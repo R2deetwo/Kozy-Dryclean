@@ -5,12 +5,12 @@
 // RBAC rules:
 //   GET:
 //     - ADMIN: can view any order
-//     - DRIVER: can view only orders assigned to them (driverId === session.user.id)
-//     - B2C/B2B: can view only their own orders (userId === session.user.id)
+//     - DRIVER: can view only orders assigned to them (driverId === session.user?.id)
+//     - B2C/B2B: can view only their own orders (userId === session.user?.id)
 //   PATCH:
 //     - ADMIN: can change anything (status, driverId, finalWeight, totalPrice)
 //     - DRIVER: can change ONLY the status, and ONLY to 'PICKED_UP' or 'DELIVERED',
-//               and ONLY on orders assigned to them (driverId === session.user.id)
+//               and ONLY on orders assigned to them (driverId === session.user?.id)
 //     - B2C/B2B: cannot PATCH orders at all (403)
 // =============================================================================
 
@@ -47,12 +47,12 @@ export async function GET(
   }
 
   // RBAC: check ownership/assignment
-  if (session.user.role === 'B2C' || session.user.role === 'B2B') {
-    if (order.userId !== session.user.id) {
+  if (session.user?.role === 'B2C' || session.user?.role === 'B2B') {
+    if (order.userId !== session.user?.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
-  } else if (session.user.role === 'DRIVER') {
-    if (order.driverId !== session.user.id) {
+  } else if (session.user?.role === 'DRIVER') {
+    if (order.driverId !== session.user?.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }
@@ -85,14 +85,14 @@ export async function PATCH(
   }
 
   // ----- RBAC enforcement -----
-  if (session.user.role === 'B2C' || session.user.role === 'B2B') {
+  if (session.user?.role === 'B2C' || session.user?.role === 'B2B') {
     // Customers cannot modify orders at all
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  if (session.user.role === 'DRIVER') {
+  if (session.user?.role === 'DRIVER') {
     // Drivers can only update status on orders assigned to them
-    if (order.driverId !== session.user.id) {
+    if (order.driverId !== session.user?.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
     // Drivers can only set status to PICKED_UP or DELIVERED
@@ -157,7 +157,7 @@ export async function PATCH(
       data: {
         orderId: id,
         status: parsed.data.status,
-        actorId: session.user.id,
+        actorId: session.user?.id,
       },
     })
   }

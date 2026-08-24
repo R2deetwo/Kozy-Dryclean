@@ -30,6 +30,7 @@ import {
   type Order,
 } from '@/lib/types'
 import { useStore } from '@/lib/store'
+import { useSession } from 'next-auth/react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -69,6 +70,19 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   const addMedia = useStore((s) => s.addMedia)
   const createPayment = useStore((s) => s.createPayment)
   const currentUser = useStore((s) => s.users.find((u) => u.id === s.currentUserId))
+  const { data: session } = useSession()
+  // Fall back to NextAuth session if Zustand doesn't have the user (real auth path)
+  const sessionUser = session?.user
+  const effectiveUser = currentUser || (sessionUser ? {
+    id: (sessionUser as any).id || '',
+    email: sessionUser.email || '',
+    name: sessionUser.name || '',
+    phone: '',
+    role: (sessionUser as any).role || 'B2C',
+    address: undefined,
+    company: undefined,
+    createdAt: '',
+  } : undefined)
   const settings = useStore((s) => s.settings)
 
   const [step, setStep] = useState(1)
@@ -91,25 +105,25 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
 
   // Populate address fields once we have the current user
   useEffect(() => {
-    if (currentUser?.address) {
-      setPickupAddress(currentUser.address)
-      setDeliveryAddress(currentUser.address)
+    if (effectiveUser?.address) {
+      setPickupAddress(effectiveUser.address)
+      setDeliveryAddress(effectiveUser.address)
     }
-  }, [currentUser?.address])
+  }, [effectiveUser?.address])
   // If this user is B2B, default the type to KG
   useEffect(() => {
-    if (currentUser?.role === 'B2B') setType('KG')
-  }, [currentUser?.role])
+    if (effectiveUser?.role === "B2B") setType("KG")
+  }, [effectiveUser?.role])
 
   // Defensive guard — auth gate should prevent this, but we don't want to crash.
-  if (!currentUser) {
+  if (!effectiveUser) {
     return (
       <div className="p-10 text-center text-sm text-navy-300">
         Please sign in to start a booking.
       </div>
     )
   }
-  const isB2B = currentUser.role === 'B2B'
+  const isB2B = effectiveUser.role === "B2B"
 
   // ----- Computed pricing -----
   const selectedItems: OrderItem[] = Object.entries(items)
@@ -188,7 +202,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
 
   const handleConfirm = () => {
     const order = createOrder({
-      userId: currentUser.id,
+      userId: effectiveUser.id,
       type,
       items: type === 'ITEM' ? selectedItems : [],
       guaranteeActive,

@@ -4,6 +4,7 @@ import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "@/components/shell/theme-provider";
 import { QueryProvider } from "@/components/shell/query-provider";
+import { SessionProviderWrapper } from "@/components/shell/session-provider";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -56,10 +57,12 @@ export default function RootLayout({
         className={`${outfit.variable} ${playfair.variable} font-sans antialiased bg-background text-foreground`}
       >
         <ThemeProvider>
-          <QueryProvider>
-            {children}
-            <Toaster />
-          </QueryProvider>
+          <SessionProviderWrapper>
+            <QueryProvider>
+              {children}
+              <Toaster />
+            </QueryProvider>
+          </SessionProviderWrapper>
         </ThemeProvider>
       </body>
     </html>

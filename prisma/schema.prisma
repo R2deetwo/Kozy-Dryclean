@@ -15,21 +15,24 @@ datasource db {
 // USERS — authentication & RBAC
 // =====================================================
 model User {
-  id          String   @id @default(cuid())
-  email       String   @unique
-  name        String
-  phone       String
-  address     String?
-  role        Role     @default(Retail)
-  // Company name for corporate clients
-  company     String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  phone         String
+  address       String?
+  role          Role     @default(B2C)
+  company       String?
+  // Auth fields (Phase 4)
+  passwordHash  String?
+  emailVerified DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
-  orders      Order[]
-  payments    Payment[]
-  // If driver, the orders they are assigned to
-  drivenOrders Order[]   @relation("DriverOrders")
+  orders             Order[]
+  payments           Payment[]
+  drivenOrders       Order[]             @relation("DriverOrders")
+  verificationTokens VerificationToken[]
+  statusEvents       StatusEvent[]
 }
 
 enum Role {
@@ -153,5 +156,18 @@ model StatusEvent {
   status    OrderStatus
   note      String?
   actorId   String?
+  actor      User?       @relation(fields: [actorId], references: [id])
   createdAt DateTime    @default(now())
+}
+
+// =====================================================
+// VERIFICATION_TOKEN — email verification flow
+// =====================================================
+model VerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires   DateTime
+  createdAt DateTime @default(now())
 }

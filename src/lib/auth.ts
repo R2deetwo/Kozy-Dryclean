@@ -1,41 +1,90 @@
 // =============================================================================
-// Auth placeholder — Phase 3
+// NextAuth configuration — Phase 4
 // =============================================================================
-// This is a TEMPORARY identity provider. Phase 4 will replace getSession() with
-// NextAuth's getServerSession(). The RBAC logic in route handlers (checking
-// session.user.role and session.user.id) will remain unchanged.
-//
-// How it works:
-//   1. The demo AuthGate in customer-portal.tsx sets a cookie "kozy-user-id"
-//      when a user signs in.
-//   2. getSession() reads that cookie, looks up the user in Prisma.
-//   3. Returns { user } or null.
-//
-// Security note: This is NOT secure for production. Cookies can be forged.
-// Phase 4 replaces this with signed JWT sessions via NextAuth.
+// Replaces the cookie-based placeholder from Phase 3.
+// Issues real signed JWT sessions stored in httpOnly cookies.
 // =============================================================================
 
-import { cookies } from 'next/headers'
+import { NextAuthOptions } from 'next-auth'
+import CredentialsProvider from 'next-auth/providers/credentials'
 import { db } from './db'
-import type { User } from '@prisma/client'
+import bcrypt from 'bcryptjs'
 
-export interface Session {
-  user: User
+export const authOptions: NextAuthOptions = {
+  providers: [
+    CredentialsProvider({
+      name: 'credentials',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        password: { label: 'Password', type: 'password' },
+      },
+      async authorize(credentials) {
+        if (!credentials?.email || !credentials?.password) {
+          return null
+        }
+
+        const user = await db.user.findUnique({
+          where: { email: credentials.email.toLowerCase() },
+        })
+
+        if (!user || !user.passwordHash) {
+          return null
+        }
+
+        const isValid = await bcrypt.compare(credentials.password, user.passwordHash)
+        if (!isValid) {
+          return null
+        }
+
+        // Return the user object — NextAuth will put this in the JWT
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          role: user.role,
+        } as any
+      },
+    }),
+  ],
+  session: {
+    strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+  },
+  pages: {
+    signIn: '/login',
+  },
+  callbacks: {
+    async jwt({ token, user }) {
+      // First sign-in: add role + id to the token
+      if (user) {
+        token.id = user.id
+        token.role = (user as any).role
+      }
+      return token
+    },
+    async session({ session, token }) {
+      // Expose role + id on the session object
+      if (session.user) {
+        ;(session.user as any).id = token.id
+        ;(session.user as any).role = token.role
+      }
+      return session
+    },
+  },
+  secret: process.env.NEXTAUTH_SECRET,
 }
 
-export async function getSession(): Promise<Session | null> {
-  const cookieStore = await cookies()
-  const userId = cookieStore.get('kozy-user-id')?.value
+// Helper to get the server session — used by API routes
+import { getServerSession } from 'next-auth'
+import { NextRequest } from 'next/server'
 
-  if (!userId) return null
-
-  const user = await db.user.findUnique({ where: { id: userId } })
-  if (!user) return null
-
-  return { user }
+export async function getSession() {
+  return getServerSession(authOptions)
 }
 
-export async function requireSession(): Promise<Session> {
+// Drop-in replacement for Phase 3's requireSession / requireRole
+// so API route handlers don't need to change
+export async function requireSession() {
   const session = await getSession()
   if (!session) {
     throw new Response(JSON.stringify({ error: 'Unauthorized' }), {
@@ -46,9 +95,10 @@ export async function requireSession(): Promise<Session> {
   return session
 }
 
-export async function requireRole(...roles: string[]): Promise<Session> {
+export async function requireRole(...roles: string[]) {
   const session = await requireSession()
-  if (!roles.includes(session.user.role)) {
+  const userRole = (session.user as any).role
+  if (!roles.includes(userRole)) {
     throw new Response(JSON.stringify({ error: 'Forbidden' }), {
       status: 403,
       headers: { 'Content-Type': 'application/json' },

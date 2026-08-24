@@ -28,12 +28,12 @@ export async function GET() {
 
   let where: any = {}
 
-  if (session.user.role === 'DRIVER') {
+  if (session.user?.role === 'DRIVER') {
     // Drivers see only assigned orders
-    where = { driverId: session.user.id }
-  } else if (session.user.role === 'B2C' || session.user.role === 'B2B') {
+    where = { driverId: session.user?.id }
+  } else if (session.user?.role === 'B2C' || session.user?.role === 'B2B') {
     // Customers see only their own orders
-    where = { userId: session.user.id }
+    where = { userId: session.user?.id }
   }
   // ADMIN sees all orders (no filter)
 
@@ -69,7 +69,7 @@ export async function POST(req: Request) {
   // Determine the order's owner
   // ADMIN can create orders for other users (by passing userId in the body)
   // Non-admins always create orders for themselves
-  const ownerId = session.user.role === 'ADMIN' && body.userId ? body.userId : session.user.id
+  const ownerId = session.user?.role === 'ADMIN' && body.userId ? body.userId : session.user?.id
 
   // Verify the owner exists
   const owner = await db.user.findUnique({ where: { id: ownerId } })

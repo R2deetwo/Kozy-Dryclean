@@ -43,7 +43,7 @@ export async function PATCH(
   const updateData: any = { status }
   if (status === 'VERIFIED') {
     updateData.verifiedAt = new Date()
-    updateData.verifiedById = session.user.id
+    updateData.verifiedById = session.user?.id
   }
 
   const updated = await db.payment.update({

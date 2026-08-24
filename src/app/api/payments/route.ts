@@ -26,15 +26,15 @@ export async function GET() {
   }
 
   // Drivers have zero access to payment data
-  if (session.user.role === 'DRIVER') {
+  if (session.user?.role === 'DRIVER') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
   let where: any = {}
 
-  if (session.user.role === 'B2C' || session.user.role === 'B2B') {
+  if (session.user?.role === 'B2C' || session.user?.role === 'B2B') {
     // Customers see only payments for their own orders
-    where = { order: { userId: session.user.id } }
+    where = { order: { userId: session.user?.id } }
   }
   // ADMIN sees all payments
 
@@ -56,7 +56,7 @@ export async function POST(req: Request) {
   const session = await requireSession()
 
   // Drivers cannot create payments
-  if (session.user.role === 'DRIVER') {
+  if (session.user?.role === 'DRIVER') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
   }
 
   // RBAC: non-admins can only create payments for their own orders
-  if (session.user.role !== 'ADMIN' && order.userId !== session.user.id) {
+  if (session.user?.role !== 'ADMIN' && order.userId !== session.user?.id) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
