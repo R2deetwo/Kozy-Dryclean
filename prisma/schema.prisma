@@ -1,0 +1,155 @@
+// Lagos Laundry & Dry Cleaning Platform - Database Schema
+// Implements the relational structure described in the master prompt.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// USERS — authentication & RBAC
+// =====================================================
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String
+  phone       String
+  address     String?
+  role        Role     @default(B2C)
+  // Customer-type discriminator (only used when role is B2C/B2B)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders      Order[]
+  payments    Payment[]
+  // If driver, the orders they are assigned to
+  drivenOrders Order[]   @relation("DriverOrders")
+}
+
+enum Role {
+  ADMIN
+  DRIVER
+  B2C
+  B2B
+}
+
+// =====================================================
+// ORDERS — central hub for laundry batch lifecycle
+// =====================================================
+model Order {
+  id                String         @id @default(cuid())
+  // Human-readable ID like #LG-1024
+  orderNumber       String         @unique
+  userId            String
+  driverId          String?
+  user              User           @relation(fields: [userId], references: [id])
+  driver            User?          @relation("DriverOrders", fields: [driverId], references: [id])
+  status            OrderStatus    @default(REQUESTED)
+  type              OrderType
+  // For B2B: weight (kg) entered by admin
+  finalWeight       Float?
+  // Computed total in naira
+  totalPrice        Float?
+  // B2C condition-capture guarantee
+  guaranteeActive   Boolean        @default(false)
+  // Per-item manifest snapshot for B2C, JSON-stringified
+  itemsManifest     String?
+  // Logistics
+  pickupAddress     String
+  pickupDate        DateTime
+  pickupTimeSlot    String
+  deliveryAddress   String?
+  deliveryDate      DateTime?
+  // Audit timestamps for the pipeline
+  pickedUpAt        DateTime?
+  atStationAt       DateTime?
+  processingAt      DateTime?
+  finishingAt       DateTime?
+  outForDeliveryAt  DateTime?
+  deliveredAt       DateTime?
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  media             GarmentMedia[]
+  payments          Payment[]
+  statusEvents      StatusEvent[]
+}
+
+enum OrderStatus {
+  REQUESTED
+  PAYMENT_PENDING_VERIFICATION
+  PAYMENT_VERIFIED
+  PICKED_UP
+  AT_STATION
+  PROCESSING
+  FINISHING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderType {
+  ITEM
+  KG
+}
+
+// =====================================================
+// GARMENT_MEDIA — B2C condition-capture photos
+// =====================================================
+model GarmentMedia {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  notes     String?
+  createdAt DateTime @default(now())
+}
+
+// =====================================================
+// PAYMENTS — manual transfer receipts + Paystack hooks
+// =====================================================
+model Payment {
+  id          String          @id @default(cuid())
+  orderId     String
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount      Float
+  method      PaymentMethod
+  status      PaymentStatus   @default(PENDING)
+  // URL to uploaded receipt screenshot (manual flow)
+  receiptUrl  String?
+  // Paystack dedicated virtual account reference
+  paystackRef String?
+  verifiedAt  DateTime?
+  verifiedById String?
+  verifier    User?           @relation(fields: [verifiedById], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  PAYSTACK
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+// =====================================================
+// STATUS_EVENT — audit trail for the order pipeline
+// =====================================================
+model StatusEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  actorId   String?
+  createdAt DateTime    @default(now())
+}
