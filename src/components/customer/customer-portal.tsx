@@ -65,6 +65,8 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight, on
         users={users}
         onSignIn={(user) => {
           setCurrentUser(user.id)
+          // Set cookie so API routes can read the session (Phase 4 will replace with NextAuth JWT)
+          document.cookie = `kozy-user-id=${user.id}; path=/; max-age=86400; samesite=lax`
           setView({ name: 'dashboard' })
         }}
         onBackToLanding={onBackToLanding}
@@ -101,7 +103,8 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight, on
       userId={currentUserId}
       highlightedId={selectedOrderId}
       onSignOut={() => {
-        setCurrentUser('') // reset
+        setCurrentUser('') // reset Zustand
+        document.cookie = 'kozy-user-id=; path=/; max-age=0' // clear cookie
         setView({ name: 'auth' })
         onBackToLanding()
       }}

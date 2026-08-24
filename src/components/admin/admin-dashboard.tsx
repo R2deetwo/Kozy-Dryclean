@@ -65,7 +65,18 @@ export function AdminDashboard() {
       <aside className="sticky top-[3.5rem] hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 bg-navy text-navy-100 lg:block">
         <div className="flex h-full flex-col">
           <div className="border-b border-navy-500 px-4 py-4">
-            <p className="text-xs uppercase tracking-wider text-gold-300">Atelier Console</p>
+            <div className="flex items-center gap-2.5 mb-3">
+              <svg width="28" height="28" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+                <rect width="40" height="40" rx="9" fill="#102740"/>
+                <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                <circle cx="20" cy="20" r="2.2" fill="#D4AF37"/>
+              </svg>
+              <div className="leading-tight">
+                <p className="font-serif text-base font-bold text-white">Kozy</p>
+                <p className="text-[9px] uppercase tracking-[0.15em] text-gold-300">Atelier Console</p>
+              </div>
+            </div>
             <p className="font-serif font-semibold text-white">{admin.name}</p>
             <p className="text-xs text-navy-300">{admin.email}</p>
           </div>
