@@ -1,4 +1,4 @@
-// Zustand store for Lagos Laundry & Dry Cleaning Platform.
+// Zustand store for Kozy Drycleaning and Laundry Services.
 // Holds Users, Orders, Payments, GarmentMedia, and Notifications in client state.
 // Persisted to localStorage so the demo survives reloads.
 

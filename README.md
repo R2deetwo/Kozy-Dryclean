@@ -4,13 +4,29 @@
 
 Premium dry cleaning & laundry service for Lagos — from designer personal wear to corporate linen programs. Built with Next.js 16, TypeScript, Prisma + Supabase (Postgres), and Tailwind CSS.
 
-## What's in this repo
+## ⚠️ Current architecture status (as of Phase 1 cleanup)
 
-A production-grade platform with three role-based portals:
+This repo is mid-migration from a UI demo to a production app. The current state:
+
+- **Routing**: Single route (`/`) with a **client-side `useState` toggle** in `src/app/page.tsx` that switches between Landing / Customer / Admin / Driver views. There is **no `middleware.ts`** and **no real route guards** — the "Admin" tab is accessible to anyone.
+- **Data layer**: Frontend reads from Zustand (seeded in-memory + persisted to `localStorage`). Supabase Postgres is provisioned and the schema is pushed, but **no `/api/*` routes exist yet** — the frontend does not yet talk to the database.
+- **Auth**: A demo "auth gate" with one-click demo-account buttons. **Not secure** — there is no real session, no NextAuth, no JWT.
+
+### Migration plan (Phases 2-4)
+
+- **Phase 2** (config hardening): Remove `ignoreBuildErrors`, add security headers to `next.config.ts`.
+- **Phase 3** (real backend wiring): Build `/api/orders`, `/api/payments`, `/api/users/me` with server-side RBAC. Replace Zustand selectors with React Query fetches.
+- **Phase 4** (real auth + real routes): Convert `/`, `/portal`, `/admin`, `/driver` into real Next.js App Router routes. Add `middleware.ts` enforcing session + role. Delete the demo auth gate and the role-switcher toggle. Unauthenticated visit to `/admin` redirects to login.
+
+See `ARCHITECTURE.md` for the full Phase 5/6 plan (Brevo email, Chakra WhatsApp, CRM mass messaging, multi-tenant).
+
+## What's in this repo (target architecture)
+
+Four role-based portals:
 
 - **Landing page** (`/`) — public marketing site with hero, pricing toggle (Retail/Corporate), How It Works
 - **Customer Portal** (`/portal`) — auth-gated dashboard with order tracking, booking wizard, invoices
-- **Atelier Console** (`/admin`) — admin dashboard with Kanban board, payment verification queue, CRM, finance charts
+- **Atelier Console** (`/admin`) — admin dashboard with Kanban/List toggle, payment verification queue, CRM, finance charts, settings (bank account + pricing management)
 - **Driver App** (`/driver`) — mobile-optimized route view with swipe-to-confirm pickups/deliveries
 
 ## Tech Stack
@@ -19,7 +35,7 @@ A production-grade platform with three role-based portals:
 - **Database**: Prisma ORM + Supabase Postgres
 - **Styling**: Tailwind CSS 4 + shadcn/ui (Kozy brand: Midnight Navy `#0A192F` + Champagne Gold `#D4AF37`)
 - **Typography**: Playfair Display (serif) + Outfit (geometric sans-serif)
-- **State**: Zustand for ephemeral UI state, Prisma for persistent data
+- **State**: Zustand for ephemeral UI state (form drafts, wizard step) — being replaced by React Query + real API routes in Phase 3
 - **DnD**: @dnd-kit for Kanban board
 - **Animations**: Framer Motion
 
@@ -65,6 +81,7 @@ See `.env.example` for the full list. Critical ones:
 ## Documentation
 
 - `DEPLOYMENT.md` — full deployment guide (Vercel + Supabase + Paystack + Termii)
+- `ARCHITECTURE.md` — Phase 2-6 roadmap (auth, notifications, CRM, multi-tenant)
 - `prisma/schema.prisma` — database schema (User, Order, Payment, GarmentMedia, StatusEvent)
 
 ## License

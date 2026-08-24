@@ -1,4 +1,4 @@
-// Type system for Lagos Laundry & Dry Cleaning Platform
+// Type system for Kozy Drycleaning and Laundry Services
 // Mirrors the Prisma schema but as plain TS types for client-side state.
 
 export type Role = 'ADMIN' | 'DRIVER' | 'B2C' | 'B2B'
@@ -71,7 +71,7 @@ export interface OrderItem {
 
 export interface Order {
   id: string
-  orderNumber: string // human-readable like LG-1024
+  orderNumber: string // human-readable like KZ-1024
   userId: string
   driverId?: string
   status: OrderStatus

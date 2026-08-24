@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
-const DRIVER_ID = 'u-driver-2' // Bisi Adebayo — has LG-1002 out for delivery
+const DRIVER_ID = 'u-driver-2' // Bisi Adebayo — has KZ-1002 out for delivery
 
 export function DriverView() {
   const allUsers = useStore((s) => s.users)

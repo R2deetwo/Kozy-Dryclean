@@ -1,4 +1,4 @@
-// Lagos Laundry & Dry Cleaning Platform - Database Schema
+// Kozy Drycleaning and Laundry Services - Database Schema
 // Implements the relational structure described in the master prompt.
 
 generator client {
@@ -44,7 +44,7 @@ enum Role {
 // =====================================================
 model Order {
   id                String         @id @default(cuid())
-  // Human-readable ID like #LG-1024
+  // Human-readable ID like #KZ-1024
   orderNumber       String         @unique
   userId            String
   driverId          String?
