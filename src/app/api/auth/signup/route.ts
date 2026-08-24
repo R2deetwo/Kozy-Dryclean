@@ -82,15 +82,27 @@ export async function POST(req: Request) {
   })
 
   // ----- Send verification email -----
+  let emailSent = false
+  let emailError = null
   try {
     await sendVerificationEmail(user.email, user.name, token)
-  } catch (e) {
+    emailSent = true
+  } catch (e: any) {
     console.error('Failed to send verification email:', e)
+    emailError = e?.message || 'Unknown error'
     // Don't fail the signup — user can request a new verification email
   }
 
-  return NextResponse.json(
-    { ok: true, message: 'Account created. Check your email for a verification link.' },
-    { status: 201 }
-  )
+  const response: any = {
+    ok: true,
+    message: emailSent
+      ? 'Account created. Check your email for a verification link.'
+      : 'Account created, but we could not send the verification email. Please contact support.',
+    emailSent,
+  }
+  if (emailError) {
+    response.emailError = emailError
+  }
+
+  return NextResponse.json(response, { status: 201 })
 }

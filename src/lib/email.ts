@@ -12,7 +12,9 @@ interface SendEmailParams {
 
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'concierge@kozy.ng'
+  // Use the Brevo-verified sender email. concierge@kozy.ng isn't verified in Brevo yet —
+  // once verified, we can switch to it. For now, use the account owner's email.
+  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'chigozieubahesq@gmail.com'
   const senderName = process.env.BREVO_SENDER_NAME || 'Kozy'
 
   if (!apiKey) {
