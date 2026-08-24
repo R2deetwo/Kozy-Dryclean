@@ -162,7 +162,7 @@ function KanbanColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        'flex w-72 shrink-0 flex-col rounded-xl bg-muted/40 ring-1 transition',
+        'flex w-72 shrink-0 flex-col rounded-xl bg-linen-200 dark:bg-navy-700 ring-1 transition',
         isOver ? 'ring-2 ring-gold-400 bg-gold-50/40' : 'ring-muted-foreground/15'
       )}
     >
@@ -176,7 +176,7 @@ function KanbanColumn({
           >
             <Icon className="h-3.5 w-3.5" />
           </div>
-          <span className="text-sm font-semibold text-foreground">{label}</span>
+          <span className="text-sm font-semibold text-navy dark:text-white">{label}</span>
         </div>
         <Badge variant="outline" className="rounded-full text-[10px]">
           {count}
@@ -222,7 +222,7 @@ function OrderCard({
         }
       }}
       className={cn(
-        'cursor-grab border-muted/60 bg-white shadow-sm transition hover:border-gold-300 hover:shadow-md active:cursor-grabbing',
+        'cursor-grab border-navy-100 dark:border-navy-600 bg-white shadow-sm transition hover:border-gold-300 hover:shadow-md active:cursor-grabbing',
         dragging && 'shadow-lg',
         isDragging && 'opacity-50'
       )}
@@ -230,10 +230,10 @@ function OrderCard({
       <CardContent className="p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-xs font-semibold text-foreground">
+            <p className="font-mono text-xs font-semibold text-navy dark:text-white">
               #{order.orderNumber}
             </p>
-            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+            <p className="mt-0.5 truncate text-xs text-navy-300 dark:text-navy-200">
               {customer?.name ?? '—'}
             </p>
           </div>
@@ -244,21 +244,21 @@ function OrderCard({
           )}
         </div>
 
-        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+        <div className="mt-2 flex items-center gap-1.5 text-[10px] text-navy-300 dark:text-navy-200">
           <Clock className="h-3 w-3" />
           {formatDate(order.pickupDate)} · {order.pickupTimeSlot}
         </div>
 
-        <div className="mt-1 truncate text-[10px] text-muted-foreground">
+        <div className="mt-1 truncate text-[10px] text-navy-300 dark:text-navy-200">
           {order.pickupAddress}
         </div>
 
         {order.totalPrice !== undefined ? (
           <div className="mt-2 flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
+            <span className="text-navy-300 dark:text-navy-200">
               {order.finalWeight ? `${order.finalWeight}kg` : `${order.items.length} item${order.items.length === 1 ? '' : 's'}`}
             </span>
-            <span className="font-bold text-foreground">{formatNaira(order.totalPrice)}</span>
+            <span className="font-bold text-navy dark:text-white">{formatNaira(order.totalPrice)}</span>
           </div>
         ) : (
           <Badge
@@ -282,7 +282,7 @@ function OrderCard({
         )}
 
         {driver && (
-          <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+          <div className="mt-2 flex items-center gap-1 text-[10px] text-navy-300 dark:text-navy-200">
             <Truck className="h-3 w-3" /> {driver.name}
           </div>
         )}

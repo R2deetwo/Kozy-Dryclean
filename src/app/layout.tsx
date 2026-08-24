@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
+import { ThemeProvider } from "@/components/shell/theme-provider";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -46,11 +47,17 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/* Set theme class before hydration to prevent FOUC */}
+        <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('kozy-theme')||'light';if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})()` }} />
+      </head>
       <body
         className={`${outfit.variable} ${playfair.variable} font-sans antialiased bg-background text-foreground`}
       >
-        {children}
-        <Toaster />
+        <ThemeProvider>
+          {children}
+          <Toaster />
+        </ThemeProvider>
       </body>
     </html>
   );

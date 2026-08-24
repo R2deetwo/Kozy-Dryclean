@@ -48,7 +48,7 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
                   <div
                     className={cn(
                       'h-0.5 flex-1',
-                      done || active ? 'bg-navy' : 'bg-muted-foreground/20'
+                      done || active ? 'bg-navy' : 'bg-linen-200 dark:bg-navy-700-foreground/20'
                     )}
                   />
                 )}
@@ -57,7 +57,7 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
                     'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ring-2 transition',
                     active && 'bg-navy text-white ring-gold-400/30',
                     done && 'bg-navy text-white ring-gold-400/30',
-                    !active && !done && 'bg-white text-muted-foreground ring-muted-foreground/20'
+                    !active && !done && 'bg-white text-navy-300 dark:text-navy-200 ring-muted-foreground/20'
                   )}
                 >
                   {done ? <Check className="h-3 w-3" /> : stage.short}
@@ -66,7 +66,7 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
                   <div
                     className={cn(
                       'h-0.5 flex-1',
-                      done ? 'bg-navy' : 'bg-muted-foreground/20'
+                      done ? 'bg-navy' : 'bg-linen-200 dark:bg-navy-700-foreground/20'
                     )}
                   />
                 )}
@@ -75,7 +75,7 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
                 <p
                   className={cn(
                     'text-center text-[9px] leading-tight sm:text-[10px]',
-                    active ? 'font-semibold text-foreground' : 'text-muted-foreground'
+                    active ? 'font-semibold text-navy dark:text-white' : 'text-navy-300 dark:text-navy-200'
                   )}
                 >
                   {stage.label}
@@ -86,8 +86,8 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
         })}
       </div>
       {!compact && (
-        <p className="mt-2 text-center text-[11px] text-muted-foreground">
-          Current stage: <span className="font-semibold text-foreground">{PIPELINE_STAGES[activeIdx].label}</span>
+        <p className="mt-2 text-center text-[11px] text-navy-300 dark:text-navy-200">
+          Current stage: <span className="font-semibold text-navy dark:text-white">{PIPELINE_STAGES[activeIdx].label}</span>
           {' · '}
           {PIPELINE_STAGES[activeIdx].description}
         </p>
@@ -113,8 +113,8 @@ export function OrderTimeline({ order }: { order: Order }) {
         <div key={i} className="flex items-start gap-2 text-sm">
           <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-navy" />
           <div className="flex-1">
-            <span className="text-foreground">{e.label}</span>
-            <span className="ml-2 text-xs text-muted-foreground">{formatDateTime(e.at)}</span>
+            <span className="text-navy dark:text-white">{e.label}</span>
+            <span className="ml-2 text-xs text-navy-300 dark:text-navy-200">{formatDateTime(e.at)}</span>
           </div>
         </div>
       ))}

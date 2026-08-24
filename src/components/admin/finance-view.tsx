@@ -106,8 +106,8 @@ export function FinanceView() {
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-4">
-        <h1 className="text-lg font-bold tracking-tight text-foreground">Finances</h1>
-        <p className="text-xs text-muted-foreground">
+        <h1 className="text-lg font-bold tracking-tight text-navy dark:text-white">Finances</h1>
+        <p className="text-xs text-navy-300 dark:text-navy-200">
           Track revenue, payment verifications, and outstanding balances.
         </p>
       </div>
@@ -230,7 +230,7 @@ export function FinanceView() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
+              <thead className="bg-linen-200 dark:bg-navy-700 text-left text-xs uppercase tracking-wide text-navy-300 dark:text-navy-200">
                 <tr>
                   <th className="px-4 py-2">Order</th>
                   <th className="hidden px-4 py-2 md:table-cell">Method</th>
@@ -243,12 +243,12 @@ export function FinanceView() {
                 {payments.slice(0, 10).map((p) => {
                   const order = orders.find((o) => o.id === p.orderId)
                   return (
-                    <tr key={p.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <tr key={p.id} className="border-b last:border-0 hover:bg-linen-200 dark:bg-navy-700">
                       <td className="px-4 py-2 font-mono text-xs">
                         #{order?.orderNumber ?? '—'}
                       </td>
                       <td className="hidden px-4 py-2 md:table-cell">
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1 text-xs text-navy-300 dark:text-navy-200">
                           {p.method === 'BANK_TRANSFER' ? (
                             <Banknote className="h-3 w-3" />
                           ) : (
@@ -260,7 +260,7 @@ export function FinanceView() {
                       <td className="px-4 py-2 text-right font-semibold">
                         {formatNaira(p.amount)}
                       </td>
-                      <td className="hidden px-4 py-2 text-xs text-muted-foreground lg:table-cell">
+                      <td className="hidden px-4 py-2 text-xs text-navy-300 dark:text-navy-200 lg:table-cell">
                         {formatDateTime(p.createdAt)}
                       </td>
                       <td className="px-4 py-2">
@@ -312,18 +312,18 @@ function StatCard({
       ? 'bg-indigo-100 text-indigo-700'
       : 'bg-gold-100 text-navy'
   return (
-    <Card className="border-muted/60 shadow-sm">
+    <Card className="border-navy-100 shadow-navy dark:border-navy-600 dark:bg-navy-800">
       <CardContent className="p-4">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <span className="text-xs font-medium uppercase tracking-wide text-navy-300 dark:text-navy-200">
             {title}
           </span>
           <div className={`flex h-8 w-8 items-center justify-center rounded-lg ${toneClass}`}>
             <Icon className="h-4 w-4" />
           </div>
         </div>
-        <p className="mt-2 text-xl font-bold text-foreground">{value}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{delta}</p>
+        <p className="mt-2 text-xl font-bold text-navy dark:text-white">{value}</p>
+        <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">{delta}</p>
       </CardContent>
     </Card>
   )

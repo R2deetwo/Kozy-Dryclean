@@ -363,7 +363,7 @@ export const useStore = create<StoreState>()(
       payments: SEED_PAYMENTS,
       media: SEED_MEDIA,
       notifications: SEED_NOTIFICATIONS,
-      currentUserId: 'u-b2c-1', // start as a B2C customer
+      currentUserId: '', // empty by default — auth gate appears until user signs in
 
       setCurrentUser: (id) => set({ currentUserId: id }),
       getCurrentUser: () => {
@@ -591,7 +591,7 @@ export const useStore = create<StoreState>()(
           payments: SEED_PAYMENTS,
           media: SEED_MEDIA,
           notifications: SEED_NOTIFICATIONS,
-          currentUserId: 'u-b2c-1',
+          currentUserId: '',
         }),
     }),
     {

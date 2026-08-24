@@ -25,7 +25,6 @@ import {
   formatNaira,
   COMPANY_BANK,
 } from '@/lib/types'
-import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -34,7 +33,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 interface Props {
   onBook: () => void
-  onDashboard: () => void
+  onPortal: () => void
 }
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -46,9 +45,8 @@ const CATEGORY_LABELS: Record<string, string> = {
   Extras: 'Extras',
 }
 
-export function CustomerLanding({ onBook, onDashboard }: Props) {
+export function CustomerLanding({ onBook, onPortal }: Props) {
   const [pricing, setPricing] = useState<'retail' | 'corporate'>('retail')
-  const currentUser = useStore((s) => s.users.find((u) => u.id === s.currentUserId) ?? s.users[0])
 
   return (
     <div className="bg-linen">
@@ -106,7 +104,7 @@ export function CustomerLanding({ onBook, onDashboard }: Props) {
               <Button
                 size="lg"
                 variant="outline"
-                onClick={onDashboard}
+                onClick={onPortal}
                 className="h-12 rounded-full border-white/30 bg-white/5 px-6 text-base font-medium text-white backdrop-blur hover:bg-white/10 hover:text-white"
               >
                 Track My Orders
@@ -221,16 +219,19 @@ export function CustomerLanding({ onBook, onDashboard }: Props) {
             {[
               {
                 icon: ShoppingBag,
+                image: '/brand/images/how-1-book.png',
                 title: '01 · Request a pickup',
                 body: 'Choose your garments, request a bulk pickup, or schedule a recurring slot. Snap optional condition photos to activate our Return-as-Received Guarantee.',
               },
               {
                 icon: Truck,
+                image: '/brand/images/how-2-collect.png',
                 title: '02 · We collect & treat',
                 body: 'A Kozy rider arrives within your window. Items travel to our atelier where they are sorted, treated, and pressed by garment-specific protocols.',
               },
               {
                 icon: CheckCircle2,
+                image: '/brand/images/how-3-return.png',
                 title: '03 · Pristine return',
                 body: 'Your garments are folded, packaged, and delivered within 48 hours (retail) — sealed in protective Kozy garment bags, ready for your wardrobe.',
               },
@@ -242,11 +243,18 @@ export function CustomerLanding({ onBook, onDashboard }: Props) {
                 viewport={{ once: true }}
                 transition={{ delay: i * 0.08 }}
               >
-                <Card className="h-full border-navy-100 bg-white shadow-navy">
-                  <CardContent className="p-6">
-                    <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-lg bg-navy text-gold-400">
-                      <s.icon className="h-6 w-6" />
+                <Card className="group h-full overflow-hidden border-navy-100 bg-white shadow-navy transition hover:shadow-lg">
+                  <div className="relative h-44 overflow-hidden bg-linen-100">
+                    <img
+                      src={s.image}
+                      alt={s.title}
+                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
+                    />
+                    <div className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl bg-navy text-gold-400 shadow-navy">
+                      <s.icon className="h-5 w-5" />
                     </div>
+                  </div>
+                  <CardContent className="p-6">
                     <h3 className="font-serif text-lg font-semibold text-navy">
                       {s.title}
                     </h3>
@@ -526,10 +534,10 @@ export function CustomerLanding({ onBook, onDashboard }: Props) {
           <div className="grid gap-8 md:grid-cols-4">
             <div>
               <div className="flex items-center gap-2">
-                <svg width="32" height="32" viewBox="0 0 40 40" fill="none">
+                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <rect width="40" height="40" rx="9" fill="#102740"/>
-                  <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-                  <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                  <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
                   <circle cx="20" cy="20" r="2.2" fill="#D4AF37"/>
                 </svg>
                 <span className="font-serif text-lg font-semibold text-white">Kozy</span>
@@ -584,7 +592,7 @@ export function CustomerLanding({ onBook, onDashboard }: Props) {
                   </button>
                 </li>
                 <li>
-                  <button onClick={onDashboard} className="text-navy-100/70 hover:text-white">
+                  <button onClick={onPortal} className="text-navy-100/70 hover:text-white">
                     Track an order
                   </button>
                 </li>

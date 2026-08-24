@@ -69,7 +69,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
         <div className="space-y-5">
           {/* Pipeline */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">Order progress</h3>
+            <h3 className="mb-2 text-sm font-semibold text-navy dark:text-white">Order progress</h3>
             <OrderPipeline order={order} />
           </section>
 
@@ -77,14 +77,14 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           {/* Items / weight */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">
+            <h3 className="mb-2 text-sm font-semibold text-navy dark:text-white">
               {order.type === 'ITEM' ? 'Items' : 'Weight'}
             </h3>
             {order.type === 'ITEM' ? (
               <ul className="space-y-1.5 text-sm">
                 {order.items.map((i) => (
                   <li key={i.id} className="flex items-center justify-between">
-                    <span className="text-foreground/80">
+                    <span className="text-navy-300 dark:text-navy-200">
                       {i.quantity}× {i.name}
                     </span>
                     <span className="font-medium">{formatNaira(i.quantity * i.unitPrice)}</span>
@@ -97,13 +97,13 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                 )}
               </ul>
             ) : (
-              <div className="rounded-lg bg-muted/50 p-3 text-sm">
+              <div className="rounded-lg bg-linen-200 dark:bg-navy-700/50 p-3 text-sm">
                 {order.finalWeight !== undefined ? (
                   <>
                     <p>
                       Final weight: <strong>{order.finalWeight}kg</strong>
                     </p>
-                    <p className="text-muted-foreground">
+                    <p className="text-navy-300 dark:text-navy-200">
                       @ ₦800/kg · Minimum 10kg charge applies.
                     </p>
                   </>
@@ -118,24 +118,24 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           {/* Logistics */}
           <section className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-muted/40 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-foreground">
+            <div className="rounded-lg bg-linen-200 dark:bg-navy-700 p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
                 <MapPin className="h-3.5 w-3.5" /> Pickup
               </p>
-              <p className="mt-1 text-muted-foreground">{order.pickupAddress}</p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-navy-300 dark:text-navy-200">{order.pickupAddress}</p>
+              <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">
                 <Calendar className="mr-1 inline h-3 w-3" />
                 {formatDate(order.pickupDate)} · {order.pickupTimeSlot}
               </p>
             </div>
-            <div className="rounded-lg bg-muted/40 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-foreground">
+            <div className="rounded-lg bg-linen-200 dark:bg-navy-700 p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
                 <Truck className="h-3.5 w-3.5" /> Delivery
               </p>
-              <p className="mt-1 text-muted-foreground">
+              <p className="mt-1 text-navy-300 dark:text-navy-200">
                 {order.deliveryAddress ?? order.pickupAddress}
               </p>
-              <p className="mt-1 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">
                 {order.deliveryDate ? formatDate(order.deliveryDate) : 'To be confirmed'}
               </p>
             </div>
@@ -144,11 +144,11 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           {/* Driver info */}
           {driver && (
             <section className="rounded-lg bg-gold-50/50 p-3 text-sm ring-1 ring-gold-100">
-              <p className="flex items-center gap-1.5 font-medium text-foreground">
+              <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
                 <UserIcon className="h-3.5 w-3.5" /> Assigned rider
               </p>
               <div className="mt-1 flex items-center justify-between">
-                <span className="text-foreground/80">{driver.name}</span>
+                <span className="text-navy-300 dark:text-navy-200">{driver.name}</span>
                 <a
                   href={`tel:${driver.phone}`}
                   className="inline-flex items-center gap-1 text-xs text-navy-300 hover:underline"
@@ -161,21 +161,21 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           {/* Payment */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">Payment</h3>
+            <h3 className="mb-2 text-sm font-semibold text-navy dark:text-white">Payment</h3>
             {payments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No payment yet.</p>
+              <p className="text-sm text-navy-300 dark:text-navy-200">No payment yet.</p>
             ) : (
               <div className="space-y-2">
                 {payments.map((p) => (
                   <div
                     key={p.id}
-                    className="flex items-center justify-between rounded-lg bg-muted/40 px-3 py-2 text-sm"
+                    className="flex items-center justify-between rounded-lg bg-linen-200 dark:bg-navy-700 px-3 py-2 text-sm"
                   >
                     <div>
-                      <span className="text-foreground/80">
+                      <span className="text-navy-300 dark:text-navy-200">
                         {p.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'Paystack'}
                       </span>
-                      <span className="ml-2 text-xs text-muted-foreground">
+                      <span className="ml-2 text-xs text-navy-300 dark:text-navy-200">
                         {formatDateTime(p.createdAt)}
                       </span>
                     </div>
@@ -199,8 +199,8 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                 >
                   <Receipt className="mr-1 h-3.5 w-3.5" /> View invoice
                 </Button>
-                <span className="text-sm text-muted-foreground">
-                  Order total: <strong className="text-foreground">{formatNaira(order.totalPrice)}</strong>
+                <span className="text-sm text-navy-300 dark:text-navy-200">
+                  Order total: <strong className="text-navy dark:text-white">{formatNaira(order.totalPrice)}</strong>
                 </span>
               </div>
             )}
@@ -209,7 +209,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           {/* Condition capture media */}
           {media.length > 0 && (
             <section>
-              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
+              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-navy dark:text-white">
                 <Shield className="h-4 w-4 text-gold-400" /> Condition photos ({media.length})
               </h3>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -231,7 +231,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           {/* Timeline */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-foreground">Timeline</h3>
+            <h3 className="mb-2 text-sm font-semibold text-navy dark:text-white">Timeline</h3>
             <OrderTimeline order={order} />
           </section>
         </div>

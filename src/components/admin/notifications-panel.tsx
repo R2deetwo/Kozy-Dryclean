@@ -12,16 +12,16 @@ export function NotificationsPanel() {
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-4">
-        <h1 className="text-lg font-bold tracking-tight text-foreground">Notifications log</h1>
-        <p className="text-xs text-muted-foreground">
+        <h1 className="text-lg font-bold tracking-tight text-navy dark:text-white">Notifications log</h1>
+        <p className="text-xs text-navy-300 dark:text-navy-200">
           Audit trail of SMS, email, and in-app notifications dispatched across the pipeline.
         </p>
       </div>
 
-      <Card className="border-muted/60 shadow-sm">
+      <Card className="border-navy-100 shadow-navy dark:border-navy-600 dark:bg-navy-800">
         <CardContent className="p-0">
           {notifications.length === 0 ? (
-            <div className="p-10 text-center text-sm text-muted-foreground">
+            <div className="p-10 text-center text-sm text-navy-300 dark:text-navy-200">
               No notifications dispatched yet.
             </div>
           ) : (
@@ -29,7 +29,7 @@ export function NotificationsPanel() {
               {notifications.map((n, i) => (
                 <li
                   key={n.id}
-                  className="flex items-start gap-3 border-b p-3 last:border-0 hover:bg-muted/30"
+                  className="flex items-start gap-3 border-b p-3 last:border-0 hover:bg-linen-200 dark:bg-navy-700"
                 >
                   <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold-100 text-navy">
                     {n.channel === 'SMS' && <Smartphone className="h-4 w-4" />}
@@ -41,14 +41,14 @@ export function NotificationsPanel() {
                       <Badge variant="outline" className="rounded-full text-[10px]">
                         {n.channel}
                       </Badge>
-                      <span className="text-xs font-mono text-foreground">
+                      <span className="text-xs font-mono text-navy dark:text-white">
                         Order #{n.orderId}
                       </span>
-                      <span className="text-xs text-muted-foreground">·</span>
-                      <span className="text-xs text-muted-foreground">{n.to}</span>
+                      <span className="text-xs text-navy-300 dark:text-navy-200">·</span>
+                      <span className="text-xs text-navy-300 dark:text-navy-200">{n.to}</span>
                     </div>
-                    <p className="mt-1 text-sm text-foreground">{n.body}</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">
+                    <p className="mt-1 text-sm text-navy dark:text-white">{n.body}</p>
+                    <p className="mt-1 text-[10px] text-navy-300 dark:text-navy-200">
                       {formatDateTime(n.sentAt)}
                     </p>
                   </div>
@@ -59,7 +59,7 @@ export function NotificationsPanel() {
         </CardContent>
       </Card>
 
-      <p className="mt-4 text-xs text-muted-foreground">
+      <p className="mt-4 text-xs text-navy-300 dark:text-navy-200">
         <MessageSquare className="mr-1 inline h-3 w-3" />
         In production, this log is backed by Termii/Twilio (SMS), Postmark/SendGrid (email),
         and a Firebase Cloud Messaging topic (in-app push). Each pipeline transition in the

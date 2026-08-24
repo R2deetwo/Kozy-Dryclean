@@ -40,11 +40,11 @@ export function InvoiceView({ order, onBack }: Props) {
   const total = order.totalPrice ?? 0
 
   return (
-    <div className="min-h-[calc(100vh-3.5rem)] bg-muted/30">
+    <div className="min-h-[calc(100vh-3.5rem)] bg-linen-200 dark:bg-navy-700">
       <div className="mx-auto max-w-3xl px-4 py-6 sm:px-6">
         <button
           onClick={onBack}
-          className="mb-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          className="mb-3 inline-flex items-center gap-1 text-xs text-navy-300 dark:text-navy-200 dark:text-white"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back to dashboard
         </button>
@@ -79,34 +79,34 @@ export function InvoiceView({ order, onBack }: Props) {
             {/* Bill to */}
             <div className="grid gap-4 sm:grid-cols-2">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="text-xs font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
                   Bill to
                 </p>
-                <p className="mt-1 font-semibold text-foreground">{customer?.name}</p>
-                <p className="text-sm text-muted-foreground">{customer?.phone}</p>
-                <p className="text-sm text-muted-foreground">{customer?.email}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{order.pickupAddress}</p>
+                <p className="mt-1 font-semibold text-navy dark:text-white">{customer?.name}</p>
+                <p className="text-sm text-navy-300 dark:text-navy-200">{customer?.phone}</p>
+                <p className="text-sm text-navy-300 dark:text-navy-200">{customer?.email}</p>
+                <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">{order.pickupAddress}</p>
               </div>
               <div className="sm:text-right">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <p className="text-xs font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
                   Order details
                 </p>
                 <p className="mt-1 text-sm">
                   Type:{' '}
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-navy dark:text-white">
                     {order.type === 'ITEM' ? 'Retail / Per-item' : 'Corporate / Per-kg'}
                   </span>
                 </p>
                 <p className="text-sm">
                   Pickup:{' '}
-                  <span className="font-medium text-foreground">
+                  <span className="font-medium text-navy dark:text-white">
                     {formatDate(order.pickupDate)}
                   </span>
                 </p>
                 {order.deliveryDate && (
                   <p className="text-sm">
                     Delivered:{' '}
-                    <span className="font-medium text-foreground">
+                    <span className="font-medium text-navy dark:text-white">
                       {formatDate(order.deliveryDate)}
                     </span>
                   </p>
@@ -119,7 +119,7 @@ export function InvoiceView({ order, onBack }: Props) {
             {/* Line items */}
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
+                <tr className="border-b text-left text-xs uppercase tracking-wide text-navy-300 dark:text-navy-200">
                   <th className="pb-2">Description</th>
                   <th className="pb-2 text-center">Qty / Weight</th>
                   <th className="pb-2 text-right">Unit price</th>
@@ -130,9 +130,9 @@ export function InvoiceView({ order, onBack }: Props) {
                 {order.type === 'ITEM' ? (
                   order.items.map((i) => (
                     <tr key={i.id} className="border-b last:border-0">
-                      <td className="py-2 text-foreground">{i.name}</td>
-                      <td className="py-2 text-center text-muted-foreground">{i.quantity}</td>
-                      <td className="py-2 text-right text-muted-foreground">
+                      <td className="py-2 text-navy dark:text-white">{i.name}</td>
+                      <td className="py-2 text-center text-navy-300 dark:text-navy-200">{i.quantity}</td>
+                      <td className="py-2 text-right text-navy-300 dark:text-navy-200">
                         {formatNaira(i.unitPrice)}
                       </td>
                       <td className="py-2 text-right font-medium">
@@ -142,11 +142,11 @@ export function InvoiceView({ order, onBack }: Props) {
                   ))
                 ) : (
                   <tr className="border-b last:border-0">
-                    <td className="py-2 text-foreground">Bulk laundry (per kg)</td>
-                    <td className="py-2 text-center text-muted-foreground">
+                    <td className="py-2 text-navy dark:text-white">Bulk laundry (per kg)</td>
+                    <td className="py-2 text-center text-navy-300 dark:text-navy-200">
                       {order.finalWeight}kg
                     </td>
-                    <td className="py-2 text-right text-muted-foreground">₦800</td>
+                    <td className="py-2 text-right text-navy-300 dark:text-navy-200">₦800</td>
                     <td className="py-2 text-right font-medium">
                       {formatNaira((order.finalWeight ?? 0) * 800)}
                     </td>
@@ -167,7 +167,7 @@ export function InvoiceView({ order, onBack }: Props) {
 
             <div className="mt-4 flex justify-end">
               <div className="w-48 space-y-1 text-sm">
-                <div className="flex justify-between text-muted-foreground">
+                <div className="flex justify-between text-navy-300 dark:text-navy-200">
                   <span>Subtotal</span>
                   <span>{formatNaira(subtotal)}</span>
                 </div>
@@ -177,7 +177,7 @@ export function InvoiceView({ order, onBack }: Props) {
                     <span>−{formatNaira(guaranteeDiscount)}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-t pt-2 text-base font-bold text-foreground">
+                <div className="flex justify-between border-t pt-2 text-base font-bold text-navy dark:text-white">
                   <span>Total</span>
                   <span>{formatNaira(total)}</span>
                 </div>
@@ -203,16 +203,16 @@ export function InvoiceView({ order, onBack }: Props) {
             )}
 
             {/* Bank details */}
-            <div className="mt-6 rounded-lg bg-muted/40 p-4 text-sm">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <div className="mt-6 rounded-lg bg-linen-200 dark:bg-navy-700 p-4 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
                 Bank details for transfer
               </p>
               <div className="mt-2 grid grid-cols-2 gap-y-1">
-                <span className="text-muted-foreground">Bank</span>
+                <span className="text-navy-300 dark:text-navy-200">Bank</span>
                 <span className="font-medium">{COMPANY_BANK.bankName}</span>
-                <span className="text-muted-foreground">Account name</span>
+                <span className="text-navy-300 dark:text-navy-200">Account name</span>
                 <span className="font-medium">{COMPANY_BANK.accountName}</span>
-                <span className="text-muted-foreground">Account number</span>
+                <span className="text-navy-300 dark:text-navy-200">Account number</span>
                 <span className="font-mono font-bold text-navy-300">
                   {COMPANY_BANK.accountNumber}
                 </span>
@@ -242,7 +242,7 @@ export function InvoiceView({ order, onBack }: Props) {
           </CardContent>
         </Card>
 
-        <p className="mt-4 text-center text-xs text-muted-foreground">
+        <p className="mt-4 text-center text-xs text-navy-300 dark:text-navy-200">
           This invoice was auto-generated by Lagos Fresh Laundry&apos;s order system.
         </p>
       </div>
