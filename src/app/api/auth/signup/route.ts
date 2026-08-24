@@ -16,8 +16,19 @@ import { db } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { sendVerificationEmail } from '@/lib/email'
+import { rateLimit, getClientIP } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
+  // ----- Rate limit: 5 signups per hour per IP -----
+  const ip = getClientIP(req)
+  const limit = rateLimit(`signup:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
+  if (!limit.success) {
+    return NextResponse.json(
+      { error: 'Too many signup attempts. Please try again later.' },
+      { status: 429, headers: { 'Retry-After': String(Math.ceil((limit.resetAt - Date.now()) / 1000)) } }
+    )
+  }
+
   const body = await req.json()
   const { email, password, name, phone, role } = body
 

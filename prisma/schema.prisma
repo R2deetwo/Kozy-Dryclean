@@ -82,6 +82,12 @@ model Order {
   media             GarmentMedia[]
   payments          Payment[]
   statusEvents      StatusEvent[]
+
+  @@index([userId])
+  @@index([driverId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([orderNumber])
 }
 
 enum OrderStatus {
@@ -112,6 +118,8 @@ model GarmentMedia {
   imageUrl  String
   notes     String?
   createdAt DateTime @default(now())
+
+  @@index([orderId])
 }
 
 // =====================================================
@@ -133,6 +141,10 @@ model Payment {
   verifier    User?           @relation(fields: [verifiedById], references: [id])
   createdAt   DateTime        @default(now())
   updatedAt   DateTime        @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([paystackRef])
 }
 
 enum PaymentMethod {
@@ -158,6 +170,9 @@ model StatusEvent {
   actorId   String?
   actor      User?       @relation(fields: [actorId], references: [id])
   createdAt DateTime    @default(now())
+
+  @@index([orderId])
+  @@index([actorId])
 }
 
 // =====================================================
