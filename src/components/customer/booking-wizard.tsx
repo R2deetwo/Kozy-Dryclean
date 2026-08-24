@@ -205,7 +205,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-emerald-50/30 to-white pb-16">
+    <div className="min-h-screen bg-gradient-to-b from-linen-200 to-white pb-16">
       <Toaster />
       {/* Header / progress */}
       <div className="border-b bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60">
@@ -230,8 +230,8 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <div
                     className={cn(
                       'flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ring-2 transition',
-                      active && 'bg-emerald-600 text-white ring-emerald-600/30',
-                      done && 'bg-emerald-100 text-emerald-700 ring-emerald-200',
+                      active && 'bg-navy text-white ring-gold-400/30',
+                      done && 'bg-gold-100 text-navy ring-gold-200',
                       !active && !done && 'bg-muted text-muted-foreground ring-muted-foreground/15'
                     )}
                   >
@@ -268,7 +268,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
-              <h2 className="text-2xl font-bold tracking-tight text-foreground">Select service</h2>
+              <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">Select service</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {isB2B
                   ? 'As a corporate client, your order is priced per kilogram.'
@@ -284,11 +284,11 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <label
                     className={cn(
                       'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
-                      type === 'ITEM' ? 'border-emerald-500 bg-emerald-50/50' : 'border-muted'
+                      type === 'ITEM' ? 'border-gold-400 bg-gold-50/50' : 'border-muted'
                     )}
                   >
                     <RadioGroupItem value="ITEM" className="sr-only" />
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
                       <User className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
@@ -301,11 +301,11 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <label
                     className={cn(
                       'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
-                      type === 'KG' ? 'border-emerald-500 bg-emerald-50/50' : 'border-muted'
+                      type === 'KG' ? 'border-gold-400 bg-gold-50/50' : 'border-muted'
                     )}
                   >
                     <RadioGroupItem value="KG" className="sr-only" />
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
                       <Building2 className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
@@ -319,19 +319,19 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               )}
 
               {isB2B && (
-                <Card className="mt-5 border-emerald-200 bg-emerald-50/50">
+                <Card className="mt-5 border-gold-200 bg-gold-50/50">
                   <CardContent className="p-5">
                     <div className="flex items-center gap-2">
-                      <Building2 className="h-5 w-5 text-emerald-700" />
-                      <p className="font-semibold text-emerald-900">Corporate Bulk Pickup</p>
+                      <Building2 className="h-5 w-5 text-navy-300" />
+                      <p className="font-semibold text-navy">Corporate Bulk Pickup</p>
                     </div>
-                    <p className="mt-2 text-sm text-emerald-800">
+                    <p className="mt-2 text-sm text-navy-300">
                       Your order will be priced at <strong>{formatNaira(B2B_PRICING.pricePerKg)}/kg</strong>{' '}
                       with a {B2B_PRICING.minimumKg}kg minimum charge. Our rider will collect your
                       items, weigh them at the station, and we&apos;ll send you the final invoice
                       with payment instructions.
                     </p>
-                    <p className="mt-3 text-xs text-emerald-700">
+                    <p className="mt-3 text-xs text-navy-300">
                       Estimated minimum charge: <strong>{formatNaira(B2B_PRICING.minimumCharge)}</strong>
                     </p>
                   </CardContent>
@@ -352,12 +352,16 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                           className={cn(
                             'flex items-center justify-between rounded-xl border p-3 transition',
                             qty > 0
-                              ? 'border-emerald-300 bg-emerald-50/50 ring-1 ring-emerald-200'
-                              : 'border-muted hover:border-emerald-200'
+                              ? 'border-gold-300 bg-gold-50/50 ring-1 ring-gold-200'
+                              : 'border-muted hover:border-gold-200'
                           )}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="text-xl">{g.icon}</span>
+                            <img
+                              src={g.icon}
+                              alt=""
+                              className="h-7 w-7"
+                            />
                             <div>
                               <p className="text-sm font-medium text-foreground">{g.name}</p>
                               <p className="text-xs text-muted-foreground">
@@ -376,7 +380,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                             <span className="w-6 text-center text-sm font-semibold">{qty}</span>
                             <button
                               onClick={() => setQty(g.id, 1)}
-                              className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-600 text-white hover:bg-emerald-700"
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-white hover:bg-navy-500"
                             >
                               <Plus className="h-3.5 w-3.5" />
                             </button>
@@ -387,7 +391,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   </div>
 
                   {selectedItems.length > 0 && (
-                    <div className="mt-4 flex items-center justify-between rounded-xl bg-foreground px-4 py-3 text-background">
+                    <div className="mt-4 flex items-center justify-between rounded-xl bg-navy px-4 py-3 text-white">
                       <span className="text-sm">
                         {selectedItems.reduce((s, i) => s + i.quantity, 0)} item
                         {selectedItems.reduce((s, i) => s + i.quantity, 0) === 1 ? '' : 's'} selected
@@ -412,9 +416,9 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               transition={{ duration: 0.2 }}
             >
               <div className="flex items-start gap-2">
-                <Shield className="mt-1 h-5 w-5 text-emerald-600" />
+                <Shield className="mt-1 h-5 w-5 text-gold-400" />
                 <div>
-                  <h2 className="text-2xl font-bold tracking-tight text-foreground">
+                  <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">
                     Activate your Return-as-Received Guarantee
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
@@ -425,7 +429,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                 </div>
               </div>
 
-              <Card className="mt-5 border-dashed border-emerald-300">
+              <Card className="mt-5 border-dashed border-gold-300">
                 <CardContent className="p-5">
                   <input
                     ref={fileInputRef}
@@ -441,7 +445,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       type="button"
                       variant="outline"
                       onClick={() => fileInputRef.current?.click()}
-                      className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                      className="border-gold-300 text-navy hover:bg-gold-50"
                     >
                       <Camera className="mr-2 h-4 w-4" />
                       Take or upload photos
@@ -456,7 +460,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       {photos.map((p, i) => (
                         <div
                           key={i}
-                          className="group relative aspect-square overflow-hidden rounded-lg ring-1 ring-emerald-200"
+                          className="group relative aspect-square overflow-hidden rounded-lg ring-1 ring-gold-200"
                         >
                           <img
                             src={p.url}
@@ -475,14 +479,14 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   )}
 
                   {photos.length > 0 && (
-                    <label className="mt-4 flex items-start gap-2 rounded-lg bg-emerald-50/60 p-3 text-sm">
+                    <label className="mt-4 flex items-start gap-2 rounded-lg bg-gold-50/60 p-3 text-sm">
                       <input
                         type="checkbox"
                         checked={guaranteeAck}
                         onChange={(e) => setGuaranteeAck(e.target.checked)}
-                        className="mt-0.5 h-4 w-4 rounded accent-emerald-600"
+                        className="mt-0.5 h-4 w-4 rounded accent-gold-400"
                       />
-                      <span className="text-emerald-900">
+                      <span className="text-navy">
                         I confirm these photos document the condition of my items at pickup and I
                         agree to the Return-as-Received Guarantee terms. Claims must be made within
                         24 hours of delivery.
@@ -504,7 +508,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               </Card>
 
               {guaranteeActive && (
-                <div className="mt-4 flex items-center gap-2 rounded-xl bg-emerald-100 px-4 py-3 text-sm text-emerald-900">
+                <div className="mt-4 flex items-center gap-2 rounded-xl bg-gold-100 px-4 py-3 text-sm text-navy">
                   <CheckCircle2 className="h-5 w-5" />
                   <span>
                     <strong>Guarantee Activated.</strong> You saved{' '}
@@ -526,7 +530,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
-              <h2 className="text-2xl font-bold tracking-tight text-foreground">
+              <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">
                 Pickup &amp; delivery
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -557,8 +561,8 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         className={cn(
                           'rounded-lg border px-3 py-2 text-xs font-medium transition',
                           pickupSlot === slot
-                            ? 'border-emerald-500 bg-emerald-50 text-emerald-900'
-                            : 'border-muted text-muted-foreground hover:border-emerald-300'
+                            ? 'border-navy bg-navy-50 text-navy'
+                            : 'border-muted text-muted-foreground hover:border-gold-300'
                         )}
                       >
                         {slot}
@@ -589,7 +593,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               </div>
 
               <div className="mt-4 flex items-start gap-2 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
-                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-400" />
                 <p>
                   Standard turnaround is 48 hours from pickup for retail orders. Corporate
                   bulk orders may take up to 72 hours depending on volume.
@@ -609,7 +613,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               exit={{ opacity: 0, x: -16 }}
               transition={{ duration: 0.2 }}
             >
-              <h2 className="text-2xl font-bold tracking-tight text-foreground">Checkout</h2>
+              <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">Checkout</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 {type === 'ITEM'
                   ? 'Review your order and choose how to pay.'
@@ -638,7 +642,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         </li>
                       ))}
                       {guaranteeActive && (
-                        <li className="flex items-center justify-between text-emerald-700">
+                        <li className="flex items-center justify-between text-navy-300">
                           <span className="flex items-center gap-1">
                             <Shield className="h-3.5 w-3.5" />
                             Return-as-Received discount ({Math.round(GUARANTEE_DISCOUNT * 100)}%)
@@ -666,14 +670,14 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   {type === 'ITEM' && (
                     <div className="mt-4 flex items-center justify-between border-t pt-3">
                       <span className="font-semibold">Total</span>
-                      <span className="text-xl font-bold text-emerald-700">
+                      <span className="text-xl font-bold text-navy-300">
                         {formatNaira(total)}
                       </span>
                     </div>
                   )}
 
                   {guaranteeActive && (
-                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-800 ring-1 ring-emerald-200">
+                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-gold-50 px-3 py-2 text-xs text-navy-300 ring-1 ring-gold-200">
                       <Shield className="h-3.5 w-3.5" /> Guarantee Activated · {photos.length} photos
                       on file
                     </div>
@@ -693,12 +697,12 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       className={cn(
                         'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
                         paymentMethod === 'BANK_TRANSFER'
-                          ? 'border-emerald-500 bg-emerald-50/50'
+                          ? 'border-gold-400 bg-gold-50/50'
                           : 'border-muted'
                       )}
                     >
                       <RadioGroupItem value="BANK_TRANSFER" className="sr-only" />
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
                         <Building2 className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
@@ -713,12 +717,12 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       className={cn(
                         'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
                         paymentMethod === 'PAYSTACK'
-                          ? 'border-emerald-500 bg-emerald-50/50'
+                          ? 'border-gold-400 bg-gold-50/50'
                           : 'border-muted'
                       )}
                     >
                       <RadioGroupItem value="PAYSTACK" className="sr-only" />
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
                         <CreditCard className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
@@ -733,9 +737,9 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   </RadioGroup>
 
                   {paymentMethod === 'BANK_TRANSFER' && (
-                    <Card className="mt-4 border-emerald-200 bg-emerald-50/40">
+                    <Card className="mt-4 border-gold-200 bg-gold-50/40">
                       <CardContent className="p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
                           Transfer to
                         </p>
                         <div className="mt-2 space-y-1 text-sm">
@@ -749,13 +753,13 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-muted-foreground">Account Number</span>
-                            <span className="font-mono font-bold text-emerald-700">
+                            <span className="font-mono font-bold text-navy-300">
                               {COMPANY_BANK.accountNumber}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-muted-foreground">Amount</span>
-                            <span className="font-bold text-emerald-700">{formatNaira(total)}</span>
+                            <span className="font-bold text-navy-300">{formatNaira(total)}</span>
                           </div>
                         </div>
                         <div className="mt-4 border-t pt-3">
@@ -777,7 +781,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                           >
                             {receiptUploaded ? (
                               <>
-                                <CheckCircle2 className="mr-2 h-4 w-4 text-emerald-600" /> Receipt
+                                <CheckCircle2 className="mr-2 h-4 w-4 text-gold-400" /> Receipt
                                 uploaded
                               </>
                             ) : (
@@ -821,14 +825,14 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
             <Button
               onClick={next}
               disabled={!canContinue()}
-              className="rounded-full bg-emerald-600 px-6 hover:bg-emerald-700"
+              className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
             >
               Continue <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           ) : (
             <Button
               onClick={handleConfirm}
-              className="rounded-full bg-emerald-600 px-6 hover:bg-emerald-700"
+              className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
             >
               <Sparkles className="mr-2 h-4 w-4" />
               {type === 'ITEM' ? `Pay & Confirm ${formatNaira(total)}` : 'Confirm pickup request'}

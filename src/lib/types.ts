@@ -102,27 +102,27 @@ export interface GarmentCatalogItem {
   id: string
   name: string
   price: number
-  icon: string // emoji used as a quick glyph
+  icon: string // path to Kozy SVG service icon
   category: 'Shirts' | 'Trousers' | 'Suits' | 'Traditional' | 'Household' | 'Extras'
 }
 
 export const GARMENT_CATALOG: GarmentCatalogItem[] = [
-  { id: 'shirt', name: 'Shirt', price: 500, icon: '👕', category: 'Shirts' },
-  { id: 'longsleeve', name: 'Long-Sleeve Shirt', price: 600, icon: '👔', category: 'Shirts' },
-  { id: 'trouser', name: 'Trousers', price: 700, icon: '👖', category: 'Trousers' },
-  { id: 'jeans', name: 'Jeans', price: 800, icon: '🩳', category: 'Trousers' },
-  { id: 'suit-2pc', name: 'Suit (2-Piece)', price: 4500, icon: '🤵', category: 'Suits' },
-  { id: 'suit-3pc', name: 'Suit (3-Piece)', price: 5500, icon: '🤵‍♂️', category: 'Suits' },
-  { id: 'blazer', name: 'Blazer', price: 2500, icon: '🧥', category: 'Suits' },
-  { id: 'agbada', name: 'Agbada', price: 3500, icon: '🥻', category: 'Traditional' },
-  { id: 'iro-buba', name: 'Iro & Buba', price: 2000, icon: '👚', category: 'Traditional' },
-  { id: 'kaftan', name: 'Kaftan', price: 1500, icon: '🧕', category: 'Traditional' },
-  { id: 'ankara-gown', name: 'Ankara Gown', price: 1800, icon: '👗', category: 'Traditional' },
-  { id: 'bedsheet', name: 'Bedsheet', price: 1200, icon: '🛏️', category: 'Household' },
-  { id: 'duvet', name: 'Duvet', price: 2500, icon: '🧺', category: 'Household' },
-  { id: 'curtain', name: 'Curtain (per panel)', price: 1800, icon: '🪟', category: 'Household' },
-  { id: 'native-cap', name: 'Native Cap', price: 200, icon: '🧢', category: 'Extras' },
-  { id: 'tie', name: 'Tie', price: 300, icon: '🎀', category: 'Extras' },
+  { id: 'shirt', name: 'Shirt', price: 500, icon: '/icons/services/shirt.svg', category: 'Shirts' },
+  { id: 'longsleeve', name: 'Long-Sleeve Shirt', price: 600, icon: '/icons/services/longsleeve.svg', category: 'Shirts' },
+  { id: 'trouser', name: 'Trousers', price: 700, icon: '/icons/services/trouser.svg', category: 'Trousers' },
+  { id: 'jeans', name: 'Jeans', price: 800, icon: '/icons/services/jeans.svg', category: 'Trousers' },
+  { id: 'suit-2pc', name: 'Suit (2-Piece)', price: 4500, icon: '/icons/services/suit.svg', category: 'Suits' },
+  { id: 'suit-3pc', name: 'Suit (3-Piece)', price: 5500, icon: '/icons/services/suit-3pc.svg', category: 'Suits' },
+  { id: 'blazer', name: 'Blazer', price: 2500, icon: '/icons/services/blazer.svg', category: 'Suits' },
+  { id: 'agbada', name: 'Agbada', price: 3500, icon: '/icons/services/agbada.svg', category: 'Traditional' },
+  { id: 'iro-buba', name: 'Iro & Buba', price: 2000, icon: '/icons/services/iro-buba.svg', category: 'Traditional' },
+  { id: 'kaftan', name: 'Kaftan', price: 1500, icon: '/icons/services/kaftan.svg', category: 'Traditional' },
+  { id: 'ankara-gown', name: 'Ankara Gown', price: 1800, icon: '/icons/services/ankara-gown.svg', category: 'Traditional' },
+  { id: 'bedsheet', name: 'Bedsheet', price: 1200, icon: '/icons/services/bedsheet.svg', category: 'Household' },
+  { id: 'duvet', name: 'Duvet', price: 2500, icon: '/icons/services/duvet.svg', category: 'Household' },
+  { id: 'curtain', name: 'Curtain (per panel)', price: 1800, icon: '/icons/services/curtain.svg', category: 'Household' },
+  { id: 'native-cap', name: 'Native Cap', price: 200, icon: '/icons/services/native-cap.svg', category: 'Extras' },
+  { id: 'tie', name: 'Tie', price: 300, icon: '/icons/services/tie.svg', category: 'Extras' },
 ]
 
 // =====================================================
@@ -140,7 +140,7 @@ export const GUARANTEE_DISCOUNT = 0.05 // 5% off when photos uploaded
 // Bank account details for manual transfers (demo)
 export const COMPANY_BANK = {
   bankName: 'Guaranty Trust Bank (GTB)',
-  accountName: 'Lagos Fresh Laundry Ltd',
+  accountName: 'Kozy Premium Dry Cleaning Ltd',
   accountNumber: '0123456789',
   routingNumber: '058152069',
 }

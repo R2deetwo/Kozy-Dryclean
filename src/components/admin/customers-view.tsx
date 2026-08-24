@@ -110,7 +110,7 @@ export function CustomersView() {
                             ? 'bg-amber-100 text-amber-700'
                             : u.role === 'ADMIN'
                             ? 'bg-rose-100 text-rose-700'
-                            : 'bg-emerald-100 text-emerald-700'
+                            : 'bg-gold-100 text-navy'
                         )}
                       >
                         {u.role === 'B2B' ? (
@@ -137,7 +137,7 @@ export function CustomersView() {
                     <span className="font-semibold text-foreground">{userOrders.length}</span>
                   </td>
                   <td className="hidden px-4 py-3 lg:table-cell">
-                    <span className="font-semibold text-emerald-700">{formatNaira(ltv)}</span>
+                    <span className="font-semibold text-navy-300">{formatNaira(ltv)}</span>
                   </td>
                   <td className="hidden px-4 py-3 sm:table-cell text-xs text-muted-foreground">
                     {formatDate(u.createdAt)}
@@ -171,7 +171,7 @@ function RoleBadge({ role }: { role: Role }) {
   if (role === 'B2B') {
     return <Badge className="rounded-full bg-indigo-100 text-indigo-700 hover:bg-indigo-100">Corporate</Badge>
   }
-  return <Badge className="rounded-full bg-emerald-100 text-emerald-700 hover:bg-emerald-100">Retail</Badge>
+  return <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">Retail</Badge>
 }
 
 function CustomerDetailModal({ user, onClose }: { user: User; onClose: () => void }) {
@@ -213,7 +213,7 @@ function CustomerDetailModal({ user, onClose }: { user: User; onClose: () => voi
             <Card className="border-muted/60">
               <CardContent className="p-4">
                 <p className="text-xs text-muted-foreground">Lifetime value</p>
-                <p className="text-xl font-bold text-emerald-700">{formatNaira(ltv)}</p>
+                <p className="text-xl font-bold text-navy-300">{formatNaira(ltv)}</p>
               </CardContent>
             </Card>
           </div>
@@ -264,7 +264,7 @@ function CustomerDetailModal({ user, onClose }: { user: User; onClose: () => voi
                     </div>
                     <div className="flex items-center gap-2">
                       {o.guaranteeActive && (
-                        <Shield className="h-3.5 w-3.5 text-emerald-600" />
+                        <Shield className="h-3.5 w-3.5 text-gold-400" />
                       )}
                       <Badge variant="outline" className="rounded-full text-[10px]">
                         {o.status.replace(/_/g, ' ').toLowerCase()}

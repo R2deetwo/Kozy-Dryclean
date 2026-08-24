@@ -57,14 +57,14 @@ export function AdminDashboard() {
   ]
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] bg-muted/30">
-      {/* Sidebar */}
-      <aside className="sticky top-[3.5rem] hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r bg-white lg:block">
+    <div className="flex min-h-[calc(100vh-3.5rem)] bg-linen-200">
+      {/* Sidebar — Kozy midnight navy */}
+      <aside className="sticky top-[3.5rem] hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 bg-navy text-navy-100 lg:block">
         <div className="flex h-full flex-col">
-          <div className="border-b px-4 py-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground">Admin</p>
-            <p className="font-semibold text-foreground">{admin.name}</p>
-            <p className="text-xs text-muted-foreground">{admin.email}</p>
+          <div className="border-b border-navy-500 px-4 py-4">
+            <p className="text-xs uppercase tracking-wider text-gold-300">Atelier Console</p>
+            <p className="font-serif font-semibold text-white">{admin.name}</p>
+            <p className="text-xs text-navy-300">{admin.email}</p>
           </div>
           <nav className="flex-1 space-y-0.5 p-2">
             {nav.map((n) => {
@@ -77,8 +77,8 @@ export function AdminDashboard() {
                   className={cn(
                     'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition',
                     active
-                      ? 'bg-emerald-50 text-emerald-900 ring-1 ring-emerald-200'
-                      : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                      ? 'bg-gold-400 text-navy shadow-gold'
+                      : 'text-navy-100 hover:bg-navy-500 hover:text-white'
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -88,8 +88,8 @@ export function AdminDashboard() {
                       className={cn(
                         'rounded-full px-1.5 py-0 text-[10px]',
                         n.key === 'payments'
-                          ? 'bg-amber-500 text-white hover:bg-amber-500'
-                          : 'bg-muted-foreground/15 text-foreground hover:bg-muted-foreground/15'
+                          ? 'bg-gold-400 text-navy hover:bg-gold-400'
+                          : 'bg-white/15 text-white hover:bg-white/15'
                       )}
                     >
                       {n.badge}
@@ -99,12 +99,12 @@ export function AdminDashboard() {
               )
             })}
           </nav>
-          <div className="border-t p-3">
+          <div className="border-t border-navy-500 p-3">
             <Button
               variant="ghost"
               size="sm"
               onClick={resetDemo}
-              className="w-full justify-start text-xs text-muted-foreground"
+              className="w-full justify-start text-xs text-navy-300 hover:bg-navy-500 hover:text-white"
             >
               <RotateCcw className="mr-2 h-3 w-3" /> Reset demo data
             </Button>
@@ -126,7 +126,7 @@ export function AdminDashboard() {
                   className={cn(
                     'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
                     active
-                      ? 'bg-emerald-600 text-white'
+                      ? 'bg-navy text-white'
                       : 'bg-muted text-muted-foreground'
                   )}
                 >
@@ -168,7 +168,7 @@ export function AdminDashboard() {
               )}
             </Button>
             <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-semibold text-gold-400">
                 {admin.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
               </div>
               <div className="leading-tight">
@@ -215,8 +215,10 @@ function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">Dashboard</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
+        <h1 className="font-serif text-2xl font-semibold tracking-tight text-navy">
+          Atelier Console
+        </h1>
+        <p className="mt-1 text-sm text-navy-300">
           Operations overview · {new Date().toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </div>
@@ -311,7 +313,7 @@ function KpiCard({
       disabled={!onClick}
       className={cn(
         'flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left transition',
-        onClick ? 'cursor-pointer hover:border-emerald-200 hover:shadow-sm' : 'cursor-default',
+        onClick ? 'cursor-pointer hover:border-gold-200 hover:shadow-sm' : 'cursor-default',
         tone === 'amber' ? 'border-amber-200' : 'border-muted/60'
       )}
     >
@@ -324,7 +326,7 @@ function KpiCard({
             'flex h-8 w-8 items-center justify-center rounded-lg',
             tone === 'amber'
               ? 'bg-amber-100 text-amber-700'
-              : 'bg-emerald-100 text-emerald-700'
+              : 'bg-gold-100 text-navy'
           )}
         >
           <Icon className="h-4 w-4" />
@@ -356,15 +358,15 @@ function QuickActionCard({
   return (
     <button
       onClick={onClick}
-      className="group flex items-start gap-3 rounded-xl border bg-white p-4 text-left transition hover:border-emerald-200 hover:shadow-sm"
+      className="group flex items-start gap-3 rounded-xl border bg-white p-4 text-left transition hover:border-gold-200 hover:shadow-sm"
     >
-      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
         <Icon className="h-5 w-5" />
       </div>
       <div className="flex-1">
         <p className="text-sm font-semibold text-foreground">{title}</p>
         <p className="mt-1 text-xs text-muted-foreground">{desc}</p>
-        <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-700 group-hover:underline">
+        <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-navy-300 group-hover:underline">
           {cta} →
         </span>
       </div>
@@ -414,7 +416,7 @@ function RecentNotificationsCard() {
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-foreground">Recent notifications</h3>
-        <Sparkles className="h-4 w-4 text-emerald-600" />
+        <Sparkles className="h-4 w-4 text-gold-400" />
       </div>
       <ul className="space-y-2 text-sm">
         {notifications.map((n) => (

@@ -31,7 +31,7 @@ export function NotificationsPanel() {
                   key={n.id}
                   className="flex items-start gap-3 border-b p-3 last:border-0 hover:bg-muted/30"
                 >
-                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-100 text-emerald-700">
+                  <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gold-100 text-navy">
                     {n.channel === 'SMS' && <Smartphone className="h-4 w-4" />}
                     {n.channel === 'EMAIL' && <Mail className="h-4 w-4" />}
                     {n.channel === 'IN_APP' && <Bell className="h-4 w-4" />}

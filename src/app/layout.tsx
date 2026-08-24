@@ -1,36 +1,41 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Outfit, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const outfit = Outfit({
+  variable: "--font-outfit",
   subsets: ["latin"],
+  display: "swap",
+  weight: ["300", "400", "500", "600", "700", "800"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
   subsets: ["latin"],
+  display: "swap",
+  weight: ["400", "500", "600", "700", "800", "900"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
-  title: "Lagos Fresh Laundry · Dry Cleaning & Laundry Pickup in Lagos",
-  description: "Modern laundry & dry cleaning for individuals and businesses across Lagos. Book a pickup in 60 seconds, track every stage, pay by bank transfer or Paystack.",
-  keywords: ["laundry Lagos", "dry cleaning Lagos", "laundry pickup Lagos", "laundry delivery Lagos", "corporate laundry", "B2B laundry"],
-  authors: [{ name: "Lagos Fresh Laundry" }],
+  title: "Kozy · Premium Dry Cleaning & Laundry Care in Lagos",
+  description: "Uncompromising care. Exceptional convenience. Kozy is Lagos' premium dry cleaning & laundry service — from designer wear to corporate linens, picked up at your door.",
+  keywords: ["Kozy", "dry cleaning Lagos", "laundry Lagos", "premium dry cleaning", "Ikoyi laundry", "Lekki laundry", "corporate laundry Lagos"],
+  authors: [{ name: "Kozy" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: "/kozy-mark.svg",
   },
   openGraph: {
-    title: "Lagos Fresh Laundry",
-    description: "Lagos' freshest laundry & dry cleaning, picked up at your door.",
-    siteName: "Lagos Fresh Laundry",
+    title: "Kozy · Premium Dry Cleaning & Laundry Care",
+    description: "Uncompromising care. Exceptional convenience. Lagos' premium dry cleaning & laundry service.",
+    siteName: "Kozy",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Lagos Fresh Laundry",
-    description: "Lagos' freshest laundry & dry cleaning, picked up at your door.",
+    title: "Kozy · Premium Dry Cleaning & Laundry Care",
+    description: "Uncompromising care. Exceptional convenience.",
   },
 };
 
@@ -42,7 +47,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased bg-background text-foreground`}
+        className={`${outfit.variable} ${playfair.variable} font-sans antialiased bg-background text-foreground`}
       >
         {children}
         <Toaster />

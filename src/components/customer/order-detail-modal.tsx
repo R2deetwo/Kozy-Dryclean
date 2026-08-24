@@ -56,7 +56,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               {order.type === 'ITEM' ? 'Retail' : 'Corporate'}
             </Badge>
             {order.guaranteeActive && (
-              <Badge className="rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+              <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
                 <Shield className="mr-1 h-2.5 w-2.5" /> Guarantee
               </Badge>
             )}
@@ -91,7 +91,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                   </li>
                 ))}
                 {order.guaranteeActive && (
-                  <li className="text-xs text-emerald-700">
+                  <li className="text-xs text-navy-300">
                     Includes 5% Return-as-Received discount.
                   </li>
                 )}
@@ -143,7 +143,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           {/* Driver info */}
           {driver && (
-            <section className="rounded-lg bg-emerald-50/50 p-3 text-sm ring-1 ring-emerald-100">
+            <section className="rounded-lg bg-gold-50/50 p-3 text-sm ring-1 ring-gold-100">
               <p className="flex items-center gap-1.5 font-medium text-foreground">
                 <UserIcon className="h-3.5 w-3.5" /> Assigned rider
               </p>
@@ -151,7 +151,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                 <span className="text-foreground/80">{driver.name}</span>
                 <a
                   href={`tel:${driver.phone}`}
-                  className="inline-flex items-center gap-1 text-xs text-emerald-700 hover:underline"
+                  className="inline-flex items-center gap-1 text-xs text-navy-300 hover:underline"
                 >
                   <Phone className="h-3 w-3" /> {driver.phone}
                 </a>
@@ -210,13 +210,13 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           {media.length > 0 && (
             <section>
               <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                <Shield className="h-4 w-4 text-emerald-600" /> Condition photos ({media.length})
+                <Shield className="h-4 w-4 text-gold-400" /> Condition photos ({media.length})
               </h3>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {media.map((m) => (
                   <div
                     key={m.id}
-                    className="aspect-square overflow-hidden rounded-lg ring-1 ring-emerald-200"
+                    className="aspect-square overflow-hidden rounded-lg ring-1 ring-gold-200"
                   >
                     <img
                       src={m.imageUrl}
@@ -243,7 +243,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 function PaymentStatusBadge({ status }: { status: 'PENDING' | 'VERIFIED' | 'REJECTED' }) {
   if (status === 'VERIFIED') {
     return (
-      <Badge className="rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+      <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
         Verified
       </Badge>
     )

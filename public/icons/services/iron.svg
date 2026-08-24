@@ -1,0 +1,7 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Iron (pressing) -->
+  <path d="M3 22 L28 22 L26 18 L11 18 L9 14 L4 14 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <line x1="3" y1="22" x2="28" y2="25" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <path d="M14 14 L14 11 L18 11 L18 14" stroke="#D4AF37" strokeWidth="1.4" fill="none"/>
+  <line x1="6" y1="18" x2="9" y2="18" stroke="#D4AF37" strokeWidth="1"/>
+</svg>

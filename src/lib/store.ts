@@ -35,7 +35,7 @@ function genId(prefix = ''): string {
 let orderCounter = 1024
 function nextOrderNumber(): string {
   orderCounter += 1
-  return `LG-${orderCounter}`
+  return `KZ-${orderCounter}`
 }
 
 // =====================================================
@@ -44,16 +44,16 @@ function nextOrderNumber(): string {
 const SEED_USERS: User[] = [
   {
     id: 'u-admin',
-    email: 'admin@lagosfresh.ng',
+    email: 'concierge@kozy.ng',
     name: 'Adaeze Okonkwo',
     phone: '+234 802 111 2233',
     role: 'ADMIN',
-    address: '12 Adeola Odeku St, Victoria Island, Lagos',
+    address: 'Kozy Atelier, 12 Gerard Rd, Ikoyi, Lagos',
     createdAt: '2025-01-15T08:00:00.000Z',
   },
   {
     id: 'u-driver-1',
-    email: 'tunde@lagosfresh.ng',
+    email: 'tunde@kozy.ng',
     name: 'Tunde Balogun',
     phone: '+234 803 222 4455',
     role: 'DRIVER',
@@ -62,7 +62,7 @@ const SEED_USERS: User[] = [
   },
   {
     id: 'u-driver-2',
-    email: 'bisi@lagosfresh.ng',
+    email: 'bisi@kozy.ng',
     name: 'Bisi Adebayo',
     phone: '+234 805 333 6677',
     role: 'DRIVER',
@@ -118,7 +118,7 @@ const SEED_ORDERS: Order[] = [
   // B2C order — delivered (history)
   {
     id: 'o-1001',
-    orderNumber: 'LG-1001',
+    orderNumber: 'KZ-1001',
     userId: 'u-b2c-1',
     driverId: 'u-driver-1',
     status: 'DELIVERED',
@@ -143,7 +143,7 @@ const SEED_ORDERS: Order[] = [
   // B2C order — out for delivery
   {
     id: 'o-1002',
-    orderNumber: 'LG-1002',
+    orderNumber: 'KZ-1002',
     userId: 'u-b2c-2',
     driverId: 'u-driver-2',
     status: 'OUT_FOR_DELIVERY',
@@ -167,7 +167,7 @@ const SEED_ORDERS: Order[] = [
   // B2B order — picked up, awaiting weight input from admin
   {
     id: 'o-1003',
-    orderNumber: 'LG-1003',
+    orderNumber: 'KZ-1003',
     userId: 'u-b2b-1',
     driverId: 'u-driver-1',
     status: 'PICKED_UP',
@@ -186,7 +186,7 @@ const SEED_ORDERS: Order[] = [
   // B2C order — payment pending verification (uploaded receipt)
   {
     id: 'o-1004',
-    orderNumber: 'LG-1004',
+    orderNumber: 'KZ-1004',
     userId: 'u-b2c-1',
     status: 'PAYMENT_PENDING_VERIFICATION',
     type: 'ITEM',
@@ -203,7 +203,7 @@ const SEED_ORDERS: Order[] = [
   // B2B order — payment verified, in processing
   {
     id: 'o-1005',
-    orderNumber: 'LG-1005',
+    orderNumber: 'KZ-1005',
     userId: 'u-b2b-2',
     driverId: 'u-driver-2',
     status: 'PROCESSING',
@@ -243,7 +243,7 @@ const SEED_PAYMENTS: Payment[] = [
     amount: 11000,
     method: 'PAYSTACK',
     status: 'VERIFIED',
-    paystackRef: 'PSK_DEMO_1002',
+    paystackRef: 'PSK_DEMO_KZ1002',
     verifiedAt: '2026-08-21T20:00:00.000Z',
     createdAt: '2026-08-21T19:30:00.000Z',
     updatedAt: '2026-08-21T20:00:00.000Z',
@@ -290,16 +290,16 @@ const SEED_NOTIFICATIONS: NotificationTemplate[] = [
     id: 'n-1',
     channel: 'SMS',
     to: 'Chioma Eze',
-    orderId: 'LG-1001',
-    body: 'Delivered! Order #LG-1001 is complete. Rate your experience: /rate/LG-1001',
+    orderId: 'KZ-1001',
+    body: 'Delivered! Order #KZ-1001 is complete. Rate your experience: /rate/KZ-1001',
     sentAt: '2026-08-20T16:31:00.000Z',
   },
   {
     id: 'n-2',
     channel: 'SMS',
     to: 'Femi Adeyemi',
-    orderId: 'LG-1002',
-    body: 'On the way! Bisi Adebayo is delivering your laundry. Call: +234 805 333 6677',
+    orderId: 'KZ-1002',
+    body: 'On the way! Bisi is delivering your Kozy order. Call: +234 805 333 6677',
     sentAt: '2026-08-24T13:00:00.000Z',
   },
 ]

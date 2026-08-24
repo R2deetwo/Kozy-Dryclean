@@ -16,9 +16,9 @@ export function OrderPipeline({ order, compact = false }: Props) {
     // Render as "Awaiting payment" — show stage 0 only
     return (
       <div className="space-y-3">
-        <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-amber-200">
+        <div className="flex items-center gap-2 rounded-lg bg-gold-50 px-3 py-2 text-xs text-navy ring-1 ring-gold-200">
           <span className="font-medium">Awaiting payment verification</span>
-          <span className="text-amber-600">— our team will confirm your bank transfer shortly.</span>
+          <span className="text-navy-300">— our atelier will confirm your bank transfer shortly.</span>
         </div>
         <PipelineRail activeIdx={0} compact={compact} />
       </div>
@@ -48,15 +48,15 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
                   <div
                     className={cn(
                       'h-0.5 flex-1',
-                      done || active ? 'bg-emerald-500' : 'bg-muted-foreground/20'
+                      done || active ? 'bg-navy' : 'bg-muted-foreground/20'
                     )}
                   />
                 )}
                 <div
                   className={cn(
                     'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ring-2 transition',
-                    active && 'bg-emerald-500 text-white ring-emerald-500/30',
-                    done && 'bg-emerald-500 text-white ring-emerald-500/30',
+                    active && 'bg-navy text-white ring-gold-400/30',
+                    done && 'bg-navy text-white ring-gold-400/30',
                     !active && !done && 'bg-white text-muted-foreground ring-muted-foreground/20'
                   )}
                 >
@@ -66,7 +66,7 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
                   <div
                     className={cn(
                       'h-0.5 flex-1',
-                      done ? 'bg-emerald-500' : 'bg-muted-foreground/20'
+                      done ? 'bg-navy' : 'bg-muted-foreground/20'
                     )}
                   />
                 )}
@@ -111,7 +111,7 @@ export function OrderTimeline({ order }: { order: Order }) {
     <div className="space-y-2">
       {events.map((e, i) => (
         <div key={i} className="flex items-start gap-2 text-sm">
-          <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
+          <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-navy" />
           <div className="flex-1">
             <span className="text-foreground">{e.label}</span>
             <span className="ml-2 text-xs text-muted-foreground">{formatDateTime(e.at)}</span>

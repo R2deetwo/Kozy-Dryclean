@@ -67,7 +67,7 @@ export function DriverView() {
         <div className="mx-auto max-w-md">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs uppercase tracking-wider text-emerald-400">Driver on duty</p>
+              <p className="text-xs uppercase tracking-wider text-gold-400">Driver on duty</p>
               <p className="text-lg font-bold">{driver.name}</p>
             </div>
             <div className="flex items-center gap-2">
@@ -104,7 +104,7 @@ export function DriverView() {
           </div>
           <div className="rounded-xl bg-slate-800 p-3 text-center">
             <p className="text-xs text-slate-400">Pickups</p>
-            <p className="text-2xl font-bold text-emerald-400">
+            <p className="text-2xl font-bold text-gold-400">
               {orders.filter((o) => o.status === 'PAYMENT_VERIFIED').length}
             </p>
             <p className="text-[10px] text-slate-500">to collect</p>
@@ -121,7 +121,7 @@ export function DriverView() {
         {/* Route header */}
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-base font-bold">
-            <Route className="h-4 w-4 text-emerald-400" /> Your route today
+            <Route className="h-4 w-4 text-gold-400" /> Your route today
           </h2>
           <span className="text-xs text-slate-400">
             {orders.length} stop{orders.length === 1 ? '' : 's'}
@@ -131,7 +131,7 @@ export function DriverView() {
         {/* Stop cards */}
         {orders.length === 0 ? (
           <div className="rounded-xl bg-slate-800 p-8 text-center">
-            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-500" />
+            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-gold-400" />
             <p className="font-semibold text-white">Route complete!</p>
             <p className="mt-1 text-xs text-slate-400">
               No pickups or deliveries assigned right now.
@@ -178,7 +178,7 @@ function DriverStopCard({
       whileTap={{ scale: 0.98 }}
       className={cn(
         'relative w-full overflow-hidden rounded-2xl p-4 text-left shadow-lg',
-        isPickup && 'bg-gradient-to-br from-emerald-600 to-teal-700',
+        isPickup && 'bg-gradient-to-br from-navy to-navy-500',
         isDrop && 'bg-gradient-to-br from-cyan-600 to-blue-700'
       )}
     >
@@ -276,7 +276,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
         <div
           className={cn(
             'px-4 py-3 text-center text-sm font-semibold sm:px-6',
-            isPickup ? 'bg-emerald-600' : 'bg-cyan-600'
+            isPickup ? 'bg-navy' : 'bg-navy-500'
           )}
         >
           {isPickup ? 'COLLECT FROM CUSTOMER' : 'DELIVER TO CUSTOMER'}
@@ -287,7 +287,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
           <div className="rounded-2xl bg-slate-800 p-5">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-lg font-bold text-white">
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-navy text-lg font-bold text-white">
                   {customer?.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
                 </div>
                 <div>
@@ -296,7 +296,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
                 </div>
               </div>
               {order.guaranteeActive && (
-                <Badge className="bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/20">
+                <Badge className="bg-navy/20 text-gold-300 hover:bg-navy/20">
                   <Check className="mr-1 h-3 w-3" /> Guarantee
                 </Badge>
               )}
@@ -327,7 +327,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
           <div className="mt-3 grid grid-cols-2 gap-3">
             <a
               href={`tel:${customer?.phone}`}
-              className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-base font-bold text-white shadow-lg active:scale-95"
+              className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-navy text-base font-bold text-white shadow-lg active:scale-95"
             >
               <Phone className="h-5 w-5" /> Call
             </a>
@@ -344,7 +344,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
           {/* Items list — no financial data */}
           <div className="mt-4 rounded-2xl bg-slate-800 p-4">
             <p className="flex items-center gap-1.5 text-sm font-semibold text-white">
-              <ListChecks className="h-4 w-4 text-emerald-400" />
+              <ListChecks className="h-4 w-4 text-gold-400" />
               {isPickup ? 'Items to collect' : 'Items to deliver'}
             </p>
             {order.type === 'ITEM' ? (
@@ -355,7 +355,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
                     className="flex items-center justify-between rounded-lg bg-slate-900/60 px-3 py-2 text-sm"
                   >
                     <span className="text-white">
-                      <span className="mr-1 font-bold text-emerald-400">{i.quantity}×</span>
+                      <span className="mr-1 font-bold text-gold-400">{i.quantity}×</span>
                       {i.name}
                     </span>
                   </li>
@@ -372,7 +372,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
               </div>
             )}
             {order.guaranteeActive && (
-              <p className="mt-2 flex items-center gap-1 text-xs text-emerald-300">
+              <p className="mt-2 flex items-center gap-1 text-xs text-gold-300">
                 <AlertCircle className="h-3 w-3" /> Handle with care — Guarantee active. Inspect items before confirming pickup.
               </p>
             )}
@@ -392,7 +392,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
                 key="done"
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
-                className="flex h-16 items-center justify-center gap-2 rounded-2xl bg-emerald-600 text-lg font-bold text-white"
+                className="flex h-16 items-center justify-center gap-2 rounded-2xl bg-navy text-lg font-bold text-white"
               >
                 <CheckCircle2 className="h-6 w-6" /> Confirmed!
               </motion.div>
@@ -438,7 +438,7 @@ function SwipeToConfirm({
 
       {/* Progress fill */}
       <motion.div
-        className="absolute inset-y-0 left-0 rounded-2xl bg-emerald-600/30"
+        className="absolute inset-y-0 left-0 rounded-2xl bg-gold-400/30"
         animate={{ width: 80 + drag }}
         transition={{ duration: 0 }}
       />
@@ -455,7 +455,7 @@ function SwipeToConfirm({
           setDrag(0)
         }}
         whileTap={{ cursor: 'grabbing' }}
-        className="relative z-10 ml-1 flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-emerald-500 text-white shadow-lg active:cursor-grabbing"
+        className="relative z-10 ml-1 flex h-14 w-14 cursor-grab items-center justify-center rounded-full bg-navy text-white shadow-lg active:cursor-grabbing"
       >
         {loading ? (
           <motion.div

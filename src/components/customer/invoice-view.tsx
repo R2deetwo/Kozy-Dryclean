@@ -51,7 +51,7 @@ export function InvoiceView({ order, onBack }: Props) {
 
         <Card className="overflow-hidden shadow-sm">
           {/* Invoice header */}
-          <div className="bg-gradient-to-br from-teal-600 to-emerald-600 px-6 py-6 text-white sm:px-8">
+          <div className="bg-gradient-to-br from-navy to-navy-500 px-6 py-6 text-white sm:px-8">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
@@ -60,15 +60,15 @@ export function InvoiceView({ order, onBack }: Props) {
                   </div>
                   <p className="text-lg font-bold">Lagos Fresh Laundry</p>
                 </div>
-                <p className="mt-1 text-xs text-emerald-50">
+                <p className="mt-1 text-xs text-gold-100">
                   12 Adeola Odeku St, Victoria Island, Lagos
                 </p>
-                <p className="text-xs text-emerald-50">+234 800 LAUNDRY · hello@lagosfresh.ng</p>
+                <p className="text-xs text-gold-100">+234 800 LAUNDRY · hello@lagosfresh.ng</p>
               </div>
               <div className="text-right">
                 <p className="text-sm font-semibold uppercase tracking-wide">Invoice</p>
                 <p className="font-mono text-sm">#{order.orderNumber}</p>
-                <p className="mt-1 text-xs text-emerald-50">
+                <p className="mt-1 text-xs text-gold-100">
                   Issued: {formatDate(verifiedPayment?.verifiedAt ?? order.updatedAt)}
                 </p>
               </div>
@@ -154,10 +154,10 @@ export function InvoiceView({ order, onBack }: Props) {
                 )}
                 {order.guaranteeActive && guaranteeDiscount > 0 && (
                   <tr>
-                    <td className="py-2 text-emerald-700" colSpan={3}>
+                    <td className="py-2 text-navy-300" colSpan={3}>
                       Return-as-Received Guarantee discount ({Math.round(GUARANTEE_DISCOUNT * 100)}%)
                     </td>
-                    <td className="py-2 text-right font-medium text-emerald-700">
+                    <td className="py-2 text-right font-medium text-navy-300">
                       −{formatNaira(guaranteeDiscount)}
                     </td>
                   </tr>
@@ -172,7 +172,7 @@ export function InvoiceView({ order, onBack }: Props) {
                   <span>{formatNaira(subtotal)}</span>
                 </div>
                 {guaranteeDiscount > 0 && (
-                  <div className="flex justify-between text-emerald-700">
+                  <div className="flex justify-between text-navy-300">
                     <span>Discount</span>
                     <span>−{formatNaira(guaranteeDiscount)}</span>
                   </div>
@@ -186,14 +186,14 @@ export function InvoiceView({ order, onBack }: Props) {
 
             {/* Payment summary */}
             {verifiedPayment && (
-              <div className="mt-6 rounded-lg bg-emerald-50 p-4 text-sm ring-1 ring-emerald-100">
+              <div className="mt-6 rounded-lg bg-gold-50 p-4 text-sm ring-1 ring-gold-100">
                 <p className="flex items-center justify-between">
-                  <span className="text-emerald-900">Payment received</span>
-                  <span className="font-bold text-emerald-700">
+                  <span className="text-navy">Payment received</span>
+                  <span className="font-bold text-navy-300">
                     {formatNaira(verifiedPayment.amount)}
                   </span>
                 </p>
-                <p className="mt-1 text-xs text-emerald-700">
+                <p className="mt-1 text-xs text-navy-300">
                   {verifiedPayment.method === 'BANK_TRANSFER'
                     ? 'Bank transfer verified by admin'
                     : 'Paystack webhook auto-verified'}{' '}
@@ -213,15 +213,15 @@ export function InvoiceView({ order, onBack }: Props) {
                 <span className="text-muted-foreground">Account name</span>
                 <span className="font-medium">{COMPANY_BANK.accountName}</span>
                 <span className="text-muted-foreground">Account number</span>
-                <span className="font-mono font-bold text-emerald-700">
+                <span className="font-mono font-bold text-navy-300">
                   {COMPANY_BANK.accountNumber}
                 </span>
               </div>
             </div>
 
             {order.guaranteeActive && (
-              <div className="mt-6 flex items-start gap-2 rounded-lg bg-emerald-50/50 p-3 text-xs text-emerald-800 ring-1 ring-emerald-100">
-                <Shield className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
+              <div className="mt-6 flex items-start gap-2 rounded-lg bg-gold-50/50 p-3 text-xs text-navy-300 ring-1 ring-gold-100">
+                <Shield className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
                 <p>
                   Return-as-Received Guarantee active. Items must be returned clean and in the
                   structural condition documented at pickup. Claims must be filed within 24 hours of
@@ -235,7 +235,7 @@ export function InvoiceView({ order, onBack }: Props) {
               <Button variant="outline" size="sm" onClick={() => window.print()} className="rounded-full">
                 <Printer className="mr-2 h-3.5 w-3.5" /> Print
               </Button>
-              <Button size="sm" className="rounded-full bg-emerald-600 hover:bg-emerald-700">
+              <Button size="sm" className="rounded-full bg-gold-gradient text-navy hover:opacity-90">
                 <Download className="mr-2 h-3.5 w-3.5" /> Download PDF
               </Button>
             </div>

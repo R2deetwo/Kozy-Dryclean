@@ -66,17 +66,17 @@ export function CustomerDashboard({
           </button>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <p className="text-xs uppercase tracking-wider text-muted-foreground">
+              <p className="text-xs uppercase tracking-[0.15em] text-gold-400">
                 Welcome back
               </p>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              <h1 className="font-serif text-2xl font-semibold tracking-tight text-navy sm:text-3xl">
                 {currentUser.name}
               </h1>
-              <p className="mt-1 text-sm text-muted-foreground">
+              <p className="mt-1 text-sm text-navy-300">
                 {currentUser.email} · {currentUser.phone}
               </p>
             </div>
-            <Button onClick={onBook} className="rounded-full bg-emerald-600 hover:bg-emerald-700">
+            <Button onClick={onBook} className="rounded-full bg-gold-gradient text-navy hover:opacity-90">
               <PlusCircle className="mr-2 h-4 w-4" /> Book new pickup
             </Button>
           </div>
@@ -86,28 +86,28 @@ export function CustomerDashboard({
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
         {/* Stats */}
         <div className="mb-6 grid grid-cols-3 gap-3">
-          <Card className="border-muted/60 shadow-sm">
+          <Card className="border-navy-100 shadow-navy">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-navy-300">
                 <Package className="h-3.5 w-3.5" /> Active
               </div>
-              <p className="mt-1 text-2xl font-bold text-foreground">{activeOrders.length}</p>
+              <p className="mt-1 font-serif text-2xl font-bold text-navy">{activeOrders.length}</p>
             </CardContent>
           </Card>
-          <Card className="border-muted/60 shadow-sm">
+          <Card className="border-navy-100 shadow-navy">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-navy-300">
                 <Receipt className="h-3.5 w-3.5" /> Past orders
               </div>
-              <p className="mt-1 text-2xl font-bold text-foreground">{pastOrders.length}</p>
+              <p className="mt-1 font-serif text-2xl font-bold text-navy">{pastOrders.length}</p>
             </CardContent>
           </Card>
-          <Card className="border-muted/60 shadow-sm">
+          <Card className="border-navy-100 shadow-navy">
             <CardContent className="p-4">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 text-xs uppercase tracking-wider text-navy-300">
                 <Sparkles className="h-3.5 w-3.5" /> Guarantee
               </div>
-              <p className="mt-1 text-2xl font-bold text-foreground">
+              <p className="mt-1 font-serif text-2xl font-bold text-navy">
                 {orders.filter((o) => o.guaranteeActive).length}
               </p>
             </CardContent>
@@ -115,12 +115,12 @@ export function CustomerDashboard({
         </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'active' | 'invoices')}>
-          <TabsList className="bg-muted">
-            <TabsTrigger value="active">
+          <TabsList className="bg-linen-200">
+            <TabsTrigger value="active" className="data-[state=active]:bg-navy data-[state=active]:text-white">
               <Clock className="mr-1.5 h-3.5 w-3.5" /> Active ({filteredActive.length})
             </TabsTrigger>
-            <TabsTrigger value="invoices">
-              <Receipt className="mr-1.5 h-3.5 w-3.5" /> Invoices & History ({filteredPast.length})
+            <TabsTrigger value="invoices" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+              <Receipt className="mr-1.5 h-3.5 w-3.5" /> Invoices &amp; History ({filteredPast.length})
             </TabsTrigger>
           </TabsList>
 
@@ -180,14 +180,14 @@ function EmptyState({ onBook }: { onBook: () => void }) {
   return (
     <Card className="border-dashed">
       <CardContent className="flex flex-col items-center justify-center gap-3 p-10 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy">
           <ShoppingBag className="h-7 w-7" />
         </div>
         <p className="font-medium text-foreground">No orders here yet</p>
         <p className="max-w-sm text-sm text-muted-foreground">
           Book your first pickup and it&apos;ll show up here with live tracking.
         </p>
-        <Button onClick={onBook} className="mt-2 rounded-full bg-emerald-600 hover:bg-emerald-700">
+        <Button onClick={onBook} className="mt-2 rounded-full bg-gold-gradient text-navy hover:opacity-90">
           <PlusCircle className="mr-2 h-4 w-4" /> Book pickup
         </Button>
       </CardContent>
@@ -216,8 +216,8 @@ function ActiveOrderCard({
         className={cn(
           'overflow-hidden transition',
           highlighted
-            ? 'border-emerald-400 ring-2 ring-emerald-200'
-            : 'border-muted/60 shadow-sm hover:border-emerald-200'
+            ? 'border-gold-400 ring-2 ring-gold-200'
+            : 'border-muted/60 shadow-sm hover:border-gold-200'
         )}
       >
         <CardContent className="p-5">
@@ -231,7 +231,7 @@ function ActiveOrderCard({
                   {order.type === 'ITEM' ? 'Retail' : 'Corporate'}
                 </Badge>
                 {order.guaranteeActive && (
-                  <Badge className="rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                  <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
                     <Sparkles className="mr-1 h-2.5 w-2.5" /> Guarantee
                   </Badge>
                 )}
@@ -292,7 +292,7 @@ function PastOrderCard({
   onViewInvoice: () => void
 }) {
   return (
-    <Card className="border-muted/60 shadow-sm hover:border-emerald-200">
+    <Card className="border-muted/60 shadow-sm hover:border-gold-200">
       <CardContent className="flex items-center justify-between gap-3 p-4">
         <div className="flex-1">
           <div className="flex items-center gap-2">
@@ -300,12 +300,12 @@ function PastOrderCard({
               #{order.orderNumber}
             </span>
             {order.status === 'DELIVERED' && (
-              <Badge variant="outline" className="rounded-full bg-emerald-50 text-emerald-700">
+              <Badge variant="outline" className="rounded-full bg-gold-50 text-navy-300">
                 Delivered
               </Badge>
             )}
             {order.guaranteeActive && (
-              <Badge className="rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+              <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
                 <Sparkles className="mr-1 h-2.5 w-2.5" /> Guarantee
               </Badge>
             )}

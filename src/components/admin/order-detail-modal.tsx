@@ -145,7 +145,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               {order.type === 'ITEM' ? 'Retail' : 'Corporate'}
             </Badge>
             {order.guaranteeActive && (
-              <Badge className="rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+              <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
                 <Shield className="mr-1 h-2.5 w-2.5" /> Guarantee
               </Badge>
             )}
@@ -188,7 +188,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               <p className="mt-1 font-medium text-foreground">{customer?.name}</p>
               <a
                 href={`tel:${customer?.phone}`}
-                className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-700 hover:underline"
+                className="mt-1 inline-flex items-center gap-1 text-xs text-navy-300 hover:underline"
               >
                 <Phone className="h-3 w-3" /> {customer?.phone}
               </a>
@@ -208,7 +208,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                   <p className="mt-1 font-medium text-foreground">{driver.name}</p>
                   <a
                     href={`tel:${driver.phone}`}
-                    className="mt-1 inline-flex items-center gap-1 text-xs text-emerald-700 hover:underline"
+                    className="mt-1 inline-flex items-center gap-1 text-xs text-navy-300 hover:underline"
                   >
                     <Phone className="h-3 w-3" /> {driver.phone}
                   </a>
@@ -341,7 +341,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                       <div className="flex items-center gap-2">
                         <span className="font-bold">{formatNaira(p.amount)}</span>
                         {p.status === 'VERIFIED' && (
-                          <Badge className="rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                          <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
                             <CheckCircle2 className="mr-1 h-3 w-3" /> Verified
                           </Badge>
                         )}
@@ -368,7 +368,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                           <Button
                             size="sm"
                             onClick={handleVerify}
-                            className="bg-emerald-600 hover:bg-emerald-700"
+                            className="bg-gold-gradient text-navy hover:opacity-90"
                           >
                             <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Verify
                           </Button>
@@ -403,11 +403,11 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           {media.length > 0 && (
             <section>
               <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-foreground">
-                <Shield className="h-4 w-4 text-emerald-600" /> Condition photos ({media.length})
+                <Shield className="h-4 w-4 text-gold-400" /> Condition photos ({media.length})
               </h3>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {media.map((m) => (
-                  <div key={m.id} className="aspect-square overflow-hidden rounded-lg ring-1 ring-emerald-200">
+                  <div key={m.id} className="aspect-square overflow-hidden rounded-lg ring-1 ring-gold-200">
                     <img src={m.imageUrl} alt="Condition" className="h-full w-full object-cover" />
                   </div>
                 ))}

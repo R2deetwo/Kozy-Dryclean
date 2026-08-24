@@ -71,7 +71,7 @@ export function PaymentQueue() {
         <p className="text-xs text-muted-foreground">No pending receipts — you&apos;re all caught up.</p>
         <Card className="mt-6 border-dashed">
           <CardContent className="flex flex-col items-center justify-center gap-3 p-10 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy">
               <Inbox className="h-7 w-7" />
             </div>
             <p className="font-medium text-foreground">Inbox zero!</p>
@@ -126,13 +126,13 @@ export function PaymentQueue() {
                     }}
                     className={cn(
                       'flex w-full items-start gap-2 border-b p-3 text-left transition',
-                      isActive ? 'bg-emerald-50 ring-1 ring-emerald-200' : 'hover:bg-muted/40'
+                      isActive ? 'bg-gold-50 ring-1 ring-gold-200' : 'hover:bg-muted/40'
                     )}
                   >
                     <div
                       className={cn(
                         'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-                        isActive ? 'bg-emerald-600 text-white' : 'bg-muted text-muted-foreground'
+                        isActive ? 'bg-navy text-white' : 'bg-muted text-muted-foreground'
                       )}
                     >
                       <Receipt className="h-3.5 w-3.5" />
@@ -142,7 +142,7 @@ export function PaymentQueue() {
                         #{o?.orderNumber}
                       </p>
                       <p className="truncate text-xs text-muted-foreground">{c?.name}</p>
-                      <p className="mt-0.5 text-xs font-semibold text-emerald-700">
+                      <p className="mt-0.5 text-xs font-semibold text-navy-300">
                         {formatNaira(p.amount)}
                       </p>
                       <p className="text-[10px] text-muted-foreground">
@@ -195,7 +195,7 @@ export function PaymentQueue() {
                 >
                   {/* Mock receipt — in production this would be the actual uploaded image */}
                   <div className="overflow-hidden rounded-lg border bg-white">
-                    <div className="bg-gradient-to-br from-emerald-600 to-teal-600 px-5 py-4 text-white">
+                    <div className="bg-navy-gradient px-5 py-4 text-white">
                       <p className="text-xs uppercase tracking-wider opacity-80">
                         Transfer receipt
                       </p>
@@ -225,7 +225,7 @@ export function PaymentQueue() {
               <div className="sticky bottom-0 flex gap-2 rounded-xl bg-white p-3 shadow-lg ring-1 ring-muted">
                 <Button
                   onClick={() => handleVerify(selected)}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700"
+                  className="flex-1 bg-gold-gradient text-navy hover:opacity-90"
                 >
                   <CheckCircle2 className="mr-2 h-4 w-4" /> Verify payment
                 </Button>
@@ -265,14 +265,14 @@ export function PaymentQueue() {
                 <p className="flex items-center gap-1.5 font-medium text-foreground">
                   <Banknote className="h-3.5 w-3.5" /> Total expected
                 </p>
-                <p className="mt-1 text-2xl font-bold text-emerald-700">
+                <p className="mt-1 text-2xl font-bold text-navy-300">
                   {formatNaira(order.totalPrice ?? selected.amount)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
                   Receipt amount: <strong>{formatNaira(selected.amount)}</strong>
                 </p>
                 {order.totalPrice !== undefined && order.totalPrice === selected.amount && (
-                  <div className="mt-2 flex items-center gap-1 text-xs text-emerald-700">
+                  <div className="mt-2 flex items-center gap-1 text-xs text-navy-300">
                     <CheckCircle2 className="h-3 w-3" /> Amount matches order total
                   </div>
                 )}
@@ -291,13 +291,13 @@ export function PaymentQueue() {
                 <p className="mt-1 font-medium text-foreground">{customer.name}</p>
                 <a
                   href={`tel:${customer.phone}`}
-                  className="mt-1 flex items-center gap-1 text-xs text-emerald-700 hover:underline"
+                  className="mt-1 flex items-center gap-1 text-xs text-navy-300 hover:underline"
                 >
                   <Phone className="h-3 w-3" /> {customer.phone}
                 </a>
                 <a
                   href={`mailto:${customer.email}`}
-                  className="mt-0.5 flex items-center gap-1 text-xs text-emerald-700 hover:underline"
+                  className="mt-0.5 flex items-center gap-1 text-xs text-navy-300 hover:underline"
                 >
                   <Mail className="h-3 w-3" /> {customer.email}
                 </a>
@@ -327,7 +327,7 @@ export function PaymentQueue() {
               </div>
 
               {order.guaranteeActive && (
-                <div className="rounded-lg bg-emerald-50 p-3 text-xs text-emerald-800 ring-1 ring-emerald-100">
+                <div className="rounded-lg bg-gold-50 p-3 text-xs text-navy-300 ring-1 ring-gold-100">
                   <p className="flex items-center gap-1 font-medium">
                     <Shield className="h-3.5 w-3.5" /> Return-as-Received Guarantee active
                   </p>
@@ -380,7 +380,7 @@ function Row({
           'text-sm font-medium',
           mono && 'font-mono',
           bold && 'font-bold',
-          tone === 'emerald' && 'text-emerald-700'
+          tone === 'emerald' && 'text-navy-300'
         )}
       >
         {value}

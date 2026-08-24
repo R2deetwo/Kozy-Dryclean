@@ -87,10 +87,10 @@ export function KanbanBoard() {
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col lg:h-[calc(100vh-9rem)]">
       <div className="border-b bg-white px-4 py-3 sm:px-6">
-        <h1 className="text-lg font-bold tracking-tight text-foreground">
+        <h1 className="font-serif text-lg font-semibold tracking-tight text-navy">
           Orders Kanban
         </h1>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs text-navy-300">
           Drag order cards between columns to update their pipeline stage.
         </p>
       </div>
@@ -163,7 +163,7 @@ function KanbanColumn({
       ref={setNodeRef}
       className={cn(
         'flex w-72 shrink-0 flex-col rounded-xl bg-muted/40 ring-1 transition',
-        isOver ? 'ring-2 ring-emerald-400 bg-emerald-50/40' : 'ring-muted-foreground/15'
+        isOver ? 'ring-2 ring-gold-400 bg-gold-50/40' : 'ring-muted-foreground/15'
       )}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2">
@@ -222,7 +222,7 @@ function OrderCard({
         }
       }}
       className={cn(
-        'cursor-grab border-muted/60 bg-white shadow-sm transition hover:border-emerald-300 hover:shadow-md active:cursor-grabbing',
+        'cursor-grab border-muted/60 bg-white shadow-sm transition hover:border-gold-300 hover:shadow-md active:cursor-grabbing',
         dragging && 'shadow-lg',
         isDragging && 'opacity-50'
       )}
@@ -240,7 +240,7 @@ function OrderCard({
           {order.type === 'B2B' ? (
             <Building2 className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
           ) : (
-            <User className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            <User className="h-3.5 w-3.5 shrink-0 text-gold-400" />
           )}
         </div>
 
@@ -270,7 +270,7 @@ function OrderCard({
         )}
 
         {order.guaranteeActive && (
-          <div className="mt-2 flex items-center gap-1 text-[10px] text-emerald-700">
+          <div className="mt-2 flex items-center gap-1 text-[10px] text-navy-300">
             <Shield className="h-3 w-3" /> Guarantee active
           </div>
         )}
@@ -308,7 +308,7 @@ function toneBg(tone: string): string {
     case 'cyan':
       return 'bg-cyan-100 text-cyan-700'
     case 'emerald':
-      return 'bg-emerald-100 text-emerald-700'
+      return 'bg-gold-100 text-navy'
     case 'rose':
       return 'bg-rose-100 text-rose-700'
     default:

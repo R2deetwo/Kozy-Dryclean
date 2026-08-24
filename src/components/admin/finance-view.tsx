@@ -265,7 +265,7 @@ export function FinanceView() {
                       </td>
                       <td className="px-4 py-2">
                         {p.status === 'VERIFIED' && (
-                          <Badge className="rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                          <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
                             <CheckCircle2 className="mr-1 h-3 w-3" /> Verified
                           </Badge>
                         )}
@@ -310,7 +310,7 @@ function StatCard({
       ? 'bg-amber-100 text-amber-700'
       : tone === 'indigo'
       ? 'bg-indigo-100 text-indigo-700'
-      : 'bg-emerald-100 text-emerald-700'
+      : 'bg-gold-100 text-navy'
   return (
     <Card className="border-muted/60 shadow-sm">
       <CardContent className="p-4">
