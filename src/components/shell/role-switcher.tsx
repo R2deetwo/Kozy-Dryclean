@@ -35,7 +35,7 @@ export function RoleSwitcher({ portal, onChange }: Props) {
           <div className="leading-tight">
             <p className="font-serif text-base font-semibold tracking-tight text-navy dark:text-white">Kozy</p>
             <p className="text-[10px] uppercase tracking-[0.15em] text-navy-300 dark:text-navy-200">
-              {portal === 'landing' && 'Public site'}
+              {portal === 'landing' && 'Drycleaning & Laundry'}
               {portal === 'customer' && 'Customer Portal'}
               {portal === 'admin' && 'Atelier Console'}
               {portal === 'driver' && 'Field Operations'}
