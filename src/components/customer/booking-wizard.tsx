@@ -239,14 +239,14 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-linen-200 to-white dark:from-navy-900 dark:to-navy-800 pb-16 dark:from-navy-900 dark:to-navy-800">
+    <div className="min-h-screen bg-gradient-to-b from-linen-200 to-white pb-16">
       <Toaster />
       {/* Header / progress */}
-      <div className="border-b border-navy-100 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60 dark:border-navy-600 dark:bg-navy-800/80 dark:supports-[backdrop-filter]:bg-navy-800/60">
+      <div className="border-b border-navy-100 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60[backdrop-filter]:bg-navy-800/60">
         <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6">
           <button
             onClick={onCancel}
-            className="mb-3 inline-flex items-center gap-1 text-xs text-navy-300 hover:text-navy dark:text-navy-200 dark:hover:text-white"
+            className="mb-3 inline-flex items-center gap-1 text-xs text-navy-300 hover:text-navy"
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Back to home
           </button>
@@ -266,7 +266,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       'flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ring-2 transition',
                       active && 'bg-navy text-white ring-gold-400/30',
                       done && 'bg-gold-100 text-navy ring-gold-200',
-                      !active && !done && 'bg-linen-200 dark:bg-navy-700 text-navy-300 dark:text-navy-200 ring-muted-foreground/15'
+                      !active && !done && 'bg-linen-200 text-navy-300 ring-muted-foreground/15'
                     )}
                   >
                     {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
@@ -274,13 +274,13 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <span
                     className={cn(
                       'ml-2 hidden text-sm font-medium sm:inline',
-                      active ? 'text-navy dark:text-white' : 'text-navy-300 dark:text-navy-200'
+                      active ? 'text-navy' : 'text-navy-300'
                     )}
                   >
                     {s.name}
                   </span>
                   {i < STEPS.length - 1 && (
-                    <div className="mx-3 hidden h-px flex-1 bg-linen-200 dark:bg-navy-700-foreground/15 sm:block" />
+                    <div className="mx-3 hidden h-px flex-1 bg-linen-200 sm:block" />
                   )}
                 </div>
               )
@@ -303,7 +303,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               transition={{ duration: 0.2 }}
             >
               <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">Select service</h2>
-              <p className="mt-1 text-sm text-navy-300 dark:text-navy-200">
+              <p className="mt-1 text-sm text-navy-300">
                 {isB2B
                   ? 'As a corporate client, your order is priced per kilogram.'
                   : 'Choose per-item retail pricing or request a bulk pickup.'}
@@ -318,7 +318,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <label
                     className={cn(
                       'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
-                      type === 'ITEM' ? 'border-gold-400 bg-gold-50/50' : 'border-navy-100 dark:border-navy-600'
+                      type === 'ITEM' ? 'border-gold-400 bg-gold-50/50' : 'border-navy-100'
                     )}
                   >
                     <RadioGroupItem value="ITEM" className="sr-only" />
@@ -326,8 +326,8 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       <User className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-navy dark:text-white">Per-item (Retail)</p>
-                      <p className="text-xs text-navy-300 dark:text-navy-200">
+                      <p className="font-semibold text-navy">Per-item (Retail)</p>
+                      <p className="text-xs text-navy-300">
                         Pick your garments. Exact total at checkout.
                       </p>
                     </div>
@@ -335,7 +335,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <label
                     className={cn(
                       'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
-                      type === 'KG' ? 'border-gold-400 bg-gold-50/50' : 'border-navy-100 dark:border-navy-600'
+                      type === 'KG' ? 'border-gold-400 bg-gold-50/50' : 'border-navy-100'
                     )}
                   >
                     <RadioGroupItem value="KG" className="sr-only" />
@@ -343,8 +343,8 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       <Building2 className="h-5 w-5" />
                     </div>
                     <div className="flex-1">
-                      <p className="font-semibold text-navy dark:text-white">Bulk (Per kg)</p>
-                      <p className="text-xs text-navy-300 dark:text-navy-200">
+                      <p className="font-semibold text-navy">Bulk (Per kg)</p>
+                      <p className="text-xs text-navy-300">
                         Total weighed at the station after pickup.
                       </p>
                     </div>
@@ -374,7 +374,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
 
               {type === 'ITEM' && (
                 <div className="mt-6">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-300">
                     Pick your garments
                   </h3>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -387,7 +387,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                             'flex items-center justify-between rounded-xl border p-3 transition',
                             qty > 0
                               ? 'border-gold-300 bg-gold-50/50 ring-1 ring-gold-200'
-                              : 'border-navy-100 dark:border-navy-600 hover:border-gold-200'
+                              : 'border-navy-100 hover:border-gold-200'
                           )}
                         >
                           <div className="flex items-center gap-2">
@@ -397,8 +397,8 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                               className="h-7 w-7"
                             />
                             <div>
-                              <p className="text-sm font-medium text-navy dark:text-white">{g.name}</p>
-                              <p className="text-xs text-navy-300 dark:text-navy-200">
+                              <p className="text-sm font-medium text-navy">{g.name}</p>
+                              <p className="text-xs text-navy-300">
                                 {formatNaira(settings.garmentPrices[g.id] ?? g.price)} each
                               </p>
                             </div>
@@ -407,7 +407,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                             <button
                               onClick={() => setQty(g.id, -1)}
                               disabled={qty === 0}
-                              className="flex h-8 w-8 items-center justify-center rounded-full bg-linen-200 dark:bg-navy-700 text-navy dark:text-white hover:bg-linen-200 dark:bg-navy-700-foreground/20 disabled:opacity-30"
+                              className="flex h-8 w-8 items-center justify-center rounded-full bg-linen-200 text-navy hover:bg-linen-200 disabled:opacity-30"
                             >
                               <Minus className="h-3.5 w-3.5" />
                             </button>
@@ -455,7 +455,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">
                     Activate your Return-as-Received Guarantee
                   </h2>
-                  <p className="mt-1 text-sm text-navy-300 dark:text-navy-200">
+                  <p className="mt-1 text-sm text-navy-300">
                     Upload photos of your items to activate our guarantee. If we damage anything in
                     our care, we&apos;ll cover it. Plus — you get a{' '}
                     <strong>{settings.guaranteeDiscountPercent}% discount</strong> on this order.
@@ -484,7 +484,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       <Camera className="mr-2 h-4 w-4" />
                       Take or upload photos
                     </Button>
-                    <span className="text-xs text-navy-300 dark:text-navy-200">
+                    <span className="text-xs text-navy-300">
                       {photos.length}/6 photos · optional
                     </span>
                   </div>
@@ -528,8 +528,8 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                     </label>
                   )}
 
-                  <div className="mt-4 rounded-lg bg-linen-200 dark:bg-navy-700/50 p-3 text-xs text-navy-300 dark:text-navy-200">
-                    <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
+                  <div className="mt-4 rounded-lg bg-linen-200 p-3 text-xs text-navy-300">
+                    <p className="flex items-center gap-1.5 font-medium text-navy">
                       <Info className="h-3.5 w-3.5" /> What the guarantee covers
                     </p>
                     <p className="mt-1">
@@ -567,7 +567,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">
                 Pickup &amp; delivery
               </h2>
-              <p className="mt-1 text-sm text-navy-300 dark:text-navy-200">
+              <p className="mt-1 text-sm text-navy-300">
                 Pick a date and time slot. We&apos;ll handle the rest.
               </p>
 
@@ -582,7 +582,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       onChange={(e) => setPickupDate(e.target.value)}
                       min={new Date().toISOString().slice(0, 10)}
                     />
-                    <Calendar className="h-5 w-5 shrink-0 text-navy-300 dark:text-navy-200" />
+                    <Calendar className="h-5 w-5 shrink-0 text-navy-300" />
                   </div>
                 </div>
                 <div>
@@ -596,7 +596,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                           'rounded-lg border px-3 py-2 text-xs font-medium transition',
                           pickupSlot === slot
                             ? 'border-navy bg-navy-50 text-navy'
-                            : 'border-navy-100 dark:border-navy-600 text-navy-300 dark:text-navy-200 hover:border-gold-300'
+                            : 'border-navy-100 text-navy-300 hover:border-gold-300'
                         )}
                       >
                         {slot}
@@ -626,7 +626,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                 </div>
               </div>
 
-              <div className="mt-4 flex items-start gap-2 rounded-lg bg-linen-200 dark:bg-navy-700 p-3 text-xs text-navy-300 dark:text-navy-200">
+              <div className="mt-4 flex items-start gap-2 rounded-lg bg-linen-200 p-3 text-xs text-navy-300">
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-400" />
                 <p>
                   Standard turnaround is 48 hours from pickup for retail orders. Corporate
@@ -648,7 +648,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               transition={{ duration: 0.2 }}
             >
               <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">Checkout</h2>
-              <p className="mt-1 text-sm text-navy-300 dark:text-navy-200">
+              <p className="mt-1 text-sm text-navy-300">
                 {type === 'ITEM'
                   ? 'Review your order and choose how to pay.'
                   : 'Confirm your pickup request. Final invoice will be sent after weighing.'}
@@ -657,7 +657,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
               <Card className="mt-5">
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between border-b pb-3">
-                    <span className="text-sm font-medium text-navy-300 dark:text-navy-200">Order summary</span>
+                    <span className="text-sm font-medium text-navy-300">Order summary</span>
                     <Badge variant="outline" className="rounded-full">
                       {type === 'ITEM' ? 'Per-item' : 'Per-kg (Corporate)'}
                     </Badge>
@@ -667,7 +667,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                     <ul className="mt-3 space-y-2 text-sm">
                       {selectedItems.map((i) => (
                         <li key={i.id} className="flex items-center justify-between">
-                          <span className="text-navy-300 dark:text-navy-200">
+                          <span className="text-navy-300">
                             {i.quantity}× {i.name}
                           </span>
                           <span className="font-medium">
@@ -689,7 +689,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
 
                   {type === 'KG' && (
                     <div className="mt-3 space-y-2 text-sm">
-                      <p className="text-navy-300 dark:text-navy-200">
+                      <p className="text-navy-300">
                         Bulk pickup requested. Final price depends on weight measured at our
                         station. Minimum charge: <strong>{formatNaira(settings.pricePerKg * settings.minimumKg)}</strong>{' '}
                         ({settings.minimumKg}kg @ {formatNaira(settings.pricePerKg)}/kg).
@@ -732,7 +732,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
                         paymentMethod === 'BANK_TRANSFER'
                           ? 'border-gold-400 bg-gold-50/50'
-                          : 'border-navy-100 dark:border-navy-600'
+                          : 'border-navy-100'
                       )}
                     >
                       <RadioGroupItem value="BANK_TRANSFER" className="sr-only" />
@@ -740,8 +740,8 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         <Building2 className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-navy dark:text-white">Bank Transfer (Manual)</p>
-                        <p className="text-xs text-navy-300 dark:text-navy-200">
+                        <p className="font-semibold text-navy">Bank Transfer (Manual)</p>
+                        <p className="text-xs text-navy-300">
                           Transfer to our account, then upload your receipt. Admin verifies within
                           minutes.
                         </p>
@@ -752,7 +752,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
                         paymentMethod === 'PAYSTACK'
                           ? 'border-gold-400 bg-gold-50/50'
-                          : 'border-navy-100 dark:border-navy-600'
+                          : 'border-navy-100'
                       )}
                     >
                       <RadioGroupItem value="PAYSTACK" className="sr-only" />
@@ -760,10 +760,10 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         <CreditCard className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-navy dark:text-white">
+                        <p className="font-semibold text-navy">
                           Paystack Virtual Account
                         </p>
-                        <p className="text-xs text-navy-300 dark:text-navy-200">
+                        <p className="text-xs text-navy-300">
                           Get a dedicated virtual account. We auto-confirm payment via webhook.
                         </p>
                       </div>
@@ -778,26 +778,26 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         </p>
                         <div className="mt-2 space-y-1 text-sm">
                           <div className="flex items-center justify-between">
-                            <span className="text-navy-300 dark:text-navy-200">Bank</span>
+                            <span className="text-navy-300">Bank</span>
                             <span className="font-medium">{settings.bankName}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-navy-300 dark:text-navy-200">Account Name</span>
+                            <span className="text-navy-300">Account Name</span>
                             <span className="font-medium">{settings.accountName}</span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-navy-300 dark:text-navy-200">Account Number</span>
+                            <span className="text-navy-300">Account Number</span>
                             <span className="font-mono font-bold text-navy-300">
                               {settings.accountNumber}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
-                            <span className="text-navy-300 dark:text-navy-200">Amount</span>
+                            <span className="text-navy-300">Amount</span>
                             <span className="font-bold text-navy-300">{formatNaira(total)}</span>
                           </div>
                         </div>
                         <div className="mt-4 border-t pt-3">
-                          <p className="text-xs text-navy-300 dark:text-navy-200">
+                          <p className="text-xs text-navy-300">
                             Upload your transfer receipt:
                           </p>
                           <input
