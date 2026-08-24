@@ -280,7 +280,7 @@ function OrderCard({
               {customer?.name ?? '—'}
             </p>
           </div>
-          {order.type === 'CORPORATE' ? (
+          {order.type === 'KG' ? (
             <Building2 className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
           ) : (
             <User className="h-3.5 w-3.5 shrink-0 text-gold-400" />

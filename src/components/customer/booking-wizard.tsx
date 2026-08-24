@@ -170,7 +170,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   }
 
   const next = () => {
-    if (step === 2 && type === 'CORPORATE') {
+    if (step === 2 && type === 'KG') {
       // Skip condition capture step for B2B
       setStep(3)
       return
@@ -178,7 +178,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
     if (step < 4) setStep(step + 1)
   }
   const prev = () => {
-    if (step === 3 && type === 'CORPORATE') {
+    if (step === 3 && type === 'KG') {
       // Skip back to step 1 for B2B
       setStep(1)
       return

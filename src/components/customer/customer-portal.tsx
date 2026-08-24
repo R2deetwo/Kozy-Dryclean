@@ -51,9 +51,11 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight, on
   const users = useStore((s) => s.users)
   const currentUser = users.find((u) => u.id === currentUserId)
 
-  const [view, setView] = useState<View>(
-    currentUser ? { name: initialView } : { name: 'auth' }
-  )
+  const [view, setView] = useState<View>(() => {
+    if (!currentUser) return { name: 'auth' }
+    if (initialView === 'booking') return { name: 'booking' }
+    return { name: 'dashboard' }
+  })
   const [selectedOrderId, setSelectedOrderId] = useState<string | undefined>(initialHighlight)
 
   // ----- Auth gate -----

@@ -51,6 +51,7 @@ export interface Payment {
   verifiedAt?: string
   verifiedById?: string
   createdAt: string
+  updatedAt: string
 }
 
 export interface StatusEvent {
