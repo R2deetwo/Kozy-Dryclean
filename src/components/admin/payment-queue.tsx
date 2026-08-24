@@ -27,6 +27,7 @@ import { toast } from '@/hooks/use-toast'
 
 export function PaymentQueue() {
   const allPayments = useStore((s) => s.payments)
+  const settings = useStore((s) => s.settings)
   const payments = useMemo(
     () => allPayments.filter((p) => p.status === 'PENDING'),
     [allPayments]
@@ -200,9 +201,9 @@ export function PaymentQueue() {
                         Transfer receipt
                       </p>
                       <p className="font-mono text-base font-bold">
-                        {COMPANY_BANK_DISPLAY.accountNumber}
+                        {settings.accountNumber}
                       </p>
-                      <p className="text-xs opacity-80">{COMPANY_BANK_DISPLAY.bankName}</p>
+                      <p className="text-xs opacity-80">{settings.bankName}</p>
                     </div>
                     <div className="space-y-2 p-5 text-sm">
                       <Row label="Sender" value={customer?.name ?? '—'} />
@@ -387,10 +388,4 @@ function Row({
       </span>
     </div>
   )
-}
-
-const COMPANY_BANK_DISPLAY = {
-  bankName: 'Guaranty Trust Bank (GTB)',
-  accountName: 'Lagos Fresh Laundry Ltd',
-  accountNumber: '0123456789',
 }

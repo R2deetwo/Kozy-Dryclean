@@ -34,7 +34,7 @@ export function CustomersView() {
   const users = useStore((s) => s.users)
   const orders = useStore((s) => s.orders)
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'B2C' | 'B2B' | 'DRIVER'>('all')
+  const [filter, setFilter] = useState<'all' | 'RETAIL' | 'CORPORATE' | 'DRIVER'>('all')
   const [selected, setSelected] = useState<User | undefined>(undefined)
 
   const filtered = users.filter((u) => {

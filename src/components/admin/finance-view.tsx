@@ -129,14 +129,14 @@ export function FinanceView() {
           tone="amber"
         />
         <StatCard
-          title="B2B revenue"
+          title="Corporate revenue"
           value={formatNaira(stats.b2bRevenue)}
           delta="Corporate clients"
           icon={TrendingUp}
           tone="indigo"
         />
         <StatCard
-          title="B2C revenue"
+          title="Retail revenue"
           value={formatNaira(stats.b2cRevenue)}
           delta="Retail clients"
           icon={TrendingUp}

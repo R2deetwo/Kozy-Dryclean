@@ -27,7 +27,7 @@ export interface User {
   phone: string
   address?: string
   role: Role
-  // Company name for B2B clients
+  // Company name for corporate clients
   company?: string
   createdAt: string
 }
@@ -143,6 +143,27 @@ export const COMPANY_BANK = {
   accountName: 'Kozy Premium Dry Cleaning Ltd',
   accountNumber: '0123456789',
   routingNumber: '058152069',
+}
+
+// =====================================================
+// ADMIN SETTINGS — bank account, pricing, etc. (managed by admin)
+// =====================================================
+export interface KozySettings {
+  // Bank account details shown to customers during checkout
+  bankName: string
+  accountName: string
+  accountNumber: string
+  // Contact info shown across the app
+  contactPhone: string
+  contactEmail: string
+  atelierAddress: string
+  // B2B pricing
+  pricePerKg: number
+  minimumKg: number
+  // Guarantee
+  guaranteeDiscountPercent: number // e.g. 5 for 5%
+  // Garment prices (keyed by garment id from GARMENT_CATALOG)
+  garmentPrices: Record<string, number>
 }
 
 // Order pipeline stages for visual tracking

@@ -14,6 +14,7 @@ import {
   Truck,
   Sparkles,
   RotateCcw,
+  Settings,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -25,8 +26,9 @@ import { PaymentQueue } from './payment-queue'
 import { CustomersView } from './customers-view'
 import { FinanceView } from './finance-view'
 import { NotificationsPanel } from './notifications-panel'
+import { SettingsView } from './settings-view'
 
-type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'notifications'
+type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'notifications' | 'settings'
 
 export function AdminDashboard() {
   const admin = useStore((s) => s.users.find((u) => u.id === 'u-admin') ?? s.users[0])
@@ -54,6 +56,7 @@ export function AdminDashboard() {
     { key: 'customers', label: 'Customers', icon: UsersIcon },
     { key: 'finance', label: 'Finances', icon: Wallet },
     { key: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.length },
+    { key: 'settings', label: 'Settings', icon: Settings },
   ]
 
   return (
@@ -187,6 +190,7 @@ export function AdminDashboard() {
           {tab === 'customers' && <CustomersView />}
           {tab === 'finance' && <FinanceView />}
           {tab === 'notifications' && <NotificationsPanel />}
+          {tab === 'settings' && <SettingsView />}
         </main>
       </div>
     </div>

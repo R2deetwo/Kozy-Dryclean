@@ -24,6 +24,9 @@ import {
   User,
   Shield,
   Clock,
+  List,
+  KanbanSquare,
+  ChevronRight,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useMemo } from 'react'
@@ -57,6 +60,7 @@ export function KanbanBoard() {
   const updateStatus = useStore((s) => s.updateOrderStatus)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selected, setSelected] = useState<Order | undefined>(undefined)
+  const [view, setView] = useState<'kanban' | 'list'>('kanban')
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -87,14 +91,52 @@ export function KanbanBoard() {
   return (
     <div className="flex h-[calc(100vh-7rem)] flex-col lg:h-[calc(100vh-9rem)]">
       <div className="border-b bg-white px-4 py-3 sm:px-6">
-        <h1 className="font-serif text-lg font-semibold tracking-tight text-navy">
-          Orders Kanban
-        </h1>
-        <p className="text-xs text-navy-300">
-          Drag order cards between columns to update their pipeline stage.
-        </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="font-serif text-lg font-semibold tracking-tight text-navy">
+              Orders
+            </h1>
+            <p className="text-xs text-navy-300">
+              {view === 'kanban'
+                ? 'Drag order cards between columns to update their pipeline stage.'
+                : 'Sortable list of all orders. Click any row to view details.'}
+            </p>
+          </div>
+          <div className="flex items-center gap-1 rounded-full bg-linen-200 p-1">
+            <button
+              onClick={() => setView('kanban')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
+                view === 'kanban'
+                  ? 'bg-navy text-white'
+                  : 'text-navy-300 hover:text-navy'
+              )}
+            >
+              <KanbanSquare className="h-3.5 w-3.5" /> Kanban
+            </button>
+            <button
+              onClick={() => setView('list')}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
+                view === 'list'
+                  ? 'bg-navy text-white'
+                  : 'text-navy-300 hover:text-navy'
+              )}
+            >
+              <List className="h-3.5 w-3.5" /> List
+            </button>
+          </div>
+        </div>
       </div>
 
+      {view === 'list' && (
+        <OrdersListView
+          orders={visibleOrders}
+          onOpen={(o) => setSelected(o)}
+        />
+      )}
+
+      {view === 'kanban' && (
       <DndContext
         sensors={sensors}
         onDragStart={onDragStart}
@@ -129,6 +171,7 @@ export function KanbanBoard() {
           ) : null}
         </DragOverlay>
       </DndContext>
+      )}
 
       {selected && (
         <OrderDetailModal
@@ -237,7 +280,7 @@ function OrderCard({
               {customer?.name ?? '—'}
             </p>
           </div>
-          {order.type === 'B2B' ? (
+          {order.type === 'CORPORATE' ? (
             <Building2 className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
           ) : (
             <User className="h-3.5 w-3.5 shrink-0 text-gold-400" />
@@ -314,4 +357,175 @@ function toneBg(tone: string): string {
     default:
       return 'bg-slate-100 text-slate-700'
   }
+}
+
+// =====================================================
+// ORDERS LIST VIEW — sortable table alternative to Kanban
+// =====================================================
+function OrdersListView({
+  orders,
+  onOpen,
+}: {
+  orders: Order[]
+  onOpen: (o: Order) => void
+}) {
+  const [sortBy, setSortBy] = useState<'date' | 'number' | 'amount' | 'status'>('date')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  const [filter, setFilter] = useState<OrderStatus | 'ALL'>('ALL')
+
+  const filtered = filter === 'ALL' ? orders : orders.filter((o) => o.status === filter)
+  const sorted = [...filtered].sort((a, b) => {
+    let cmp = 0
+    if (sortBy === 'date') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+    else if (sortBy === 'number') cmp = a.orderNumber.localeCompare(b.orderNumber)
+    else if (sortBy === 'amount') cmp = (a.totalPrice ?? 0) - (b.totalPrice ?? 0)
+    else if (sortBy === 'status') cmp = a.status.localeCompare(b.status)
+    return sortDir === 'asc' ? cmp : -cmp
+  })
+
+  const toggleSort = (col: typeof sortBy) => {
+    if (sortBy === col) {
+      setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortBy(col)
+      setSortDir('desc')
+    }
+  }
+
+  const statusFilters: Array<OrderStatus | 'ALL'> = ['ALL', ...KANBAN_COLUMNS]
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-linen-200 p-4">
+      {/* Status filter pills */}
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {statusFilters.map((s) => {
+          const active = filter === s
+          const label = s === 'ALL' ? 'All' : COLUMN_META[s as OrderStatus]?.label ?? s
+          const count = s === 'ALL' ? orders.length : orders.filter((o) => o.status === s).length
+          return (
+            <button
+              key={s}
+              onClick={() => setFilter(s)}
+              className={cn(
+                'flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition',
+                active
+                  ? 'bg-navy text-white'
+                  : 'bg-white text-navy-300 hover:text-navy'
+              )}
+            >
+              {label}
+              <span
+                className={cn(
+                  'rounded-full px-1.5 py-0 text-[10px]',
+                  active ? 'bg-white/20' : 'bg-linen-200'
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Orders table */}
+      <div className="overflow-hidden rounded-xl border border-navy-100 bg-white shadow-navy">
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-linen-100 text-left text-xs uppercase tracking-wide text-navy-300">
+              <tr>
+                <th className="px-4 py-3">
+                  <button onClick={() => toggleSort('number')} className="flex items-center gap-1 font-semibold">
+                    Order #
+                    {sortBy === 'number' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  </button>
+                </th>
+                <th className="hidden px-4 py-3 md:table-cell">Customer</th>
+                <th className="hidden px-4 py-3 lg:table-cell">Type</th>
+                <th className="px-4 py-3">
+                  <button onClick={() => toggleSort('status')} className="flex items-center gap-1 font-semibold">
+                    Status
+                    {sortBy === 'status' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  </button>
+                </th>
+                <th className="hidden px-4 py-3 lg:table-cell">
+                  <button onClick={() => toggleSort('date')} className="flex items-center gap-1 font-semibold">
+                    Date
+                    {sortBy === 'date' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  </button>
+                </th>
+                <th className="px-4 py-3 text-right">
+                  <button onClick={() => toggleSort('amount')} className="flex items-center gap-1 font-semibold">
+                    Amount
+                    {sortBy === 'amount' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  </button>
+                </th>
+                <th className="px-4 py-3" />
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.map((o) => {
+                const customer = useStore.getState().users.find((u) => u.id === o.userId)
+                const meta = COLUMN_META[o.status]
+                return (
+                  <tr
+                    key={o.id}
+                    onClick={() => onOpen(o)}
+                    className="cursor-pointer border-b border-navy-50 transition last:border-0 hover:bg-linen-50"
+                  >
+                    <td className="px-4 py-3">
+                      <span className="font-mono text-xs font-semibold text-navy">
+                        #{o.orderNumber}
+                      </span>
+                      {o.guaranteeActive && (
+                        <Shield className="ml-1 inline h-3 w-3 text-gold-400" />
+                      )}
+                    </td>
+                    <td className="hidden px-4 py-3 md:table-cell">
+                      <span className="flex items-center gap-2 text-navy">
+                        {o.type === 'ITEM' ? (
+                          <User className="h-3.5 w-3.5 text-navy-300" />
+                        ) : (
+                          <Building2 className="h-3.5 w-3.5 text-navy-300" />
+                        )}
+                        <span className="truncate">{customer?.name ?? '—'}</span>
+                      </span>
+                    </td>
+                    <td className="hidden px-4 py-3 lg:table-cell">
+                      <span className="text-xs text-navy-300">
+                        {o.type === 'ITEM' ? 'Retail' : 'Corporate'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium',
+                          toneBg(meta.tone)
+                        )}
+                      >
+                        {meta.label}
+                      </span>
+                    </td>
+                    <td className="hidden px-4 py-3 text-xs text-navy-300 lg:table-cell">
+                      {formatDate(o.pickupDate)}
+                    </td>
+                    <td className="px-4 py-3 text-right font-semibold text-navy">
+                      {o.totalPrice !== undefined ? formatNaira(o.totalPrice) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <ChevronRight className="h-3.5 w-3.5 text-navy-300" />
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+        {sorted.length === 0 && (
+          <div className="p-10 text-center text-sm text-navy-300">
+            No orders match this filter.
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }

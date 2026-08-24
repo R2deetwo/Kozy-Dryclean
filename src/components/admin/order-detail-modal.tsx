@@ -21,7 +21,6 @@ import {
   formatNaira,
   formatDateTime,
   formatDate,
-  B2B_PRICING,
   type Order,
   type OrderStatus,
 } from '@/lib/types'
@@ -72,6 +71,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
   const allUsers = useStore((s) => s.users)
   const allPayments = useStore((s) => s.payments)
   const allMedia = useStore((s) => s.media)
+  const settings = useStore((s) => s.settings)
   const drivers = useMemo(
     () => allUsers.filter((u) => u.role === 'DRIVER'),
     [allUsers]
@@ -120,7 +120,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
     setB2BWeight(order.id, kg, 'u-admin')
     toast({
       title: 'Weight recorded',
-      description: `${kg}kg · ${formatNaira(Math.max(kg, B2B_PRICING.minimumKg) * B2B_PRICING.pricePerKg)} invoice sent.`,
+      description: `${kg}kg · ${formatNaira(Math.max(kg, settings.minimumKg) * settings.pricePerKg)} invoice sent.`,
     })
   }
 
@@ -262,12 +262,12 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           {order.type === 'KG' && (
             <section className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
               <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
-                <Scale className="h-4 w-4 text-indigo-600" /> B2B weight entry
+                <Scale className="h-4 w-4 text-indigo-600" /> Corporate weight entry
               </p>
               <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">
                 Weigh the items at the station and enter the kilogram amount. Final invoice will
-                be calculated at {formatNaira(B2B_PRICING.pricePerKg)}/kg (minimum{' '}
-                {B2B_PRICING.minimumKg}kg).
+                be calculated at {formatNaira(settings.pricePerKg)}/kg (minimum{' '}
+                {settings.minimumKg}kg).
               </p>
               <div className="mt-3 flex items-end gap-2">
                 <div className="flex-1">

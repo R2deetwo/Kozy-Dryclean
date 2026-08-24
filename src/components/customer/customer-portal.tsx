@@ -490,7 +490,7 @@ function ActiveOrderCard({
                     {order.finalWeight ? `${order.finalWeight}kg · ` : ''}
                     {order.items.length > 0
                       ? `${order.items.reduce((s, i) => s + i.quantity, 0)} items`
-                      : 'B2B bulk'}
+                      : 'Corporate bulk'}
                   </p>
                 </>
               ) : (
@@ -547,7 +547,7 @@ function PastOrderCard({
           </div>
           <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">
             {formatDate(order.deliveryDate ?? order.pickupDate)} ·{' '}
-            {order.totalPrice ? formatNaira(order.totalPrice) : 'B2B bulk'}
+            {order.totalPrice ? formatNaira(order.totalPrice) : 'Corporate bulk'}
           </p>
         </div>
         <div className="flex gap-2">

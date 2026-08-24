@@ -20,8 +20,8 @@ model User {
   name        String
   phone       String
   address     String?
-  role        Role     @default(B2C)
-  // Company name for B2B clients
+  role        Role     @default(Retail)
+  // Company name for corporate clients
   company     String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

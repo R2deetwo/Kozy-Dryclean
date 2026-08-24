@@ -24,9 +24,6 @@ import {
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
-  GUARANTEE_DISCOUNT,
-  B2B_PRICING,
-  COMPANY_BANK,
   formatNaira,
   type OrderItem,
   type OrderType,
@@ -72,6 +69,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   const addMedia = useStore((s) => s.addMedia)
   const createPayment = useStore((s) => s.createPayment)
   const currentUser = useStore((s) => s.users.find((u) => u.id === s.currentUserId))
+  const settings = useStore((s) => s.settings)
 
   const [step, setStep] = useState(1)
   const [type, setType] = useState<OrderType>('ITEM')
@@ -118,11 +116,12 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
     .filter(([, q]) => q > 0)
     .map(([id, q]) => {
       const g = GARMENT_CATALOG.find((c) => c.id === id)!
-      return { id: 'item_' + id, name: g.name, quantity: q, unitPrice: g.price }
+      const unitPrice = settings.garmentPrices[id] ?? g.price
+      return { id: 'item_' + id, name: g.name, quantity: q, unitPrice }
     })
   const subtotal = selectedItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const guaranteeActive = type === 'ITEM' && photos.length > 0 && guaranteeAck
-  const discount = guaranteeActive ? subtotal * GUARANTEE_DISCOUNT : 0
+  const discount = guaranteeActive ? subtotal * (settings.guaranteeDiscountPercent / 100) : 0
   const total = subtotal - discount
 
   // ----- Helpers -----
@@ -171,7 +170,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   }
 
   const next = () => {
-    if (step === 2 && type === 'B2B') {
+    if (step === 2 && type === 'CORPORATE') {
       // Skip condition capture step for B2B
       setStep(3)
       return
@@ -179,7 +178,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
     if (step < 4) setStep(step + 1)
   }
   const prev = () => {
-    if (step === 3 && type === 'B2B') {
+    if (step === 3 && type === 'CORPORATE') {
       // Skip back to step 1 for B2B
       setStep(1)
       return
@@ -347,13 +346,13 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                       <p className="font-semibold text-navy">Corporate Bulk Pickup</p>
                     </div>
                     <p className="mt-2 text-sm text-navy-300">
-                      Your order will be priced at <strong>{formatNaira(B2B_PRICING.pricePerKg)}/kg</strong>{' '}
-                      with a {B2B_PRICING.minimumKg}kg minimum charge. Our rider will collect your
+                      Your order will be priced at <strong>{formatNaira(settings.pricePerKg)}/kg</strong>{' '}
+                      with a {settings.minimumKg}kg minimum charge. Our rider will collect your
                       items, weigh them at the station, and we&apos;ll send you the final invoice
                       with payment instructions.
                     </p>
                     <p className="mt-3 text-xs text-navy-300">
-                      Estimated minimum charge: <strong>{formatNaira(B2B_PRICING.minimumCharge)}</strong>
+                      Estimated minimum charge: <strong>{formatNaira(settings.pricePerKg * settings.minimumKg)}</strong>
                     </p>
                   </CardContent>
                 </Card>
@@ -386,7 +385,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                             <div>
                               <p className="text-sm font-medium text-navy dark:text-white">{g.name}</p>
                               <p className="text-xs text-navy-300 dark:text-navy-200">
-                                {formatNaira(g.price)} each
+                                {formatNaira(settings.garmentPrices[g.id] ?? g.price)} each
                               </p>
                             </div>
                           </div>
@@ -426,7 +425,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
           )}
 
           {/* ====================================================
-              STEP 2 — CONDITION CAPTURE (B2C ONLY)
+              STEP 2 — CONDITION CAPTURE (RETAIL ONLY)
           ==================================================== */}
           {step === 2 && type === 'ITEM' && (
             <motion.div
@@ -445,7 +444,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <p className="mt-1 text-sm text-navy-300 dark:text-navy-200">
                     Upload photos of your items to activate our guarantee. If we damage anything in
                     our care, we&apos;ll cover it. Plus — you get a{' '}
-                    <strong>{Math.round(GUARANTEE_DISCOUNT * 100)}% discount</strong> on this order.
+                    <strong>{settings.guaranteeDiscountPercent}% discount</strong> on this order.
                   </p>
                 </div>
               </div>
@@ -533,7 +532,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <CheckCircle2 className="h-5 w-5" />
                   <span>
                     <strong>Guarantee Activated.</strong> You saved{' '}
-                    {formatNaira(discount)} ({Math.round(GUARANTEE_DISCOUNT * 100)}% off).
+                    {formatNaira(discount)} ({settings.guaranteeDiscountPercent}% off).
                   </span>
                 </div>
               )}
@@ -646,7 +645,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   <div className="flex items-center justify-between border-b pb-3">
                     <span className="text-sm font-medium text-navy-300 dark:text-navy-200">Order summary</span>
                     <Badge variant="outline" className="rounded-full">
-                      {type === 'ITEM' ? 'Per-item (Retail)' : 'Per-kg (Corporate)'}
+                      {type === 'ITEM' ? 'Per-item' : 'Per-kg (Corporate)'}
                     </Badge>
                   </div>
 
@@ -666,7 +665,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         <li className="flex items-center justify-between text-navy-300">
                           <span className="flex items-center gap-1">
                             <Shield className="h-3.5 w-3.5" />
-                            Return-as-Received discount ({Math.round(GUARANTEE_DISCOUNT * 100)}%)
+                            Return-as-Received discount ({settings.guaranteeDiscountPercent}%)
                           </span>
                           <span>−{formatNaira(discount)}</span>
                         </li>
@@ -678,8 +677,8 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                     <div className="mt-3 space-y-2 text-sm">
                       <p className="text-navy-300 dark:text-navy-200">
                         Bulk pickup requested. Final price depends on weight measured at our
-                        station. Minimum charge: <strong>{formatNaira(B2B_PRICING.minimumCharge)}</strong>{' '}
-                        ({B2B_PRICING.minimumKg}kg @ {formatNaira(B2B_PRICING.pricePerKg)}/kg).
+                        station. Minimum charge: <strong>{formatNaira(settings.pricePerKg * settings.minimumKg)}</strong>{' '}
+                        ({settings.minimumKg}kg @ {formatNaira(settings.pricePerKg)}/kg).
                       </p>
                       <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-amber-200">
                         <span>Total</span>
@@ -766,16 +765,16 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         <div className="mt-2 space-y-1 text-sm">
                           <div className="flex items-center justify-between">
                             <span className="text-navy-300 dark:text-navy-200">Bank</span>
-                            <span className="font-medium">{COMPANY_BANK.bankName}</span>
+                            <span className="font-medium">{settings.bankName}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-navy-300 dark:text-navy-200">Account Name</span>
-                            <span className="font-medium">{COMPANY_BANK.accountName}</span>
+                            <span className="font-medium">{settings.accountName}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-navy-300 dark:text-navy-200">Account Number</span>
                             <span className="font-mono font-bold text-navy-300">
-                              {COMPANY_BANK.accountNumber}
+                              {settings.accountNumber}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">

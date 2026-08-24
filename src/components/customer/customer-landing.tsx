@@ -21,10 +21,9 @@ import {
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
-  B2B_PRICING,
   formatNaira,
-  COMPANY_BANK,
 } from '@/lib/types'
+import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -47,6 +46,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 export function CustomerLanding({ onBook, onPortal }: Props) {
   const [pricing, setPricing] = useState<'retail' | 'corporate'>('retail')
+  const settings = useStore((s) => s.settings)
 
   return (
     <div className="bg-linen">
@@ -332,7 +332,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                                 {g.name}
                               </span>
                               <span className="font-semibold text-navy">
-                                {formatNaira(g.price)}
+                                {formatNaira(settings.garmentPrices[g.id] ?? g.price)}
                               </span>
                             </li>
                           ))}
@@ -371,15 +371,15 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                         Per kilogram
                       </p>
                       <p className="mt-1 font-serif text-4xl font-bold text-gold-100">
-                        {formatNaira(B2B_PRICING.pricePerKg)}
+                        {formatNaira(settings.pricePerKg)}
                       </p>
                       <div className="mt-3 divider-gold" />
                       <p className="mt-3 text-xs text-navy-100">
                         Minimum charge{' '}
                         <span className="font-semibold text-white">
-                          {formatNaira(B2B_PRICING.minimumCharge)}
+                          {formatNaira(settings.pricePerKg * settings.minimumKg)}
                         </span>{' '}
-                        ({B2B_PRICING.minimumKg}kg minimum billable weight)
+                        ({settings.minimumKg}kg minimum billable weight)
                       </p>
                     </CardContent>
                   </Card>
@@ -442,7 +442,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                   How the guarantee works
                 </p>
                 <p className="mt-3 text-sm leading-relaxed text-navy-300">
-                  During the B2C booking flow, you&apos;ll see an optional photo uploader.
+                  During the retail booking flow, you&apos;ll see an optional photo uploader.
                   Use it to capture the current condition of your garments. Orders with
                   uploaded photos are automatically tagged &quot;Guarantee Activated&quot;
                   and receive a 5% discount on the total.
@@ -462,7 +462,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                 </div>
 
                 <p className="mt-4 text-xs text-navy-300">
-                  <span className="font-semibold text-navy">B2B note:</span> For
+                  <span className="font-semibold text-navy">Corporate note:</span> For
                   corporate bulk orders, condition capture is hidden by default to
                   streamline booking. It can be enabled per-order on request.
                 </p>
@@ -518,8 +518,8 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
 
           <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
             <img
-              src="/brand/images/atelier-interior.png"
-              alt="Kozy atelier interior with navy cabinetry and gold accents"
+              src="/brand/images/atelier-craftsman.png"
+              alt="Kozy master dry cleaner treating a premium garment with care"
               className="h-full w-full object-cover"
             />
           </div>
@@ -531,7 +531,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
       ============================================================ */}
       <footer className="bg-navy text-navy-100">
         <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
-          <div className="grid gap-8 md:grid-cols-4">
+          <div className="grid gap-8 md:grid-cols-3">
             <div>
               <div className="flex items-center gap-2">
                 <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -564,19 +564,6 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                 </li>
                 <li className="flex items-center gap-2">
                   <MapPin className="h-4 w-4 text-gold-400" /> Kozy Atelier, 12 Gerard Rd, Ikoyi
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">
-                Bank transfer
-              </p>
-              <ul className="mt-3 space-y-2 text-sm text-navy-100/70">
-                <li>{COMPANY_BANK.bankName}</li>
-                <li>{COMPANY_BANK.accountName}</li>
-                <li className="font-mono font-semibold text-white">
-                  {COMPANY_BANK.accountNumber}
                 </li>
               </ul>
             </div>

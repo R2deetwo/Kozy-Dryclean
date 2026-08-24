@@ -13,8 +13,6 @@ import {
   formatNaira,
   formatDateTime,
   formatDate,
-  COMPANY_BANK,
-  GUARANTEE_DISCOUNT,
   type Order,
 } from '@/lib/types'
 import { Button } from '@/components/ui/button'
@@ -33,10 +31,11 @@ export function InvoiceView({ order, onBack }: Props) {
     [allPayments, order.id]
   )
   const verifiedPayment = payments.find((p) => p.status === 'VERIFIED')
+  const settings = useStore((s) => s.settings)
 
-  const subtotal = order.type === 'ITEM' ? order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0) : (order.finalWeight ?? 0) * 800
+  const subtotal = order.type === 'ITEM' ? order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0) : (order.finalWeight ?? 0) * settings.pricePerKg
   const guaranteeDiscount =
-    order.guaranteeActive && order.type === 'ITEM' ? subtotal * GUARANTEE_DISCOUNT : 0
+    order.guaranteeActive && order.type === 'ITEM' ? subtotal * (settings.guaranteeDiscountPercent / 100) : 0
   const total = order.totalPrice ?? 0
 
   return (
@@ -155,7 +154,7 @@ export function InvoiceView({ order, onBack }: Props) {
                 {order.guaranteeActive && guaranteeDiscount > 0 && (
                   <tr>
                     <td className="py-2 text-navy-300" colSpan={3}>
-                      Return-as-Received Guarantee discount ({Math.round(GUARANTEE_DISCOUNT * 100)}%)
+                      Return-as-Received Guarantee discount ({settings.guaranteeDiscountPercent}%)
                     </td>
                     <td className="py-2 text-right font-medium text-navy-300">
                       −{formatNaira(guaranteeDiscount)}
@@ -209,12 +208,12 @@ export function InvoiceView({ order, onBack }: Props) {
               </p>
               <div className="mt-2 grid grid-cols-2 gap-y-1">
                 <span className="text-navy-300 dark:text-navy-200">Bank</span>
-                <span className="font-medium">{COMPANY_BANK.bankName}</span>
+                <span className="font-medium">{settings.bankName}</span>
                 <span className="text-navy-300 dark:text-navy-200">Account name</span>
-                <span className="font-medium">{COMPANY_BANK.accountName}</span>
+                <span className="font-medium">{settings.accountName}</span>
                 <span className="text-navy-300 dark:text-navy-200">Account number</span>
                 <span className="font-mono font-bold text-navy-300">
-                  {COMPANY_BANK.accountNumber}
+                  {settings.accountNumber}
                 </span>
               </div>
             </div>

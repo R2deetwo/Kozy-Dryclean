@@ -15,11 +15,13 @@ import type {
   OrderType,
   PaymentMethod,
   NotificationTemplate,
+  KozySettings,
 } from './types'
 import {
   GARMENT_CATALOG,
   B2B_PRICING,
   GUARANTEE_DISCOUNT,
+  COMPANY_BANK,
   buildNotification,
   PIPELINE_STAGES,
   type PipelineStage,
@@ -305,6 +307,22 @@ const SEED_NOTIFICATIONS: NotificationTemplate[] = [
 ]
 
 // =====================================================
+// Default admin-managed settings
+// =====================================================
+const DEFAULT_SETTINGS: KozySettings = {
+  bankName: COMPANY_BANK.bankName,
+  accountName: COMPANY_BANK.accountName,
+  accountNumber: COMPANY_BANK.accountNumber,
+  contactPhone: '+234 800 569 3789',
+  contactEmail: 'concierge@kozy.ng',
+  atelierAddress: 'Kozy Atelier, 12 Gerard Rd, Ikoyi, Lagos',
+  pricePerKg: B2B_PRICING.pricePerKg,
+  minimumKg: B2B_PRICING.minimumKg,
+  guaranteeDiscountPercent: Math.round(GUARANTEE_DISCOUNT * 100),
+  garmentPrices: Object.fromEntries(GARMENT_CATALOG.map((g) => [g.id, g.price])),
+}
+
+// =====================================================
 // Store shape
 // =====================================================
 interface StoreState {
@@ -315,10 +333,14 @@ interface StoreState {
   notifications: NotificationTemplate[]
   // current session user
   currentUserId: string
+  // admin-managed settings (bank account, pricing, etc.)
+  settings: KozySettings
 
   // selectors / actions
   setCurrentUser: (id: string) => void
   getCurrentUser: () => User
+  updateSettings: (partial: Partial<KozySettings>) => void
+  setGarmentPrice: (id: string, price: number) => void
 
   // orders
   createOrder: (input: {
@@ -364,6 +386,18 @@ export const useStore = create<StoreState>()(
       media: SEED_MEDIA,
       notifications: SEED_NOTIFICATIONS,
       currentUserId: '', // empty by default — auth gate appears until user signs in
+      settings: DEFAULT_SETTINGS,
+
+      updateSettings: (partial) =>
+        set((s) => ({ settings: { ...s.settings, ...partial } })),
+
+      setGarmentPrice: (id, price) =>
+        set((s) => ({
+          settings: {
+            ...s.settings,
+            garmentPrices: { ...s.settings.garmentPrices, [id]: price },
+          },
+        })),
 
       setCurrentUser: (id) => set({ currentUserId: id }),
       getCurrentUser: () => {
@@ -377,7 +411,7 @@ export const useStore = create<StoreState>()(
         let totalPrice: number | undefined
         if (input.type === 'ITEM') {
           const subtotal = input.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-          totalPrice = input.guaranteeActive ? subtotal * (1 - GUARANTEE_DISCOUNT) : subtotal
+          totalPrice = input.guaranteeActive ? subtotal * (1 - (get().settings.guaranteeDiscountPercent / 100)) : subtotal
         } else {
           // B2B: pending weight
           totalPrice = undefined
@@ -592,6 +626,7 @@ export const useStore = create<StoreState>()(
           media: SEED_MEDIA,
           notifications: SEED_NOTIFICATIONS,
           currentUserId: '',
+          settings: DEFAULT_SETTINGS,
         }),
     }),
     {
@@ -604,6 +639,7 @@ export const useStore = create<StoreState>()(
         payments: s.payments,
         media: s.media,
         notifications: s.notifications,
+        settings: s.settings,
       }),
     }
   )
