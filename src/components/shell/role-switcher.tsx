@@ -3,6 +3,7 @@
 import { Moon, Sun } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useTheme } from '@/components/shell/theme-provider'
+import { useEffect } from 'react'
 
 interface Props {
   portal: 'landing' | 'customer' | 'admin' | 'driver'
@@ -10,7 +11,16 @@ interface Props {
 }
 
 export function RoleSwitcher({ portal, onChange }: Props) {
-  const { theme, toggle } = useTheme()
+  const { theme, toggle, setTheme } = useTheme()
+
+  // Theme isolation: landing page should ALWAYS be light mode
+  // (the navy hero section already provides the dark aesthetic)
+  // Other portals respect the user's theme preference
+  useEffect(() => {
+    if (portal === 'landing') {
+      setTheme('light')
+    }
+  }, [portal, setTheme])
 
   const items = [
     { key: 'landing', label: 'Landing' },
@@ -64,13 +74,16 @@ export function RoleSwitcher({ portal, onChange }: Props) {
             })}
           </div>
 
-          <button
-            onClick={toggle}
-            aria-label="Toggle theme"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-linen-200 text-navy transition hover:bg-linen-300"
-          >
-            {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
-          </button>
+          {/* Hide theme toggle on landing — landing is always light */}
+          {portal !== 'landing' && (
+            <button
+              onClick={toggle}
+              aria-label="Toggle theme"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-linen-200 text-navy transition hover:bg-linen-300"
+            >
+              {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+            </button>
+          )}
         </div>
       </div>
     </div>
