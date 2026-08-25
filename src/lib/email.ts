@@ -12,10 +12,12 @@ interface SendEmailParams {
 
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY
-  // Use the Brevo-verified sender email. concierge@kozy.ng isn't verified in Brevo yet —
-  // once verified, we can switch to it. For now, use the account owner's email.
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'chigozieubahesq@gmail.com'
-  const senderName = process.env.BREVO_SENDER_NAME || 'Kozy'
+  // Hardcode the Brevo-verified sender. concierge@kozy.ng is NOT verified in Brevo yet.
+  // The BREVO_SENDER_EMAIL env var on Vercel still points to concierge@kozy.ng (unverified),
+  // which causes Brevo to silently reject the email. Until concierge@kozy.ng is verified
+  // in Brevo's dashboard, we must use chigozieubahesq@gmail.com (the only verified sender).
+  const senderEmail = 'chigozieubahesq@gmail.com'
+  const senderName = 'Kozy'
 
   if (!apiKey) {
     console.warn('BREVO_API_KEY not set — skipping email send')
