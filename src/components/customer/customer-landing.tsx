@@ -540,7 +540,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
                 Beyond Laundry
               </p>
-              <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+              <h2 className="font-serif text-3xl font-semibold tracking-tight text-white sm:text-4xl">
                 Sneaker &amp; Trainer Restoration
               </h2>
               <p className="mt-4 max-w-xl text-white">
@@ -637,8 +637,11 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
           <div className="grid gap-8 md:grid-cols-3">
             <div>
               <div className="flex items-center gap-2">
-                <img src="/kozy-icon.png" alt="Kozy Care" width={32} height={32} className="rounded-lg" />
-                <span className="font-serif text-lg font-semibold text-white">Kozy Care</span>
+                <img src="/kozy-icon.png" alt="Kozy Care" height={32} className="shrink-0" style={{ height: 32, width: 'auto' }} />
+                <div className="leading-none">
+                  <p className="font-serif text-lg font-bold text-white">Kozy Care</p>
+                  <p className="text-[8px] uppercase tracking-[0.15em] text-gold-300 font-medium mt-0.5">DRYCLEANING &amp; LAUNDRY</p>
+                </div>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-navy-100/70">
                 Premium dry cleaning &amp; laundry care for individuals and corporate
@@ -653,19 +656,19 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
               <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">
                 Contact Us
               </p>
-              <ul className="mt-3 space-y-2 text-sm text-navy-100/70">
-                <li className="flex items-center gap-2 hover:text-white transition">
+              <ul className="mt-3 space-y-2 text-sm">
+                <li className="flex items-center gap-2 transition">
                   <Phone className="h-4 w-4 text-gold-400 shrink-0" />
-                  <a href="tel:+2348031755230" className="hover:text-gold-300 transition">+234 803 175 5230</a>
+                  <a href="tel:+2348031755230" className="text-navy-100/70 hover:text-gold-300 transition">+234 803 175 5230</a>
                 </li>
-                <li className="flex items-center gap-2 hover:text-white transition">
+                <li className="flex items-center gap-2 transition">
                   <Mail className="h-4 w-4 text-gold-400 shrink-0" />
-                  <a href="mailto:kozygarmentcare@gmail.com" className="hover:text-gold-300 transition">kozygarmentcare@gmail.com</a>
+                  <a href="mailto:kozygarmentcare@gmail.com" className="text-navy-100/70 hover:text-gold-300 transition">kozygarmentcare@gmail.com</a>
                 </li>
-                <li className="flex items-start gap-2 hover:text-white transition">
+                <li className="flex items-start gap-2 transition">
                   <MapPin className="h-4 w-4 text-gold-400 shrink-0 mt-0.5" />
-                  <span>
-                    <a href="#locations" className="hover:text-gold-300 transition block">No 20. Westsyde Drive, Ogombo, Lagos State</a>
+                  <span className="text-navy-100/70">
+                    <span className="block">No 20. Westsyde Drive, Ogombo, Lagos State</span>
                     <span className="block mt-1">Paradise 3 Estate, Road 5/3, Chevron, Lagos State</span>
                   </span>
                 </li>
@@ -678,12 +681,12 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
               </p>
               <ul className="mt-3 space-y-2 text-sm">
                 <li>
-                  <button onClick={onBook} className="text-navy-100/70 hover:text-gold-300 transition">
+                  <button onClick={onBook} className="cursor-pointer text-navy-100/70 hover:text-gold-300 transition">
                     Book a pickup
                   </button>
                 </li>
                 <li>
-                  <button onClick={onPortal} className="text-navy-100/70 hover:text-gold-300 transition">
+                  <button onClick={onPortal} className="cursor-pointer text-navy-100/70 hover:text-gold-300 transition">
                     Track an order
                   </button>
                 </li>
@@ -727,8 +730,14 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col items-center justify-between gap-2 border-t border-navy-500 pt-6 text-xs text-navy-100/40 sm:flex-row">
-            <p>© 2026 Kozy Care. All rights reserved.</p>
+          <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-navy-500 pt-6 text-xs sm:flex-row">
+            <p className="text-navy-100/40">© 2026 Kozy Care. All rights reserved.</p>
+            <div className="flex flex-wrap gap-4">
+              <a href="/terms" className="text-navy-100/40 hover:text-gold-300 transition">Terms of Service</a>
+              <a href="/privacy" className="text-navy-100/40 hover:text-gold-300 transition">Privacy Policy</a>
+              <a href="/refunds" className="text-navy-100/40 hover:text-gold-300 transition">Refunds</a>
+              <a href="/cookies" className="text-navy-100/40 hover:text-gold-300 transition">Cookies</a>
+            </div>
             <p>Built for Lagos, with care.</p>
           </div>
         </div>

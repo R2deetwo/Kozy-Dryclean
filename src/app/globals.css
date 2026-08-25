@@ -38,6 +38,40 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Kozy brand colors — registered directly in @theme for Tailwind v4 */
+  --color-navy-50: #E8ECF2;
+  --color-navy-100: #C8D2DF;
+  --color-navy-200: #9FB1C7;
+  --color-navy-300: #6F88A8;
+  --color-navy-400: #3F5F88;
+  --color-navy-500: #1B3A5F;
+  --color-navy-600: #102740;
+  --color-navy-700: #0A192F;
+  --color-navy-800: #07101F;
+  --color-navy-900: #040A14;
+  --color-navy: #0A192F;
+
+  --color-gold-50: #FBF5E0;
+  --color-gold-100: #F7EBBF;
+  --color-gold-200: #EFD87E;
+  --color-gold-300: #E3BE4F;
+  --color-gold-400: #D4AF37;
+  --color-gold-500: #B8962B;
+  --color-gold-600: #947621;
+  --color-gold-700: #6B541A;
+  --color-gold-800: #4A3A12;
+  --color-gold-900: #2D2410;
+  --color-gold: #D4AF37;
+
+  --color-linen-50: #FFFFFF;
+  --color-linen-100: #F8F9FA;
+  --color-linen-200: #EEF0F2;
+  --color-linen-300: #E2E5E9;
+  --color-linen-400: #CCD1D8;
+  --color-linen-500: #B0B7C2;
+  --color-linen: #F8F9FA;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
