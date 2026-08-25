@@ -30,7 +30,7 @@ export const OrderItemSchema = z.object({
   id: z.string(),
   name: z.string(),
   quantity: z.number().int().positive(),
-  unitPrice: z.number().nonnegative(),
+  unitPrice: z.number().nonnegative().optional(), // server computes from PriceCatalog — client value is ignored
 })
 
 export const CreateOrderSchema = z.object({
