@@ -22,22 +22,22 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
-  title: "Kozy Drycleaning and Laundry Services | Premium Pickup & Delivery in Lagos",
-  description: "Uncompromising care. Exceptional convenience. Kozy Drycleaning and Laundry Services — Lagos' premium pickup & delivery for designer wear, corporate linens, and household items.",
-  keywords: ["Kozy", "Kozy Drycleaning", "dry cleaning Lagos", "laundry Lagos", "premium dry cleaning", "Ikoyi laundry", "Lekki laundry", "corporate laundry Lagos", "laundry pickup Lagos"],
-  authors: [{ name: "Kozy Drycleaning and Laundry Services" }],
+  title: "Kozy Care — Premium Drycleaning & Laundry Services in Lagos",
+  description: "Uncompromising care. Exceptional convenience. Kozy Care — Lagos' premium dry cleaning & laundry pickup and delivery service.",
+  keywords: ["Kozy Care", "dry cleaning Lagos", "laundry Lagos", "premium dry cleaning", "Ikoyi laundry", "Lekki laundry", "corporate laundry Lagos", "laundry pickup Lagos"],
+  authors: [{ name: "Kozy Care" }],
   icons: {
     icon: "/kozy-logo.png",
   },
   openGraph: {
-    title: "Kozy Drycleaning and Laundry Services",
-    description: "Uncompromising care. Exceptional convenience. Lagos' premium pickup & delivery service for designer wear and corporate linens.",
-    siteName: "Kozy Drycleaning and Laundry Services",
+    title: "Kozy Care — Premium Drycleaning & Laundry Services",
+    description: "Uncompromising care. Exceptional convenience.",
+    siteName: "Kozy Care",
     type: "website",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Kozy Drycleaning and Laundry Services",
+    title: "Kozy Care — Premium Drycleaning & Laundry Services",
     description: "Uncompromising care. Exceptional convenience.",
   },
 };

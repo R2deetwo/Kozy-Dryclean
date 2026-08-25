@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle2, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -24,32 +24,41 @@ export default function SignupPage() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [emailSent, setEmailSent] = useState(false)
+  const [emailError, setEmailError] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
 
-    const res = await fetch('/api/auth/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email,
-        password,
-        name: accountType === 'B2B' ? company : name,
-        phone,
-        role: accountType,
-        company: accountType === 'B2B' ? company : undefined,
-      }),
-    })
+    try {
+      const res = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email,
+          password,
+          name: accountType === 'B2B' ? company : name,
+          phone,
+          role: accountType,
+          company: accountType === 'B2B' ? company : undefined,
+        }),
+      })
 
-    const data = await res.json()
+      const data = await res.json()
 
-    if (!res.ok) {
-      setError(data.error || 'Signup failed')
-      setLoading(false)
-    } else {
-      setSuccess(true)
+      if (!res.ok) {
+        setError(data.error || 'Signup failed')
+        setLoading(false)
+      } else {
+        setSuccess(true)
+        setEmailSent(data.emailSent ?? false)
+        setEmailError(data.emailError || '')
+        setLoading(false)
+      }
+    } catch (e: any) {
+      setError('Network error. Please check your connection and try again.')
       setLoading(false)
     }
   }
@@ -59,14 +68,40 @@ export default function SignupPage() {
       <div className="min-h-screen flex items-center justify-center bg-linen px-4 py-8">
         <Card className="w-full max-w-md border-navy-100 shadow-navy">
           <CardContent className="p-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-100">
-              <CheckCircle2 className="h-7 w-7 text-gold-600" />
-            </div>
-            <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Check your email</h1>
-            <p className="text-sm text-navy-300 mb-6">
-              We&apos;ve sent a verification link to <strong className="text-navy">{email}</strong>.
-              Click the link to activate your account, then sign in.
-            </p>
+            {emailSent ? (
+              <>
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-100">
+                  <CheckCircle2 className="h-7 w-7 text-gold-600" />
+                </div>
+                <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Check your email</h1>
+                <p className="text-sm text-navy-300 mb-2">
+                  We&apos;ve sent a verification link to <strong className="text-navy">{email}</strong>.
+                </p>
+                <p className="text-xs text-navy-300 mb-6">
+                  Click the link to activate your account, then sign in.
+                  <br />
+                  <strong className="text-navy">Didn&apos;t get it?</strong> Check your spam/junk folder.
+                </p>
+              </>
+            ) : (
+              <>
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
+                  <AlertCircle className="h-7 w-7 text-amber-600" />
+                </div>
+                <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Account created</h1>
+                <p className="text-sm text-navy-300 mb-2">
+                  Your account was created but we couldn&apos;t send the verification email.
+                </p>
+                {emailError && (
+                  <p className="text-xs text-rose-600 mb-4 bg-rose-50 rounded-lg p-2">
+                    Error: {emailError}
+                  </p>
+                )}
+                <p className="text-xs text-navy-300 mb-6">
+                  Please contact support at concierge@kozy.ng to verify your account manually.
+                </p>
+              </>
+            )}
             <Button onClick={() => router.push('/login')} className="bg-gold-gradient text-navy hover:opacity-90 w-full">
               Go to login
             </Button>
@@ -88,7 +123,7 @@ export default function SignupPage() {
         <Card className="border-navy-100 shadow-navy">
           <CardContent className="p-6 sm:p-8">
             <h1 className="font-serif text-2xl font-semibold text-navy text-center mb-2">Create account</h1>
-            <p className="text-sm text-navy-300 text-center mb-6">Get started with Kozy in 60 seconds</p>
+            <p className="text-sm text-navy-300 text-center mb-6">Get started with Kozy Care in 60 seconds</p>
 
             {error && (
               <div className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 flex items-start gap-2 ring-1 ring-rose-200">

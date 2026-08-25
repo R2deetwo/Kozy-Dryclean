@@ -17,7 +17,7 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
   // which causes Brevo to silently reject the email. Until concierge@kozy.ng is verified
   // in Brevo's dashboard, we must use chigozieubahesq@gmail.com (the only verified sender).
   const senderEmail = 'chigozieubahesq@gmail.com'
-  const senderName = 'Kozy'
+  const senderName = 'Kozy Care'
 
   if (!apiKey) {
     console.warn('BREVO_API_KEY not set — skipping email send')
@@ -52,18 +52,18 @@ export async function sendVerificationEmail(email: string, name: string, token: 
 
   await sendEmail({
     to: email,
-    subject: 'Verify your Kozy account',
+    subject: 'Verify your Kozy Care account',
     html: `
       <!DOCTYPE html>
       <html>
       <body style="font-family: Georgia, serif; background: #F8F9FA; padding: 40px 0; margin: 0;">
         <div style="max-width: 480px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
           <div style="background: linear-gradient(135deg, #0A192F, #102740); padding: 32px 40px; text-align: center;">
-            <h1 style="color: #D4AF37; font-family: Georgia, serif; font-size: 28px; font-weight: 700; margin: 0;">Kozy</h1>
+            <h1 style="color: #D4AF37; font-family: Georgia, serif; font-size: 28px; font-weight: 700; margin: 0;">Kozy Care</h1>
             <p style="color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0 0 0;">Drycleaning &amp; Laundry</p>
           </div>
           <div style="padding: 40px;">
-            <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">Welcome to Kozy, ${name}!</h2>
+            <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">Welcome to Kozy Care, ${name}!</h2>
             <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 24px 0;">
               Please verify your email address to activate your account and start booking pickups.
             </p>
@@ -75,7 +75,7 @@ export async function sendVerificationEmail(email: string, name: string, token: 
               <span style="color: #0A192F; word-break: break-all;">${verifyUrl}</span>
             </p>
             <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px;">
-              If you didn't create a Kozy account, you can safely ignore this email.
+              If you didn&apos;t create a Kozy Care account, you can safely ignore this email.
             </p>
           </div>
         </div>

@@ -37,7 +37,7 @@ export function Logo({ size = 'md', showText = true, subtitle, className, onClic
       </div>
       {showText && (
         <div className="leading-tight text-left">
-          <p className={cn('font-serif font-bold tracking-tight text-navy', s.text)}>Kozy</p>
+          <p className={cn('font-serif font-bold tracking-tight text-navy', s.text)}>Kozy Care</p>
           {subtitle && (
             <p className={cn('uppercase tracking-[0.18em] text-navy-400 font-medium', s.subtitle)}>
               {subtitle}

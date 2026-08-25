@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { signOut } from 'next-auth/react'
 import {
   LayoutDashboard,
   KanbanSquare,
@@ -15,6 +16,7 @@ import {
   Sparkles,
   RotateCcw,
   Settings,
+  LogOut,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { cn } from '@/lib/utils'
@@ -105,7 +107,7 @@ export function AdminDashboard() {
               )
             })}
           </nav>
-          <div className="border-t border-navy-500 p-3">
+          <div className="border-t border-navy-500 p-3 space-y-1">
             <Button
               variant="ghost"
               size="sm"
@@ -113,6 +115,14 @@ export function AdminDashboard() {
               className="w-full justify-start text-xs text-navy-300 hover:bg-navy-500 hover:text-white"
             >
               <RotateCcw className="mr-2 h-3 w-3" /> Reset demo data
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => signOut({ callbackUrl: '/' })}
+              className="w-full justify-start text-xs text-navy-300 hover:bg-rose-600 hover:text-white"
+            >
+              <LogOut className="mr-2 h-3 w-3" /> Sign out
             </Button>
           </div>
         </div>

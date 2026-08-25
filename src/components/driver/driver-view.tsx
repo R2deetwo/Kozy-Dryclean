@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { signOut } from 'next-auth/react'
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion'
 import {
   Phone,
@@ -19,6 +20,7 @@ import {
   AlertCircle,
   Route,
   ListChecks,
+  LogOut,
 } from 'lucide-react'
 import { useStore } from '@/lib/store'
 import { useMemo } from 'react'
@@ -70,11 +72,17 @@ export function DriverView() {
               <p className="text-xs uppercase tracking-wider text-gold-400">Driver on duty</p>
               <p className="text-lg font-bold">{driver.name}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Sun className="h-4 w-4 text-amber-400" />
               <span className="text-xs text-slate-300">
                 {new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
               </span>
+              <button
+                onClick={() => signOut({ callbackUrl: '/' })}
+                className="flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-700"
+              >
+                <LogOut className="h-3 w-3" /> Sign out
+              </button>
             </div>
           </div>
           <div className="mt-3 flex items-center gap-1.5">
