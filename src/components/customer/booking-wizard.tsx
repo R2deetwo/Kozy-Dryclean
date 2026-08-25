@@ -31,6 +31,8 @@ import {
 } from '@/lib/types'
 import { useStore } from '@/lib/store'
 import { useSession } from 'next-auth/react'
+
+// Zustand is now only used for settings (pricing config) — orders/payments go through the API
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -66,14 +68,10 @@ const TIME_SLOTS = [
 ]
 
 export function BookingWizard({ onComplete, onCancel }: Props) {
-  const createOrder = useStore((s) => s.createOrder)
-  const addMedia = useStore((s) => s.addMedia)
-  const createPayment = useStore((s) => s.createPayment)
-  const currentUser = useStore((s) => s.users.find((u) => u.id === s.currentUserId))
+  const settings = useStore((s) => s.settings)
   const { data: session } = useSession()
-  // Fall back to NextAuth session if Zustand doesn't have the user (real auth path)
   const sessionUser = session?.user
-  const effectiveUser = currentUser || (sessionUser ? {
+  const effectiveUser = sessionUser ? {
     id: (sessionUser as any).id || '',
     email: sessionUser.email || '',
     name: sessionUser.name || '',
@@ -82,8 +80,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
     address: undefined,
     company: undefined,
     createdAt: '',
-  } : undefined)
-  const settings = useStore((s) => s.settings)
+  } : undefined
 
   const [step, setStep] = useState(1)
   const [type, setType] = useState<OrderType>('ITEM')
@@ -100,6 +97,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'BANK_TRANSFER' | 'PAYSTACK'>('BANK_TRANSFER')
   const [receiptUploaded, setReceiptUploaded] = useState(false)
+  const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const receiptInputRef = useRef<HTMLInputElement>(null)
 
@@ -204,42 +202,66 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
     if (step > 1) setStep(step - 1)
   }
 
-  const handleConfirm = () => {
-    const order = createOrder({
-      userId: effectiveUser.id,
-      type,
-      items: type === 'ITEM' ? selectedItems : [],
-      guaranteeActive,
-      pickupAddress,
-      pickupDate: new Date(pickupDate).toISOString(),
-      pickupTimeSlot: pickupSlot,
-      deliveryAddress,
-    })
+  const handleConfirm = async () => {
+    setLoading(true)
+    try {
+      // Create order via API
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type,
+          items: type === 'ITEM' ? selectedItems : [],
+          guaranteeActive,
+          pickupAddress,
+          pickupDate: new Date(pickupDate).toISOString(),
+          pickupTimeSlot: pickupSlot,
+          deliveryAddress,
+        }),
+      })
 
-    // Persist photos as garment media
-    photos.forEach((p) => addMedia(order.id, p.url))
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to create order')
+      }
 
-    // Create payment record
-    const amount = type === 'ITEM' ? total : 0
-    createPayment({
-      orderId: order.id,
-      amount,
-      method: paymentMethod,
-      receiptUrl: paymentMethod === 'BANK_TRANSFER' && receiptUploaded ? 'mock-receipt' : undefined,
-    })
+      const data = await res.json()
+      const order = data.order
 
-    toast({
-      title: 'Booking placed!',
-      description: `Order #${order.orderNumber} is confirmed. ${
-        type === 'KG'
-          ? 'We will weigh your items at the station and send the invoice.'
-          : paymentMethod === 'BANK_TRANSFER' && receiptUploaded
-          ? 'Your receipt is in the verification queue.'
-          : 'We\'ve initiated your Paystack payment request.'
-      }`,
-    })
+      // Create payment record via API (for ITEM orders with a total)
+      if (type === 'ITEM' && order.totalPrice) {
+        await fetch('/api/payments', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            orderId: order.id,
+            amount: order.totalPrice,
+            method: paymentMethod,
+            receiptUrl: paymentMethod === 'BANK_TRANSFER' && receiptUploaded ? 'mock-receipt' : undefined,
+          }),
+        })
+      }
 
-    setTimeout(() => onComplete(order), 300)
+      toast({
+        title: 'Booking placed!',
+        description: `Order #${order.orderNumber} is confirmed. ${
+          type === 'KG'
+            ? 'We will weigh your items at the station and send the invoice.'
+            : paymentMethod === 'BANK_TRANSFER' && receiptUploaded
+            ? 'Your receipt is in the verification queue.'
+            : 'We\'ve initiated your Paystack payment request.'
+        }`,
+      })
+
+      setTimeout(() => onComplete(order), 300)
+    } catch (e: any) {
+      toast({
+        title: 'Booking failed',
+        description: e.message || 'Something went wrong. Please try again.',
+        variant: 'destructive',
+      })
+      setLoading(false)
+    }
   }
 
   return (
@@ -873,10 +895,11 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
           ) : (
             <Button
               onClick={handleConfirm}
+              disabled={loading}
               className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
             >
               <Sparkles className="mr-2 h-4 w-4" />
-              {type === 'ITEM' ? `Pay & Confirm ${formatNaira(total)}` : 'Confirm pickup request'}
+              {loading ? 'Placing order...' : type === 'ITEM' ? `Pay & Confirm ${formatNaira(total)}` : 'Confirm pickup request'}
             </Button>
           )}
         </div>

@@ -12,9 +12,10 @@ import {
   Sparkles,
   PlusCircle,
   LogOut,
+  Loader2,
 } from 'lucide-react'
-import { useStore, useOrdersForUser } from '@/lib/store'
-import { formatNaira, formatDate, type Order } from '@/lib/types'
+import { useOrders, type ApiOrder } from '@/lib/hooks'
+import { formatNaira, formatDate } from '@/lib/types'
 import { OrderPipeline } from '@/components/shared/order-pipeline'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -35,18 +36,11 @@ interface Props {
 type View =
   | { name: 'dashboard' }
   | { name: 'booking' }
-  | { name: 'invoice'; order: Order }
+  | { name: 'invoice'; order: any }
 
 export function CustomerPortal({ initialView = 'dashboard', initialHighlight }: Props) {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const users = useStore((s) => s.users)
-
-  // Get the current user from session, fall back to Zustand seed data for demo
-  const currentUserId = (session?.user as any)?.id
-  const currentUser = currentUserId
-    ? users.find((u) => u.id === currentUserId)
-    : users.find((u) => u.email === session?.user?.email)
 
   const [view, setView] = useState<View>(
     initialView === 'booking' ? { name: 'booking' } : { name: 'dashboard' }
@@ -57,23 +51,18 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight }: 
   if (status === 'loading') {
     return (
       <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center bg-linen">
-        <div className="text-sm text-navy-300">Loading...</div>
+        <Loader2 className="h-6 w-6 animate-spin text-navy-300" />
       </div>
     )
   }
 
-  // If no session, middleware should have redirected — but just in case
   if (!session) {
     router.push('/login')
     return null
   }
 
-  // Use session user info, fall back to Zustand seed user if the real user
-  // isn't in the seed data (demo mode — will be fully wired to API in follow-up)
-  const displayName = currentUser?.name || (session.user?.name ?? 'Customer')
-  const displayEmail = currentUser?.email || (session.user?.email ?? '')
-  const displayPhone = currentUser?.phone || ''
-  const userId = currentUser?.id || currentUserId || ''
+  const displayName = session.user?.name ?? 'Customer'
+  const displayEmail = session.user?.email ?? ''
 
   // ----- Booking wizard -----
   if (view.name === 'booking') {
@@ -98,10 +87,8 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight }: 
   // ----- Main dashboard -----
   return (
     <CustomerDashboard
-      userId={userId}
       displayName={displayName}
       displayEmail={displayEmail}
-      displayPhone={displayPhone}
       highlightedId={selectedOrderId}
       onSignOut={() => signOut({ callbackUrl: '/' })}
       onBackToLanding={() => router.push('/')}
@@ -116,10 +103,8 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight }: 
 // CUSTOMER DASHBOARD — main authenticated view
 // =====================================================
 function CustomerDashboard({
-  userId,
   displayName,
   displayEmail,
-  displayPhone,
   highlightedId,
   onSignOut,
   onBackToLanding,
@@ -127,26 +112,34 @@ function CustomerDashboard({
   onViewInvoice,
   onCloseDetail,
 }: {
-  userId: string
   displayName: string
   displayEmail: string
-  displayPhone: string
   highlightedId?: string
   onSignOut: () => void
   onBackToLanding: () => void
   onBook: () => void
-  onViewInvoice: (o: Order) => void
+  onViewInvoice: (o: any) => void
   onCloseDetail: () => void
 }) {
-  // For now, use Zustand seed data for orders (will be replaced with useOrders() hook in follow-up)
-  const orders = useOrdersForUser(userId)
+  // Fetch orders from the real API (already RBAC-filtered server-side to this user)
+  const { data: orders, isLoading } = useOrders()
   const [tab, setTab] = useState<'active' | 'invoices'>('active')
-  const [selected, setSelected] = useState<Order | undefined>(
-    highlightedId ? orders.find((o) => o.id === highlightedId) : undefined
+  const [selected, setSelected] = useState<any | undefined>(
+    highlightedId ? orders?.find((o) => o.id === highlightedId) : undefined
   )
 
-  const activeOrders = orders.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
-  const pastOrders = orders.filter((o) => ['DELIVERED', 'CANCELLED'].includes(o.status))
+  const orderList = orders ?? []
+  const activeOrders = orderList.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
+  const pastOrders = orderList.filter((o) => ['DELIVERED', 'CANCELLED'].includes(o.status))
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-[calc(100vh-3.5rem)] flex items-center justify-center bg-linen">
+        <Loader2 className="h-6 w-6 animate-spin text-navy-300" />
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-linen-200">
@@ -166,7 +159,7 @@ function CustomerDashboard({
                 {displayName}
               </h1>
               <p className="mt-0.5 text-xs text-navy-300 truncate">
-                {displayEmail}{displayPhone ? ` · ${displayPhone}` : ''}
+                {displayEmail}
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
@@ -218,14 +211,14 @@ function CustomerDashboard({
                 <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Guarantee
               </div>
               <p className="mt-1 font-serif text-lg font-bold text-navy sm:text-2xl">
-                {orders.filter((o) => o.guaranteeActive).length}
+                {orderList.filter((o) => o.guaranteeActive).length}
               </p>
             </CardContent>
           </Card>
         </div>
 
         {/* Orders or empty state */}
-        {orders.length === 0 ? (
+        {orderList.length === 0 ? (
           <Card className="border-dashed border-navy-200">
             <CardContent className="flex flex-col items-center justify-center gap-3 p-8 text-center sm:p-10">
               <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy">
@@ -305,7 +298,7 @@ function ActiveOrderCard({
   onView,
   onViewInvoice,
 }: {
-  order: Order
+  order: any
   highlighted?: boolean
   onView: () => void
   onViewInvoice: () => void
@@ -349,9 +342,14 @@ function ActiveOrderCard({
                   </p>
                   <p className="text-xs text-navy-300">
                     {order.finalWeight ? `${order.finalWeight}kg · ` : ''}
-                    {order.items.length > 0
-                      ? `${order.items.reduce((s, i) => s + i.quantity, 0)} items`
-                      : 'Bulk'}
+                    {(() => {
+                      try {
+                        const items = JSON.parse(order.itemsManifest || '[]')
+                        return items.length > 0
+                          ? `${items.reduce((s: number, i: any) => s + i.quantity, 0)} items`
+                          : 'Bulk'
+                      } catch { return 'Bulk' }
+                    })()}
                   </p>
                 </>
               ) : (
@@ -388,7 +386,7 @@ function PastOrderCard({
   onView,
   onViewInvoice,
 }: {
-  order: Order
+  order: any
   onView: () => void
   onViewInvoice: () => void
 }) {
