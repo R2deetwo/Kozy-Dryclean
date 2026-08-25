@@ -158,10 +158,16 @@ function LoginForm() {
               <Button
                 type="submit"
                 disabled={loading}
-                className="w-full bg-gold-gradient text-navy hover:opacity-90 font-semibold"
+                className="w-full bg-gold-gradient text-[#0A192F] hover:opacity-90 font-semibold"
               >
                 {loading ? 'Signing in...' : 'Sign in'}
               </Button>
+
+              <div className="text-center">
+                <a href="/forgot-password" className="text-xs text-[#6F88A8] hover:text-[#0A192F]">
+                  Forgot password?
+                </a>
+              </div>
             </form>
 
             <div className="mt-6 text-center text-sm text-navy-300">

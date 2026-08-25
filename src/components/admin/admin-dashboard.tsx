@@ -143,7 +143,7 @@ export function AdminDashboard() {
                     'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
                     active
                       ? 'bg-navy text-white'
-                      : 'bg-linen-200 dark:bg-navy-700 text-navy-300 dark:text-navy-200'
+                      : 'bg-linen-200 text-navy-300'
                   )}
                 >
                   <Icon className="h-3 w-3" />
@@ -162,7 +162,7 @@ export function AdminDashboard() {
         {/* Top bar (desktop) */}
         <header className="hidden items-center justify-between border-b bg-white px-6 py-3 lg:flex">
           <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-300 dark:text-navy-200" />
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-300" />
             <Input
               placeholder="Search orders, customers, IDs…"
               className="pl-9"
@@ -188,8 +188,8 @@ export function AdminDashboard() {
                 {admin.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
               </div>
               <div className="leading-tight">
-                <p className="text-xs font-medium text-navy dark:text-white">{admin.name}</p>
-                <p className="text-[10px] text-navy-300 dark:text-navy-200">Super Admin</p>
+                <p className="text-xs font-medium text-navy">{admin.name}</p>
+                <p className="text-[10px] text-navy-300">Super Admin</p>
               </div>
             </div>
           </div>
@@ -331,11 +331,11 @@ function KpiCard({
       className={cn(
         'flex flex-col items-start gap-2 rounded-xl border bg-white p-4 text-left transition',
         onClick ? 'cursor-pointer hover:border-gold-200 hover:shadow-sm' : 'cursor-default',
-        tone === 'amber' ? 'border-amber-200' : 'border-navy-100 dark:border-navy-600'
+        tone === 'amber' ? 'border-amber-200' : 'border-navy-100'
       )}
     >
       <div className="flex w-full items-center justify-between">
-        <span className="text-xs font-medium uppercase tracking-wide text-navy-300 dark:text-navy-200">
+        <span className="text-xs font-medium uppercase tracking-wide text-navy-300">
           {label}
         </span>
         <div
@@ -349,9 +349,9 @@ function KpiCard({
           <Icon className="h-4 w-4" />
         </div>
       </div>
-      <p className="text-2xl font-bold text-navy dark:text-white">{value}</p>
+      <p className="text-2xl font-bold text-navy">{value}</p>
       {delta && (
-        <p className={cn('text-xs', tone === 'amber' ? 'text-amber-700' : 'text-navy-300 dark:text-navy-200')}>
+        <p className={cn('text-xs', tone === 'amber' ? 'text-amber-700' : 'text-navy-300')}>
           {delta}
         </p>
       )}
@@ -381,8 +381,8 @@ function QuickActionCard({
         <Icon className="h-5 w-5" />
       </div>
       <div className="flex-1">
-        <p className="text-sm font-semibold text-navy dark:text-white">{title}</p>
-        <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">{desc}</p>
+        <p className="text-sm font-semibold text-navy">{title}</p>
+        <p className="mt-1 text-xs text-navy-300">{desc}</p>
         <span className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-navy-300 group-hover:underline">
           {cta} →
         </span>
@@ -398,8 +398,8 @@ function RecentOrdersCard() {
   return (
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-navy dark:text-white">Recent orders</h3>
-        <Truck className="h-4 w-4 text-navy-300 dark:text-navy-200" />
+        <h3 className="text-sm font-semibold text-navy">Recent orders</h3>
+        <Truck className="h-4 w-4 text-navy-300" />
       </div>
       <ul className="space-y-2 text-sm">
         {orders.map((o) => {
@@ -410,10 +410,10 @@ function RecentOrdersCard() {
               className="flex items-center justify-between gap-2 border-b last:border-0"
             >
               <div className="py-1.5">
-                <p className="font-mono text-xs font-semibold text-navy dark:text-white">
+                <p className="font-mono text-xs font-semibold text-navy">
                   #{o.orderNumber}
                 </p>
-                <p className="text-xs text-navy-300 dark:text-navy-200">{u?.name}</p>
+                <p className="text-xs text-navy-300">{u?.name}</p>
               </div>
               <Badge variant="outline" className="rounded-full text-[10px]">
                 {o.status.replace(/_/g, ' ').toLowerCase()}
@@ -432,7 +432,7 @@ function RecentNotificationsCard() {
   return (
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-navy dark:text-white">Recent notifications</h3>
+        <h3 className="text-sm font-semibold text-navy">Recent notifications</h3>
         <Sparkles className="h-4 w-4 text-gold-400" />
       </div>
       <ul className="space-y-2 text-sm">
@@ -442,7 +442,7 @@ function RecentNotificationsCard() {
               <Badge variant="outline" className="rounded-full text-[10px]">
                 {n.channel}
               </Badge>
-              <span className="text-[10px] text-navy-300 dark:text-navy-200">
+              <span className="text-[10px] text-navy-300">
                 {new Date(n.sentAt).toLocaleString('en-NG', {
                   hour: '2-digit',
                   minute: '2-digit',
@@ -451,7 +451,7 @@ function RecentNotificationsCard() {
                 })}
               </span>
             </div>
-            <p className="py-1 text-xs text-navy-300 dark:text-navy-200">{n.body}</p>
+            <p className="py-1 text-xs text-navy-300">{n.body}</p>
           </li>
         ))}
       </ul>

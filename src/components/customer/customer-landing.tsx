@@ -541,25 +541,26 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                 Beyond Laundry
               </p>
               <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
-                Shoe Cleaning &amp; Restoration
+                Sneaker &amp; Trainer Restoration
               </h2>
-              <p className="mt-4 max-w-xl text-navy-100">
-                From scuffed sneakers to stained suede loafers, our specialists bring your
-                footwear back to life. We handle deep cleaning, sole restoration, colour
-                refinishing, and protective coating for all materials — leather, suede,
-                canvas, and synthetics.
+              <p className="mt-4 max-w-xl text-white">
+                Got beat-up Jordans? Muddy Sambas? Yellowed Air Force soles? Our sneaker
+                restoration specialists bring your favourite kicks back to box-fresh condition.
+                From deep cleans to sole whitening to full restorations — we treat your
+                sneakers like collectibles.
               </p>
               <ul className="mt-6 space-y-3 text-sm">
                 {[
-                  'Deep clean & stain removal for sneakers, loafers, heels, and boots',
-                  'Sole whitening & edge restoration',
-                  'Suede & nubuck revival treatment',
-                  'Colour refinishing & leather conditioning',
-                  'Waterproof & protective coating application',
+                  'Deep clean & stain removal for sneakers, trainers, and canvas shoes',
+                  'Sole whitening & midsole restoration (yellowing reversal)',
+                  'Suede & nubuck revival for premium sneakers',
+                  'Insole & lace replacement options',
+                  'Repainting & colour restoration for scuffed uppers',
+                  'Protective coating to keep them fresh longer',
                 ].map((t) => (
                   <li key={t} className="flex items-start gap-3">
                     <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
-                    <span className="text-navy-100">{t}</span>
+                    <span className="text-white">{t}</span>
                   </li>
                 ))}
               </ul>

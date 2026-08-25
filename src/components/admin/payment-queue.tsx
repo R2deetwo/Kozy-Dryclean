@@ -61,15 +61,15 @@ export function PaymentQueue() {
   if (payments.length === 0) {
     return (
       <div className="p-4 sm:p-6">
-        <h1 className="text-lg font-bold tracking-tight text-navy dark:text-white">Payment Verification Queue</h1>
-        <p className="text-xs text-navy-300 dark:text-navy-200">No pending receipts — you&apos;re all caught up.</p>
+        <h1 className="text-lg font-bold tracking-tight text-navy">Payment Verification Queue</h1>
+        <p className="text-xs text-navy-300">No pending receipts — you&apos;re all caught up.</p>
         <Card className="mt-6 border-dashed">
           <CardContent className="flex flex-col items-center justify-center gap-3 p-10 text-center">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy">
               <Inbox className="h-7 w-7" />
             </div>
-            <p className="font-medium text-navy dark:text-white">Inbox zero!</p>
-            <p className="max-w-sm text-sm text-navy-300 dark:text-navy-200">
+            <p className="font-medium text-navy">Inbox zero!</p>
+            <p className="max-w-sm text-sm text-navy-300">
               When customers upload transfer receipts, they&apos;ll appear here for manual
               verification. Paystack payments are auto-verified via webhook.
             </p>
@@ -85,10 +85,10 @@ export function PaymentQueue() {
       <div className="border-b bg-white px-4 py-3 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-navy dark:text-white">
+            <h1 className="text-lg font-bold tracking-tight text-navy">
               Payment Verification Queue
             </h1>
-            <p className="text-xs text-navy-300 dark:text-navy-200">
+            <p className="text-xs text-navy-300">
               Review each uploaded receipt against the order total, then verify or reject.
             </p>
           </div>
@@ -100,9 +100,9 @@ export function PaymentQueue() {
 
       <div className="grid flex-1 grid-cols-1 overflow-hidden lg:grid-cols-[280px_1fr_320px]">
         {/* Left: queue list */}
-        <aside className="overflow-y-auto border-r bg-linen-100 dark:bg-navy-700">
+        <aside className="overflow-y-auto border-r bg-linen-100">
           <div className="border-b px-3 py-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
               Receipts to review
             </p>
           </div>
@@ -120,30 +120,30 @@ export function PaymentQueue() {
                     }}
                     className={cn(
                       'flex w-full items-start gap-2 border-b p-3 text-left transition',
-                      isActive ? 'bg-gold-50 ring-1 ring-gold-200' : 'hover:bg-linen-200 dark:bg-navy-700'
+                      isActive ? 'bg-gold-50 ring-1 ring-gold-200' : 'hover:bg-linen-200'
                     )}
                   >
                     <div
                       className={cn(
                         'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-                        isActive ? 'bg-navy text-white' : 'bg-linen-200 dark:bg-navy-700 text-navy-300 dark:text-navy-200'
+                        isActive ? 'bg-navy text-white' : 'bg-linen-200 text-navy-300'
                       )}
                     >
                       <Receipt className="h-3.5 w-3.5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className="font-mono text-xs font-semibold text-navy dark:text-white">
+                      <p className="font-mono text-xs font-semibold text-navy">
                         #{o?.orderNumber}
                       </p>
-                      <p className="truncate text-xs text-navy-300 dark:text-navy-200">{c?.name}</p>
+                      <p className="truncate text-xs text-navy-300">{c?.name}</p>
                       <p className="mt-0.5 text-xs font-semibold text-navy-300">
                         {formatNaira(p.amount)}
                       </p>
-                      <p className="text-[10px] text-navy-300 dark:text-navy-200">
+                      <p className="text-[10px] text-navy-300">
                         {formatDateTime(p.createdAt)}
                       </p>
                     </div>
-                    <ChevronRight className="mt-1 h-3 w-3 text-navy-300 dark:text-navy-200" />
+                    <ChevronRight className="mt-1 h-3 w-3 text-navy-300" />
                   </button>
                 </li>
               )
@@ -152,11 +152,11 @@ export function PaymentQueue() {
         </aside>
 
         {/* Center: receipt viewer */}
-        <main className="overflow-auto bg-linen-200 dark:bg-navy-700 p-3 sm:p-5">
+        <main className="overflow-auto bg-linen-200 p-3 sm:p-5">
           {selected ? (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-medium text-navy dark:text-white">
+                <p className="text-sm font-medium text-navy">
                   Receipt — <span className="font-mono">#{order?.orderNumber}</span>
                 </p>
                 <div className="flex items-center gap-1">
@@ -168,7 +168,7 @@ export function PaymentQueue() {
                   >
                     <ZoomOut className="h-3.5 w-3.5" />
                   </Button>
-                  <span className="w-12 text-center text-xs text-navy-300 dark:text-navy-200">
+                  <span className="w-12 text-center text-xs text-navy-300">
                     {Math.round(zoom * 100)}%
                   </span>
                   <Button
@@ -205,7 +205,7 @@ export function PaymentQueue() {
                       <Row label="Reference" value={`TRX-${selected.id.slice(-8).toUpperCase()}`} mono />
                       <Row label="Status" value="Success" tone="emerald" />
                       <div className="mt-3 border-t pt-3">
-                        <p className="text-xs text-navy-300 dark:text-navy-200">
+                        <p className="text-xs text-navy-300">
                           ⚠ This is a mock receipt rendered for the demo. In production, the actual
                           screenshot uploaded by the customer will be displayed here.
                         </p>
@@ -233,7 +233,7 @@ export function PaymentQueue() {
               </div>
             </div>
           ) : (
-            <div className="flex h-full items-center justify-center text-sm text-navy-300 dark:text-navy-200">
+            <div className="flex h-full items-center justify-center text-sm text-navy-300">
               Select a receipt to review.
             </div>
           )}
@@ -244,25 +244,25 @@ export function PaymentQueue() {
           {selected && order && customer ? (
             <div className="space-y-4 p-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
                   Order
                 </p>
-                <p className="font-mono text-sm font-semibold text-navy dark:text-white">
+                <p className="font-mono text-sm font-semibold text-navy">
                   #{order.orderNumber}
                 </p>
-                <p className="text-xs text-navy-300 dark:text-navy-200">
+                <p className="text-xs text-navy-300">
                   {order.type === 'ITEM' ? 'Retail / Per-item' : 'Corporate / Per-kg'}
                 </p>
               </div>
 
-              <div className="rounded-lg bg-linen-200 dark:bg-navy-700 p-3 text-sm">
-                <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
+              <div className="rounded-lg bg-linen-200 p-3 text-sm">
+                <p className="flex items-center gap-1.5 font-medium text-navy">
                   <Banknote className="h-3.5 w-3.5" /> Total expected
                 </p>
                 <p className="mt-1 text-2xl font-bold text-navy-300">
                   {formatNaira(order.totalPrice ?? selected.amount)}
                 </p>
-                <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">
+                <p className="mt-1 text-xs text-navy-300">
                   Receipt amount: <strong>{formatNaira(selected.amount)}</strong>
                 </p>
                 {order.totalPrice !== undefined && order.totalPrice === selected.amount && (
@@ -279,10 +279,10 @@ export function PaymentQueue() {
               </div>
 
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
                   Customer
                 </p>
-                <p className="mt-1 font-medium text-navy dark:text-white">{customer.name}</p>
+                <p className="mt-1 font-medium text-navy">{customer.name}</p>
                 <a
                   href={`tel:${customer.phone}`}
                   className="mt-1 flex items-center gap-1 text-xs text-navy-300 hover:underline"
@@ -298,7 +298,7 @@ export function PaymentQueue() {
               </div>
 
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
+                <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
                   Items
                 </p>
                 {order.type === 'ITEM' ? (() => {
@@ -316,7 +316,7 @@ export function PaymentQueue() {
                     )
                   } catch { return <p className="text-sm text-navy-300">Items</p> }
                 })() : (
-                  <p className="mt-1 text-sm text-navy-300 dark:text-navy-200">
+                  <p className="mt-1 text-sm text-navy-300">
                     Bulk order ·{' '}
                     {order.finalWeight ? `${order.finalWeight}kg` : 'awaiting weighing'}
                   </p>
@@ -334,17 +334,17 @@ export function PaymentQueue() {
                 </div>
               )}
 
-              <div className="border-t pt-3 text-xs text-navy-300 dark:text-navy-200">
+              <div className="border-t pt-3 text-xs text-navy-300">
                 <p className="flex items-center gap-1">
                   <CreditCard className="h-3 w-3" /> Payment method
                 </p>
-                <p className="mt-1 font-medium text-navy dark:text-white">
+                <p className="mt-1 font-medium text-navy">
                   {selected.method === 'BANK_TRANSFER' ? 'Bank Transfer (Manual)' : 'Paystack'}
                 </p>
                 <p className="mt-2 flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" /> Uploaded at
                 </p>
-                <p className="mt-1 font-medium text-navy dark:text-white">
+                <p className="mt-1 font-medium text-navy">
                   {formatDateTime(selected.createdAt)}
                 </p>
               </div>
@@ -371,7 +371,7 @@ function Row({
 }) {
   return (
     <div className="flex items-center justify-between border-b pb-1 last:border-0">
-      <span className="text-xs text-navy-300 dark:text-navy-200">{label}</span>
+      <span className="text-xs text-navy-300">{label}</span>
       <span
         className={cn(
           'text-sm font-medium',

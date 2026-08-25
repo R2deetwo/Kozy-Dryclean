@@ -158,10 +158,10 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
         <div className="space-y-5">
           {/* Pipeline + status control */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-navy dark:text-white">Order progress</h3>
+            <h3 className="mb-2 text-sm font-semibold text-navy">Order progress</h3>
             <OrderPipeline order={order} />
             <div className="mt-3 flex items-center gap-2">
-              <Label className="text-xs text-navy-300 dark:text-navy-200">Set status</Label>
+              <Label className="text-xs text-navy-300">Set status</Label>
               <Select value={statusSelect} onValueChange={(v) => handleStatusChange(v as OrderStatus)}>
                 <SelectTrigger className="h-8 w-56 text-xs">
                   <SelectValue />
@@ -181,31 +181,31 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           {/* Customer */}
           <section className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-linen-200 dark:bg-navy-700 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
+            <div className="rounded-lg bg-linen-200 p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-navy">
                 <UserIcon className="h-3.5 w-3.5" /> Customer
               </p>
-              <p className="mt-1 font-medium text-navy dark:text-white">{customer?.name}</p>
+              <p className="mt-1 font-medium text-navy">{customer?.name}</p>
               <a
                 href={`tel:${customer?.phone}`}
                 className="mt-1 inline-flex items-center gap-1 text-xs text-navy-300 hover:underline"
               >
                 <Phone className="h-3 w-3" /> {customer?.phone}
               </a>
-              <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">{customer?.email}</p>
-              <p className="mt-2 text-xs text-navy-300 dark:text-navy-200">
+              <p className="mt-1 text-xs text-navy-300">{customer?.email}</p>
+              <p className="mt-2 text-xs text-navy-300">
                 Role: <span className="font-medium">{customer?.role}</span>
               </p>
             </div>
 
             {/* Driver assignment */}
-            <div className="rounded-lg bg-linen-200 dark:bg-navy-700 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
+            <div className="rounded-lg bg-linen-200 p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-navy">
                 <Truck className="h-3.5 w-3.5" /> Assigned rider
               </p>
               {driver ? (
                 <>
-                  <p className="mt-1 font-medium text-navy dark:text-white">{driver.name}</p>
+                  <p className="mt-1 font-medium text-navy">{driver.name}</p>
                   <a
                     href={`tel:${driver.phone}`}
                     className="mt-1 inline-flex items-center gap-1 text-xs text-navy-300 hover:underline"
@@ -235,24 +235,24 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           {/* Logistics */}
           <section className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-linen-200 dark:bg-navy-700 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
+            <div className="rounded-lg bg-linen-200 p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-navy">
                 <MapPin className="h-3.5 w-3.5" /> Pickup
               </p>
-              <p className="mt-1 text-navy-300 dark:text-navy-200">{order.pickupAddress}</p>
-              <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">
+              <p className="mt-1 text-navy-300">{order.pickupAddress}</p>
+              <p className="mt-1 text-xs text-navy-300">
                 <Calendar className="mr-1 inline h-3 w-3" />
                 {formatDate(order.pickupDate)} · {order.pickupTimeSlot}
               </p>
             </div>
-            <div className="rounded-lg bg-linen-200 dark:bg-navy-700 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
+            <div className="rounded-lg bg-linen-200 p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-navy">
                 <Truck className="h-3.5 w-3.5" /> Delivery
               </p>
-              <p className="mt-1 text-navy-300 dark:text-navy-200">
+              <p className="mt-1 text-navy-300">
                 {order.deliveryAddress ?? order.pickupAddress}
               </p>
-              <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">
+              <p className="mt-1 text-xs text-navy-300">
                 {order.deliveryDate ? formatDate(order.deliveryDate) : 'To be confirmed'}
               </p>
             </div>
@@ -261,10 +261,10 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           {/* B2B weight input */}
           {order.type === 'KG' && (
             <section className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
-              <p className="flex items-center gap-1.5 font-medium text-navy dark:text-white">
+              <p className="flex items-center gap-1.5 font-medium text-navy">
                 <Scale className="h-4 w-4 text-indigo-600" /> Corporate weight entry
               </p>
-              <p className="mt-1 text-xs text-navy-300 dark:text-navy-200">
+              <p className="mt-1 text-xs text-navy-300">
                 Weigh the items at the station and enter the kilogram amount. Final invoice will
                 be calculated at {formatNaira(settings.pricePerKg)}/kg (minimum{' '}
                 {settings.minimumKg}kg).
@@ -303,11 +303,11 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           {/* Items / weight */}
           {order.type === 'ITEM' && (
             <section>
-              <h3 className="mb-2 text-sm font-semibold text-navy dark:text-white">Items</h3>
+              <h3 className="mb-2 text-sm font-semibold text-navy">Items</h3>
               <ul className="space-y-1.5 text-sm">
                 {order.items.map((i) => (
-                  <li key={i.id} className="flex items-center justify-between rounded bg-linen-200 dark:bg-navy-700 px-3 py-1.5">
-                    <span className="text-navy-300 dark:text-navy-200">
+                  <li key={i.id} className="flex items-center justify-between rounded bg-linen-200 px-3 py-1.5">
+                    <span className="text-navy-300">
                       {i.quantity}× {i.name}
                     </span>
                     <span className="font-medium">{formatNaira(i.quantity * i.unitPrice)}</span>
@@ -319,22 +319,22 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           {/* Payment verification */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-navy dark:text-white">Payment</h3>
+            <h3 className="mb-2 text-sm font-semibold text-navy">Payment</h3>
             {payments.length === 0 ? (
-              <p className="text-sm text-navy-300 dark:text-navy-200">No payment yet.</p>
+              <p className="text-sm text-navy-300">No payment yet.</p>
             ) : (
               <div className="space-y-2">
                 {payments.map((p) => (
                   <div
                     key={p.id}
-                    className="rounded-lg border bg-linen-200 dark:bg-navy-700 p-3 text-sm"
+                    className="rounded-lg border bg-linen-200 p-3 text-sm"
                   >
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="font-medium text-navy dark:text-white">
+                        <p className="font-medium text-navy">
                           {p.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'Paystack'}
                         </p>
-                        <p className="text-xs text-navy-300 dark:text-navy-200">
+                        <p className="text-xs text-navy-300">
                           {formatDateTime(p.createdAt)}
                         </p>
                       </div>
@@ -402,7 +402,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           {/* Condition capture media */}
           {media.length > 0 && (
             <section>
-              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-navy dark:text-white">
+              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-navy">
                 <Shield className="h-4 w-4 text-gold-400" /> Condition photos ({media.length})
               </h3>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -416,7 +416,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           )}
 
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-navy dark:text-white">Timeline</h3>
+            <h3 className="mb-2 text-sm font-semibold text-navy">Timeline</h3>
             <OrderTimeline order={order} />
           </section>
         </div>
