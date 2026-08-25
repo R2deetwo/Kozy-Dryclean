@@ -534,12 +534,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
           <div className="grid gap-8 md:grid-cols-3">
             <div>
               <div className="flex items-center gap-2">
-                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <rect width="40" height="40" rx="9" fill="#102740"/>
-                  <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  <circle cx="20" cy="20" r="2.2" fill="#D4AF37"/>
-                </svg>
+                <img src="/kozy-logo.png" alt="Kozy" width={32} height={32} className="rounded-lg" />
                 <span className="font-serif text-lg font-semibold text-white">Kozy</span>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-navy-100/70">

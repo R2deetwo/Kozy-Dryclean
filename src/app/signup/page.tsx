@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
+import { Logo } from '@/components/shell/logo'
 import Link from 'next/link'
 
 export default function SignupPage() {
@@ -78,18 +79,11 @@ export default function SignupPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-linen px-4 py-8">
       <div className="w-full max-w-md">
-        <Link href="/" className="mb-6 flex items-center justify-center gap-3">
-          <svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <rect width="40" height="40" rx="9" fill="#0A192F"/>
-            <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" strokeWidth={2.4} strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            <circle cx="20" cy="20" r="2.2" fill="#D4AF37"/>
-          </svg>
-          <div className="leading-tight text-left">
-            <p className="font-serif text-xl font-bold text-navy">Kozy</p>
-            <p className="text-[9px] uppercase tracking-[0.18em] text-navy-400 font-medium">Drycleaning &amp; Laundry</p>
-          </div>
-        </Link>
+        <div className="mb-6 flex justify-center">
+          <Link href="/">
+            <Logo size="md" subtitle="Drycleaning & Laundry" />
+          </Link>
+        </div>
 
         <Card className="border-navy-100 shadow-navy">
           <CardContent className="p-6 sm:p-8">

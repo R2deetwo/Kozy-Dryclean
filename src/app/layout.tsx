@@ -27,7 +27,7 @@ export const metadata: Metadata = {
   keywords: ["Kozy", "Kozy Drycleaning", "dry cleaning Lagos", "laundry Lagos", "premium dry cleaning", "Ikoyi laundry", "Lekki laundry", "corporate laundry Lagos", "laundry pickup Lagos"],
   authors: [{ name: "Kozy Drycleaning and Laundry Services" }],
   icons: {
-    icon: "/kozy-mark.svg",
+    icon: "/kozy-logo.png",
   },
   openGraph: {
     title: "Kozy Drycleaning and Laundry Services",
