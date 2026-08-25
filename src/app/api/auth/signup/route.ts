@@ -59,6 +59,9 @@ export async function POST(req: Request) {
   }
 
   // ----- Create user -----
+  // Auto-verify email for now — Brevo + Gmail DMARC issue prevents email delivery.
+  // TODO: Fix by verifying kozy.ng domain in Brevo, then revert to emailVerified: null
+  // and re-enable the verification email flow.
   const passwordHash = await bcrypt.hash(password, 10)
   const user = await db.user.create({
     data: {
@@ -67,7 +70,7 @@ export async function POST(req: Request) {
       phone,
       role: role || 'B2C',
       passwordHash,
-      emailVerified: null,
+      emailVerified: new Date(), // auto-verified (bypassing email until Brevo sender is fixed)
     },
   })
 

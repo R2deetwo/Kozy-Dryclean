@@ -12,9 +12,9 @@ interface LogoProps {
 }
 
 const SIZES = {
-  sm: { mark: 32, text: 'text-base', subtitle: 'text-[8px]', gap: 'gap-2' },
-  md: { mark: 44, text: 'text-xl', subtitle: 'text-[9px]', gap: 'gap-2.5' },
-  lg: { mark: 64, text: 'text-3xl', subtitle: 'text-[10px]', gap: 'gap-3' },
+  sm: { mark: 40, text: 'text-base', subtitle: 'text-[8px]', gap: 'gap-2' },
+  md: { mark: 56, text: 'text-2xl', subtitle: 'text-[10px]', gap: 'gap-3' },
+  lg: { mark: 80, text: 'text-3xl', subtitle: 'text-[11px]', gap: 'gap-3' },
 }
 
 export function Logo({ size = 'md', showText = true, subtitle, className, onClick, variant = 'light' }: LogoProps) {
@@ -33,7 +33,7 @@ export function Logo({ size = 'md', showText = true, subtitle, className, onClic
         alt="Kozy Care"
         width={s.mark}
         height={s.mark}
-        className="shrink-0 rounded-lg"
+        className="shrink-0"
         style={{ width: s.mark, height: s.mark }}
       />
       {showText && (

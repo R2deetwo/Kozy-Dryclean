@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle2, Send } from 'lucide-react'
+import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -87,54 +87,18 @@ export default function SignupPage() {
       <div className="min-h-screen flex items-center justify-center bg-linen px-4 py-8">
         <Card className="w-full max-w-md border-navy-100 shadow-navy">
           <CardContent className="p-8 text-center">
-            {emailSent ? (
-              <>
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-100">
-                  <CheckCircle2 className="h-7 w-7 text-gold-600" />
-                </div>
-                <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Check your email</h1>
-                <p className="text-sm text-navy-300 mb-2">
-                  We&apos;ve sent a verification link to <strong className="text-navy">{email}</strong>.
-                </p>
-                <p className="text-xs text-navy-300 mb-4">
-                  Click the link to activate your account, then sign in.
-                  <br />
-                  <strong className="text-navy">Didn&apos;t get it?</strong> Check your spam/junk folder.
-                </p>
-                <div className="mb-6">
-                  <button
-                    onClick={handleResend}
-                    disabled={resending}
-                    className="text-xs text-[#0A192F] font-semibold hover:underline disabled:opacity-50"
-                  >
-                    {resending ? 'Sending...' : 'Resend verification email'}
-                  </button>
-                  {resendMessage && (
-                    <p className="mt-2 text-xs text-navy-300">{resendMessage}</p>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
-                  <AlertCircle className="h-7 w-7 text-amber-600" />
-                </div>
-                <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Account created</h1>
-                <p className="text-sm text-navy-300 mb-2">
-                  Your account was created but we couldn&apos;t send the verification email.
-                </p>
-                {emailError && (
-                  <p className="text-xs text-rose-600 mb-4 bg-rose-50 rounded-lg p-2">
-                    Error: {emailError}
-                  </p>
-                )}
-                <p className="text-xs text-navy-300 mb-6">
-                  Please contact support at concierge@kozy.ng to verify your account manually.
-                </p>
-              </>
-            )}
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-100">
+              <CheckCircle2 className="h-7 w-7 text-gold-600" />
+            </div>
+            <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Account created!</h1>
+            <p className="text-sm text-navy-300 mb-2">
+              Your Kozy Care account is ready. You can sign in now.
+            </p>
+            <p className="text-xs text-navy-300 mb-6">
+              Email: <strong className="text-navy">{email}</strong>
+            </p>
             <Button onClick={() => router.push('/login')} className="bg-gold-gradient text-navy hover:opacity-90 w-full">
-              Go to login
+              Sign in now
             </Button>
           </CardContent>
         </Card>
