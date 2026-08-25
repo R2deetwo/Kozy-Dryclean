@@ -68,7 +68,7 @@ function LoginForm() {
         <Card className="border-navy-100 shadow-navy">
           <CardContent className="p-6 sm:p-8">
             <h1 className="font-serif text-2xl font-semibold text-navy text-center mb-2">Welcome back</h1>
-            <p className="text-sm text-navy-300 text-center mb-6">Sign in to your Kozy account</p>
+            <p className="text-sm text-navy-300 text-center mb-6">Sign in to your Kozy Care account</p>
 
             {error && (
               <div className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 flex items-start gap-2 ring-1 ring-rose-200">

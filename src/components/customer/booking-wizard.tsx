@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -115,6 +115,23 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
     if (effectiveUser?.role === "B2B") setType("KG")
   }, [effectiveUser?.role])
 
+  // ----- Computed pricing (memoized for performance) -----
+  // Must be called BEFORE any early returns (Rules of Hooks)
+  const selectedItems: OrderItem[] = useMemo(() => {
+    if (!effectiveUser) return []
+    return Object.entries(items)
+      .filter(([, q]) => q > 0)
+      .map(([id, q]) => {
+        const g = GARMENT_CATALOG.find((c) => c.id === id)!
+        const unitPrice = settings.garmentPrices[id] ?? g.price
+        return { id: 'item_' + id, name: g.name, quantity: q, unitPrice }
+      })
+  }, [items, settings.garmentPrices, effectiveUser])
+  const subtotal = selectedItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const guaranteeActive = type === 'ITEM' && photos.length > 0 && guaranteeAck
+  const discount = guaranteeActive ? subtotal * (settings.guaranteeDiscountPercent / 100) : 0
+  const total = subtotal - discount
+
   // Defensive guard — auth gate should prevent this, but we don't want to crash.
   if (!effectiveUser) {
     return (
@@ -124,19 +141,6 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
     )
   }
   const isB2B = effectiveUser.role === "B2B"
-
-  // ----- Computed pricing -----
-  const selectedItems: OrderItem[] = Object.entries(items)
-    .filter(([, q]) => q > 0)
-    .map(([id, q]) => {
-      const g = GARMENT_CATALOG.find((c) => c.id === id)!
-      const unitPrice = settings.garmentPrices[id] ?? g.price
-      return { id: 'item_' + id, name: g.name, quantity: q, unitPrice }
-    })
-  const subtotal = selectedItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-  const guaranteeActive = type === 'ITEM' && photos.length > 0 && guaranteeAck
-  const discount = guaranteeActive ? subtotal * (settings.guaranteeDiscountPercent / 100) : 0
-  const total = subtotal - discount
 
   // ----- Helpers -----
   const setQty = (id: string, delta: number) => {
@@ -403,20 +407,22 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1">
+                          <div className="flex items-center gap-1.5">
                             <button
                               onClick={() => setQty(g.id, -1)}
                               disabled={qty === 0}
-                              className="flex h-8 w-8 items-center justify-center rounded-full bg-linen-200 text-navy hover:bg-linen-200 disabled:opacity-30"
+                              className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy-200 text-navy transition hover:bg-navy-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                              aria-label={`Remove one ${g.name}`}
                             >
-                              <Minus className="h-3.5 w-3.5" />
+                              <Minus className="h-4 w-4" />
                             </button>
-                            <span className="w-6 text-center text-sm font-semibold">{qty}</span>
+                            <span className="w-8 text-center text-sm font-bold text-navy">{qty}</span>
                             <button
                               onClick={() => setQty(g.id, 1)}
-                              className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-white hover:bg-navy-500"
+                              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0A192F] text-white shadow-md transition hover:bg-[#1B3A5F] active:scale-95"
+                              aria-label={`Add one ${g.name}`}
                             >
-                              <Plus className="h-3.5 w-3.5" />
+                              <Plus className="h-4 w-4" />
                             </button>
                           </div>
                         </div>
@@ -586,17 +592,18 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                   </div>
                 </div>
                 <div>
-                  <Label>Pickup time slot</Label>
+                  <Label className="text-navy">Pickup time slot</Label>
                   <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                     {TIME_SLOTS.map((slot) => (
                       <button
                         key={slot}
+                        type="button"
                         onClick={() => setPickupSlot(slot)}
                         className={cn(
-                          'rounded-lg border px-3 py-2 text-xs font-medium transition',
+                          'rounded-lg border-2 px-3 py-2.5 text-xs font-medium transition cursor-pointer',
                           pickupSlot === slot
-                            ? 'border-navy bg-navy-50 text-navy'
-                            : 'border-navy-100 text-navy-300 hover:border-gold-300'
+                            ? 'border-[#0A192F] bg-[#E8ECF2] text-[#0A192F]'
+                            : 'border-[#E2E5E9] text-[#6F88A8] hover:border-[#D4AF37] hover:text-[#0A192F]'
                         )}
                       >
                         {slot}

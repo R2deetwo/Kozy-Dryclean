@@ -26,6 +26,25 @@ export default function SignupPage() {
   const [success, setSuccess] = useState(false)
   const [emailSent, setEmailSent] = useState(false)
   const [emailError, setEmailError] = useState('')
+  const [resending, setResending] = useState(false)
+  const [resendMessage, setResendMessage] = useState('')
+
+  const handleResend = async () => {
+    setResending(true)
+    setResendMessage('')
+    try {
+      const res = await fetch('/api/auth/resend-verification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      const data = await res.json()
+      setResendMessage(data.message || data.error || 'Something went wrong.')
+    } catch {
+      setResendMessage('Network error. Please try again.')
+    }
+    setResending(false)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -77,11 +96,23 @@ export default function SignupPage() {
                 <p className="text-sm text-navy-300 mb-2">
                   We&apos;ve sent a verification link to <strong className="text-navy">{email}</strong>.
                 </p>
-                <p className="text-xs text-navy-300 mb-6">
+                <p className="text-xs text-navy-300 mb-4">
                   Click the link to activate your account, then sign in.
                   <br />
                   <strong className="text-navy">Didn&apos;t get it?</strong> Check your spam/junk folder.
                 </p>
+                <div className="mb-6">
+                  <button
+                    onClick={handleResend}
+                    disabled={resending}
+                    className="text-xs text-[#0A192F] font-semibold hover:underline disabled:opacity-50"
+                  >
+                    {resending ? 'Sending...' : 'Resend verification email'}
+                  </button>
+                  {resendMessage && (
+                    <p className="mt-2 text-xs text-navy-300">{resendMessage}</p>
+                  )}
+                </div>
               </>
             ) : (
               <>
