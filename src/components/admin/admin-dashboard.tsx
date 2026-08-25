@@ -14,7 +14,6 @@ import {
   TrendingUp,
   Truck,
   Sparkles,
-  RotateCcw,
   Settings,
   LogOut,
 } from 'lucide-react'
@@ -38,7 +37,6 @@ export function AdminDashboard() {
   const { data: orders } = useOrders()
   const { data: payments } = usePayments()
   const notifications: any[] = []
-  const resetDemo = () => alert('Reset not available in production mode')
   const [tab, setTab] = useState<Tab>('overview')
 
   const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
@@ -107,15 +105,7 @@ export function AdminDashboard() {
               )
             })}
           </nav>
-          <div className="border-t border-navy-500 p-3 space-y-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={resetDemo}
-              className="w-full justify-start text-xs text-navy-300 hover:bg-navy-500 hover:text-white"
-            >
-              <RotateCcw className="mr-2 h-3 w-3" /> Reset demo data
-            </Button>
+          <div className="border-t border-navy-500 p-3">
             <Button
               variant="ghost"
               size="sm"

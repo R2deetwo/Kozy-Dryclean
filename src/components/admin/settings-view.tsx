@@ -7,7 +7,6 @@ import {
   Mail,
   MapPin,
   Save,
-  RotateCcw,
   CheckCircle2,
   Banknote,
   Tag,
@@ -37,7 +36,6 @@ export function SettingsView() {
   const settings = useStore((s) => s.settings)
   const updateSettings = useStore((s) => s.updateSettings)
   const setGarmentPrice = useStore((s) => s.setGarmentPrice)
-  const resetDemo = useStore((s) => s.resetDemo)
 
   const [draft, setDraft] = useState<KozySettings>(settings)
   const [saving, setSaving] = useState(false)
@@ -74,14 +72,6 @@ export function SettingsView() {
     }, 600)
   }
 
-  const handleReset = () => {
-    if (confirm('Reset all settings to defaults? This will also reset all demo data.')) {
-      resetDemo()
-      setDraft(settings)
-      toast({ title: 'Reset complete', description: 'All settings restored to defaults.' })
-    }
-  }
-
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-6 flex items-center justify-between">
@@ -95,14 +85,6 @@ export function SettingsView() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleReset}
-            className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
-          >
-            <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset
-          </Button>
           <Button
             onClick={handleSave}
             disabled={saving}

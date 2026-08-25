@@ -16,14 +16,9 @@ import {
   XCircle,
   AlertCircle,
 } from 'lucide-react'
-import { useStore, useUserById } from '@/lib/store'
-import {
-  formatNaira,
-  formatDateTime,
-  formatDate,
-  type Order,
-  type OrderStatus,
-} from '@/lib/types'
+import { useOrders, useUpdateOrder, usePayments, useVerifyPayment, useUsers } from '@/lib/hooks'
+import { formatNaira, formatDateTime, formatDate, type OrderStatus } from '@/lib/types'
+import { OrderPipeline, OrderTimeline } from '@/components/shared/order-pipeline'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -44,12 +39,11 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
-import { OrderPipeline, OrderTimeline } from '@/components/shared/order-pipeline'
 
 interface Props {
-  order: Order
+  order: any
   onClose: () => void
-  onViewInvoice?: (o: Order) => void
+  onViewInvoice?: (o: any) => void
 }
 
 const STATUS_OPTIONS: OrderStatus[] = [
@@ -66,74 +60,65 @@ const STATUS_OPTIONS: OrderStatus[] = [
 ]
 
 export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
-  const customer = useUserById(order.userId)
-  const driver = useUserById(order.driverId)
-  const allUsers = useStore((s) => s.users)
-  const allPayments = useStore((s) => s.payments)
-  const allMedia = useStore((s) => s.media)
-  const settings = useStore((s) => s.settings)
-  const drivers = useMemo(
-    () => allUsers.filter((u) => u.role === 'DRIVER'),
-    [allUsers]
-  )
-  const payments = useMemo(
-    () => allPayments.filter((p) => p.orderId === order.id),
-    [allPayments, order.id]
-  )
-  const media = useMemo(
-    () => allMedia.filter((m) => m.orderId === order.id),
-    [allMedia, order.id]
-  )
-  const assignDriver = useStore((s) => s.assignDriver)
-  const updateStatus = useStore((s) => s.updateOrderStatus)
-  const setB2BWeight = useStore((s) => s.setB2BWeight)
-  const verifyPayment = useStore((s) => s.verifyPayment)
-  const rejectPayment = useStore((s) => s.rejectPayment)
+  // Data comes from the order object (nested includes from API)
+  const customer = order.user
+  const driver = order.driver
+  const payments = order.payments ?? []
+  const media = order.media ?? []
 
-  const [weightInput, setWeightInput] = useState(
-    order.finalWeight?.toString() ?? ''
-  )
+  // Mutations via React Query
+  const updateOrderMutation = useUpdateOrder()
+  const verifyPaymentMutation = useVerifyPayment()
+
+  // Users list for driver assignment
+  const { data: usersData } = useUsers()
+  const drivers = (usersData ?? []).filter((u: any) => u.role === 'DRIVER')
+
+  // Parse items from itemsManifest JSON string
+  const items = useMemo(() => {
+    try { return JSON.parse(order.itemsManifest || '[]') } catch { return [] }
+  }, [order.itemsManifest])
+
+  const [weightInput, setWeightInput] = useState(order.finalWeight?.toString() ?? '')
   const [statusSelect, setStatusSelect] = useState<OrderStatus>(order.status)
 
-  const pendingPayment = payments.find((p) => p.status === 'PENDING')
-
   const handleAssignDriver = (driverId: string) => {
-    assignDriver(order.id, driverId)
-    toast({ title: 'Driver assigned', description: 'The rider has been notified.' })
+    updateOrderMutation.mutate(
+      { id: order.id, driverId },
+      { onSuccess: () => toast({ title: 'Driver assigned' }) }
+    )
   }
 
   const handleStatusChange = (newStatus: OrderStatus) => {
     setStatusSelect(newStatus)
-    updateStatus(order.id, newStatus, 'u-admin')
-    toast({
-      title: 'Status updated',
-      description: `Order #${order.orderNumber} is now ${newStatus.replace(/_/g, ' ').toLowerCase()}.`,
-    })
+    updateOrderMutation.mutate({ id: order.id, status: newStatus })
+    toast({ title: 'Status updated', description: `Order is now ${newStatus.replace(/_/g, ' ').toLowerCase()}.` })
   }
 
   const handleSetWeight = () => {
     const kg = parseFloat(weightInput) || 0
-    if (kg <= 0) {
-      toast({ title: 'Invalid weight', description: 'Enter a value greater than 0.', variant: 'destructive' })
-      return
-    }
-    setB2BWeight(order.id, kg, 'u-admin')
-    toast({
-      title: 'Weight recorded',
-      description: `${kg}kg · ${formatNaira(Math.max(kg, settings.minimumKg) * settings.pricePerKg)} invoice sent.`,
-    })
+    if (kg <= 0) { toast({ title: 'Invalid weight', variant: 'destructive' }); return }
+    // Server calculates totalPrice from weight × pricePerKg
+    updateOrderMutation.mutate(
+      { id: order.id, finalWeight: kg },
+      { onSuccess: () => toast({ title: 'Weight recorded', description: `${kg}kg — invoice sent.` }) }
+    )
   }
 
-  const handleVerify = () => {
-    if (!pendingPayment) return
-    verifyPayment(pendingPayment.id, 'u-admin')
-    toast({ title: 'Payment verified', description: 'Customer notified by SMS.' })
+  const handleVerify = (paymentId: string) => {
+    verifyPaymentMutation.mutate(
+      { id: paymentId, status: 'VERIFIED' },
+      { onSuccess: () => toast({ title: 'Payment verified' }) }
+    )
   }
-  const handleReject = () => {
-    if (!pendingPayment) return
-    rejectPayment(pendingPayment.id, 'u-admin')
-    toast({ title: 'Payment rejected', description: 'Customer notified to re-upload.', variant: 'destructive' })
+  const handleReject = (paymentId: string) => {
+    verifyPaymentMutation.mutate(
+      { id: paymentId, status: 'REJECTED' },
+      { onSuccess: () => toast({ title: 'Payment rejected', variant: 'destructive' }) }
+    )
   }
+
+  const pendingPayment = payments.find((p: any) => p.status === 'PENDING')
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -141,36 +126,29 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="font-mono">#{order.orderNumber}</span>
-            <Badge variant="outline" className="rounded-full text-[10px]">
+            <Badge variant="outline" className="rounded-full text-[10px] text-[#0A192F] border-[#E2E5E9]">
               {order.type === 'ITEM' ? 'Retail' : 'Corporate'}
             </Badge>
             {order.guaranteeActive && (
-              <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
+              <Badge className="rounded-full bg-[#FBF5E0] text-[#0A192F]">
                 <Shield className="mr-1 h-2.5 w-2.5" /> Guarantee
               </Badge>
             )}
           </DialogTitle>
-          <DialogDescription>
-            Booked on {formatDateTime(order.createdAt)} · Last updated {formatDateTime(order.updatedAt)}
-          </DialogDescription>
+          <DialogDescription>Booked on {formatDateTime(order.createdAt)}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5">
-          {/* Pipeline + status control */}
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-navy">Order progress</h3>
+            <h3 className="mb-2 text-sm font-semibold text-[#0A192F]">Order progress</h3>
             <OrderPipeline order={order} />
             <div className="mt-3 flex items-center gap-2">
-              <Label className="text-xs text-navy-300">Set status</Label>
+              <Label className="text-xs text-[#6F88A8]">Set status</Label>
               <Select value={statusSelect} onValueChange={(v) => handleStatusChange(v as OrderStatus)}>
-                <SelectTrigger className="h-8 w-56 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
+                <SelectTrigger className="h-8 w-56 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {STATUS_OPTIONS.map((s) => (
-                    <SelectItem key={s} value={s} className="text-xs">
-                      {s.replace(/_/g, ' ')}
-                    </SelectItem>
+                    <SelectItem key={s} value={s} className="text-xs">{s.replace(/_/g, ' ')}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -179,208 +157,86 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
           <Separator />
 
-          {/* Customer */}
-          <section className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-linen-200 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-navy">
-                <UserIcon className="h-3.5 w-3.5" /> Customer
-              </p>
-              <p className="mt-1 font-medium text-navy">{customer?.name}</p>
-              <a
-                href={`tel:${customer?.phone}`}
-                className="mt-1 inline-flex items-center gap-1 text-xs text-navy-300 hover:underline"
-              >
-                <Phone className="h-3 w-3" /> {customer?.phone}
-              </a>
-              <p className="mt-1 text-xs text-navy-300">{customer?.email}</p>
-              <p className="mt-2 text-xs text-navy-300">
-                Role: <span className="font-medium">{customer?.role}</span>
-              </p>
-            </div>
-
-            {/* Driver assignment */}
-            <div className="rounded-lg bg-linen-200 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-navy">
-                <Truck className="h-3.5 w-3.5" /> Assigned rider
-              </p>
-              {driver ? (
-                <>
-                  <p className="mt-1 font-medium text-navy">{driver.name}</p>
-                  <a
-                    href={`tel:${driver.phone}`}
-                    className="mt-1 inline-flex items-center gap-1 text-xs text-navy-300 hover:underline"
-                  >
-                    <Phone className="h-3 w-3" /> {driver.phone}
-                  </a>
-                </>
-              ) : (
-                <p className="mt-1 text-xs text-amber-700">No driver assigned.</p>
-              )}
-              <div className="mt-2">
-                <Select onValueChange={handleAssignDriver}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue placeholder="Assign rider…" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {drivers.map((d) => (
-                      <SelectItem key={d.id} value={d.id}>
-                        {d.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </section>
-
-          {/* Logistics */}
-          <section className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-lg bg-linen-200 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-navy">
-                <MapPin className="h-3.5 w-3.5" /> Pickup
-              </p>
-              <p className="mt-1 text-navy-300">{order.pickupAddress}</p>
-              <p className="mt-1 text-xs text-navy-300">
-                <Calendar className="mr-1 inline h-3 w-3" />
-                {formatDate(order.pickupDate)} · {order.pickupTimeSlot}
-              </p>
-            </div>
-            <div className="rounded-lg bg-linen-200 p-3 text-sm">
-              <p className="flex items-center gap-1.5 font-medium text-navy">
-                <Truck className="h-3.5 w-3.5" /> Delivery
-              </p>
-              <p className="mt-1 text-navy-300">
-                {order.deliveryAddress ?? order.pickupAddress}
-              </p>
-              <p className="mt-1 text-xs text-navy-300">
-                {order.deliveryDate ? formatDate(order.deliveryDate) : 'To be confirmed'}
-              </p>
-            </div>
-          </section>
-
-          {/* B2B weight input */}
-          {order.type === 'KG' && (
-            <section className="rounded-lg border border-indigo-200 bg-indigo-50/50 p-4">
-              <p className="flex items-center gap-1.5 font-medium text-navy">
-                <Scale className="h-4 w-4 text-indigo-600" /> Corporate weight entry
-              </p>
-              <p className="mt-1 text-xs text-navy-300">
-                Weigh the items at the station and enter the kilogram amount. Final invoice will
-                be calculated at {formatNaira(settings.pricePerKg)}/kg (minimum{' '}
-                {settings.minimumKg}kg).
-              </p>
-              <div className="mt-3 flex items-end gap-2">
-                <div className="flex-1">
-                  <Label htmlFor="weight" className="text-xs">
-                    Weight (kg)
-                  </Label>
-                  <Input
-                    id="weight"
-                    type="number"
-                    min="0"
-                    step="0.5"
-                    value={weightInput}
-                    onChange={(e) => setWeightInput(e.target.value)}
-                    placeholder="e.g. 25"
-                    className="mt-1"
-                  />
-                </div>
-                <Button
-                  onClick={handleSetWeight}
-                  className="bg-indigo-600 hover:bg-indigo-700"
-                >
-                  Calculate &amp; send invoice
-                </Button>
-              </div>
-              {order.finalWeight !== undefined && (
-                <p className="mt-2 text-xs text-indigo-700">
-                  Recorded: {order.finalWeight}kg · Invoice: <strong>{formatNaira(order.totalPrice ?? 0)}</strong>
-                </p>
-              )}
-            </section>
-          )}
-
-          {/* Items / weight */}
-          {order.type === 'ITEM' && (
-            <section>
-              <h3 className="mb-2 text-sm font-semibold text-navy">Items</h3>
+          <section>
+            <h3 className="mb-2 text-sm font-semibold text-[#0A192F]">{order.type === 'ITEM' ? 'Items' : 'Weight'}</h3>
+            {order.type === 'ITEM' ? (
               <ul className="space-y-1.5 text-sm">
-                {order.items.map((i) => (
-                  <li key={i.id} className="flex items-center justify-between rounded bg-linen-200 px-3 py-1.5">
-                    <span className="text-navy-300">
-                      {i.quantity}× {i.name}
-                    </span>
-                    <span className="font-medium">{formatNaira(i.quantity * i.unitPrice)}</span>
+                {items.map((i: any, idx: number) => (
+                  <li key={idx} className="flex items-center justify-between">
+                    <span className="text-[#6F88A8]"><span className="font-semibold text-[#0A192F]">{i.quantity}×</span> {i.name}</span>
+                    <span className="font-medium text-[#0A192F]">{formatNaira(i.quantity * i.unitPrice)}</span>
                   </li>
                 ))}
               </ul>
+            ) : (
+              <div className="rounded-lg bg-[#EEF0F2] p-3 text-sm">
+                {order.finalWeight != null ? (
+                  <>
+                    <p className="text-[#0A192F]">Final weight: <strong>{order.finalWeight}kg</strong></p>
+                    <p className="text-[#6F88A8]">@ ₦800/kg · Minimum 10kg charge applies.</p>
+                  </>
+                ) : (
+                  <p className="text-amber-700">Awaiting weighing at the station.</p>
+                )}
+              </div>
+            )}
+          </section>
+
+          {order.type === 'KG' && (
+            <section className="rounded-lg border border-[#C8D2DF] bg-[#FBF5E0] p-4">
+              <p className="flex items-center gap-1.5 font-medium text-[#0A192F]"><Scale className="h-4 w-4 text-[#D4AF37]" /> Weight entry</p>
+              <p className="mt-1 text-xs text-[#6F88A8]">Weigh at station, enter kg. Server calculates total.</p>
+              <div className="mt-3 flex items-end gap-2">
+                <div className="flex-1"><Label htmlFor="weight" className="text-xs">Weight (kg)</Label>
+                <Input id="weight" type="number" min="0" step="0.5" value={weightInput} onChange={(e) => setWeightInput(e.target.value)} className="mt-1" /></div>
+                <Button onClick={handleSetWeight} className="bg-[#0A192F] hover:bg-[#1B3A5F]">Calculate &amp; send invoice</Button>
+              </div>
             </section>
           )}
 
-          {/* Payment verification */}
+          <section className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg bg-[#EEF0F2] p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-[#0A192F]"><MapPin className="h-3.5 w-3.5 text-[#D4AF37]" /> Pickup</p>
+              <p className="mt-1 text-[#6F88A8] break-words">{order.pickupAddress}</p>
+              <p className="mt-1 text-xs text-[#6F88A8]"><Calendar className="mr-1 inline h-3 w-3" />{formatDate(order.pickupDate)} · {order.pickupTimeSlot}</p>
+            </div>
+            <div className="rounded-lg bg-[#EEF0F2] p-3 text-sm">
+              <p className="flex items-center gap-1.5 font-medium text-[#0A192F]"><Truck className="h-3.5 w-3.5 text-[#D4AF37]" /> Delivery</p>
+              <p className="mt-1 text-[#6F88A8] break-words">{order.deliveryAddress ?? order.pickupAddress}</p>
+              <p className="mt-1 text-xs text-[#6F88A8]">{order.deliveryDate ? formatDate(order.deliveryDate) : 'To be confirmed'}</p>
+            </div>
+          </section>
+
+          {driver && (
+            <section className="rounded-lg bg-[#FBF5E0] p-3 text-sm ring-1 ring-[#E3BE4F]">
+              <p className="flex items-center gap-1.5 font-medium text-[#0A192F]"><UserIcon className="h-3.5 w-3.5 text-[#D4AF37]" /> Assigned rider</p>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-[#6F88A8]">{driver.name}</span>
+                <a href={`tel:${driver.phone}`} className="inline-flex items-center gap-1 text-xs text-[#0A192F] font-semibold hover:underline"><Phone className="h-3 w-3" /> {driver.phone}</a>
+              </div>
+            </section>
+          )}
+
           <section>
-            <h3 className="mb-2 text-sm font-semibold text-navy">Payment</h3>
-            {payments.length === 0 ? (
-              <p className="text-sm text-navy-300">No payment yet.</p>
-            ) : (
+            <h3 className="mb-2 text-sm font-semibold text-[#0A192F]">Payment</h3>
+            {payments.length === 0 ? <p className="text-sm text-[#6F88A8]">No payment yet.</p> : (
               <div className="space-y-2">
-                {payments.map((p) => (
-                  <div
-                    key={p.id}
-                    className="rounded-lg border bg-linen-200 p-3 text-sm"
-                  >
+                {payments.map((p: any) => (
+                  <div key={p.id} className="rounded-lg bg-[#EEF0F2] px-3 py-2 text-sm">
                     <div className="flex items-center justify-between">
-                      <div>
-                        <p className="font-medium text-navy">
-                          {p.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'Paystack'}
-                        </p>
-                        <p className="text-xs text-navy-300">
-                          {formatDateTime(p.createdAt)}
-                        </p>
-                      </div>
+                      <div><span className="text-[#6F88A8]">{p.method === 'BANK_TRANSFER' ? 'Bank Transfer' : 'Paystack'}</span>
+                      <span className="ml-2 text-xs text-[#6F88A8]">{formatDateTime(p.createdAt)}</span></div>
                       <div className="flex items-center gap-2">
-                        <span className="font-bold">{formatNaira(p.amount)}</span>
-                        {p.status === 'VERIFIED' && (
-                          <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
-                            <CheckCircle2 className="mr-1 h-3 w-3" /> Verified
-                          </Badge>
-                        )}
-                        {p.status === 'REJECTED' && (
-                          <Badge variant="outline" className="rounded-full border-rose-200 text-rose-700">
-                            <XCircle className="mr-1 h-3 w-3" /> Rejected
-                          </Badge>
-                        )}
-                        {p.status === 'PENDING' && (
-                          <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 text-amber-700">
-                            <AlertCircle className="mr-1 h-3 w-3" /> Pending
-                          </Badge>
-                        )}
+                        <span className="font-medium text-[#0A192F]">{p.amount > 0 ? formatNaira(p.amount) : ''}</span>
+                        {p.status === 'VERIFIED' && <Badge className="bg-[#FBF5E0] text-[#0A192F]"><CheckCircle2 className="mr-1 h-3 w-3" /> Verified</Badge>}
+                        {p.status === 'REJECTED' && <Badge variant="outline" className="border-rose-200 text-rose-700"><XCircle className="mr-1 h-3 w-3" /> Rejected</Badge>}
+                        {p.status === 'PENDING' && <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700"><AlertCircle className="mr-1 h-3 w-3" /> Pending</Badge>}
                       </div>
                     </div>
-
                     {p.status === 'PENDING' && p.method === 'BANK_TRANSFER' && (
-                      <div className="mt-3 rounded-lg bg-amber-50 p-2 ring-1 ring-amber-200">
-                        <p className="text-xs text-amber-900">
-                          ⚠ Customer uploaded a receipt. Use the full Payment Verification Queue
-                          for zoom-in review.
-                        </p>
-                        <div className="mt-2 flex gap-2">
-                          <Button
-                            size="sm"
-                            onClick={handleVerify}
-                            className="bg-gold-gradient text-navy hover:opacity-90"
-                          >
-                            <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Verify
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleReject}
-                            className="border-rose-300 text-rose-700 hover:bg-rose-50"
-                          >
-                            <XCircle className="mr-1 h-3.5 w-3.5" /> Reject
-                          </Button>
-                        </div>
+                      <div className="mt-2 flex gap-2">
+                        <Button size="sm" onClick={() => handleVerify(p.id)} className="bg-[#0A192F] hover:bg-[#1B3A5F]"><CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Verify</Button>
+                        <Button size="sm" variant="outline" onClick={() => handleReject(p.id)} className="border-rose-300 text-rose-700"><XCircle className="mr-1 h-3.5 w-3.5" /> Reject</Button>
                       </div>
                     )}
                   </div>
@@ -388,37 +244,23 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               </div>
             )}
             {order.totalPrice !== undefined && onViewInvoice && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => onViewInvoice(order)}
-                className="mt-3 rounded-full"
-              >
-                <Receipt className="mr-1 h-3.5 w-3.5" /> View invoice
-              </Button>
+              <div className="mt-3 flex items-center justify-between border-t pt-3">
+                <Button variant="outline" size="sm" onClick={() => onViewInvoice(order)} className="rounded-full border-[#E2E5E9] text-[#0A192F]"><Receipt className="mr-1 h-3.5 w-3.5" /> View invoice</Button>
+                <span className="text-sm text-[#6F88A8]">Total: <strong className="text-[#0A192F]">{formatNaira(order.totalPrice)}</strong></span>
+              </div>
             )}
           </section>
 
-          {/* Condition capture media */}
           {media.length > 0 && (
             <section>
-              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-navy">
-                <Shield className="h-4 w-4 text-gold-400" /> Condition photos ({media.length})
-              </h3>
+              <h3 className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-[#0A192F]"><Shield className="h-4 w-4 text-[#D4AF37]" /> Condition photos ({media.length})</h3>
               <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                {media.map((m) => (
-                  <div key={m.id} className="aspect-square overflow-hidden rounded-lg ring-1 ring-gold-200">
-                    <img src={m.imageUrl} alt="Condition" className="h-full w-full object-cover" />
-                  </div>
-                ))}
+                {media.map((m: any) => (<div key={m.id} className="aspect-square overflow-hidden rounded-lg ring-1 ring-[#E3BE4F]"><img src={m.imageUrl} alt="Condition" className="h-full w-full object-cover" /></div>))}
               </div>
             </section>
           )}
 
-          <section>
-            <h3 className="mb-2 text-sm font-semibold text-navy">Timeline</h3>
-            <OrderTimeline order={order} />
-          </section>
+          <section><h3 className="mb-2 text-sm font-semibold text-[#0A192F]">Timeline</h3><OrderTimeline order={order} /></section>
         </div>
       </DialogContent>
     </Dialog>

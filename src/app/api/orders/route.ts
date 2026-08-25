@@ -77,15 +77,30 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'User not found' }, { status: 404 })
   }
 
-  // Generate human-readable order number (KZ-####)
-  const count = await db.order.count()
-  const orderNumber = `KZ-${1000 + count + 1}`
+  // Generate human-readable order number — timestamp + random for uniqueness (Item 5)
+  const orderNumber = `KZ-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 90 + 10)}`
 
-  // Calculate total price for ITEM orders
+  // Calculate total price for ITEM orders — SERVER-SIDE PRICING ONLY
   let totalPrice: number | undefined
   let appliedDiscounts: string[] = []
   if (type === 'ITEM') {
-    const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+    // Look up prices from PriceCatalog (Item 3 — server-side price validation)
+    const itemKeys = items.map((i: any) => (i.id || '').replace('item_', '') || i.name)
+    const catalogEntries = await db.priceCatalog.findMany({
+      where: { itemKey: { in: itemKeys }, active: true }
+    })
+    const catalogMap = new Map(catalogEntries.map(c => [c.itemKey, c]))
+
+    // Compute subtotal from server-side catalog prices — client-supplied unitPrice is IGNORED
+    let subtotal = 0
+    const pricedItems = items.map((i: any) => {
+      const key = (i.id || '').replace('item_', '') || i.name
+      const catalog = catalogMap.get(key)
+      const unitPrice = catalog?.unitPrice ?? 0 // 0 if not found in catalog
+      subtotal += unitPrice * i.quantity
+      return { ...i, unitPrice } // override with server-side price
+    })
+
     let totalDiscount = 0
 
     // Apply guarantee discount if active (5%)
@@ -94,7 +109,7 @@ export async function POST(req: Request) {
       appliedDiscounts.push('Return-as-Received Guarantee (5%)')
     }
 
-    // Apply signup discount (5% off first order for new users)
+    // Apply signup discount — Item 4 fix: only mark as used if discount was actually applied
     if (owner.signupDiscountUsed === false) {
       const signupDiscount = await db.discount.findFirst({
         where: { appliesTo: 'SIGNUP', active: true }
@@ -102,15 +117,19 @@ export async function POST(req: Request) {
       if (signupDiscount && signupDiscount.type === 'PERCENTAGE') {
         totalDiscount += signupDiscount.value / 100
         appliedDiscounts.push(`Signup discount (${signupDiscount.value}%)`)
+        // Item 4 fix: only mark as used INSIDE the if-branch
+        await db.user.update({
+          where: { id: ownerId },
+          data: { signupDiscountUsed: true }
+        })
       }
-      // Mark as used
-      await db.user.update({
-        where: { id: ownerId },
-        data: { signupDiscountUsed: true }
-      })
+      // If signupDiscount is null or inactive, signupDiscountUsed stays false
     }
 
-    totalPrice = Math.round(subtotal * (1 - Math.min(totalDiscount, 0.95))) // cap at 95% off
+    totalPrice = Math.round(subtotal * (1 - Math.min(totalDiscount, 0.95)))
+    // Update items with server-side prices for storage
+    items.length = 0
+    items.push(...pricedItems)
   }
   // KG orders: totalPrice is undefined until admin weighs at station
 
