@@ -16,9 +16,8 @@ import {
   Shield,
   Receipt,
 } from 'lucide-react'
-import { useStore } from '@/lib/store'
-import { useMemo } from 'react'
-import { formatNaira, formatDateTime, formatDate, type Payment } from '@/lib/types'
+import { usePayments, useVerifyPayment, useOrders } from '@/lib/hooks'
+import { formatNaira, formatDateTime, formatDate } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -26,34 +25,28 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
 export function PaymentQueue() {
-  const allPayments = useStore((s) => s.payments)
-  const settings = useStore((s) => s.settings)
-  const payments = useMemo(
-    () => allPayments.filter((p) => p.status === 'PENDING'),
-    [allPayments]
-  )
-  const orders = useStore((s) => s.orders)
-  const users = useStore((s) => s.users)
-  const verify = useStore((s) => s.verifyPayment)
-  const reject = useStore((s) => s.rejectPayment)
+  const { data: paymentsData, isLoading } = usePayments()
+  const verifyMutation = useVerifyPayment()
+  const payments = (paymentsData ?? []).filter((p) => p.status === 'PENDING')
+  const orders = useOrders().data ?? []
   const [selectedId, setSelectedId] = useState<string | undefined>(payments[0]?.id)
   const [zoom, setZoom] = useState(1)
 
   const selected = payments.find((p) => p.id === selectedId) ?? payments[0]
-  const order = selected ? orders.find((o) => o.id === selected.orderId) : undefined
-  const customer = order ? users.find((u) => u.id === order.userId) : undefined
+  const order = selected ? orders.find((o: any) => o.id === selected.orderId) : undefined
+  const customer = order?.user
 
-  const handleVerify = (p: Payment) => {
-    verify(p.id, 'u-admin')
-    toast({ title: 'Payment verified', description: 'Customer notified by SMS.' })
+  const handleVerify = (p: any) => {
+    verifyMutation.mutate({ id: p.id, status: 'VERIFIED' })
+    toast({ title: 'Payment verified', description: 'Customer notified.' })
     // Select next pending payment if any
     const idx = payments.findIndex((x) => x.id === p.id)
     const next = payments[idx + 1] ?? payments[idx - 1]
     setSelectedId(next?.id)
     setZoom(1)
   }
-  const handleReject = (p: Payment) => {
-    reject(p.id, 'u-admin')
+  const handleReject = (p: any) => {
+    verifyMutation.mutate({ id: p.id, status: 'REJECTED' })
     toast({
       title: 'Payment rejected',
       description: 'Order remains in pending verification until re-uploaded.',
@@ -116,7 +109,7 @@ export function PaymentQueue() {
           <ul>
             {payments.map((p) => {
               const o = orders.find((o) => o.id === p.orderId)
-              const c = o ? users.find((u) => u.id === o.userId) : undefined
+              const c = o?.user
               const isActive = selected?.id === p.id
               return (
                 <li key={p.id}>
@@ -201,9 +194,9 @@ export function PaymentQueue() {
                         Transfer receipt
                       </p>
                       <p className="font-mono text-base font-bold">
-                        {settings.accountNumber}
+                        {"0123456789"}
                       </p>
-                      <p className="text-xs opacity-80">{settings.bankName}</p>
+                      <p className="text-xs opacity-80">{"Guaranty Trust Bank (GTB)"}</p>
                     </div>
                     <div className="space-y-2 p-5 text-sm">
                       <Row label="Sender" value={customer?.name ?? '—'} />
@@ -280,7 +273,7 @@ export function PaymentQueue() {
                 {order.totalPrice !== undefined && order.totalPrice !== selected.amount && (
                   <div className="mt-2 flex items-center gap-1 text-xs text-rose-700">
                     <AlertCircle className="h-3 w-3" /> Amount mismatch! Expected{' '}
-                    {formatNaira(order.totalPrice)}
+                    {formatNaira(order.totalPrice ?? 0)}
                   </div>
                 )}
               </div>
@@ -308,18 +301,21 @@ export function PaymentQueue() {
                 <p className="text-xs font-semibold uppercase tracking-wide text-navy-300 dark:text-navy-200">
                   Items
                 </p>
-                {order.type === 'ITEM' ? (
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {order.items.map((i) => (
-                      <li key={i.id} className="flex justify-between">
-                        <span className="text-navy-300 dark:text-navy-200">
-                          {i.quantity}× {i.name}
-                        </span>
-                        <span>{formatNaira(i.quantity * i.unitPrice)}</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
+                {order.type === 'ITEM' ? (() => {
+                  try {
+                    const items = JSON.parse(order.itemsManifest || '[]')
+                    return (
+                      <ul className="mt-1 space-y-1 text-sm">
+                        {items.map((i: any, idx: number) => (
+                          <li key={idx} className="flex justify-between">
+                            <span className="text-navy-300">{i.quantity}× {i.name}</span>
+                            <span>{formatNaira(i.quantity * i.unitPrice)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  } catch { return <p className="text-sm text-navy-300">Items</p> }
+                })() : (
                   <p className="mt-1 text-sm text-navy-300 dark:text-navy-200">
                     Bulk order ·{' '}
                     {order.finalWeight ? `${order.finalWeight}kg` : 'awaiting weighing'}

@@ -18,7 +18,7 @@ import {
   Settings,
   LogOut,
 } from 'lucide-react'
-import { useStore } from '@/lib/store'
+import { useOrders, usePayments, useUsers } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -34,16 +34,16 @@ import { Logo } from '@/components/shell/logo'
 type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'notifications' | 'settings'
 
 export function AdminDashboard() {
-  const admin = useStore((s) => s.users.find((u) => u.id === 'u-admin') ?? s.users[0])
-  const orders = useStore((s) => s.orders)
-  const payments = useStore((s) => s.payments)
-  const notifications = useStore((s) => s.notifications)
-  const resetDemo = useStore((s) => s.resetDemo)
+  const admin = { name: 'Admin', email: 'admin@kozy.ng' }
+  const { data: orders } = useOrders()
+  const { data: payments } = usePayments()
+  const notifications: any[] = []
+  const resetDemo = () => alert('Reset not available in production mode')
   const [tab, setTab] = useState<Tab>('overview')
 
-  const pendingPayments = payments.filter((p) => p.status === 'PENDING')
-  const activeOrders = orders.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
-  const todayRevenue = orders
+  const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
+  const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
+  const todayRevenue = (orders ?? [])
     .filter((o) => o.totalPrice !== undefined)
     .reduce((sum, o) => sum + (o.totalPrice ?? 0), 0)
 
@@ -211,21 +211,21 @@ export function AdminDashboard() {
 }
 
 function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
-  const orders = useStore((s) => s.orders)
-  const payments = useStore((s) => s.payments)
-  const allUsers = useStore((s) => s.users)
+  const { data: orders } = useOrders()
+  const { data: payments } = usePayments()
+  const { data: allUsers } = useUsers()
   const customers = useMemo(
-    () => allUsers.filter((u) => u.role === 'B2C' || u.role === 'B2B'),
+    () => (allUsers ?? []).filter((u) => u.role === 'B2C' || u.role === 'B2B'),
     [allUsers]
   )
-  const notifications = useStore((s) => s.notifications)
+  const notifications: any[] = []
 
-  const pendingPayments = payments.filter((p) => p.status === 'PENDING')
-  const activeOrders = orders.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
-  const revenue = orders
+  const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
+  const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
+  const revenue = (orders ?? [])
     .filter((o) => o.totalPrice !== undefined && o.status === 'DELIVERED')
     .reduce((s, o) => s + (o.totalPrice ?? 0), 0)
-  const expectedRevenue = orders
+  const expectedRevenue = (orders ?? [])
     .filter((o) => o.totalPrice !== undefined)
     .reduce((s, o) => s + (o.totalPrice ?? 0), 0)
 
@@ -392,9 +392,9 @@ function QuickActionCard({
 }
 
 function RecentOrdersCard() {
-  const allOrders = useStore((s) => s.orders)
-  const orders = useMemo(() => allOrders.slice(0, 5), [allOrders])
-  const users = useStore((s) => s.users)
+  const { data: allOrders } = useOrders()
+  const orders = useMemo(() => (allOrders ?? []).slice(0, 5), [allOrders])
+  const { data: users } = useUsers()
   return (
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -403,7 +403,7 @@ function RecentOrdersCard() {
       </div>
       <ul className="space-y-2 text-sm">
         {orders.map((o) => {
-          const u = users.find((u) => u.id === o.userId)
+          const u = (users ?? []).find((u) => u.id === o.userId) ?? o.user
           return (
             <li
               key={o.id}
@@ -427,7 +427,7 @@ function RecentOrdersCard() {
 }
 
 function RecentNotificationsCard() {
-  const allNotifications = useStore((s) => s.notifications)
+  const allNotifications: any[] = []
   const notifications = useMemo(() => allNotifications.slice(0, 5), [allNotifications])
   return (
     <div className="rounded-xl border bg-white p-4">

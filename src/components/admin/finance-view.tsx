@@ -26,30 +26,30 @@ import {
   Cell,
   Legend,
 } from 'recharts'
-import { useStore } from '@/lib/store'
+import { useOrders, usePayments } from '@/lib/hooks'
 import { formatNaira, formatDateTime, type Order } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
 export function FinanceView() {
-  const orders = useStore((s) => s.orders)
-  const payments = useStore((s) => s.payments)
+  const { data: orders } = useOrders()
+  const { data: payments } = usePayments()
 
   const stats = useMemo(() => {
-    const verified = payments.filter((p) => p.status === 'VERIFIED')
-    const pending = payments.filter((p) => p.status === 'PENDING')
-    const rejected = payments.filter((p) => p.status === 'REJECTED')
+    const verified = (payments ?? []).filter((p: any) => p.status === 'VERIFIED')
+    const pending = (payments ?? []).filter((p: any) => p.status === 'PENDING')
+    const rejected = (payments ?? []).filter((p: any) => p.status === 'REJECTED')
 
     const totalRevenue = verified.reduce((s, p) => s + p.amount, 0)
-    const expectedRevenue = orders
-      .filter((o) => o.totalPrice !== undefined)
+    const expectedRevenue = (orders ?? [])
+      .filter((o: any) => o.totalPrice !== undefined)
       .reduce((s, o) => s + (o.totalPrice ?? 0), 0)
     const pendingAmount = pending.reduce((s, p) => s + p.amount, 0)
-    const b2bRevenue = orders
-      .filter((o) => o.type === 'KG' && o.status === 'DELIVERED')
+    const b2bRevenue = (orders ?? [])
+      .filter((o: any) => o.type === 'KG' && o.status === 'DELIVERED')
       .reduce((s, o) => s + (o.totalPrice ?? 0), 0)
-    const b2cRevenue = orders
-      .filter((o) => o.type === 'ITEM' && o.status === 'DELIVERED')
+    const b2cRevenue = (orders ?? [])
+      .filter((o: any) => o.type === 'ITEM' && o.status === 'DELIVERED')
       .reduce((s, o) => s + (o.totalPrice ?? 0), 0)
 
     return {
@@ -73,10 +73,10 @@ export function FinanceView() {
       d.setDate(d.getDate() - i)
       const iso = d.toISOString().slice(0, 10)
       const label = d.toLocaleDateString('en-NG', { weekday: 'short' })
-      const revenue = orders
-        .filter((o) => o.createdAt.slice(0, 10) === iso && o.totalPrice !== undefined)
+      const revenue = (orders ?? [])
+        .filter((o: any) => o.createdAt.slice(0, 10) === iso && o.totalPrice !== undefined)
         .reduce((s, o) => s + (o.totalPrice ?? 0), 0)
-      const pending = orders
+      const pending = (orders ?? [])
         .filter(
           (o) =>
             o.createdAt.slice(0, 10) === iso &&
@@ -91,11 +91,11 @@ export function FinanceView() {
 
   // Payment method breakdown
   const methodStats = useMemo(() => {
-    const transfer = payments
-      .filter((p) => p.method === 'BANK_TRANSFER' && p.status === 'VERIFIED')
+    const transfer = (payments ?? [])
+      .filter((p: any) => p.method === 'BANK_TRANSFER' && p.status === 'VERIFIED')
       .reduce((s, p) => s + p.amount, 0)
-    const paystack = payments
-      .filter((p) => p.method === 'PAYSTACK' && p.status === 'VERIFIED')
+    const paystack = (payments ?? [])
+      .filter((p: any) => p.method === 'PAYSTACK' && p.status === 'VERIFIED')
       .reduce((s, p) => s + p.amount, 0)
     return [
       { name: 'Bank Transfer', value: transfer, color: '#10b981' },
@@ -240,8 +240,8 @@ export function FinanceView() {
                 </tr>
               </thead>
               <tbody>
-                {payments.slice(0, 10).map((p) => {
-                  const order = orders.find((o) => o.id === p.orderId)
+                {((payments ?? []).slice(0, 10)).map((p: any) => {
+                  const order = (orders ?? []).find((o: any) => o.id === p.orderId)
                   return (
                     <tr key={p.id} className="border-b last:border-0 hover:bg-linen-200 dark:bg-navy-700">
                       <td className="px-4 py-2 font-mono text-xs">

@@ -22,36 +22,28 @@ import {
   ListChecks,
   LogOut,
 } from 'lucide-react'
-import { useStore } from '@/lib/store'
+import { useSession } from 'next-auth/react'
+import { useOrders, useUpdateOrder } from '@/lib/hooks'
 import { useMemo } from 'react'
 import { formatDate, type Order } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
-const DRIVER_ID = 'u-driver-2' // Bisi Adebayo — has KZ-1002 out for delivery
-
 export function DriverView() {
-  const allUsers = useStore((s) => s.users)
-  const allOrders = useStore((s) => s.orders)
-  const drivers = useMemo(
-    () => allUsers.filter((u) => u.role === 'DRIVER'),
-    [allUsers]
-  )
-  const [driverId, setDriverId] = useState(DRIVER_ID)
-  const orders = useMemo(
-    () =>
-      allOrders.filter(
-        (o) =>
-          o.driverId === driverId &&
-          ['PICKED_UP', 'OUT_FOR_DELIVERY', 'PAYMENT_VERIFIED'].includes(o.status)
-      ),
-    [allOrders, driverId]
-  )
+  const { data: session } = useSession()
+  const { data: allOrders, isLoading } = useOrders()
+  const updateOrderMutation = useUpdateOrder()
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
-  const selected = orders.find((o) => o.id === selectedId)
 
-  const driver = drivers.find((d) => d.id === driverId)!
+  // The API already filters orders to the logged-in driver (RBAC)
+  // For now, show all orders returned (driver sees only their own)
+  const orders = (allOrders ?? []).filter(
+    (o: any) => ['PICKED_UP', 'OUT_FOR_DELIVERY', 'PAYMENT_VERIFIED'].includes(o.status)
+  )
+  const selected = orders.find((o: any) => o.id === selectedId)
+
+  const driverName = session?.user?.name ?? 'Driver'
 
   if (selected) {
     return (
@@ -70,7 +62,7 @@ export function DriverView() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs uppercase tracking-wider text-gold-400">Driver on duty</p>
-              <p className="text-lg font-bold">{driver.name}</p>
+              <p className="text-lg font-bold">{driverName}</p>
             </div>
             <div className="flex items-center gap-3">
               <Sun className="h-4 w-4 text-amber-400" />
@@ -85,20 +77,7 @@ export function DriverView() {
               </button>
             </div>
           </div>
-          <div className="mt-3 flex items-center gap-1.5">
-            <span className="text-xs text-slate-400">Active rider:</span>
-            <select
-              value={driverId}
-              onChange={(e) => setDriverId(e.target.value)}
-              className="rounded-md border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-white"
-            >
-              {drivers.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Stats */}
         </div>
       </header>
 
@@ -171,12 +150,11 @@ function DriverStopCard({
   index,
   onOpen,
 }: {
-  order: Order
+  order: any
   index: number
   onOpen: () => void
 }) {
-  const users = useStore((s) => s.users)
-  const customer = users.find((u) => u.id === order.userId)
+  const customer = order.user
   const isPickup = order.status === 'PAYMENT_VERIFIED'
   const isDrop = order.status === 'OUT_FOR_DELIVERY'
 
@@ -225,13 +203,19 @@ function DriverStopCard({
         </span>
       </div>
 
-      {order.type === 'ITEM' && order.items.length > 0 && (
-        <div className="mt-2 text-xs text-white/80">
-          {order.items.reduce((s, i) => s + i.quantity, 0)} items ·{' '}
-          {order.items.slice(0, 2).map((i) => `${i.quantity}× ${i.name}`).join(', ')}
-          {order.items.length > 2 && ` +${order.items.length - 2} more`}
-        </div>
-      )}
+      {order.type === 'ITEM' && (() => {
+        try {
+          const items = JSON.parse(order.itemsManifest || '[]')
+          if (items.length === 0) return null
+          return (
+            <div className="mt-2 text-xs text-white/80">
+              {items.reduce((s: number, i: any) => s + i.quantity, 0)} items ·{' '}
+              {items.slice(0, 2).map((i: any) => `${i.quantity}× ${i.name}`).join(', ')}
+              {items.length > 2 && ` +${items.length - 2} more`}
+            </div>
+          )
+        } catch { return null }
+      })()}
       {order.type === 'KG' && (
         <div className="mt-2 text-xs text-white/80">
           Bulk laundry — {order.finalWeight ? `${order.finalWeight}kg` : 'weigh at station'}
@@ -241,14 +225,13 @@ function DriverStopCard({
   )
 }
 
-function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void }) {
-  const users = useStore((s) => s.users)
-  const customer = users.find((u) => u.id === order.userId)
-  const updateStatus = useStore((s) => s.updateOrderStatus)
+function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }) {
+  const customer = order.user
+  const updateOrderMutation = useUpdateOrder()
 
   const isPickup = order.status === 'PAYMENT_VERIFIED'
   const actionLabel = isPickup ? 'Swipe to confirm pickup' : 'Swipe to confirm delivery'
-  const actionVerb = isPickup ? 'PICKED UP' : 'DELIVERED'
+  const actionVerb = isPickup ? 'PICKED_UP' : 'DELIVERED'
 
   const [confirming, setConfirming] = useState(false)
   const [done, setDone] = useState(false)
@@ -258,7 +241,7 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
       setConfirming(true)
       // simulate API call
       setTimeout(() => {
-        updateStatus(order.id, actionVerb as any, order.driverId)
+        updateOrderMutation.mutate({ id: order.id, status: actionVerb })
         setConfirming(false)
         setDone(true)
         setTimeout(() => onBack(), 1200)
@@ -355,21 +338,23 @@ function DriverOrderDetail({ order, onBack }: { order: Order; onBack: () => void
               <ListChecks className="h-4 w-4 text-gold-400" />
               {isPickup ? 'Items to collect' : 'Items to deliver'}
             </p>
-            {order.type === 'ITEM' ? (
-              <ul className="mt-2 space-y-1.5">
-                {order.items.map((i) => (
-                  <li
-                    key={i.id}
-                    className="flex items-center justify-between rounded-lg bg-slate-900/60 px-3 py-2 text-sm"
-                  >
-                    <span className="text-white">
-                      <span className="mr-1 font-bold text-gold-400">{i.quantity}×</span>
-                      {i.name}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
+            {order.type === 'ITEM' ? (() => {
+              try {
+                const items = JSON.parse(order.itemsManifest || '[]')
+                return (
+                  <ul className="mt-2 space-y-1.5">
+                    {items.map((i: any, idx: number) => (
+                      <li key={idx} className="flex items-center justify-between rounded-lg bg-slate-900/60 px-3 py-2 text-sm">
+                        <span className="text-white">
+                          <span className="mr-1 font-bold text-gold-400">{i.quantity}×</span>
+                          {i.name}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )
+              } catch { return <p className="text-sm text-slate-400">Items</p> }
+            })() : (
               <div className="mt-2 rounded-lg bg-slate-900/60 p-3 text-sm text-white">
                 <p>Bulk laundry bag</p>
                 <p className="text-xs text-slate-400">

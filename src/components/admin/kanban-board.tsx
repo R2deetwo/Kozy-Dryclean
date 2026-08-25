@@ -28,7 +28,7 @@ import {
   KanbanSquare,
   ChevronRight,
 } from 'lucide-react'
-import { useStore } from '@/lib/store'
+import { useOrders, useUpdateOrder } from '@/lib/hooks'
 import { useMemo } from 'react'
 import {
   KANBAN_COLUMNS,
@@ -56,17 +56,18 @@ const COLUMN_META: Record<OrderStatus, { label: string; icon: any; tone: string 
 }
 
 export function KanbanBoard() {
-  const orders = useStore((s) => s.orders)
-  const updateStatus = useStore((s) => s.updateOrderStatus)
+  const { data: ordersData, isLoading } = useOrders()
+  const updateOrderMutation = useUpdateOrder()
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [selected, setSelected] = useState<Order | undefined>(undefined)
+  const [selected, setSelected] = useState<any | undefined>(undefined)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  const visibleOrders = orders.filter((o) =>
+  const orders = ordersData ?? []
+  const visibleOrders = orders.filter((o: any) =>
     KANBAN_COLUMNS.includes(o.status)
   )
 
@@ -80,7 +81,7 @@ export function KanbanBoard() {
     const newStatus = over.id as OrderStatus
     const orderId = active.id as string
     if (KANBAN_COLUMNS.includes(newStatus)) {
-      updateStatus(orderId, newStatus, 'u-admin')
+      updateOrderMutation.mutate({ id: orderId, status: newStatus })
     }
   }
 
@@ -235,21 +236,17 @@ function OrderCard({
   onOpen,
   dragging,
 }: {
-  order: Order
+  order: any
   onOpen: () => void
   dragging?: boolean
 }) {
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: order.id,
   })
-  const users = useStore((s) => s.users)
-  const customer = users.find((u) => u.id === order.userId)
-  const driver = users.find((u) => u.id === order.driverId)
-  const allPayments = useStore((s) => s.payments)
-  const payments = useMemo(
-    () => allPayments.filter((p) => p.orderId === order.id),
-    [allPayments, order.id]
-  )
+  // users + payments come from the order's nested includes (API already returns them)
+  const customer = order.user
+  const driver = order.driver
+  const payments = order.payments ?? []
   const pendingPayment = payments.find((p) => p.status === 'PENDING')
 
   return (
@@ -366,8 +363,8 @@ function OrdersListView({
   orders,
   onOpen,
 }: {
-  orders: Order[]
-  onOpen: (o: Order) => void
+  orders: any[]
+  onOpen: (o: any) => void
 }) {
   const [sortBy, setSortBy] = useState<'date' | 'number' | 'amount' | 'status'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -464,7 +461,7 @@ function OrdersListView({
             </thead>
             <tbody>
               {sorted.map((o) => {
-                const customer = useStore.getState().users.find((u) => u.id === o.userId)
+                const customer = o.user
                 const meta = COLUMN_META[o.status]
                 return (
                   <tr

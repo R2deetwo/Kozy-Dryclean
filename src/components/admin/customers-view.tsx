@@ -14,9 +14,9 @@ import {
   ShoppingBag,
   PlusCircle,
 } from 'lucide-react'
-import { useStore } from '@/lib/store'
+import { useUsers, useOrders } from '@/lib/hooks'
 import { useMemo } from 'react'
-import { formatNaira, formatDate, type User, type Role } from '@/lib/types'
+import { formatNaira, formatDate } from '@/lib/types'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
@@ -31,13 +31,13 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export function CustomersView() {
-  const users = useStore((s) => s.users)
-  const orders = useStore((s) => s.orders)
+  const { data: users } = useUsers()
+  const { data: orders } = useOrders()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'RETAIL' | 'CORPORATE' | 'DRIVER'>('all')
-  const [selected, setSelected] = useState<User | undefined>(undefined)
+  const [selected, setSelected] = useState<any | undefined>(undefined)
 
-  const filtered = users.filter((u) => {
+  const filtered = (users ?? []).filter((u) => {
     if (filter !== 'all' && u.role !== filter) return false
     if (!search) return true
     const s = search.toLowerCase()
@@ -91,7 +91,7 @@ export function CustomersView() {
           </thead>
           <tbody>
             {filtered.map((u) => {
-              const userOrders = orders.filter((o) => o.userId === u.id)
+              const userOrders = (orders ?? []).filter((o) => o.userId === u.id)
               const ltv = userOrders.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
               return (
                 <tr
@@ -161,7 +161,7 @@ export function CustomersView() {
   )
 }
 
-function RoleBadge({ role }: { role: Role }) {
+function RoleBadge({ role }: { role: any }) {
   if (role === 'ADMIN') {
     return <Badge className="rounded-full bg-rose-100 text-rose-700 hover:bg-rose-100">Admin</Badge>
   }
@@ -174,8 +174,8 @@ function RoleBadge({ role }: { role: Role }) {
   return <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">Retail</Badge>
 }
 
-function CustomerDetailModal({ user, onClose }: { user: User; onClose: () => void }) {
-  const allOrders = useStore((s) => s.orders)
+function CustomerDetailModal({ user, onClose }: { user: any; onClose: () => void }) {
+  const allOrders = useOrders().data ?? []
   const orders = useMemo(
     () => allOrders.filter((o) => o.userId === user.id),
     [allOrders, user.id]
@@ -259,7 +259,7 @@ function CustomerDetailModal({ user, onClose }: { user: User; onClose: () => voi
                       <p className="text-xs text-navy-300 dark:text-navy-200">
                         <Calendar className="mr-1 inline h-3 w-3" />
                         {formatDate(o.pickupDate)} ·{' '}
-                        {o.type === 'ITEM' ? `${o.items.length} items` : 'Bulk'}
+                        {o.type === 'ITEM' ? (() => { try { return JSON.parse(o.itemsManifest || '[]').length + ' items' } catch { return 'items' } })() : 'Bulk'}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
@@ -269,7 +269,7 @@ function CustomerDetailModal({ user, onClose }: { user: User; onClose: () => voi
                       <Badge variant="outline" className="rounded-full text-[10px]">
                         {o.status.replace(/_/g, ' ').toLowerCase()}
                       </Badge>
-                      {o.totalPrice !== undefined && (
+                      {o.totalPrice !== null && o.totalPrice !== undefined && (
                         <span className="font-semibold text-navy dark:text-white">
                           {formatNaira(o.totalPrice)}
                         </span>
