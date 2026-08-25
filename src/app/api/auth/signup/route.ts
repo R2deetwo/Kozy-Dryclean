@@ -67,7 +67,8 @@ export async function POST(req: Request) {
       phone,
       role: role || 'B2C',
       passwordHash,
-      emailVerified: null, // requires email verification via Brevo
+      emailVerified: null,
+      signupDiscountUsed: false, // eligible for signup discount
     },
   })
 

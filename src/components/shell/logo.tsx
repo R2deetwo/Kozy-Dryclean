@@ -11,10 +11,12 @@ interface LogoProps {
   variant?: 'light' | 'dark'
 }
 
+// The icon is a wide logo (725x243 aspect ratio = ~3:1)
+// We size it by HEIGHT so it scales proportionally
 const SIZES = {
-  sm: { markH: 28, text: 'text-sm', subtitle: 'text-[8px]', gap: 'gap-2' },
-  md: { markH: 36, text: 'text-xl', subtitle: 'text-[9px]', gap: 'gap-2.5' },
-  lg: { markH: 48, text: 'text-2xl', subtitle: 'text-[10px]', gap: 'gap-3' },
+  sm: { height: 24, text: 'text-sm', subtitle: 'text-[8px]', gap: 'gap-2' },
+  md: { height: 32, text: 'text-xl', subtitle: 'text-[9px]', gap: 'gap-2.5' },
+  lg: { height: 44, text: 'text-2xl', subtitle: 'text-[10px]', gap: 'gap-3' },
 }
 
 export function Logo({ size = 'md', showText = true, subtitle, className, onClick, variant = 'light' }: LogoProps) {
@@ -28,23 +30,21 @@ export function Logo({ size = 'md', showText = true, subtitle, className, onClic
       className={cn('flex items-center transition hover:opacity-80', s.gap, className)}
       disabled={!onClick}
     >
-      {/* Icon — height-matched to the text block, width auto from aspect ratio */}
+      {/* Logo image — sized by height, width auto-scales from aspect ratio */}
       <img
         src="/kozy-icon.png"
         alt="Kozy Care"
         className="shrink-0"
-        style={{ height: s.markH, width: 'auto' }}
+        style={{ height: s.height, width: 'auto' }}
       />
-      {showText && (
+      {showText && subtitle && (
         <div className="flex flex-col justify-center leading-none">
           <p className={cn('font-serif font-bold tracking-tight', textColor, s.text)} style={{ lineHeight: 1.1 }}>
             Kozy Care
           </p>
-          {subtitle && (
-            <p className={cn('uppercase tracking-[0.15em] font-medium mt-0.5', subtitleColor, s.subtitle)}>
-              {subtitle}
-            </p>
-          )}
+          <p className={cn('uppercase tracking-[0.15em] font-medium mt-0.5', subtitleColor, s.subtitle)}>
+            {subtitle}
+          </p>
         </div>
       )}
     </button>

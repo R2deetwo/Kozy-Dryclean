@@ -83,11 +83,34 @@ export async function POST(req: Request) {
 
   // Calculate total price for ITEM orders
   let totalPrice: number | undefined
+  let appliedDiscounts: string[] = []
   if (type === 'ITEM') {
     const subtotal = items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
-    // Apply guarantee discount if active (5% default — will be dynamic from settings in future)
-    const discount = guaranteeActive ? 0.05 : 0
-    totalPrice = Math.round(subtotal * (1 - discount))
+    let totalDiscount = 0
+
+    // Apply guarantee discount if active (5%)
+    if (guaranteeActive) {
+      totalDiscount += 0.05
+      appliedDiscounts.push('Return-as-Received Guarantee (5%)')
+    }
+
+    // Apply signup discount (5% off first order for new users)
+    if (owner.signupDiscountUsed === false) {
+      const signupDiscount = await db.discount.findFirst({
+        where: { appliesTo: 'SIGNUP', active: true }
+      })
+      if (signupDiscount && signupDiscount.type === 'PERCENTAGE') {
+        totalDiscount += signupDiscount.value / 100
+        appliedDiscounts.push(`Signup discount (${signupDiscount.value}%)`)
+      }
+      // Mark as used
+      await db.user.update({
+        where: { id: ownerId },
+        data: { signupDiscountUsed: true }
+      })
+    }
+
+    totalPrice = Math.round(subtotal * (1 - Math.min(totalDiscount, 0.95))) // cap at 95% off
   }
   // KG orders: totalPrice is undefined until admin weighs at station
 

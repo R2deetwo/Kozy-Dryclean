@@ -22,9 +22,11 @@ model User {
   address       String?
   role          Role     @default(B2C)
   company       String?
-  // Auth fields (Phase 4)
+  // Auth fields
   passwordHash  String?
   emailVerified DateTime?
+  // Discount tracking
+  signupDiscountUsed Boolean @default(false)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -185,4 +187,20 @@ model VerificationToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   expires   DateTime
   createdAt DateTime @default(now())
+}
+
+// =====================================================
+// DISCOUNT — admin-managed discounts
+// =====================================================
+model Discount {
+  id          String   @id @default(cuid())
+  name        String   // "Signup Discount", "Weekend Promo", etc.
+  code        String?  @unique // optional promo code
+  type        String   @default("PERCENTAGE") // PERCENTAGE, FIXED
+  value       Float    // 5 = 5% or 500 = ₦500
+  active      Boolean  @default(true)
+  appliesTo   String   @default("ALL") // ALL, SIGNUP, FIRST_ORDER
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

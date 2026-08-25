@@ -270,7 +270,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
       {/* ============================================================
           PRICING & SERVICES
       ============================================================ */}
-      <section className="bg-white py-20">
+      <section id="pricing" className="bg-white py-20 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
             <div>
@@ -417,7 +417,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
       {/* ============================================================
           GUARANTEE — Kozy Care Promise
       ============================================================ */}
-      <section className="bg-linen py-20">
+      <section id="guarantee" className="bg-linen py-20 scroll-mt-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <Card className="overflow-hidden border-navy-100 shadow-navy">
             <CardContent className="grid gap-0 p-0 md:grid-cols-[1fr_1.4fr]">
@@ -527,6 +527,108 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
       </section>
 
       {/* ============================================================
+          SHOE CLEANING & RESTORATION — new service section
+      ============================================================ */}
+      <section id="shoe-care" className="bg-navy py-20 text-white">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid gap-10 lg:grid-cols-2 items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -16 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+            >
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+                Beyond Laundry
+              </p>
+              <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+                Shoe Cleaning &amp; Restoration
+              </h2>
+              <p className="mt-4 max-w-xl text-navy-100">
+                From scuffed sneakers to stained suede loafers, our specialists bring your
+                footwear back to life. We handle deep cleaning, sole restoration, colour
+                refinishing, and protective coating for all materials — leather, suede,
+                canvas, and synthetics.
+              </p>
+              <ul className="mt-6 space-y-3 text-sm">
+                {[
+                  'Deep clean & stain removal for sneakers, loafers, heels, and boots',
+                  'Sole whitening & edge restoration',
+                  'Suede & nubuck revival treatment',
+                  'Colour refinishing & leather conditioning',
+                  'Waterproof & protective coating application',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3">
+                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
+                    <span className="text-navy-100">{t}</span>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                onClick={onBook}
+                className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+              >
+                Book shoe care <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </motion.div>
+            <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
+              <img src="/brand/images/shoe-care.png" alt="Restored luxury shoes" className="h-full w-full object-cover" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          FEMALE LIFESTYLE — representing all customers
+      ============================================================ */}
+      <section className="bg-linen py-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid gap-10 lg:grid-cols-2 items-center">
+            <div className="overflow-hidden rounded-2xl ring-1 ring-navy-100 shadow-2xl order-2 lg:order-1">
+              <img src="/brand/images/female-customer.png" alt="Happy customer receiving her clean laundry" className="h-full w-full object-cover" />
+            </div>
+            <motion.div
+              initial={{ opacity: 0, x: 16 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+              className="order-1 lg:order-2"
+            >
+              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+                Trusted by thousands
+              </p>
+              <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+                Care for everything you wear.
+              </h2>
+              <p className="mt-4 max-w-xl text-navy-300">
+                From your favourite Ankara gown to that designer blazer you save for special
+                occasions — we treat every garment with the same level of attention. Our
+                pickup and delivery service means you never have to leave home.
+              </p>
+              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
+                  <p className="font-serif text-2xl font-bold text-navy">48h</p>
+                  <p className="text-xs text-navy-300">Standard turnaround</p>
+                </div>
+                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
+                  <p className="font-serif text-2xl font-bold text-navy">₦500+</p>
+                  <p className="text-xs text-navy-300">Per item, starting at</p>
+                </div>
+                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
+                  <p className="font-serif text-2xl font-bold text-navy">5%</p>
+                  <p className="text-xs text-navy-300">Off first order</p>
+                </div>
+              </div>
+              <Button
+                onClick={onBook}
+                className="mt-6 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+              >
+                Book your pickup <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </motion.div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
           FOOTER
       ============================================================ */}
       <footer className="bg-navy text-navy-100">
@@ -548,17 +650,23 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
 
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">
-                Concierge
+                Contact Us
               </p>
               <ul className="mt-3 space-y-2 text-sm text-navy-100/70">
-                <li className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-gold-400" /> +234 800 KOZY NG
+                <li className="flex items-center gap-2 hover:text-white transition">
+                  <Phone className="h-4 w-4 text-gold-400 shrink-0" />
+                  <a href="tel:+2348031755230" className="hover:text-gold-300 transition">+234 803 175 5230</a>
                 </li>
-                <li className="flex items-center gap-2">
-                  <Mail className="h-4 w-4 text-gold-400" /> concierge@kozy.ng
+                <li className="flex items-center gap-2 hover:text-white transition">
+                  <Mail className="h-4 w-4 text-gold-400 shrink-0" />
+                  <a href="mailto:kozygarmentcare@gmail.com" className="hover:text-gold-300 transition">kozygarmentcare@gmail.com</a>
                 </li>
-                <li className="flex items-center gap-2">
-                  <MapPin className="h-4 w-4 text-gold-400" /> Kozy Atelier, 12 Gerard Rd, Ikoyi
+                <li className="flex items-start gap-2 hover:text-white transition">
+                  <MapPin className="h-4 w-4 text-gold-400 shrink-0 mt-0.5" />
+                  <span>
+                    <a href="#locations" className="hover:text-gold-300 transition block">No 20. Westsyde Drive, Ogombo, Lagos State</a>
+                    <span className="block mt-1">Paradise 3 Estate, Road 5/3, Chevron, Lagos State</span>
+                  </span>
                 </li>
               </ul>
             </div>
@@ -569,24 +677,57 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
               </p>
               <ul className="mt-3 space-y-2 text-sm">
                 <li>
-                  <button onClick={onBook} className="text-navy-100/70 hover:text-white">
+                  <button onClick={onBook} className="text-navy-100/70 hover:text-gold-300 transition">
                     Book a pickup
                   </button>
                 </li>
                 <li>
-                  <button onClick={onPortal} className="text-navy-100/70 hover:text-white">
+                  <button onClick={onPortal} className="text-navy-100/70 hover:text-gold-300 transition">
                     Track an order
                   </button>
                 </li>
-                <li className="text-navy-100/70">Pricing &amp; services</li>
-                <li className="text-navy-100/70">Return-as-Received Guarantee</li>
-                <li className="text-navy-100/70">Corporate programs</li>
+                <li>
+                  <a href="#pricing" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+                    Pricing &amp; services
+                  </a>
+                </li>
+                <li>
+                  <a href="#guarantee" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+                    Return-as-Received Guarantee
+                  </a>
+                </li>
+                <li>
+                  <a href="#shoe-care" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+                    Shoe Cleaning &amp; Restoration
+                  </a>
+                </li>
+                <li>
+                  <a href="#pricing" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+                    Corporate programs
+                  </a>
+                </li>
               </ul>
             </div>
           </div>
 
-          <div className="mt-10 flex flex-col items-center justify-between gap-2 border-t border-navy-500 pt-6 text-xs text-navy-100/40 sm:flex-row">
-            <p>© 2026 Kozy Premium Dry Cleaning Ltd. RC 1234567.</p>
+          {/* Driver recruitment banner */}
+          <div className="mt-8 rounded-xl bg-gradient-to-r from-navy-600 to-navy-700 p-4 ring-1 ring-gold-400/20">
+            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">🚚</span>
+                <div>
+                  <p className="text-sm font-semibold text-white">Join our rider team</p>
+                  <p className="text-xs text-navy-100/60">Flexible contract work across Lagos. Earn while you move.</p>
+                </div>
+              </div>
+              <a href="/join-riders" className="shrink-0 rounded-full bg-gold-gradient px-4 py-2 text-xs font-bold text-navy hover:opacity-90 transition">
+                Apply now →
+              </a>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col items-center justify-between gap-2 border-t border-navy-500 pt-6 text-xs text-navy-100/40 sm:flex-row">
+            <p>© 2026 Kozy Care. All rights reserved.</p>
             <p>Built for Lagos, with care.</p>
           </div>
         </div>

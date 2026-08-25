@@ -258,7 +258,7 @@ function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
           onClick={() => onGoto('payments')}
         />
         <KpiCard
-          label="Lifetime revenue"
+          label="Revenue (verified)"
           value={`₦${revenue.toLocaleString('en-NG')}`}
           delta={`₦${expectedRevenue.toLocaleString('en-NG')} pipeline`}
           icon={TrendingUp}

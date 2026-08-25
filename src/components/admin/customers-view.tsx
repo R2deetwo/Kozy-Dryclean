@@ -85,7 +85,7 @@ export function CustomersView() {
               <th className="hidden px-4 py-2 md:table-cell">Type</th>
               <th className="hidden px-4 py-2 lg:table-cell">Contact</th>
               <th className="px-4 py-2 text-center">Orders</th>
-              <th className="hidden px-4 py-2 lg:table-cell">Lifetime Value</th>
+              <th className="hidden px-4 py-2 lg:table-cell">Total Spent</th>
               <th className="hidden px-4 py-2 sm:table-cell">Since</th>
             </tr>
           </thead>
@@ -212,7 +212,7 @@ function CustomerDetailModal({ user, onClose }: { user: any; onClose: () => void
             </Card>
             <Card className="border-navy-100 dark:border-navy-600">
               <CardContent className="p-4">
-                <p className="text-xs text-navy-300 dark:text-navy-200">Lifetime value</p>
+                <p className="text-xs text-navy-300 dark:text-navy-200">Total spent</p>
                 <p className="text-xl font-bold text-navy-300">{formatNaira(ltv)}</p>
               </CardContent>
             </Card>
