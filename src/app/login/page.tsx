@@ -3,7 +3,7 @@
 import { useState, Suspense } from 'react'
 import { signIn } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -30,10 +30,14 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const [unverifiedEmail, setUnverifiedEmail] = useState(false)
+  const [resending, setResending] = useState(false)
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
+    setUnverifiedEmail(false)
 
     const res = await signIn('credentials', {
       email,
@@ -42,7 +46,14 @@ function LoginForm() {
     })
 
     if (res?.error) {
-      setError('Invalid email or password. If you just signed up, make sure you verified your email.')
+      // Check if the error is the email-not-verified case
+      // NextAuth passes the thrown error message as the error string
+      if (res.error === 'EMAIL_NOT_VERIFIED' || res.error?.includes('EMAIL_NOT_VERIFIED')) {
+        setUnverifiedEmail(true)
+        setError('')
+      } else {
+        setError('Invalid email or password. Please check your credentials.')
+      }
       setLoading(false)
     } else if (res?.ok) {
       // Fetch the user's role to redirect to the right portal
@@ -74,6 +85,33 @@ function LoginForm() {
               <div className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 flex items-start gap-2 ring-1 ring-rose-200">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {unverifiedEmail && (
+              <div className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 flex items-start gap-2 ring-1 ring-amber-200">
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">Please verify your email first</p>
+                  <p className="mt-1">We sent a verification link to <strong>{email}</strong>. Check your inbox and spam folder.</p>
+                  <button
+                    onClick={async () => {
+                      setResending(true)
+                      const r = await fetch('/api/auth/resend-verification', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ email }),
+                      })
+                      const d = await r.json()
+                      alert(d.message || d.error)
+                      setResending(false)
+                    }}
+                    disabled={resending}
+                    className="mt-1 font-semibold text-[#0A192F] hover:underline disabled:opacity-50"
+                  >
+                    {resending ? 'Sending...' : 'Resend verification email'}
+                  </button>
+                </div>
               </div>
             )}
 

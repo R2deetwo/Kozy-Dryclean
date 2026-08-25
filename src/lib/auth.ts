@@ -36,6 +36,15 @@ export const authOptions: NextAuthOptions = {
           return null
         }
 
+        // Enforce email verification — don't issue a session for unverified users
+        if (!user.emailVerified) {
+          // Return a special error that the login page can distinguish from
+          // "invalid credentials" without leaking whether the email exists.
+          // Since we only get here AFTER a correct password match, it's safe
+          // to tell this specific user that their email isn't verified.
+          throw new Error('EMAIL_NOT_VERIFIED')
+        }
+
         // Return the user object — NextAuth will put this in the JWT
         return {
           id: user.id,
