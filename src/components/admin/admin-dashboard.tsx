@@ -69,7 +69,7 @@ export function AdminDashboard() {
         <div className="flex h-full flex-col">
           <div className="border-b border-navy-500 px-4 py-4">
             <div className="mb-3">
-              <Logo size="sm" subtitle="Atelier Console" className="[&_p]:text-white [&_.text-navy-400]:text-gold-300" />
+              <Logo size="sm" subtitle="Atelier Console" variant="dark" />
             </div>
             <p className="font-serif font-semibold text-white">{admin.name}</p>
             <p className="text-xs text-navy-300">{admin.email}</p>

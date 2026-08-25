@@ -534,8 +534,8 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
           <div className="grid gap-8 md:grid-cols-3">
             <div>
               <div className="flex items-center gap-2">
-                <img src="/kozy-logo.png" alt="Kozy" width={32} height={32} className="rounded-lg" />
-                <span className="font-serif text-lg font-semibold text-white">Kozy</span>
+                <img src="/kozy-icon.png" alt="Kozy Care" width={32} height={32} className="rounded-lg" />
+                <span className="font-serif text-lg font-semibold text-white">Kozy Care</span>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-navy-100/70">
                 Premium dry cleaning &amp; laundry care for individuals and corporate
