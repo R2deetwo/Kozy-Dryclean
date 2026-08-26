@@ -1,7 +1,12 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Kozy: Agbada (flowing traditional robe) -->
-  <path d="M11 5 L6 9 L4 18 L7 19 L8 27 L24 27 L25 19 L28 18 L26 9 L21 5 L18 7 L14 7 L11 5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
-  <path d="M14 7 L16 11 L18 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
-  <path d="M12 14 L16 17 L20 14" stroke="#D4AF37" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
-  <line x1="16" y1="17" x2="16" y2="24" stroke="#D4AF37" strokeWidth="1" strokeDasharray="2 2"/>
+  <!-- Kozy: Agbada (flowing wide-sleeve robe, ankle-length, boat neck) -->
+  <!-- Body is narrow; bell sleeves extend well past body width. Wide boat neck. Hem near bottom of frame. No waist taper. -->
+  <path d="M12 5 L10 6 L2 9 L1 18 L4 22 L10 19 L10 29 L22 29 L22 19 L28 22 L31 18 L30 9 L22 6 L20 5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Inner fold lines on the bell sleeves to suggest draping -->
+  <path d="M3 10 L3 17" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.55"/>
+  <path d="M29 10 L29 17" stroke="currentColor" strokeWidth="1" strokeLinecap="round" opacity="0.55"/>
+  <!-- Wide boat-neck opening (horizontal neckline emphasis) -->
+  <path d="M12 5 L20 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <!-- Embroidery band at chest (gold accent, traditional agbada trim) -->
+  <line x1="11" y1="13" x2="21" y2="13" stroke="#D4AF37" strokeWidth="1.2" stroke-linecap="round"/>
 </svg>

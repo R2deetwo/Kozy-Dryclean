@@ -97,6 +97,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'BANK_TRANSFER' | 'PAYSTACK'>('BANK_TRANSFER')
   const [receiptUploaded, setReceiptUploaded] = useState(false)
+  const [catalogTab, setCatalogTab] = useState<'garments' | 'shoes'>('garments')
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const receiptInputRef = useRef<HTMLInputElement>(null)
@@ -400,11 +401,40 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
 
               {type === 'ITEM' && (
                 <div className="mt-6">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-navy-300">
-                    Pick your garments
-                  </h3>
+                  {/* Pick your garments / Pick your shoes — two tabs on the same line.
+                      "Pick your garments" stays in the muted navy-300 tone of the old label;
+                      "Pick your shoes" uses a navy fill + white text so it's unmissable,
+                      but still inside the brand palette (navy + gold). */}
+                  <div className="flex items-stretch gap-2 border-b border-navy-100">
+                    <button
+                      type="button"
+                      onClick={() => setCatalogTab('garments')}
+                      className={cn(
+                        '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-wide transition',
+                        catalogTab === 'garments'
+                          ? 'border-gold-400 text-navy'
+                          : 'border-transparent text-navy-300 hover:text-navy'
+                      )}
+                    >
+                      Pick your garments
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCatalogTab('shoes')}
+                      className={cn(
+                        '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-wide transition',
+                        catalogTab === 'shoes'
+                          ? 'border-gold-400 bg-navy text-white'
+                          : 'border-transparent bg-navy text-white hover:bg-[#1B3A5F]'
+                      )}
+                    >
+                      Pick your shoes
+                    </button>
+                  </div>
                   <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {GARMENT_CATALOG.map((g) => {
+                    {GARMENT_CATALOG.filter(
+                      (g) => (catalogTab === 'garments' ? g.category !== 'Shoes' : g.category === 'Shoes')
+                    ).map((g) => {
                       const qty = items[g.id] ?? 0
                       return (
                         <div

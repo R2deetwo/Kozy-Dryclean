@@ -1,6 +1,18 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Kozy: 3-piece suit (jacket + trousers) -->
-  <path d="M11 5 L7 7 L5 13 L8 14 L8 21 L24 21 L24 14 L27 13 L25 7 L21 5 L18 7 L14 7 L11 5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
-  <path d="M10 21 L9 27 L14 27 L15 21 M17 21 L18 27 L23 27 L22 21" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
-  <path d="M16 9 L14 13 L16 16 L18 13 L16 9 Z" stroke="#D4AF37" strokeWidth="1.4" fill="none"/>
+  <!-- Kozy: Suit (3-Piece) — jacket + trousers + visible waistcoat (vest) panel between lapels -->
+  <!-- Same jacket+trousers as 2pc, plus a triangular V waistcoat showing through the open lapels. -->
+  <!-- JACKET (top) -->
+  <path d="M11 4 L7 5 L6 10 L9 10 L9 18 L23 18 L23 10 L26 10 L25 5 L21 4 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Boat neck -->
+  <path d="M11 4 L21 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <!-- Notch lapel diagonals — gap between them shows the waistcoat V -->
+  <path d="M11 4 L14 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <path d="M21 4 L18 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <!-- WAISTCOAT V panel (gold) — visible between the open lapels -->
+  <path d="M14 4 L18 4 L16 14 Z" stroke="#D4AF37" strokeWidth="1.2" strokeLinejoin="round" fill="none"/>
+  <!-- Waistcoat buttons (gold) -->
+  <circle cx="16" cy="9" r="0.8" fill="#D4AF37"/>
+  <circle cx="16" cy="12" r="0.8" fill="#D4AF37"/>
+  <!-- TROUSERS (below) -->
+  <path d="M9 18 L23 18 L22 29 L17 29 L16 20 L15 29 L10 29 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
 </svg>

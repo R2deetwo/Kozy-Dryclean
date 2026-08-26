@@ -1,0 +1,6 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Iro & Buba (women's traditional) -->
+  <path d="M11 5 L7 8 L7 18 L10 18 L11 27 L21 27 L22 18 L25 18 L25 8 L21 5 L18 7 L14 7 L11 5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <path d="M14 7 L16 11 L18 7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+  <path d="M11 18 L21 18 L19 24 L13 24 Z" stroke="#D4AF37" strokeWidth="1.2" fill="none"/>
+</svg>

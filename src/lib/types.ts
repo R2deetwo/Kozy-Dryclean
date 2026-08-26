@@ -104,7 +104,7 @@ export interface GarmentCatalogItem {
   name: string
   price: number
   icon: string // path to Kozy SVG service icon
-  category: 'Shirts' | 'Trousers' | 'Suits' | 'Traditional' | 'Household' | 'Extras'
+  category: 'Shirts' | 'Trousers' | 'Suits' | 'Traditional' | 'Household' | 'Extras' | 'Shoes'
 }
 
 export const GARMENT_CATALOG: GarmentCatalogItem[] = [
@@ -129,6 +129,10 @@ export const GARMENT_CATALOG: GarmentCatalogItem[] = [
   { id: 'mens-underwear', name: 'Men\u2019s Underwear', price: 250, icon: '/icons/services/underwear.svg', category: 'Extras' },
   { id: 'socks', name: 'Socks (per pair)', price: 200, icon: '/icons/services/socks.svg', category: 'Extras' },
   { id: 'hats', name: 'Hat', price: 500, icon: '/icons/services/hats.svg', category: 'Extras' },
+  { id: 'sneakers-white', name: 'Sneakers (White)', price: 1000, icon: '/icons/services/sneakers-white.svg', category: 'Shoes' },
+  { id: 'sneakers-coloured', name: 'Sneakers (Coloured)', price: 1200, icon: '/icons/services/sneakers-coloured.svg', category: 'Shoes' },
+  { id: 'leather-shoes', name: 'Leather Shoes', price: 1000, icon: '/icons/services/leather-shoes.svg', category: 'Shoes' },
+  { id: 'suede-shoes', name: 'Suede Shoes', price: 2000, icon: '/icons/services/suede-shoes.svg', category: 'Shoes' },
 ]
 
 // =====================================================

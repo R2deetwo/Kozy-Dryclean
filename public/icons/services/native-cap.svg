@@ -1,6 +1,12 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Kozy: Native cap (fila) -->
-  <path d="M8 22 C8 14 12 9 16 9 C20 9 24 14 24 22 Z" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinejoin="round"/>
-  <line x1="6" y1="22" x2="26" y2="22" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
-  <path d="M11 14 L13 12 M21 14 L19 12" stroke="#D4AF37" strokeWidth="1" strokeLinecap="round"/>
+  <!-- Kozy: Native Cap (fila/kufi-style — tall narrow dome, exaggerated for distinction from sun hat) -->
+  <!-- Taller and narrower than the sun hat. Tall dome silhouette unmistakable at small sizes. -->
+  <!-- Tall narrow dome -->
+  <path d="M11 22 C11 8 13 4 16 4 C19 4 21 8 21 22 Z" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinejoin="round"/>
+  <!-- Base/brim line -->
+  <line x1="9" y1="22" x2="23" y2="22" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+  <!-- Subtle gold accent: embroidery on cap side -->
+  <path d="M13 14 L15 12 M19 14 L17 12" stroke="#D4AF37" strokeWidth="1" strokeLinecap="round"/>
+  <!-- Vertical seam accent (gold) emphasizing the tall peak -->
+  <line x1="16" y1="6" x2="16" y2="18" stroke="#D4AF37" strokeWidth="0.8" strokeLinecap="round" opacity="0.7"/>
 </svg>

@@ -30,6 +30,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   Traditional: 'Traditional',
   Household: 'Household',
   Extras: 'Extras',
+  Shoes: 'Shoes & Sneakers',
 }
 
 export function SettingsView() {
@@ -319,7 +320,7 @@ export function SettingsView() {
               </p>
             </CardHeader>
             <CardContent>
-              {(['Shirts', 'Trousers', 'Suits', 'Traditional', 'Household', 'Extras'] as const).map(
+              {(['Shirts', 'Trousers', 'Suits', 'Traditional', 'Household', 'Extras', 'Shoes'] as const).map(
                 (cat) => (
                   <div key={cat} className="mb-5 last:mb-0">
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold-400">

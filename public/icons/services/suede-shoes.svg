@@ -1,0 +1,18 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Suede Shoes (chukka/desert boot — higher ankle, two-eyelet lacing, suede texture) -->
+  <!-- Higher ankle than loafer (chukka silhouette = iconic suede footwear). Two small eyelets + laces. Texture tick marks on upper. -->
+  <!-- Suede chukka boot upper outline (higher ankle) -->
+  <path d="M3 23 L4 14 L8 12 L11 12 L13 9 L16 9 L18 12 L20 13 L23 16 L25 19 L25 23 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Crepe sole (slightly thicker than leather) -->
+  <path d="M3 23 L25 23 L25 26 L3 26 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Two-eyelet lacing (gold) -->
+  <circle cx="14" cy="13" r="0.7" fill="#D4AF37"/>
+  <circle cx="16" cy="13" r="0.7" fill="#D4AF37"/>
+  <line x1="14" y1="13" x2="16" y2="13" stroke="#D4AF37" strokeWidth="1" stroke-linecap="round"/>
+  <!-- Suede texture: small tick marks on the upper suggesting matte fuzzy pile -->
+  <line x1="6" y1="18" x2="7" y2="18" stroke="currentColor" strokeWidth="0.8" stroke-linecap="round" opacity="0.6"/>
+  <line x1="9" y1="19" x2="10" y2="19" stroke="currentColor" strokeWidth="0.8" stroke-linecap="round" opacity="0.6"/>
+  <line x1="12" y1="18" x2="13" y2="18" stroke="currentColor" strokeWidth="0.8" stroke-linecap="round" opacity="0.6"/>
+  <line x1="20" y1="18" x2="21" y2="18" stroke="currentColor" strokeWidth="0.8" stroke-linecap="round" opacity="0.6"/>
+  <line x1="22" y1="19" x2="23" y2="19" stroke="currentColor" strokeWidth="0.8" stroke-linecap="round" opacity="0.6"/>
+</svg>

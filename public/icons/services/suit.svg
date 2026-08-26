@@ -1,6 +1,15 @@
 <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- Kozy: Suit jacket -->
-  <path d="M11 5 L7 7 L5 13 L8 14 L8 27 L24 27 L24 14 L27 13 L25 7 L21 5 L18 7 L14 7 L11 5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
-  <path d="M16 9 L14 14 L16 18 L18 14 L16 9 Z" stroke="#D4AF37" strokeWidth="1.4" fill="none"/>
-  <line x1="14" y1="22" x2="18" y2="22" stroke="currentColor" strokeWidth="1.2"/>
+  <!-- Kozy: Suit (2-Piece) — blazer jacket with notch lapel + trousers below as two connected pieces -->
+  <!-- Jacket uses corrected notch-lapel shape. Trousers hang below, clearly separate. -->
+  <!-- JACKET (top, hip-length ~y=18) -->
+  <path d="M11 4 L7 5 L6 10 L9 10 L9 18 L23 18 L23 10 L26 10 L25 5 L21 4 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Boat neck -->
+  <path d="M11 4 L21 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <!-- Notch lapel diagonals converging at center chest -->
+  <path d="M11 4 L15 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <path d="M21 4 L17 11" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <!-- TROUSERS (below, waistband meets jacket hem) -->
+  <path d="M9 18 L23 18 L22 29 L17 29 L16 20 L15 29 L10 29 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Single button on jacket (gold) -->
+  <circle cx="16" cy="14" r="1" fill="#D4AF37"/>
 </svg>
