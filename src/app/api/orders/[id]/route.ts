@@ -18,6 +18,7 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession, requireSession } from '@/lib/auth'
 import { UpdateOrderSchema } from '@/lib/schemas'
+import { notifyOrderStatus } from '@/lib/notifications'
 
 // ----- GET /api/orders/[id] -----
 export async function GET(
@@ -160,6 +161,12 @@ export async function PATCH(
         actorId: session.user?.id,
       },
     })
+
+    // Email + SMS the customer about the status change.
+    // notifyOrderStatus never throws, so it can't break the update.
+    if (parsed.data.status !== order.status) {
+      await notifyOrderStatus(updated, parsed.data.status)
+    }
   }
 
   return NextResponse.json({ order: updated })

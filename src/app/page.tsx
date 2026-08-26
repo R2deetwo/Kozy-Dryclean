@@ -30,8 +30,8 @@ export default function Home() {
 
       <CustomerLanding
         onBook={() => {
-          // Redirect to signup/login
-          window.location.href = '/signup'
+          // Straight to booking — guests can check out without an account
+          window.location.href = '/book'
         }}
         onPortal={() => {
           window.location.href = '/login'

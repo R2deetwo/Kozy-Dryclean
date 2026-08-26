@@ -45,8 +45,12 @@ import { toast } from '@/hooks/use-toast'
 import { Toaster } from '@/components/ui/toaster'
 
 interface Props {
-  onComplete: (order: Order) => void
+  onComplete: (order: Order, meta?: { guestAccountCreated?: boolean }) => void
   onCancel: () => void
+  /** Allow booking without an account (guest checkout). The guest's
+   *  contact details are collected in step 3 and a customer record is
+   *  created server-side. */
+  allowGuest?: boolean
 }
 
 const STEPS = [
@@ -67,10 +71,11 @@ const TIME_SLOTS = [
   '16:00 - 17:00',
 ]
 
-export function BookingWizard({ onComplete, onCancel }: Props) {
+export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Props) {
   const settings = useStore((s) => s.settings)
-  const { data: session } = useSession()
+  const { data: session, status: sessionStatus } = useSession()
   const sessionUser = session?.user
+  const isGuest = allowGuest && sessionStatus !== 'loading' && !sessionUser
   const effectiveUser = sessionUser ? {
     id: (sessionUser as any).id || '',
     email: sessionUser.email || '',
@@ -102,6 +107,16 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const receiptInputRef = useRef<HTMLInputElement>(null)
 
+  // ----- Guest checkout contact details (collected in step 3) -----
+  const [guestName, setGuestName] = useState('')
+  const [guestEmail, setGuestEmail] = useState('')
+  const [guestPhone, setGuestPhone] = useState('')
+  const [accountExists, setAccountExists] = useState(false)
+  const guestEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())
+  const guestPhoneValid = guestPhone.trim().length >= 7
+  const guestValid =
+    guestName.trim().length >= 2 && guestEmailValid && guestPhoneValid
+
   // Populate address fields once we have the current user
   useEffect(() => {
     if (effectiveUser?.address) {
@@ -117,7 +132,7 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
   // ----- Computed pricing (memoized for performance) -----
   // Must be called BEFORE any early returns (Rules of Hooks)
   const selectedItems: OrderItem[] = useMemo(() => {
-    if (!effectiveUser) return []
+    if (!effectiveUser && !isGuest) return []
     return Object.entries(items)
       .filter(([, q]) => q > 0)
       .map(([id, q]) => {
@@ -125,21 +140,22 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
         const unitPrice = settings.garmentPrices[id] ?? g.price
         return { id: 'item_' + id, name: g.name, quantity: q, unitPrice }
       })
-  }, [items, settings.garmentPrices, effectiveUser])
+  }, [items, settings.garmentPrices, effectiveUser, isGuest])
   const subtotal = selectedItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
   const guaranteeActive = type === 'ITEM' && photos.length > 0 && guaranteeAck
   const discount = guaranteeActive ? subtotal * (settings.guaranteeDiscountPercent / 100) : 0
   const total = subtotal - discount
 
-  // Defensive guard — auth gate should prevent this, but we don't want to crash.
-  if (!effectiveUser) {
+  // Defensive guard — auth gate should prevent this, but we don't want to
+  // crash. Guest mode (allowGuest) bypasses the session requirement.
+  if (!effectiveUser && !isGuest) {
     return (
       <div className="p-10 text-center text-sm text-navy-300">
-        Please sign in to start a booking.
+        {sessionStatus === 'loading' ? 'Loading…' : 'Please sign in to start a booking.'}
       </div>
     )
   }
-  const isB2B = effectiveUser.role === "B2B"
+  const isB2B = effectiveUser?.role === "B2B"
 
   // ----- Helpers -----
   const setQty = (id: string, delta: number) => {
@@ -181,7 +197,10 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
       return true // B2B always continues (just requests pickup)
     }
     if (step === 2) return true // condition capture is optional
-    if (step === 3) return Boolean(pickupAddress && pickupDate && pickupSlot)
+    if (step === 3)
+      return Boolean(
+        pickupAddress && pickupDate && pickupSlot && (!isGuest || guestValid)
+      )
     if (step === 4) return true
     return false
   }
@@ -205,8 +224,10 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
 
   const handleConfirm = async () => {
     setLoading(true)
+    setAccountExists(false)
     try {
-      // Create order via API
+      // Create order via API (guests pass their contact details; the payment
+      // record for BANK_TRANSFER is created server-side in the same request)
       const res = await fetch('/api/orders', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -218,29 +239,66 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
           pickupDate: new Date(pickupDate).toISOString(),
           pickupTimeSlot: pickupSlot,
           deliveryAddress,
+          ...(isGuest
+            ? {
+                guest: {
+                  name: guestName.trim(),
+                  email: guestEmail.trim(),
+                  phone: guestPhone.trim(),
+                },
+              }
+            : {}),
+          ...(type === 'ITEM' ? { paymentMethod } : {}),
         }),
       })
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to create order')
+        if (err.error === 'ACCOUNT_EXISTS') {
+          setAccountExists(true)
+          setLoading(false)
+          return
+        }
+        throw new Error(err.error === 'Validation failed' ? 'Please check your details and try again.' : err.error || 'Failed to create order')
       }
 
       const data = await res.json()
       const order = data.order
 
-      // Create payment record via API (for ITEM orders with a total)
-      if (type === 'ITEM' && order.totalPrice) {
-        await fetch('/api/payments', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            orderId: order.id,
-            amount: order.totalPrice,
-            method: paymentMethod,
-            receiptUrl: paymentMethod === 'BANK_TRANSFER' && receiptUploaded ? 'mock-receipt' : undefined,
-          }),
-        })
+      // ----- Online card payment: redirect to Paystack's hosted checkout -----
+      if (type === 'ITEM' && paymentMethod === 'PAYSTACK' && order.totalPrice) {
+        try {
+          const initRes = await fetch('/api/paystack/initialize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: order.id,
+              ...(isGuest ? { email: guestEmail.trim() } : {}),
+            }),
+          })
+          const initData = await initRes.json().catch(() => ({}))
+          if (initRes.ok && initData.authorizationUrl) {
+            // Redirect to the Paystack checkout page — after payment the
+            // customer lands on /payment/callback and the webhook verifies.
+            window.location.href = initData.authorizationUrl
+            return
+          }
+          // Online payment unavailable — the order is still placed; fall
+          // back to transfer instructions on the success screen.
+          toast({
+            title: 'Online payment unavailable',
+            description:
+              'Your order is confirmed — please complete payment by bank transfer using the details on the next screen.',
+            variant: 'destructive',
+          })
+        } catch {
+          toast({
+            title: 'Online payment unavailable',
+            description:
+              'Your order is confirmed — please complete payment by bank transfer using the details on the next screen.',
+            variant: 'destructive',
+          })
+        }
       }
 
       toast({
@@ -248,13 +306,15 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
         description: `Order #${order.orderNumber} is confirmed. ${
           type === 'KG'
             ? 'We will weigh your items at the station and send the invoice.'
-            : paymentMethod === 'BANK_TRANSFER' && receiptUploaded
-            ? 'Your receipt is in the verification queue.'
-            : 'We\'ve initiated your Paystack payment request.'
+            : paymentMethod === 'BANK_TRANSFER'
+            ? receiptUploaded
+              ? 'Your receipt is in the verification queue.'
+              : 'Please complete your transfer to confirm payment.'
+            : 'Complete your card payment to confirm.'
         }`,
       })
 
-      setTimeout(() => onComplete(order), 300)
+      setTimeout(() => onComplete(order, { guestAccountCreated: !!data.guestAccountCreated }), 300)
     } catch (e: any) {
       toast({
         title: 'Booking failed',
@@ -629,6 +689,82 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                 Pick a date and time slot. We&apos;ll handle the rest.
               </p>
 
+              {/* Guest contact details (guest checkout only) */}
+              {isGuest && (
+                <Card className="mt-5 border-gold-200 bg-gold-50/30">
+                  <CardContent className="p-5">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-gold-600" />
+                      <p className="text-sm font-semibold text-navy">Your details</p>
+                      <span className="ml-auto rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-300 ring-1 ring-navy-100">
+                        No account needed
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-navy-300">
+                      We use these to confirm your pickup and email your receipt. You can set a
+                      password afterwards to track this order.
+                    </p>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                      <div>
+                        <Label htmlFor="guest-name">Full name</Label>
+                        <Input
+                          id="guest-name"
+                          value={guestName}
+                          onChange={(e) => setGuestName(e.target.value)}
+                          placeholder="e.g., Adaeze Okonkwo"
+                          className="mt-1.5"
+                          autoComplete="name"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="guest-email">Email</Label>
+                        <Input
+                          id="guest-email"
+                          type="email"
+                          value={guestEmail}
+                          onChange={(e) => {
+                            setGuestEmail(e.target.value)
+                            setAccountExists(false)
+                          }}
+                          placeholder="you@example.com"
+                          className="mt-1.5"
+                          autoComplete="email"
+                        />
+                        {guestEmail && !guestEmailValid && (
+                          <p className="mt-1 text-xs text-red-500">Enter a valid email address</p>
+                        )}
+                      </div>
+                      <div>
+                        <Label htmlFor="guest-phone">Phone</Label>
+                        <Input
+                          id="guest-phone"
+                          type="tel"
+                          value={guestPhone}
+                          onChange={(e) => setGuestPhone(e.target.value)}
+                          placeholder="e.g., 0803 123 4567"
+                          className="mt-1.5"
+                          autoComplete="tel"
+                        />
+                        {guestPhone && !guestPhoneValid && (
+                          <p className="mt-1 text-xs text-red-500">Enter a valid phone number</p>
+                        )}
+                      </div>
+                    </div>
+                    {accountExists && (
+                      <div className="mt-4 rounded-lg bg-blue-50 p-3 text-xs text-blue-900 ring-1 ring-blue-200">
+                        <p className="font-semibold">You already have an account with this email.</p>
+                        <p className="mt-0.5">
+                          <a href="/login" className="font-semibold underline">
+                            Sign in
+                          </a>{' '}
+                          to book — your saved details will be waiting for you.
+                        </p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               <div className="mt-6 grid gap-4">
                 <div>
                   <Label htmlFor="pickup-date">Pickup date</Label>
@@ -819,11 +955,10 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                         <CreditCard className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-navy">
-                          Paystack Virtual Account
-                        </p>
+                        <p className="font-semibold text-navy">Pay Online — Card</p>
                         <p className="text-xs text-navy-300">
-                          Get a dedicated virtual account. We auto-confirm payment via webhook.
+                          Pay securely with your debit card via Paystack. Payment is
+                          confirmed instantly — no receipt upload needed.
                         </p>
                       </div>
                     </label>
@@ -892,13 +1027,13 @@ export function BookingWizard({ onComplete, onCancel }: Props) {
                     <Card className="mt-4 border-blue-200 bg-blue-50/40">
                       <CardContent className="p-4">
                         <p className="text-sm text-blue-900">
-                          On confirm, we&apos;ll request a dedicated virtual account from Paystack
-                          tied to this order. You&apos;ll receive the account details by SMS, and
-                          once funds hit the account, we auto-confirm via webhook — no admin
+                          On confirm, you&apos;ll be redirected to Paystack&apos;s secure checkout
+                          to pay {formatNaira(total)} with your card. After payment you&apos;ll
+                          return here and your order is confirmed automatically — no admin
                           review needed.
                         </p>
                         <div className="mt-2 text-xs text-blue-700">
-                          Reference: <span className="font-mono">PSK_LG_{Date.now().toString().slice(-6)}</span>
+                          Secured by Paystack · Cards, USSD &amp; bank options at checkout
                         </div>
                       </CardContent>
                     </Card>

@@ -20,6 +20,7 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
+import { notifyPaymentVerified } from '@/lib/notifications'
 
 export async function POST(req: Request) {
   // ----- 1. Verify the Paystack signature -----
@@ -88,6 +89,20 @@ export async function POST(req: Request) {
 
 // ----- Handle charge.success -----
 async function handleChargeSuccess(data: any) {
+  // notifyPaymentVerified never throws and needs the order + owner; wrap the
+  // lookups once here so both branches below can use it.
+  const notify = async (orderId: string) => {
+    try {
+      const o = await db.order.findUnique({
+        where: { id: orderId },
+        include: { user: { select: { id: true, name: true, email: true, phone: true } } },
+      })
+      if (o) await notifyPaymentVerified(o)
+    } catch (e) {
+      console.error('notifyPaymentVerified failed:', e)
+    }
+  }
+
   const paystackRef = data?.reference
   const amountInKobo = data?.amount // Paystack sends amount in kobo (1 naira = 100 kobo)
   const amount = amountInKobo ? amountInKobo / 100 : 0
@@ -126,6 +141,8 @@ async function handleChargeSuccess(data: any) {
       where: { id: existing.orderId },
       data: { status: 'PAYMENT_VERIFIED' },
     })
+
+    await notify(existing.orderId)
 
     return NextResponse.json({ ok: true, message: 'Payment verified' })
   }
@@ -174,6 +191,8 @@ async function handleChargeSuccess(data: any) {
       note: `Auto-verified via Paystack webhook (ref: ${paystackRef})`,
     },
   })
+
+  await notify(order.id)
 
   console.log(`Paystack webhook: verified payment for order ${order.orderNumber}`)
 

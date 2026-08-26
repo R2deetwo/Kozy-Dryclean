@@ -33,6 +33,15 @@ export const OrderItemSchema = z.object({
   unitPrice: z.number().nonnegative().optional(), // server computes from PriceCatalog — client value is ignored
 })
 
+// ----- Guest checkout -----
+// Lets a visitor place an order without signing up first. The server
+// find-or-creates a customer record from these details.
+export const GuestInfoSchema = z.object({
+  name: z.string().min(2, 'Name is required').max(100),
+  email: z.string().email('A valid email is required').max(255),
+  phone: z.string().min(7, 'Phone number is required').max(20),
+})
+
 export const CreateOrderSchema = z.object({
   type: OrderTypeSchema,
   items: z.array(OrderItemSchema).optional().default([]),
@@ -41,6 +50,12 @@ export const CreateOrderSchema = z.object({
   pickupDate: z.string().min(1, 'Pickup date is required'), // ISO string
   pickupTimeSlot: z.string().min(1, 'Pickup time slot is required'),
   deliveryAddress: z.string().optional(),
+  // Guest contact details — required when there is no session
+  guest: GuestInfoSchema.optional(),
+  // When provided, the payment record is created server-side as part of the
+  // order (single atomic request — also works for guests, who cannot call
+  // POST /api/payments). PAYSTACK payments are initialized separately.
+  paymentMethod: PaymentMethodSchema.optional(),
 })
 
 export const UpdateOrderSchema = z.object({
@@ -79,6 +94,7 @@ export const ModerateReviewSchema = z.object({
 
 // ----- Type exports -----
 export type CreateOrderInput = z.infer<typeof CreateOrderSchema>
+export type GuestInfoInput = z.infer<typeof GuestInfoSchema>
 export type UpdateOrderInput = z.infer<typeof UpdateOrderSchema>
 export type CreatePaymentInput = z.infer<typeof CreatePaymentSchema>
 export type UpdatePaymentInput = z.infer<typeof UpdatePaymentSchema>

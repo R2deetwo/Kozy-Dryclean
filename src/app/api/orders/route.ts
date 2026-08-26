@@ -1,6 +1,6 @@
 // =============================================================================
 // GET /api/orders — list orders (RBAC-filtered)
-// POST /api/orders — create a new order
+// POST /api/orders — create a new order (authed OR guest checkout)
 // =============================================================================
 // RBAC rules:
 //   GET:
@@ -8,16 +8,29 @@
 //     - DRIVER: sees only orders where driverId === their own ID
 //     - B2C/B2B: sees only orders where userId === their own ID
 //   POST:
-//     - Any authenticated user can create an order
-//     - The order's userId is forced to the session user's ID (cannot create
-//       orders for other users without ADMIN role)
-//     - ADMIN can optionally create orders for other users by passing userId
+//     - Authenticated users create orders for themselves (userId is forced to
+//       the session user's ID; ADMIN can optionally pass userId for someone else)
+//     - GUESTS (no session): must pass `guest: { name, email, phone }`.
+//       The server find-or-creates a customer record from those details:
+//         * email unknown             -> create a B2C "guest account" with a
+//                                        random password + emailVerified set
+//                                        (the guest can set a real password via
+//                                        the forgot-password flow to claim it)
+//         * email exists w/o password -> reuse the earlier guest account
+//         * email exists w/ password  -> 409 ACCOUNT_EXISTS (they should log in)
+//     - `paymentMethod: BANK_TRANSFER` creates the Payment record atomically
+//       with the order (works for guests too, who can't call /api/payments).
+//       PAYSTACK payments are initialized separately after the order exists.
 // =============================================================================
 
 import { NextResponse } from 'next/server'
+import bcrypt from 'bcryptjs'
+import crypto from 'crypto'
 import { db } from '@/lib/db'
-import { getSession, requireSession } from '@/lib/auth'
+import { getSession } from '@/lib/auth'
 import { CreateOrderSchema } from '@/lib/schemas'
+import { notifyOrderCreated, notifyGuestAccountCreated } from '@/lib/notifications'
+import { rateLimit, getClientIP } from '@/lib/rate-limit'
 
 // ----- GET /api/orders -----
 export async function GET() {
@@ -53,7 +66,20 @@ export async function GET() {
 
 // ----- POST /api/orders -----
 export async function POST(req: Request) {
-  const session = await requireSession()
+  const session = await getSession()
+
+  // ----- Guest checkout rate limit: 5 orders/hour per IP -----
+  // (authed users are identified by their session — no extra limit needed)
+  if (!session) {
+    const ip = getClientIP(req)
+    const limit = rateLimit(`guest-order:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
+    if (!limit.success) {
+      return NextResponse.json(
+        { error: 'Too many bookings from this device. Please try again later or sign in.' },
+        { status: 429, headers: { 'Retry-After': String(Math.ceil((limit.resetAt - Date.now()) / 1000)) } }
+      )
+    }
+  }
 
   const body = await req.json()
   const parsed = CreateOrderSchema.safeParse(body)
@@ -64,12 +90,71 @@ export async function POST(req: Request) {
     )
   }
 
-  const { type, items, guaranteeActive, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress } = parsed.data
+  const { type, items, guaranteeActive, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
 
-  // Determine the order's owner
-  // ADMIN can create orders for other users (by passing userId in the body)
-  // Non-admins always create orders for themselves
-  const ownerId = session.user?.role === 'ADMIN' && body.userId ? body.userId : session.user?.id
+  // ----- Determine the order's owner (authed) or guest customer -----
+  let ownerId: string | undefined
+  let guestAccountCreated = false
+  let guestEmail: string | null = null
+
+  if (session) {
+    // ADMIN can create orders for other users (by passing userId in the body)
+    // Non-admins always create orders for themselves
+    ownerId = session.user?.role === 'ADMIN' && body.userId ? body.userId : session.user?.id
+  } else {
+    // Guest checkout — contact details are mandatory
+    if (!guest) {
+      return NextResponse.json(
+        { error: 'Guest bookings require a name, email and phone number.' },
+        { status: 401 }
+      )
+    }
+    const email = guest.email.toLowerCase()
+    const existing = await db.user.findUnique({ where: { email } })
+    if (existing) {
+      if (existing.passwordHash) {
+        // Real account exists — they should sign in (prevents order hijacking)
+        return NextResponse.json(
+          {
+            error: 'ACCOUNT_EXISTS',
+            message: 'An account with this email already exists. Please sign in to book — your details will be waiting.',
+          },
+          { status: 409 }
+        )
+      }
+      // Previous guest account (no password) — reuse and refresh contact info
+      ownerId = existing.id
+      await db.user.update({
+        where: { id: existing.id },
+        data: { name: guest.name, phone: guest.phone },
+      })
+    } else {
+      // First-time guest — create a customer record with a random password.
+      // emailVerified is set so the guest can claim the account via the
+      // forgot-password flow without an extra verification round-trip.
+      const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10)
+      const guestUser = await db.user.create({
+        data: {
+          email,
+          name: guest.name,
+          phone: guest.phone,
+          role: 'B2C',
+          passwordHash,
+          emailVerified: new Date(),
+          signupDiscountUsed: false,
+        },
+      })
+      ownerId = guestUser.id
+      guestAccountCreated = true
+      guestEmail = email
+    }
+  }
+
+  // ownerId is always set by this point (session user, admin override, or the
+  // guest find-or-create branches above) — the guard is for TypeScript.
+  if (!ownerId) {
+    return NextResponse.json({ error: 'Could not determine the order owner.' }, { status: 400 })
+  }
 
   // Verify the owner exists
   const owner = await db.user.findUnique({ where: { id: ownerId } })
@@ -87,7 +172,7 @@ export async function POST(req: Request) {
     // Look up prices from PriceCatalog (Item 3 — server-side price validation)
     const itemKeys = items.map((i: any) => (i.id || '').replace('item_', '') || i.name)
     const catalogEntries = await db.priceCatalog.findMany({
-      where: { itemKey: { in: itemKeys }, active: true }
+      where: { itemKey: { in: itemKeys }, active: true },
     })
     const catalogMap = new Map(catalogEntries.map(c => [c.itemKey, c]))
 
@@ -133,11 +218,21 @@ export async function POST(req: Request) {
   }
   // KG orders: totalPrice is undefined until admin weighs at station
 
+  // ----- Create the order (+ bank-transfer payment record atomically) -----
+  // BANK_TRANSFER: create a PENDING payment now and move the order straight
+  // to PAYMENT_PENDING_VERIFICATION — one atomic request, works for guests.
+  // PAYSTACK: no payment record here; the client initializes the transaction
+  // separately (POST /api/paystack/initialize) which creates it.
+  const bankTransferAmount =
+    type === 'ITEM' && paymentMethod === 'BANK_TRANSFER' && totalPrice && totalPrice > 0
+      ? totalPrice
+      : null
+
   const order = await db.order.create({
     data: {
       orderNumber,
       userId: ownerId,
-      status: 'REQUESTED',
+      status: bankTransferAmount !== null ? 'PAYMENT_PENDING_VERIFICATION' : 'REQUESTED',
       type,
       guaranteeActive,
       itemsManifest: JSON.stringify(items),
@@ -146,6 +241,17 @@ export async function POST(req: Request) {
       pickupDate: new Date(pickupDate),
       pickupTimeSlot,
       deliveryAddress: deliveryAddress || null,
+      ...(bankTransferAmount !== null
+        ? {
+            payments: {
+              create: {
+                amount: bankTransferAmount,
+                method: 'BANK_TRANSFER',
+                status: 'PENDING',
+              },
+            },
+          }
+        : {}),
     },
     include: {
       user: { select: { id: true, name: true, email: true, phone: true, role: true } },
@@ -155,5 +261,13 @@ export async function POST(req: Request) {
     },
   })
 
-  return NextResponse.json({ order }, { status: 201 })
+  // ----- Notifications (email + SMS) — never block the booking -----
+  // Runs after the DB write so a notification failure can't lose the order.
+  if (guestAccountCreated && guestEmail) {
+    await notifyGuestAccountCreated(order, guestEmail)
+  } else {
+    await notifyOrderCreated(order)
+  }
+
+  return NextResponse.json({ order, guestAccountCreated }, { status: 201 })
 }
