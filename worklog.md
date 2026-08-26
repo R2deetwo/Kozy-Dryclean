@@ -41,3 +41,31 @@ Stage Summary:
 - All Phase 8 + logo work is now live on GitHub origin/main at commit 6cc1449.
 - Live preview was already serving the code (dev server running since earlier turn); now GitHub repo is also in sync.
 - IMPORTANT SECURITY NOTE: the Vercel token and Supabase service-role key were never pushed to GitHub (rewrite caught them before push). However, they were briefly stored locally in scripts/set-vercel-env.py during the few hours before this scrub. User should consider rotating both secrets as a precaution, since they may have been visible to anyone with sandbox access during that window.
+
+---
+Task ID: 11 (domain migration to kozycare.ng)
+Agent: main (Z)
+Task: User purchased www.kozycare.ng. Migrate all domain references throughout the app from kozy-dryclean.vercel.app to kozycare.ng.
+
+Work Log:
+- Searched the codebase for all references to the old domain (kozy-dryclean.vercel.app). Found in 4 files + .env.example:
+  - src/app/api/auth/forgot-password/route.ts:42 (password reset email fallback URL)
+  - scripts/set-vercel-env.py:54,62 (NEXTAUTH_URL + NEXT_PUBLIC_APP_URL for Vercel env)
+  - scripts/create-admin.ts:48,89 (printed admin login URL)
+  - public/robots.txt:10 (sitemap URL)
+  - .env.example:14 (production URL hint comment)
+- Updated all 5 locations to https://kozycare.ng (canonical non-www form).
+- Added SEO metadata to src/app/layout.tsx: metadataBase, alternates.canonical, openGraph.url — so Google indexes the new domain as canonical and OG link previews point to kozycare.ng.
+- Did NOT touch the kozy.ng email/storage subdomain references (concierge@kozy.ng, uploads.kozy.ng) — those are a separate email/R2 domain, distinct from the website domain. User can keep email at kozy.ng even though the site moves to kozycare.ng.
+- Push protection caught the Vercel token AGAIN — this time in worklog.md line 43 (I had included it verbatim in the previous security note). Scrubbed it from worklog.md, fixup-committed, autosquash-rebased to fold the scrub into commit efacd3be.
+- Pushed successfully: 6cc1449..3e9f923 main -> main.
+- Verified dev server serves: new robots.txt with kozycare.ng sitemap URL, canonical link to kozycare.ng in HTML head, plus all the prior Phase 8 + logo work.
+
+Stage Summary:
+- All website URL references throughout the codebase now point to https://kozycare.ng.
+- Already live on GitHub origin/main at commit 3e9f923.
+- Already live on the sandbox dev server (verified via port 81).
+- Next steps for user:
+  1. Point the kozycare.ng DNS A record (or CNAME) at Vercel — in your domain registrar's DNS panel, add an A record: @ → 76.76.21.21 (Vercel's IP) and a CNAME: www → cname.vercel-dns.com. Or use Vercel's "Add Domain" wizard in the project dashboard which generates the exact DNS records.
+  2. In Vercel (kozy-dryclean project → Settings → Domains), add kozycare.ng as a production domain. Vercel will auto-issue an SSL cert and you can set it as primary.
+  3. Once DNS propagates, the existing NEXTAUTH_URL=https://kozycare.ng env var (already set in scripts/set-vercel-env.py) will take effect when you redeploy.
