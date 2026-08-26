@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { TestimonialsCarousel } from '@/components/customer/testimonials-carousel'
 
 interface Props {
   onBook: () => void
@@ -414,6 +415,11 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
           </Tabs>
         </div>
       </section>
+
+      {/* ============================================================
+          TESTIMONIALS — rotating customer reviews (4.5★ and above only)
+      ============================================================ */}
+      <TestimonialsCarousel />
 
       {/* ============================================================
           GUARANTEE — Kozy Care Promise

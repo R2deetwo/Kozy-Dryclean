@@ -28,9 +28,11 @@ import { CustomersView } from './customers-view'
 import { FinanceView } from './finance-view'
 import { NotificationsPanel } from './notifications-panel'
 import { SettingsView } from './settings-view'
+import { ReviewsView } from './reviews-view'
 import { Logo } from '@/components/shell/logo'
+import { Star } from 'lucide-react'
 
-type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'notifications' | 'settings'
+type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'reviews' | 'notifications' | 'settings'
 
 export function AdminDashboard() {
   const admin = { name: 'Admin', email: 'admin@kozy.ng' }
@@ -56,6 +58,7 @@ export function AdminDashboard() {
     },
     { key: 'customers', label: 'Customers', icon: UsersIcon },
     { key: 'finance', label: 'Finances', icon: Wallet },
+    { key: 'reviews', label: 'Reviews', icon: Star },
     { key: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.length },
     { key: 'settings', label: 'Settings', icon: Settings },
   ]
@@ -192,6 +195,7 @@ export function AdminDashboard() {
           {tab === 'payments' && <PaymentQueue />}
           {tab === 'customers' && <CustomersView />}
           {tab === 'finance' && <FinanceView />}
+          {tab === 'reviews' && <ReviewsView adminId="admin" />}
           {tab === 'notifications' && <NotificationsPanel />}
           {tab === 'settings' && <SettingsView />}
         </main>

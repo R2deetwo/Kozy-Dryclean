@@ -97,6 +97,43 @@ export interface Order {
 }
 
 // =====================================================
+// REVIEW — customer feedback on completed orders
+// =====================================================
+export interface Review {
+  id: string
+  orderId: string
+  userId: string
+  driverId?: string
+  // 1-5 stars, allows halves (4.5, 5.0, etc.)
+  rating: number
+  comment: string
+  // Public display name (defaults to user.name, admin can edit)
+  displayName?: string
+  // Location shown next to testimonial (e.g., "Lekki Phase 1")
+  displayLocation?: string
+  // Moderation: only approved reviews with rating >= 4.5 show publicly
+  isApproved: boolean
+  approvedAt?: string
+  approvedById?: string
+  // Soft-hide: even if approved, admin can hide without deleting
+  isHidden: boolean
+  createdAt: string
+  updatedAt: string
+}
+
+// Public-facing testimonial (subset of Review shown on landing page carousel)
+export interface Testimonial {
+  id: string
+  // Name + location to display publicly
+  displayName: string
+  displayLocation?: string
+  rating: number
+  comment: string
+  // ISO date — used to show "2 weeks ago" etc.
+  createdAt: string
+}
+
+// =====================================================
 // Catalog — B2C per-item pricing (in naira)
 // =====================================================
 export interface GarmentCatalogItem {

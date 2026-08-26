@@ -35,6 +35,10 @@ model User {
   drivenOrders       Order[]             @relation("DriverOrders")
   verificationTokens VerificationToken[]
   statusEvents       StatusEvent[]
+  // Reviews authored by this user (as customer)
+  reviews            Review[]
+  // Reviews this user has approved (as admin)
+  approvedReviews    Review[]            @relation("ReviewApprover")
 }
 
 enum Role {
@@ -84,6 +88,8 @@ model Order {
   media             GarmentMedia[]
   payments          Payment[]
   statusEvents      StatusEvent[]
+  // Customer feedback (one-to-one — one review per order)
+  review            Review?
 
   @@index([userId])
   @@index([driverId])
@@ -244,4 +250,44 @@ model PriceCatalog {
 
   @@index([category])
   @@index([active])
+}
+
+// =====================================================
+// REVIEW — customer feedback on completed orders
+// =====================================================
+// Public display rules:
+//   - Only reviews with isApproved=true AND rating >= 4.5 are shown on the
+//     customer landing page testimonials carousel.
+//   - All reviews (including low ratings and unapproved) are visible to admins
+//     in the moderation view, so the company can still see negative feedback
+//     internally and act on it (contact customer, address driver issues, etc.)
+model Review {
+  id          String   @id @default(cuid())
+  orderId     String   @unique // one review per order
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  driverId    String?  // optional — present if user rated the driver specifically
+  // 1-5 stars (allows halves: 4.5, 5.0, etc.)
+  rating      Float
+  comment     String
+  // Public display name on the testimonials carousel (defaults to user.name
+  // but admin can edit, e.g., "Tunde A., Lekki")
+  displayName String?
+  // Location shown next to the testimonial (e.g., "Lekki Phase 1")
+  displayLocation String?
+  // Moderation: only approved reviews with rating >= 4.5 show publicly
+  isApproved  Boolean  @default(false)
+  approvedAt  DateTime?
+  approvedById String?
+  approver    User?    @relation("ReviewApprover", fields: [approvedById], references: [id])
+  // Soft-hide: even if approved, admin can hide without deleting
+  isHidden    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([driverId])
+  @@index([isApproved])
+  @@index([rating])
 }
