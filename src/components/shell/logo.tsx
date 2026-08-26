@@ -21,7 +21,6 @@ export function Logo({ size = 'md', showText = true, subtitle, className, onClic
   const s = SIZES[size]
   const textColor = variant === 'dark' ? 'text-white' : 'text-[#0A192F]'
   const subtitleColor = variant === 'dark' ? 'text-[#D4AF37]' : 'text-[#6F88A8]'
-  const bg = variant === 'dark' ? '#102740' : '#0A192F'
 
   return (
     <button
@@ -29,20 +28,16 @@ export function Logo({ size = 'md', showText = true, subtitle, className, onClic
       className={cn('flex items-center', s.gap, className)}
       disabled={!onClick}
     >
-      {/* Inline SVG mark — no image file, renders crisp at all sizes */}
-      <svg
+      {/* Kozy brand mark — refactored from the attached logo image, transparent background.
+          Raster mark scales crisply via the high-res 512px source. */}
+      <img
+        src="/brand/kozy-mark.png"
+        alt="Kozy Care mark"
         width={s.mark}
         height={s.mark}
-        viewBox="0 0 40 40"
-        fill="none"
-        xmlns="http://www.w3.org/2000/svg"
         className="shrink-0"
-      >
-        <rect width="40" height="40" rx="9" fill={bg} />
-        <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-        <circle cx="20" cy="20" r="2.2" fill="#D4AF37" />
-      </svg>
+        style={{ width: s.mark, height: s.mark }}
+      />
       {showText && (
         <div className="flex flex-col justify-center text-left leading-none">
           <p className={cn('font-serif font-bold tracking-tight', textColor, s.text)} style={{ lineHeight: 1.15 }}>

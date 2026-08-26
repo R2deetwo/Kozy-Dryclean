@@ -27,7 +27,19 @@ export const metadata: Metadata = {
   keywords: ["Kozy Care", "dry cleaning Lagos", "laundry Lagos", "premium dry cleaning", "Ikoyi laundry", "Lekki laundry", "corporate laundry Lagos", "laundry pickup Lagos"],
   authors: [{ name: "Kozy Care" }],
   icons: {
-    icon: "/kozy-favicon.svg",
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-48.png", sizes: "48x48", type: "image/png" },
+    ],
+    shortcut: "/favicon-32.png",
+    apple: [
+      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
+    ],
+    other: [
+      { rel: "icon", url: "/favicon-192.png", sizes: "192x192", type: "image/png" },
+      { rel: "icon", url: "/favicon-512.png", sizes: "512x512", type: "image/png" },
+    ],
   },
   openGraph: {
     title: "Kozy Care — Premium Drycleaning & Laundry Services",
