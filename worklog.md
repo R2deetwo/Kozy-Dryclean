@@ -69,3 +69,40 @@ Stage Summary:
   1. Point the kozycare.ng DNS A record (or CNAME) at Vercel — in your domain registrar's DNS panel, add an A record: @ → 76.76.21.21 (Vercel's IP) and a CNAME: www → cname.vercel-dns.com. Or use Vercel's "Add Domain" wizard in the project dashboard which generates the exact DNS records.
   2. In Vercel (kozy-dryclean project → Settings → Domains), add kozycare.ng as a production domain. Vercel will auto-issue an SSL cert and you can set it as primary.
   3. Once DNS propagates, the existing NEXTAUTH_URL=https://kozycare.ng env var (already set in scripts/set-vercel-env.py) will take effect when you redeploy.
+
+---
+Task ID: 12 (Vercel deploy + kozycare.ng domain setup)
+Agent: main (Z)
+Task: User reported site still showing old version despite Phase 8 + logo + domain commits pushed to GitHub. Provided Vercel PAT to trigger deploy and configure kozycare.ng.
+
+Work Log:
+- Diagnosed: Vercel production deployment was stuck at commit 996785e (Phase 7). Despite pushes to GitHub main, Vercel had not auto-deployed. Last successful Vercel build was from 996785e.
+- Used Vercel API (token provided by user via chat, teamId=team_RJD4xe4C4h3TiJ3M3iEa8idV, project=kozy-dryclean, projectId=prj_BUv0ZqDMzsONFBQXXCgBJfmIN43e):
+  1. Updated NEXTAUTH_URL env var from https://kozy-dryclean.vercel.app → https://kozycare.ng (deleted old id=MBpfMozbFrGKAaFR, recreated)
+  2. Updated NEXT_PUBLIC_APP_URL env var from https://kozy-dryclean.vercel.app → https://kozycare.ng (deleted old id=FDAfkJLxWNTQ8MyM, recreated)
+  3. Added kozycare.ng as project domain (verified=true, gitBranch=main)
+  4. Added www.kozycare.ng as project domain (verified=true)
+  5. Configured www.kozycare.ng → kozycare.ng redirect with status code 308 (permanent)
+  6. Found Vercel verification record for kozycare.ng: TXT value "y23groDDmZ" (Vercel's per-domain verification token)
+  7. Triggered production deployment from GitHub main SHA 6f2c2a3 (POST /v13/deployments). Build READY in ~90 seconds.
+  8. Two more deployments triggered automatically (likely by Vercel picking up the env var changes), all READY.
+  9. Latest deployment ID: dpl_FtqJt4BDHCCXkzTpBtT3ChpAwCaM
+- Verified new content live at https://kozy-dryclean.vercel.app/:
+  - HTML contains kozy-mark.png (new logo)
+  - HTML contains "Sneakers (White)" and "Suede Shoes" (new Shoes pricing card)
+  - HTML contains "kozycare.ng" canonical link
+  - HTML contains 0 references to old kozy-favicon.svg
+  - VLM screenshot analysis confirms: "more elaborate gold emblem on navy" logo, 7 pricing cards including Shoes & Sneakers
+- Confirmed the "old chevron path" that initially looked like a regression was actually the lucide-log-in icon (login button arrow), not the logo. False alarm.
+- kozycare.ng DNS still needs to be configured at the user's domain registrar for the new domain to actually serve traffic.
+
+Stage Summary:
+- Vercel production is now serving the latest Phase 8 + logo swap + kozycare.ng env var code at https://kozy-dryclean.vercel.app/
+- kozycare.ng + www.kozycare.ng added to the Vercel project and configured (www → apex redirect set up)
+- NEXTAUTH_URL and NEXT_PUBLIC_APP_URL on Vercel now point to https://kozycare.ng (password reset emails will use this URL once the domain resolves)
+- Vercel verification token for kozycare.ng: y23groDDmZ
+- REMAINING: User needs to add DNS records at their kozycare.ng registrar to actually point the domain at Vercel:
+  Option A (Vercel nameservers — easiest): change nameservers to ns1.vercel-dns.com + ns2.vercel-dns.com
+  Option B (DNS records — keeps current DNS host): add A record kozycare.ng → 76.76.21.21, CNAME www → cname.vercel-dns.com, TXT _vercel=vc-domain-verify=kozycare.ng=y23groDDmZ
+- Once DNS propagates (5-30 min for .ng), https://kozycare.ng will serve the site and Vercel will auto-issue SSL.
+
