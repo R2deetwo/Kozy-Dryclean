@@ -51,11 +51,24 @@ export const metadata: Metadata = {
     url: "https://kozycare.ng",
     siteName: "Kozy Care",
     type: "website",
+    // NOTE: absolute vercel.app URL (not kozycare.ng) so WhatsApp/Facebook
+    // link previews render TODAY while the kozycare.ng DNS is still
+    // propagating. Once kozycare.ng is live, this can be switched to
+    // "/brand/og-image.png" (resolved against metadataBase).
+    images: [
+      {
+        url: "https://kozy-dryclean.vercel.app/brand/og-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Kozy Care — Premium Drycleaning & Laundry in Lagos",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Kozy Care — Premium Drycleaning & Laundry Services",
     description: "Uncompromising care. Exceptional convenience.",
+    images: ["https://kozy-dryclean.vercel.app/brand/og-image.png"],
   },
 };
 
@@ -69,6 +82,9 @@ export default function RootLayout({
       <head>
         {/* Set theme class before hydration to prevent FOUC */}
         <script dangerouslySetInnerHTML={{ __html: `(function(){try{var t=localStorage.getItem('kozy-theme')||'light';if(t==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})()` }} />
+        {/* Vercel Web Analytics — pageview data shows in the Vercel dashboard
+            (Project → Analytics) once Web Analytics is enabled for the project. */}
+        <script defer src="/_vercel/insights/script.js" />
       </head>
       <body
         className={`${outfit.variable} ${playfair.variable} font-sans antialiased bg-background text-foreground`}

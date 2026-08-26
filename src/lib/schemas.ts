@@ -62,8 +62,24 @@ export const UpdatePaymentSchema = z.object({
   status: PaymentStatusSchema,
 })
 
+// ----- Review schemas -----
+export const CreateReviewSchema = z.object({
+  // Must be the full order id (cuid) from the customer's review link —
+  // not the human-readable orderNumber (which is guessable).
+  orderId: z.string().min(10, 'Invalid order reference'),
+  rating: z.number().min(1, 'Rating must be at least 1 star').max(5, 'Rating can be at most 5 stars'),
+  comment: z.string().min(10, 'Please write at least a sentence').max(2000, 'Comment is too long'),
+  displayName: z.string().max(100).optional().nullable(),
+  displayLocation: z.string().max(100).optional().nullable(),
+})
+
+export const ModerateReviewSchema = z.object({
+  action: z.enum(['approve', 'unapprove', 'hide', 'unhide']),
+})
+
 // ----- Type exports -----
 export type CreateOrderInput = z.infer<typeof CreateOrderSchema>
 export type UpdateOrderInput = z.infer<typeof UpdateOrderSchema>
 export type CreatePaymentInput = z.infer<typeof CreatePaymentSchema>
 export type UpdatePaymentInput = z.infer<typeof UpdatePaymentSchema>
+export type CreateReviewInput = z.infer<typeof CreateReviewSchema>

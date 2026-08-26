@@ -224,3 +224,87 @@ export function useCurrentUser() {
     retry: false,
   })
 }
+
+// ----- Reviews -----
+
+// Full review shape returned by the admin API (with joined relations).
+export interface ApiReview {
+  id: string
+  orderId: string
+  userId: string
+  driverId: string | null
+  rating: number
+  comment: string
+  displayName: string | null
+  displayLocation: string | null
+  isApproved: boolean
+  approvedAt: string | null
+  approvedById: string | null
+  isHidden: boolean
+  createdAt: string
+  updatedAt: string
+  user?: { id: string; name: string; email: string }
+  order?: { id: string; orderNumber: string }
+  driver?: { id: string; name: string } | null
+}
+
+// Public testimonial shape returned by GET /api/reviews.
+export interface ApiTestimonial {
+  id: string
+  displayName: string
+  displayLocation?: string
+  rating: number
+  comment: string
+  createdAt: string
+}
+
+// Public testimonials for the landing page carousel (no auth required).
+export function usePublicTestimonials() {
+  return useQuery({
+    queryKey: ['reviews', 'public'],
+    queryFn: async () => {
+      const res = await fetch('/api/reviews')
+      if (!res.ok) throw new Error('Failed to fetch testimonials')
+      const data = await res.json()
+      return data.testimonials as ApiTestimonial[]
+    },
+    staleTime: 60 * 1000, // 1 minute
+  })
+}
+
+// All reviews for the admin moderation view (ADMIN only).
+export function useAdminReviews() {
+  return useQuery({
+    queryKey: ['reviews', 'admin'],
+    queryFn: async () => {
+      const res = await fetch('/api/reviews/admin')
+      if (!res.ok) throw new Error('Failed to fetch reviews')
+      const data = await res.json()
+      return data.reviews as ApiReview[]
+    },
+    staleTime: 10 * 1000,
+  })
+}
+
+// Moderate a review: approve / unapprove / hide / unhide.
+export function useModerateReview() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({ id, action }: { id: string; action: 'approve' | 'unapprove' | 'hide' | 'unhide' }) => {
+      const res = await fetch(`/api/reviews/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to update review')
+      }
+      const data = await res.json()
+      return data.review as ApiReview
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reviews'] })
+    },
+  })
+}

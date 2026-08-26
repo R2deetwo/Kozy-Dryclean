@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Star, Check, X, Eye, EyeOff, MessageSquare, MapPin, User, Inbox } from 'lucide-react'
-import { useStore } from '@/lib/store'
+import { Star, Check, X, Eye, EyeOff, MessageSquare, MapPin, User, Inbox, Loader2 } from 'lucide-react'
+import { useAdminReviews, useModerateReview, type ApiReview } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -11,28 +11,16 @@ import { formatDateTime } from '@/lib/types'
 
 type FilterKey = 'all' | 'pending' | 'approved' | 'hidden' | 'low'
 
-export function ReviewsView({ adminId }: { adminId: string }) {
-  const reviews = useStore((s) => s.reviews)
-  const orders = useStore((s) => s.orders)
-  const users = useStore((s) => s.users)
-  const approveReview = useStore((s) => s.approveReview)
-  const rejectReview = useStore((s) => s.rejectReview)
-  const hideReview = useStore((s) => s.hideReview)
+export function ReviewsView() {
+  const { data: reviews, isLoading } = useAdminReviews()
+  const moderate = useModerateReview()
 
   const [filter, setFilter] = useState<FilterKey>('pending')
 
-  const userById = useMemo(() => {
-    const map = new Map(users.map((u) => [u.id, u]))
-    return map
-  }, [users])
-
-  const orderById = useMemo(() => {
-    const map = new Map(orders.map((o) => [o.id, o]))
-    return map
-  }, [orders])
+  const allReviews: ApiReview[] = reviews ?? []
 
   const filtered = useMemo(() => {
-    return reviews
+    return allReviews
       .filter((r) => {
         if (filter === 'all') return true
         if (filter === 'pending') return !r.isApproved && !r.isHidden
@@ -42,19 +30,19 @@ export function ReviewsView({ adminId }: { adminId: string }) {
         return true
       })
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-  }, [reviews, filter])
+  }, [allReviews, filter])
 
   const stats = useMemo(() => {
-    const approved = reviews.filter((r) => r.isApproved && !r.isHidden && r.rating >= 4.5).length
-    const pending = reviews.filter((r) => !r.isApproved && !r.isHidden).length
-    const hidden = reviews.filter((r) => r.isHidden).length
-    const low = reviews.filter((r) => r.rating < 4.5).length
+    const approved = allReviews.filter((r) => r.isApproved && !r.isHidden && r.rating >= 4.5).length
+    const pending = allReviews.filter((r) => !r.isApproved && !r.isHidden).length
+    const hidden = allReviews.filter((r) => r.isHidden).length
+    const low = allReviews.filter((r) => r.rating < 4.5).length
     const avg =
-      reviews.length > 0
-        ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(2)
+      allReviews.length > 0
+        ? (allReviews.reduce((s, r) => s + r.rating, 0) / allReviews.length).toFixed(2)
         : '—'
-    return { approved, pending, hidden, low, avg, total: reviews.length }
-  }, [reviews])
+    return { approved, pending, hidden, low, avg, total: allReviews.length }
+  }, [allReviews])
 
   const filterTabs: { key: FilterKey; label: string; count: number }[] = [
     { key: 'pending', label: 'Pending', count: stats.pending },
@@ -122,7 +110,14 @@ export function ReviewsView({ adminId }: { adminId: string }) {
       </div>
 
       {/* ===== Review list ===== */}
-      {filtered.length === 0 ? (
+      {isLoading ? (
+        <Card className="border-navy-100">
+          <CardContent className="flex items-center justify-center py-12 text-navy-300">
+            <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+            <p className="text-sm">Loading reviews…</p>
+          </CardContent>
+        </Card>
+      ) : filtered.length === 0 ? (
         <Card className="border-dashed border-navy-200 bg-navy-50/50">
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Inbox className="h-10 w-10 text-navy-300" />
@@ -138,8 +133,6 @@ export function ReviewsView({ adminId }: { adminId: string }) {
         <div className="space-y-3">
           <AnimatePresence mode="popLayout">
             {filtered.map((review) => {
-              const user = userById.get(review.userId)
-              const order = orderById.get(review.orderId)
               const isPublic = review.isApproved && !review.isHidden && review.rating >= 4.5
               return (
                 <motion.div
@@ -206,7 +199,7 @@ export function ReviewsView({ adminId }: { adminId: string }) {
                           <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-navy-300">
                             <span className="flex items-center gap-1">
                               <User className="h-3 w-3" />
-                              {review.displayName || user?.name || 'Anonymous'}{' '}
+                              {review.displayName || review.user?.name || 'Anonymous'}{' '}
                               {review.displayLocation && (
                                 <span className="text-navy-200">·</span>
                               )}{' '}
@@ -220,7 +213,7 @@ export function ReviewsView({ adminId }: { adminId: string }) {
                             <span>·</span>
                             <span>
                               Order{' '}
-                              <strong className="text-navy">#{order?.orderNumber ?? '—'}</strong>
+                              <strong className="text-navy">#{review.order?.orderNumber ?? '—'}</strong>
                             </span>
                             {review.driverId && (
                               <>
@@ -228,7 +221,7 @@ export function ReviewsView({ adminId }: { adminId: string }) {
                                 <span>
                                   Driver:{' '}
                                   <strong className="text-navy">
-                                    {userById.get(review.driverId ?? '')?.name ?? '—'}
+                                    {review.driver?.name ?? '—'}
                                   </strong>
                                 </span>
                               </>
@@ -243,7 +236,8 @@ export function ReviewsView({ adminId }: { adminId: string }) {
                           {!review.isApproved ? (
                             <Button
                               size="sm"
-                              onClick={() => approveReview(review.id, adminId)}
+                              disabled={moderate.isPending}
+                              onClick={() => moderate.mutate({ id: review.id, action: 'approve' })}
                               className="bg-green-600 text-white hover:bg-green-700"
                             >
                               <Check className="mr-1 h-3.5 w-3.5" /> Approve
@@ -252,7 +246,8 @@ export function ReviewsView({ adminId }: { adminId: string }) {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => rejectReview(review.id)}
+                              disabled={moderate.isPending}
+                              onClick={() => moderate.mutate({ id: review.id, action: 'unapprove' })}
                               className="border-navy-200 text-navy-300 hover:bg-navy-50"
                             >
                               <X className="mr-1 h-3.5 w-3.5" /> Unapprove
@@ -261,7 +256,10 @@ export function ReviewsView({ adminId }: { adminId: string }) {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => hideReview(review.id)}
+                            disabled={moderate.isPending}
+                            onClick={() =>
+                              moderate.mutate({ id: review.id, action: review.isHidden ? 'unhide' : 'hide' })
+                            }
                             className="border-navy-200 text-navy-300 hover:bg-navy-50"
                             title={review.isHidden ? 'Unhide' : 'Hide from public'}
                           >

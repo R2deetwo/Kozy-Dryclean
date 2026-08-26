@@ -10,6 +10,7 @@ import {
   Clock,
   Package,
   Sparkles,
+  Star,
   PlusCircle,
   LogOut,
   Loader2,
@@ -414,6 +415,16 @@ function PastOrderCard({
           <Button size="sm" variant="outline" onClick={onView} className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white">
             View
           </Button>
+          {order.status === 'DELIVERED' && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => (window.location.href = `/review/${order.id}`)}
+              className="rounded-full border-gold-300 bg-gold-50 text-navy hover:bg-gold-100"
+            >
+              <Star className="mr-1 h-3.5 w-3.5 fill-gold-400 text-gold-400" /> Rate
+            </Button>
+          )}
           {order.totalPrice !== undefined && (
             <Button size="sm" variant="ghost" onClick={onViewInvoice} className="rounded-full text-navy-300 hover:text-navy">
               <Receipt className="h-3.5 w-3.5" />

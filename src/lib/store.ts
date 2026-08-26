@@ -16,8 +16,6 @@ import type {
   PaymentMethod,
   NotificationTemplate,
   KozySettings,
-  Review,
-  Testimonial,
 } from './types'
 import {
   GARMENT_CATALOG,
@@ -295,7 +293,7 @@ const SEED_NOTIFICATIONS: NotificationTemplate[] = [
     channel: 'SMS',
     to: 'Chioma Eze',
     orderId: 'KZ-1001',
-    body: 'Delivered! Order #KZ-1001 is complete. Rate your experience: /rate/KZ-1001',
+    body: 'Delivered! Order #KZ-1001 is complete. Rate your experience: /review/KZ-1001',
     sentAt: '2026-08-20T16:31:00.000Z',
   },
   {
@@ -309,103 +307,6 @@ const SEED_NOTIFICATIONS: NotificationTemplate[] = [
 ]
 
 // =====================================================
-// Seed reviews — public testimonials for the landing carousel.
-// All approved + rating >= 4.5 so they show on the public site.
-// (Admin can add more via the moderation view, or customers can submit
-// reviews via /review/[orderId] after their order is delivered.)
-// =====================================================
-const SEED_REVIEWS: Review[] = [
-  {
-    id: 'r-1',
-    orderId: 'seed-1',
-    userId: 'seed-user-1',
-    rating: 5,
-    comment: "Kozy picked up my agbada and iro set from Lekki, returned it the next morning pressed to perfection. The driver was polite and the fabric came back in better condition than I expected. This is how dry cleaning should work in Lagos.",
-    displayName: 'Chioma E.',
-    displayLocation: 'Lekki Phase 1, Lagos',
-    isApproved: true,
-    approvedAt: '2026-08-21T08:00:00.000Z',
-    approvedById: 'admin',
-    isHidden: false,
-    createdAt: '2026-08-20T18:00:00.000Z',
-    updatedAt: '2026-08-21T08:00:00.000Z',
-  },
-  {
-    id: 'r-2',
-    orderId: 'seed-2',
-    userId: 'seed-user-2',
-    rating: 5,
-    comment: "I've used three dry cleaners in Lagos before Kozy and always had issues — lost buttons, late returns, no pickup. Kozy collected my shirts at 8am and had them back by 6pm. The condition-capture photos gave me real peace of mind. Worth every naira.",
-    displayName: 'Tunde A.',
-    displayLocation: 'Ikoyi, Lagos',
-    isApproved: true,
-    approvedAt: '2026-08-22T10:00:00.000Z',
-    approvedById: 'admin',
-    isHidden: false,
-    createdAt: '2026-08-22T07:30:00.000Z',
-    updatedAt: '2026-08-22T10:00:00.000Z',
-  },
-  {
-    id: 'r-3',
-    orderId: 'seed-3',
-    userId: 'seed-user-3',
-    rating: 4.5,
-    comment: "Booked a corporate pickup for our office linens — 28kg of shirts and towels. Bisi the driver showed up exactly on the scheduled slot and weighed everything transparently at our office. Invoice was clean and itemised. Will be using them monthly.",
-    displayName: 'Adaeze M.',
-    displayLocation: 'Victoria Island, Lagos',
-    isApproved: true,
-    approvedAt: '2026-08-23T14:00:00.000Z',
-    approvedById: 'admin',
-    isHidden: false,
-    createdAt: '2026-08-23T09:00:00.000Z',
-    updatedAt: '2026-08-23T14:00:00.000Z',
-  },
-  {
-    id: 'r-4',
-    orderId: 'seed-4',
-    userId: 'seed-user-4',
-    rating: 5,
-    comment: "My suede shoes came back looking new. I was nervous about trusting anyone with suede in Lagos but Kozy handled them properly — no water marks, no shrinkage. The pickup confirmation was instant and I could track the order through every stage.",
-    displayName: 'Emeka O.',
-    displayLocation: 'Ikeja, Lagos',
-    isApproved: true,
-    approvedAt: '2026-08-24T11:00:00.000Z',
-    approvedById: 'admin',
-    isHidden: false,
-    createdAt: '2026-08-24T08:15:00.000Z',
-    updatedAt: '2026-08-24T11:00:00.000Z',
-  },
-  {
-    id: 'r-5',
-    orderId: 'seed-5',
-    userId: 'seed-user-5',
-    rating: 5,
-    comment: "Three-piece suit, white sneakers, and my wife's Ankara gown — all in one pickup, all back the next day. The Return-as-Received guarantee with photos is a real differentiator. This is the most professional laundry service I've used in Nigeria.",
-    displayName: 'Babajide K.',
-    displayLocation: 'Yaba, Lagos',
-    isApproved: true,
-    approvedAt: '2026-08-25T09:00:00.000Z',
-    approvedById: 'admin',
-    isHidden: false,
-    createdAt: '2026-08-25T07:00:00.000Z',
-    updatedAt: '2026-08-25T09:00:00.000Z',
-  },
-  {
-    id: 'r-6',
-    orderId: 'seed-6',
-    userId: 'seed-user-6',
-    rating: 4.5,
-    comment: "Used Kozy for our hotel's weekly linen service for two months now. Consistent quality, predictable per-kilogram pricing, and the rider always picks up on the same day. The dashboard makes our accounts team's job easier.",
-    displayName: 'Hotel Operations',
-    displayLocation: 'Ikoyi, Lagos',
-    isApproved: true,
-    approvedAt: '2026-08-26T10:00:00.000Z',
-    approvedById: 'admin',
-    isHidden: false,
-    createdAt: '2026-08-26T08:00:00.000Z',
-    updatedAt: '2026-08-26T10:00:00.000Z',
-  },
-]
 
 // =====================================================
 // Default admin-managed settings
@@ -432,7 +333,6 @@ interface StoreState {
   payments: Payment[]
   media: GarmentMedia[]
   notifications: NotificationTemplate[]
-  reviews: Review[]
   // current session user
   currentUserId: string
   // admin-managed settings (bank account, pricing, etc.)
@@ -475,21 +375,10 @@ interface StoreState {
   // notifications helper (writes a row but doesn't actually send)
   notify: (n: Omit<NotificationTemplate, 'id' | 'sentAt'>) => void
 
-  // reviews / testimonials
-  createReview: (input: {
-    orderId: string
-    userId: string
-    driverId?: string
-    rating: number
-    comment: string
-    displayName?: string
-    displayLocation?: string
-  }) => Review | { error: string }
-  approveReview: (reviewId: string, adminId: string) => void
-  rejectReview: (reviewId: string) => void
-  hideReview: (reviewId: string) => void
-  // Returns only approved + rating >= 4.5 reviews (the public testimonials)
-  getPublicTestimonials: () => Testimonial[]
+  // NOTE: reviews/testimonials now live in the database and are served by
+  // /api/reviews — see src/lib/hooks.ts (usePublicTestimonials,
+  // useAdminReviews, useModerateReview). They were removed from this store
+  // because localStorage is per-browser and never reached the server.
 
   // utility
   resetDemo: () => void
@@ -503,7 +392,6 @@ export const useStore = create<StoreState>()(
       payments: SEED_PAYMENTS,
       media: SEED_MEDIA,
       notifications: SEED_NOTIFICATIONS,
-      reviews: SEED_REVIEWS,
       currentUserId: '', // empty by default — auth gate appears until user signs in
       settings: DEFAULT_SETTINGS,
 
@@ -737,90 +625,6 @@ export const useStore = create<StoreState>()(
         set((s) => ({ notifications: [note, ...s.notifications].slice(0, 100) }))
       },
 
-      // ===== Reviews / Testimonials =====
-      createReview: (input) => {
-        const { orders, reviews } = get()
-        // Validate order exists and is delivered
-        const order = orders.find((o) => o.id === input.orderId || o.orderNumber === input.orderId)
-        if (!order) return { error: 'Order not found' }
-        if (order.status !== 'DELIVERED') return { error: 'You can only review delivered orders' }
-        // One review per order
-        if (reviews.some((r) => r.orderId === order.id)) {
-          return { error: 'This order has already been reviewed' }
-        }
-        // Validate rating range
-        if (input.rating < 1 || input.rating > 5) return { error: 'Rating must be between 1 and 5' }
-        const now = new Date().toISOString()
-        const review: Review = {
-          id: genId('r_'),
-          orderId: order.id,
-          userId: input.userId,
-          driverId: input.driverId ?? order.driverId,
-          rating: Math.round(input.rating * 2) / 2, // snap to nearest 0.5
-          comment: input.comment.trim(),
-          displayName: input.displayName?.trim() || undefined,
-          displayLocation: input.displayLocation?.trim() || undefined,
-          // Auto-approve if rating >= 4.5 (still subject to admin moderation via hide toggle)
-          // — this lets happy customers' reviews show immediately, while lower ratings
-          // stay pending for admin review.
-          isApproved: input.rating >= 4.5,
-          approvedAt: input.rating >= 4.5 ? now : undefined,
-          approvedById: input.rating >= 4.5 ? 'auto' : undefined,
-          isHidden: false,
-          createdAt: now,
-          updatedAt: now,
-        }
-        set((s) => ({ reviews: [review, ...s.reviews] }))
-        return review
-      },
-
-      approveReview: (reviewId, adminId) => {
-        const now = new Date().toISOString()
-        set((s) => ({
-          reviews: s.reviews.map((r) =>
-            r.id === reviewId
-              ? { ...r, isApproved: true, approvedAt: now, approvedById: adminId, updatedAt: now }
-              : r
-          ),
-        }))
-      },
-
-      rejectReview: (reviewId) => {
-        // "Reject" = unapprove (review stays in DB for admin records but won't show publicly)
-        const now = new Date().toISOString()
-        set((s) => ({
-          reviews: s.reviews.map((r) =>
-            r.id === reviewId
-              ? { ...r, isApproved: false, approvedAt: undefined, approvedById: undefined, updatedAt: now }
-              : r
-          ),
-        }))
-      },
-
-      hideReview: (reviewId) => {
-        const now = new Date().toISOString()
-        set((s) => ({
-          reviews: s.reviews.map((r) =>
-            r.id === reviewId ? { ...r, isHidden: !r.isHidden, updatedAt: now } : r
-          ),
-        }))
-      },
-
-      getPublicTestimonials: () => {
-        const { reviews, users } = get()
-        return reviews
-          .filter((r) => r.isApproved && !r.isHidden && r.rating >= 4.5)
-          .map((r) => ({
-            id: r.id,
-            displayName: r.displayName || users.find((u) => u.id === r.userId)?.name || 'Verified Customer',
-            displayLocation: r.displayLocation,
-            rating: r.rating,
-            comment: r.comment,
-            createdAt: r.createdAt,
-          }))
-          .slice(0, 12) // cap at 12 for the carousel
-      },
-
       resetDemo: () =>
         set({
           users: SEED_USERS,
@@ -828,7 +632,6 @@ export const useStore = create<StoreState>()(
           payments: SEED_PAYMENTS,
           media: SEED_MEDIA,
           notifications: SEED_NOTIFICATIONS,
-          reviews: SEED_REVIEWS,
           currentUserId: '',
           settings: DEFAULT_SETTINGS,
         }),
@@ -843,13 +646,13 @@ export const useStore = create<StoreState>()(
         payments: s.payments,
         media: s.media,
         notifications: s.notifications,
-        reviews: s.reviews,
         settings: s.settings,
       }),
-      // v2 migration: add reviews array if loading from v1 localStorage
+      // v2: reviews moved to the database (served via /api/reviews) — any
+      // reviews left over in old localStorage are simply dropped.
       migrate: (persisted: any, version: number) => {
-        if (version < 2 && persisted && !persisted.reviews) {
-          persisted.reviews = SEED_REVIEWS
+        if (persisted && persisted.reviews) {
+          delete persisted.reviews
         }
         return persisted
       },

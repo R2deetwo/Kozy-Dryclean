@@ -1,24 +1,28 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Star, Check, ArrowLeft, MessageSquare, MapPin, User } from 'lucide-react'
-import { useStore } from '@/lib/store'
+import { Star, Check, ArrowLeft, MessageSquare, MapPin, User, Loader2 } from 'lucide-react'
 import { Logo } from '@/components/shell/logo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
 interface ReviewFormProps {
-  orderId: string // can be either the cuid or the orderNumber like KZ-1024
+  orderId: string // the full order id (cuid) from the customer's review link
   onDone?: () => void
 }
 
-export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
-  const createReview = useStore((s) => s.createReview)
-  const getCurrentUser = useStore((s) => s.getCurrentUser)
-  const orders = useStore((s) => s.orders)
+interface OrderContext {
+  found: boolean
+  orderNumber?: string
+  status?: string
+  alreadyReviewed?: boolean
+  canReview?: boolean
+  customerName?: string
+}
 
+export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
   const [rating, setRating] = useState(0)
   const [hoverRating, setHoverRating] = useState(0)
   const [comment, setComment] = useState('')
@@ -28,17 +32,29 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const order = useMemo(
-    () => orders.find((o) => o.id === orderId || o.orderNumber === orderId),
-    [orders, orderId]
-  )
+  // Order context is fetched from the API (works on any device/browser —
+  // unlike the old localStorage-based lookup).
+  const [context, setContext] = useState<OrderContext | null>(null)
+  const [contextError, setContextError] = useState(false)
 
-  const user = getCurrentUser()
+  const loadContext = useCallback(async () => {
+    try {
+      const res = await fetch(
+        `/api/reviews/order-context?orderId=${encodeURIComponent(orderId)}`
+      )
+      if (!res.ok) throw new Error('Request failed')
+      const data: OrderContext = await res.json()
+      setContext(data)
+      // Pre-fill the display name if the caller is the order's owner
+      if (data.customerName) setDisplayName(data.customerName)
+    } catch {
+      setContextError(true)
+    }
+  }, [orderId])
 
-  // Pre-fill the display name with the user's name
-  useState(() => {
-    if (user?.name) setDisplayName(user.name)
-  })
+  useEffect(() => {
+    loadContext()
+  }, [loadContext])
 
   const handleSubmit = async () => {
     setError(null)
@@ -51,27 +67,66 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
       return
     }
     setSubmitting(true)
-    // Simulate async — store is sync but we want the loading state for UX
-    await new Promise((r) => setTimeout(r, 400))
-    const result = createReview({
-      orderId,
-      userId: user.id,
-      rating,
-      comment,
-      displayName,
-      displayLocation,
-    })
-    setSubmitting(false)
-    if ('error' in result) {
-      setError(result.error)
-      return
+    try {
+      const res = await fetch('/api/reviews', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          orderId,
+          rating,
+          comment,
+          displayName: displayName || null,
+          displayLocation: displayLocation || null,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setError(data.error || 'Something went wrong. Please try again.')
+        return
+      }
+      setSubmitted(true)
+      setTimeout(() => onDone?.(), 2500)
+    } catch {
+      setError('Network error. Please check your connection and try again.')
+    } finally {
+      setSubmitting(false)
     }
-    setSubmitted(true)
-    setTimeout(() => onDone?.(), 2500)
   }
 
-  // ===== States: order not found =====
-  if (!order) {
+  // ===== State: loading order context =====
+  if (!context && !contextError) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-24 text-center">
+        <Logo size="md" />
+        <div className="mt-10 flex items-center justify-center gap-2 text-navy-300">
+          <Loader2 className="h-5 w-5 animate-spin" />
+          <p className="text-sm">Loading your order…</p>
+        </div>
+      </div>
+    )
+  }
+
+  // ===== State: network error =====
+  if (contextError) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <Logo size="md" />
+        <h1 className="mt-8 font-serif text-3xl font-semibold text-navy">
+          Something went wrong
+        </h1>
+        <p className="mt-3 text-navy-300">
+          We couldn&apos;t load your order details. Please check your connection and
+          try again.
+        </p>
+        <Button className="mt-6" onClick={() => window.location.reload()}>
+          <Loader2 className="mr-2 h-4 w-4" /> Try again
+        </Button>
+      </div>
+    )
+  }
+
+  // ===== State: order not found =====
+  if (!context?.found) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <Logo size="md" />
@@ -79,8 +134,8 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
           Order not found
         </h1>
         <p className="mt-3 text-navy-300">
-          We couldn&apos;t find an order with ID <code className="rounded bg-navy-100 px-1.5 py-0.5 text-navy">{orderId}</code>.
-          Check your SMS or email for the correct link.
+          We couldn&apos;t find this order. Check your SMS or email for the correct
+          link.
         </p>
         <Button className="mt-6" onClick={() => (window.location.href = '/')}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Back to home
@@ -89,8 +144,8 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
     )
   }
 
-  // ===== States: order not delivered yet =====
-  if (order.status !== 'DELIVERED') {
+  // ===== State: order not delivered yet =====
+  if (context.status !== 'DELIVERED') {
     return (
       <div className="mx-auto max-w-2xl px-4 py-16 text-center">
         <Logo size="md" />
@@ -98,8 +153,8 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
           Order not delivered yet
         </h1>
         <p className="mt-3 text-navy-300">
-          Order <strong className="text-navy">#{order.orderNumber}</strong> is currently{' '}
-          <strong className="text-navy">{order.status.replace(/_/g, ' ').toLowerCase()}</strong>.
+          Order <strong className="text-navy">#{context.orderNumber}</strong> is currently{' '}
+          <strong className="text-navy">{context.status?.replace(/_/g, ' ').toLowerCase()}</strong>.
           You&apos;ll be able to leave a review once it&apos;s been delivered.
         </p>
         <Button className="mt-6" onClick={() => (window.location.href = '/portal')}>
@@ -109,7 +164,34 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
     )
   }
 
-  // ===== States: submitted =====
+  // ===== State: already reviewed =====
+  if (context.alreadyReviewed) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+        <Logo size="md" />
+        <motion.div
+          initial={{ scale: 0 }}
+          animate={{ scale: 1 }}
+          transition={{ delay: 0.1, type: 'spring', stiffness: 200 }}
+          className="mx-auto mt-8 flex h-16 w-16 items-center justify-center rounded-full bg-gold-100"
+        >
+          <Check className="h-8 w-8 text-gold-600" />
+        </motion.div>
+        <h1 className="mt-6 font-serif text-3xl font-semibold text-navy">
+          This order has already been reviewed
+        </h1>
+        <p className="mt-3 text-navy-300">
+          Order <strong className="text-navy">#{context.orderNumber}</strong> already has
+          your feedback — thank you! One review per order keeps things fair.
+        </p>
+        <Button className="mt-6" onClick={() => (window.location.href = '/')}>
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to home
+        </Button>
+      </div>
+    )
+  }
+
+  // ===== State: submitted =====
   if (submitted) {
     return (
       <motion.div
@@ -160,7 +242,7 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
       >
         <div className="text-center">
           <p className="text-xs font-semibold uppercase tracking-wider text-gold-400">
-            Order #{order.orderNumber}
+            Order #{context.orderNumber}
           </p>
           <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
             How was your Kozy experience?

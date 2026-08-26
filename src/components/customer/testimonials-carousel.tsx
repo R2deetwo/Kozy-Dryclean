@@ -1,25 +1,31 @@
 'use client'
 
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, Quote, ChevronLeft, ChevronRight } from 'lucide-react'
-import { useStore } from '@/lib/store'
+import { usePublicTestimonials } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 
 /**
- * Public testimonials carousel — shows only approved + rating >= 4.5 reviews.
+ * Public testimonials carousel — real customer reviews (approved, rating >= 4.5)
+ * served from the database via GET /api/reviews, newest first. Starter
+ * marketing testimonials fill the carousel while real reviews accumulate.
  * Auto-rotates every 6 seconds, pauses on hover, allows manual navigation.
  * Includes dots indicator + arrow controls.
  */
 export function TestimonialsCarousel() {
-  const getPublicTestimonials = useStore((s) => s.getPublicTestimonials)
-  const testimonials = useMemo(() => getPublicTestimonials(), [getPublicTestimonials])
+  const { data: testimonials, isLoading } = usePublicTestimonials()
 
   const [index, setIndex] = useState(0)
   const [direction, setDirection] = useState(0)
   const [paused, setPaused] = useState(false)
 
-  const count = testimonials.length
+  const count = testimonials?.length ?? 0
+
+  // Reset the index if the list shrinks (e.g. after a refetch)
+  useEffect(() => {
+    if (index >= Math.max(count, 1)) setIndex(0)
+  }, [count, index])
 
   const goNext = useCallback(() => {
     setDirection(1)
@@ -38,10 +44,10 @@ export function TestimonialsCarousel() {
     return () => clearInterval(t)
   }, [paused, count, goNext])
 
-  // Empty state — show nothing if no testimonials yet
-  if (count === 0) return null
+  // Empty / loading state — show nothing while loading or if no testimonials
+  if (isLoading || count === 0) return null
 
-  const current = testimonials[index % count]
+  const current = testimonials![index % count]
 
   return (
     <section
@@ -141,7 +147,7 @@ export function TestimonialsCarousel() {
           {/* Dots */}
           {count > 1 && (
             <div className="mt-10 flex justify-center gap-1.5">
-              {testimonials.map((t, i) => (
+              {testimonials!.map((t, i) => (
                 <button
                   key={t.id}
                   onClick={() => {

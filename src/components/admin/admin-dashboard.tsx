@@ -195,7 +195,7 @@ export function AdminDashboard() {
           {tab === 'payments' && <PaymentQueue />}
           {tab === 'customers' && <CustomersView />}
           {tab === 'finance' && <FinanceView />}
-          {tab === 'reviews' && <ReviewsView adminId="admin" />}
+          {tab === 'reviews' && <ReviewsView />}
           {tab === 'notifications' && <NotificationsPanel />}
           {tab === 'settings' && <SettingsView />}
         </main>
