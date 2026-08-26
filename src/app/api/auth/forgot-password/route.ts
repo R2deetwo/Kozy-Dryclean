@@ -39,7 +39,7 @@ export async function POST(req: Request) {
   })
 
   // Send reset email
-  const baseUrl = process.env.NEXTAUTH_URL || 'https://kozy-dryclean.vercel.app'
+  const baseUrl = process.env.NEXTAUTH_URL || 'https://kozycare.ng'
   const resetUrl = `${baseUrl}/reset-password?token=${token}`
 
   try {

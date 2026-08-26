@@ -51,7 +51,7 @@ ENV_VARS = [
 
     # Auth (REQUIRED) — secret read from env.
     ("NEXTAUTH_SECRET", os.environ.get("KOZY_NEXTAUTH_SECRET", ""), "encrypted", ["production", "preview", "development"]),
-    ("NEXTAUTH_URL", "https://kozy-dryclean.vercel.app", "plain", ["production", "preview", "development"]),
+    ("NEXTAUTH_URL", "https://kozycare.ng", "plain", ["production", "preview", "development"]),
 
     # Supabase (REQUIRED) — anon key is OK inline, but service-role key must come from env.
     ("NEXT_PUBLIC_SUPABASE_URL", "https://rejnclethpipmqwucors.supabase.co", "plain", ["production", "preview", "development"]),
@@ -59,7 +59,7 @@ ENV_VARS = [
     ("SUPABASE_SERVICE_ROLE_KEY", os.environ.get("KOZY_SUPABASE_SERVICE_ROLE_KEY", ""), "encrypted", ["production", "preview", "development"]),
 
     # App config (REQUIRED)
-    ("NEXT_PUBLIC_APP_URL", "https://kozy-dryclean.vercel.app", "plain", ["production", "preview", "development"]),
+    ("NEXT_PUBLIC_APP_URL", "https://kozycare.ng", "plain", ["production", "preview", "development"]),
     ("NEXT_PUBLIC_COMPANY_PHONE", "+2348005693789", "plain", ["production", "preview", "development"]),
     ("NEXT_PUBLIC_COMPANY_EMAIL", "concierge@kozy.ng", "plain", ["production", "preview", "development"]),
 

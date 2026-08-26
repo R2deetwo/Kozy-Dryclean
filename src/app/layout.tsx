@@ -22,10 +22,14 @@ const playfair = Playfair_Display({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://kozycare.ng"),
   title: "Kozy Care — Premium Drycleaning & Laundry Services in Lagos",
   description: "Uncompromising care. Exceptional convenience. Kozy Care — Lagos' premium dry cleaning & laundry pickup and delivery service.",
   keywords: ["Kozy Care", "dry cleaning Lagos", "laundry Lagos", "premium dry cleaning", "Ikoyi laundry", "Lekki laundry", "corporate laundry Lagos", "laundry pickup Lagos"],
   authors: [{ name: "Kozy Care" }],
+  alternates: {
+    canonical: "https://kozycare.ng",
+  },
   icons: {
     icon: [
       { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
@@ -44,6 +48,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Kozy Care — Premium Drycleaning & Laundry Services",
     description: "Uncompromising care. Exceptional convenience.",
+    url: "https://kozycare.ng",
     siteName: "Kozy Care",
     type: "website",
   },

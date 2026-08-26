@@ -45,7 +45,7 @@ async function main() {
       console.log(`\n✅ Admin password updated. You can now log in:`)
       console.log(`   Email:    ${email}`)
       console.log(`   Password: ${password}`)
-      console.log(`   URL:      https://kozy-dryclean.vercel.app/login`)
+      console.log(`   URL:      https://kozycare.ng/login`)
       return
     }
     // User exists but isn't admin — promote them
@@ -86,7 +86,7 @@ async function main() {
   console.log(`   Password: ${password}`)
   console.log(`   Role:     ADMIN`)
   console.log(`   Verified: ✅ (auto-verified — no email needed)`)
-  console.log(`\n   Login URL: https://kozy-dryclean.vercel.app/login`)
+  console.log(`\n   Login URL: https://kozycare.ng/login`)
   console.log(`\n⚠️  This is a REAL database record — it will NOT be wiped`)
   console.log(`   when demo/seed data is cleared. Only deleting this user`)
   console.log(`   from the Supabase dashboard would remove it.`)
