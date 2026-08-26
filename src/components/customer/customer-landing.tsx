@@ -637,7 +637,12 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
           <div className="grid gap-8 md:grid-cols-3">
             <div>
               <div className="flex items-center gap-2">
-                <img src="/kozy-icon.png" alt="Kozy Care" height={32} className="shrink-0" style={{ height: 32, width: 'auto' }} />
+                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+                  <rect width="40" height="40" rx="9" fill="#102740"/>
+                  <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+                  <circle cx="20" cy="20" r="2.2" fill="#D4AF37"/>
+                </svg>
                 <div className="leading-none">
                   <p className="font-serif text-lg font-bold text-white">Kozy Care</p>
                   <p className="text-[8px] uppercase tracking-[0.15em] text-gold-300 font-medium mt-0.5">DRYCLEANING &amp; LAUNDRY</p>

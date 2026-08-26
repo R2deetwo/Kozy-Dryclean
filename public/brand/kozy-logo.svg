@@ -1,7 +1,0 @@
-<svg width="160" height="40" viewBox="0 0 160 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="40" height="40" rx="9" fill="#0A192F"/>
-  <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-  <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-  <circle cx="20" cy="20" r="2.2" fill="#D4AF37"/>
-  <text x="50" y="27" font-family="Playfair Display, Georgia, serif" font-size="22" font-weight="700" fill="#0A192F" letter-spacing="0.5">Kozy</text>
-</svg>
