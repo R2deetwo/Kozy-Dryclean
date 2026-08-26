@@ -1,0 +1,7 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Men's Underwear (briefs) -->
+  <path d="M6 8 L26 8 L26 14 C26 14 22 14 20 16 C18 18 18 22 16 22 C14 22 14 18 12 16 C10 14 6 14 6 14 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <line x1="6" y1="8" x2="26" y2="8" stroke="#D4AF37" strokeWidth="1.4" strokeLinecap="round"/>
+  <line x1="10" y1="8" x2="10" y2="6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+  <line x1="22" y1="8" x2="22" y2="6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+</svg>

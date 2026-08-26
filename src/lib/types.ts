@@ -124,6 +124,11 @@ export const GARMENT_CATALOG: GarmentCatalogItem[] = [
   { id: 'curtain', name: 'Curtain (per panel)', price: 1800, icon: '/icons/services/curtain.svg', category: 'Household' },
   { id: 'native-cap', name: 'Native Cap', price: 200, icon: '/icons/services/native-cap.svg', category: 'Extras' },
   { id: 'tie', name: 'Tie', price: 300, icon: '/icons/services/tie.svg', category: 'Extras' },
+  { id: 'towel', name: 'Towel', price: 400, icon: '/icons/services/towel.svg', category: 'Household' },
+  { id: 'singlet', name: 'Singlet', price: 300, icon: '/icons/services/singlet.svg', category: 'Shirts' },
+  { id: 'mens-underwear', name: 'Men\u2019s Underwear', price: 250, icon: '/icons/services/underwear.svg', category: 'Extras' },
+  { id: 'socks', name: 'Socks (per pair)', price: 200, icon: '/icons/services/socks.svg', category: 'Extras' },
+  { id: 'hats', name: 'Hat', price: 500, icon: '/icons/services/hats.svg', category: 'Extras' },
 ]
 
 // =====================================================
