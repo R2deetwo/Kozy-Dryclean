@@ -31,6 +31,7 @@ import { getSession } from '@/lib/auth'
 import { CreateOrderSchema } from '@/lib/schemas'
 import { notifyOrderCreated, notifyGuestAccountCreated } from '@/lib/notifications'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
+import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 
 // ----- GET /api/orders -----
 export async function GET() {
@@ -50,7 +51,7 @@ export async function GET() {
   }
   // ADMIN sees all orders (no filter)
 
-  const orders = await db.order.findMany({
+  let orders = await db.order.findMany({
     where,
     include: {
       user: { select: { id: true, name: true, email: true, phone: true, role: true } },
@@ -61,7 +62,57 @@ export async function GET() {
     orderBy: { createdAt: 'desc' },
   })
 
-  return NextResponse.json({ orders })
+  // ----- Rider geofencing (DRIVER only) -----
+  // With a fresh GPS ping on file, gate the rider's activity:
+  //   - outside every service zone  -> order activity paused (empty list)
+  //   - inside a zone               -> only stops within ORDER_VISIBILITY_RADIUS_KM
+  // No ping / stale ping / lookup error -> legacy behaviour (no filtering),
+  // so the feature can never brick the driver app.
+  let geofence: Record<string, unknown> | undefined
+  if (session.user?.role === 'DRIVER') {
+    try {
+      const loc = await db.driverLocation.findUnique({
+        where: { driverId: session.user.id },
+      })
+      const fresh =
+        loc && Date.now() - loc.updatedAt.getTime() < GEO.PING_STALE_MINUTES * 60 * 1000
+      if (loc && fresh) {
+        const nearest = nearestZone(loc.lat, loc.lng)
+        const inArea = nearest.distanceKm <= nearest.zone.radiusKm + GEO.ZONE_BUFFER_KM
+        if (!inArea) {
+          geofence = {
+            status: 'outside',
+            zone: nearest.zone.name,
+            distanceKm: Math.round(nearest.distanceKm * 10) / 10,
+          }
+          orders = [] // activity paused while outside all service areas
+        } else {
+          const visible = orders.filter((o) => {
+            const zone = zoneFromAddress(o.pickupAddress)
+            // Unknown addresses are always shown (never hide a stop we can't place)
+            if (!zone) return true
+            return (
+              haversineKm(loc.lat, loc.lng, zone.lat, zone.lng) <=
+              GEO.ORDER_VISIBILITY_RADIUS_KM
+            )
+          })
+          geofence = {
+            status: 'in',
+            zone: nearest.zone.name,
+            distanceKm: Math.round(nearest.distanceKm * 10) / 10,
+            hiddenCount: orders.length - visible.length,
+          }
+          orders = visible
+        }
+      } else {
+        geofence = { status: loc ? 'stale' : 'none' }
+      }
+    } catch {
+      geofence = { status: 'error' } // degrade gracefully
+    }
+  }
+
+  return NextResponse.json({ orders, ...(geofence ? { geofence } : {}) })
 }
 
 // ----- POST /api/orders -----

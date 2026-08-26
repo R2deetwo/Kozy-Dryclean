@@ -19,6 +19,7 @@ import { db } from '@/lib/db'
 import { getSession, requireSession } from '@/lib/auth'
 import { UpdateOrderSchema } from '@/lib/schemas'
 import { notifyOrderStatus } from '@/lib/notifications'
+import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 
 // ----- GET /api/orders/[id] -----
 export async function GET(
@@ -110,6 +111,38 @@ export async function PATCH(
         { error: 'Drivers cannot modify driver assignment, weight, or price' },
         { status: 403 }
       )
+    }
+
+    // ----- Geofence guard -----
+    // A rider with a fresh GPS ping on file cannot confirm a pickup/delivery
+    // while they are far from the stop's service zone. Generous margin
+    // (ACTION_MAX_DISTANCE_KM) so normal GPS drift never blocks real work.
+    // No ping / stale ping / lookup error -> guard skipped (feature is additive).
+    if (parsed.data.status) {
+      try {
+        const loc = await db.driverLocation.findUnique({
+          where: { driverId: session.user.id },
+        })
+        const fresh =
+          loc && Date.now() - loc.updatedAt.getTime() < GEO.PING_STALE_MINUTES * 60 * 1000
+        if (loc && fresh) {
+          const zone = zoneFromAddress(order.pickupAddress)
+          if (zone) {
+            const distanceKm = haversineKm(loc.lat, loc.lng, zone.lat, zone.lng)
+            if (distanceKm > GEO.ACTION_MAX_DISTANCE_KM) {
+              return NextResponse.json(
+                {
+                  error: 'GEOFENCE_TOO_FAR',
+                  message: `You're about ${Math.round(distanceKm)} km from this stop's area (${zone.name}). Move within ${GEO.ACTION_MAX_DISTANCE_KM} km to confirm.`,
+                },
+                { status: 403 }
+              )
+            }
+          }
+        }
+      } catch {
+        // Geofence table unavailable — skip the guard
+      }
     }
   }
   // ADMIN: can change anything — no restriction

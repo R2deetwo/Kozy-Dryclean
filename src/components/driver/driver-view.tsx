@@ -6,6 +6,7 @@ import { motion, AnimatePresence, type PanInfo } from 'framer-motion'
 import {
   Phone,
   Navigation,
+  Navigation2,
   Package,
   Truck,
   CheckCircle2,
@@ -26,21 +27,41 @@ import { useSession } from 'next-auth/react'
 import { useOrders, useUpdateOrder } from '@/lib/hooks'
 import { useMemo } from 'react'
 import { formatDate, type Order } from '@/lib/types'
+import { orderDistanceKm } from '@/lib/geo'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  useDriverGeofence,
+  DriverGeofencePill,
+  DriverGeofenceBanner,
+} from '@/components/driver/driver-geofence'
 
 export function DriverView() {
   const { data: session } = useSession()
-  const { data: allOrders, isLoading } = useOrders()
+
+  // ----- Rider geofencing -----
+  // Tracks GPS, pings the server ~1/min, and pauses order activity while the
+  // rider is outside every Kozy service area (owner-requested behaviour).
+  const geofence = useDriverGeofence(true)
+  const ordersPaused = geofence.status === 'outside'
+
+  const { data: allOrders, isLoading } = useOrders({
+    enabled: !ordersPaused, // pause polling + new activity while outside the fence
+    refetchInterval: 15000, // live route updates (new assignments appear automatically)
+  })
   const updateOrderMutation = useUpdateOrder()
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
 
   // The API already filters orders to the logged-in driver (RBAC)
-  // For now, show all orders returned (driver sees only their own)
-  const orders = (allOrders ?? []).filter(
-    (o: any) => ['PICKED_UP', 'OUT_FOR_DELIVERY', 'PAYMENT_VERIFIED'].includes(o.status)
-  )
+  // For now, show all orders returned (driver sees only their own).
+  // While paused (outside the geofence) the server would return no stops —
+  // mirror that client-side so no stale route lingers on screen.
+  const orders = ordersPaused
+    ? []
+    : (allOrders ?? []).filter((o: any) =>
+        ['PICKED_UP', 'OUT_FOR_DELIVERY', 'PAYMENT_VERIFIED'].includes(o.status)
+      )
   const selected = orders.find((o: any) => o.id === selectedId)
 
   const driverName = session?.user?.name ?? 'Driver'
@@ -65,6 +86,7 @@ export function DriverView() {
               <p className="text-lg font-bold">{driverName}</p>
             </div>
             <div className="flex items-center gap-3">
+              <DriverGeofencePill state={geofence} />
               <Sun className="h-4 w-4 text-amber-400" />
               <span className="text-xs text-slate-300">
                 {new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
@@ -105,6 +127,9 @@ export function DriverView() {
           </div>
         </div>
 
+        {/* Geofence status (paused / live-in-zone / location-off) */}
+        <DriverGeofenceBanner state={geofence} />
+
         {/* Route header */}
         <div className="mb-3 flex items-center justify-between">
           <h2 className="flex items-center gap-2 text-base font-bold">
@@ -117,13 +142,24 @@ export function DriverView() {
 
         {/* Stop cards */}
         {orders.length === 0 ? (
-          <div className="rounded-xl bg-slate-800 p-8 text-center">
-            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-gold-400" />
-            <p className="font-semibold text-white">Route complete!</p>
-            <p className="mt-1 text-xs text-slate-400">
-              No pickups or deliveries assigned right now.
-            </p>
-          </div>
+          ordersPaused ? (
+            <div className="rounded-xl border border-amber-500/30 bg-slate-800 p-8 text-center">
+              <Navigation2 className="mx-auto mb-2 h-10 w-10 text-amber-400" />
+              <p className="font-semibold text-white">No active stops</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Your route resumes automatically when you re-enter a Kozy service
+                area — no action needed.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl bg-slate-800 p-8 text-center">
+              <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-gold-400" />
+              <p className="font-semibold text-white">Route complete!</p>
+              <p className="mt-1 text-xs text-slate-400">
+                No pickups or deliveries assigned right now.
+              </p>
+            </div>
+          )
         ) : (
           <ul className="space-y-3">
             {orders.map((o, i) => (
@@ -131,6 +167,7 @@ export function DriverView() {
                 key={o.id}
                 order={o}
                 index={i + 1}
+                geofence={geofence}
                 onOpen={() => setSelectedId(o.id)}
               />
             ))}
@@ -148,15 +185,23 @@ export function DriverView() {
 function DriverStopCard({
   order,
   index,
+  geofence,
   onOpen,
 }: {
   order: any
   index: number
+  geofence: { lat?: number; lng?: number }
   onOpen: () => void
 }) {
   const customer = order.user
   const isPickup = order.status === 'PAYMENT_VERIFIED'
   const isDrop = order.status === 'OUT_FOR_DELIVERY'
+
+  // Straight-line distance from the rider's last GPS fix to the stop's zone
+  const stop =
+    geofence.lat != null && geofence.lng != null
+      ? orderDistanceKm(geofence.lat, geofence.lng, order.pickupAddress)
+      : null
 
   return (
     <motion.button
@@ -198,8 +243,15 @@ function DriverStopCard({
           <Clock className="h-3 w-3" />
           {order.pickupTimeSlot}
         </span>
-        <span className="rounded-full bg-white/15 px-2 py-0.5 font-mono text-[10px]">
-          #{order.orderNumber}
+        <span className="flex items-center gap-2">
+          {stop && (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+              <MapPin className="h-2.5 w-2.5" /> {stop.distanceKm} km · {stop.zone}
+            </span>
+          )}
+          <span className="rounded-full bg-white/15 px-2 py-0.5 font-mono text-[10px]">
+            #{order.orderNumber}
+          </span>
         </span>
       </div>
 
@@ -235,17 +287,28 @@ function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }
 
   const [confirming, setConfirming] = useState(false)
   const [done, setDone] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handleDragEnd = (_e: any, info: PanInfo) => {
     if (info.offset.x > 180) {
       setConfirming(true)
-      // simulate API call
-      setTimeout(() => {
-        updateOrderMutation.mutate({ id: order.id, status: actionVerb })
-        setConfirming(false)
-        setDone(true)
-        setTimeout(() => onBack(), 1200)
-      }, 600)
+      setError(null)
+      updateOrderMutation.mutate(
+        { id: order.id, status: actionVerb },
+        {
+          onSuccess: () => {
+            setConfirming(false)
+            setDone(true)
+            setTimeout(() => onBack(), 1200)
+          },
+          onError: (err: any) => {
+            setConfirming(false)
+            // Surfaces the server's geofence message ("You're about 22 km from
+            // this stop's area…") or a generic failure message.
+            setError(err?.message || 'Could not confirm — please try again.')
+          },
+        }
+      )
     }
   }
 
@@ -323,7 +386,9 @@ function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }
               <Phone className="h-5 w-5" /> Call
             </a>
             <a
-              href="https://www.google.com/maps"
+              href={`https://www.google.com/maps/search/?api=1&destination=${encodeURIComponent(
+                isPickup ? order.pickupAddress : order.deliveryAddress ?? order.pickupAddress
+              )}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-cyan-600 text-base font-bold text-white shadow-lg active:scale-95"
@@ -379,6 +444,12 @@ function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }
 
         {/* Swipe-to-confirm slider */}
         <div className="sticky bottom-0 z-10 bg-slate-950 px-4 py-3 sm:px-6">
+          {error && (
+            <div className="mb-2 flex items-start gap-2 rounded-xl border border-amber-500/40 bg-amber-500/10 p-3 text-xs leading-relaxed text-amber-200">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              {error}
+            </div>
+          )}
           <AnimatePresence mode="wait">
             {done ? (
               <motion.div

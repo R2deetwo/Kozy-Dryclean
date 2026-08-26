@@ -39,6 +39,8 @@ model User {
   reviews            Review[]
   // Reviews this user has approved (as admin)
   approvedReviews    Review[]            @relation("ReviewApprover")
+  // Last known GPS position (rider geofencing) — one row per driver
+  driverLocation     DriverLocation?
 }
 
 enum Role {
@@ -250,6 +252,28 @@ model PriceCatalog {
 
   @@index([category])
   @@index([active])
+}
+
+// =====================================================
+// DRIVER_LOCATION — rider geofencing (last known GPS ping)
+// =====================================================
+// Riders ping their GPS position from the driver app; the server
+// checks the distance to the nearest service zone (see src/lib/geo.ts)
+// and gates order activity/notifications accordingly:
+//   - Inside a service zone   -> full route activity
+//   - Outside all zones       -> order activity paused (banner in app)
+//   - Stale/missing ping      -> legacy behaviour (no filtering)
+model DriverLocation {
+  id        String   @id @default(cuid())
+  driverId  String   @unique
+  driver    User     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  // Name of the nearest service zone at the last ping (e.g. "Lekki")
+  zone      String?
+  updatedAt DateTime @updatedAt
+
+  @@index([driverId])
 }
 
 // =====================================================

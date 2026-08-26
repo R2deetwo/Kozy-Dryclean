@@ -66,7 +66,12 @@ export interface ApiUser {
 }
 
 // ----- Orders -----
-export function useOrders() {
+export function useOrders(options?: {
+  /** Set false to pause polling (e.g. driver outside the geofence) */
+  enabled?: boolean
+  /** Live-refresh interval in ms (e.g. 15000 for the driver app) */
+  refetchInterval?: number | false
+}) {
   return useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
@@ -76,6 +81,8 @@ export function useOrders() {
       return data.orders as ApiOrder[]
     },
     staleTime: 10 * 1000, // 10 seconds
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refetchInterval ?? false,
   })
 }
 
@@ -125,7 +132,8 @@ export function useUpdateOrder() {
       })
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
-        throw new Error(err.error || 'Failed to update order')
+        // Prefer the human-readable message (e.g. the geofence explanation)
+        throw new Error(err.message || err.error || 'Failed to update order')
       }
       const data = await res.json()
       return data.order as ApiOrder

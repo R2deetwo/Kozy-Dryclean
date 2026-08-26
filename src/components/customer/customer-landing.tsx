@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TestimonialsCarousel } from '@/components/customer/testimonials-carousel'
+import { HowItWorksSection } from '@/components/customer/how-it-works'
 
 interface Props {
   onBook: () => void
@@ -200,74 +201,9 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
       </section>
 
       {/* ============================================================
-          HOW IT WORKS
+          HOW IT WORKS (animated cards — same art, motion added)
       ============================================================ */}
-      <section className="bg-linen py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="mx-auto max-w-2xl text-center">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
-              The Kozy Method
-            </p>
-            <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
-              Three steps. Zero fuss.
-            </h2>
-            <p className="mt-3 text-navy-300">
-              From your dressing room to our atelier and back — with every stage visible
-              in your dashboard.
-            </p>
-          </div>
-
-          <div className="mt-12 grid gap-6 md:grid-cols-3">
-            {[
-              {
-                icon: ShoppingBag,
-                image: '/brand/images/how-1-book.png',
-                title: '01 · Request a pickup',
-                body: 'Choose your garments, request a bulk pickup, or schedule a recurring slot. Snap optional condition photos to activate our Return-as-Received Guarantee.',
-              },
-              {
-                icon: Truck,
-                image: '/brand/images/how-2-collect.png',
-                title: '02 · We collect & treat',
-                body: 'A Kozy rider arrives within your window. Items travel to our atelier where they are sorted, treated, and pressed by garment-specific protocols.',
-              },
-              {
-                icon: CheckCircle2,
-                image: '/brand/images/how-3-return.png',
-                title: '03 · Pristine return',
-                body: 'Your garments are folded, packaged, and delivered within 48 hours (retail) — sealed in protective Kozy garment bags, ready for your wardrobe.',
-              },
-            ].map((s, i) => (
-              <motion.div
-                key={s.title}
-                initial={{ opacity: 0, y: 16 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.08 }}
-              >
-                <Card className="group h-full overflow-hidden border-navy-100 bg-white shadow-navy transition hover:shadow-lg">
-                  <div className="relative h-44 overflow-hidden bg-linen-100">
-                    <img
-                      src={s.image}
-                      alt={s.title}
-                      className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
-                    />
-                    <div className="absolute left-4 top-4 flex h-10 w-10 items-center justify-center rounded-xl bg-navy text-gold-400 shadow-navy">
-                      <s.icon className="h-5 w-5" />
-                    </div>
-                  </div>
-                  <CardContent className="p-6">
-                    <h3 className="font-serif text-lg font-semibold text-navy">
-                      {s.title}
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-navy-300">{s.body}</p>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <HowItWorksSection />
 
       {/* ============================================================
           PRICING & SERVICES
