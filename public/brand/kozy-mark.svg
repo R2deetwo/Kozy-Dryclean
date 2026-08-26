@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Solid navy background, fills entire square. NO border. -->
+  <rect width="512" height="512" fill="#0A192F"/>
+
+  <!-- Solid gold K+hanger mark. All strokes are flat solid #D4AF37, uniform width, no gradient, no shine. -->
+  <g stroke="#D4AF37" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Segment A: Vertical stem of the K (with implied serifs via the horizontal caps) -->
+    <line x1="200" y1="170" x2="200" y2="342"/>
+    <!-- Top serif (horizontal cap at top of stem) -->
+    <line x1="170" y1="170" x2="230" y2="170"/>
+    <!-- Bottom serif (horizontal cap at bottom of stem) -->
+    <line x1="170" y1="342" x2="230" y2="342"/>
+
+    <!-- Segment B: Upper diagonal arm of K — from top of stem, extends up-right to mid-right -->
+    <line x1="220" y1="180" x2="340" y2="170"/>
+
+    <!-- Segment C: Lower diagonal arm of K — from center of stem, extends down-right (shallower angle) -->
+    <line x1="220" y1="256" x2="345" y2="335"/>
+
+    <!-- Hook at top — small inverted-U above the stem, mimicking a wire hanger hook -->
+    <path d="M 200 170 L 200 150 Q 200 130 220 130 Q 240 130 240 150 L 240 170"/>
+
+    <!-- Segment D: Sweeping hanger base — convex curve from bottom-left to bottom-right -->
+    <path d="M 130 290 Q 256 380 382 290"/>
+  </g>
+</svg>
