@@ -141,7 +141,19 @@ export interface GarmentCatalogItem {
   name: string
   price: number
   icon: string // path to Kozy SVG service icon
-  category: 'Shirts' | 'Trousers' | 'Suits' | 'Traditional' | 'Household' | 'Extras' | 'Shoes'
+  category:
+    | 'Shirts'
+    | 'Trousers'
+    | 'Suits'
+    | 'Traditional'
+    | "Women's Wear"
+    | 'Household'
+    | 'Extras'
+    | 'Shoes'
+  // Optional one-line description shown under the item name in the booking
+  // wizard — used where a bare name would be ambiguous (e.g. Lace / Aso-Ebi
+  // Gown vs the general Dress vs the existing Ankara Gown).
+  description?: string
 }
 
 export const GARMENT_CATALOG: GarmentCatalogItem[] = [
@@ -156,6 +168,23 @@ export const GARMENT_CATALOG: GarmentCatalogItem[] = [
   { id: 'iro-buba', name: 'Iro & Buba', price: 2000, icon: '/icons/services/iro-buba.svg', category: 'Traditional' },
   { id: 'kaftan', name: 'Kaftan', price: 1500, icon: '/icons/services/kaftan.svg', category: 'Traditional' },
   { id: 'ankara-gown', name: 'Ankara Gown', price: 1800, icon: '/icons/services/ankara-gown.svg', category: 'Traditional' },
+  // ── Women's Wear (Phase 10) ─────────────────────────────
+  // Lace / Aso-Ebi Gown is the flagship item: priced well above the Ankara
+  // Gown for the delicate hand-wash handling premium event fabrics need.
+  { id: 'blouse', name: 'Blouse', price: 1800, icon: '/icons/services/blouse.svg', category: "Women's Wear" },
+  { id: 'skirt', name: 'Skirt', price: 1800, icon: '/icons/services/skirt.svg', category: "Women's Wear" },
+  { id: 'womens-dress', name: 'Dress', price: 2500, icon: '/icons/services/womens-dress.svg', category: "Women's Wear" },
+  {
+    id: 'lace-gown',
+    name: 'Lace / Aso-Ebi Gown',
+    price: 5000,
+    icon: '/icons/services/lace-gown.svg',
+    category: "Women's Wear",
+    description:
+      'Delicate lace & aso-ebi event wear, hand-washed with extra care — not for everyday ankara or cotton dresses.',
+  },
+  { id: 'jumpsuit', name: 'Jumpsuit', price: 2200, icon: '/icons/services/jumpsuit.svg', category: "Women's Wear" },
+  { id: 'gele', name: 'Gele (Headwrap)', price: 1500, icon: '/icons/services/gele.svg', category: "Women's Wear" },
   { id: 'bedsheet', name: 'Bedsheet', price: 1200, icon: '/icons/services/bedsheet.svg', category: 'Household' },
   { id: 'duvet', name: 'Duvet', price: 2500, icon: '/icons/services/duvet.svg', category: 'Household' },
   { id: 'curtain', name: 'Curtain (per panel)', price: 1800, icon: '/icons/services/curtain.svg', category: 'Household' },
@@ -164,6 +193,7 @@ export const GARMENT_CATALOG: GarmentCatalogItem[] = [
   { id: 'towel', name: 'Towel', price: 400, icon: '/icons/services/towel.svg', category: 'Household' },
   { id: 'singlet', name: 'Singlet', price: 300, icon: '/icons/services/singlet.svg', category: 'Shirts' },
   { id: 'mens-underwear', name: 'Men\u2019s Underwear', price: 250, icon: '/icons/services/underwear.svg', category: 'Extras' },
+  { id: 'womens-underwear', name: 'Women\u2019s Underwear', price: 500, icon: '/icons/services/womens-underwear.svg', category: 'Extras' },
   { id: 'socks', name: 'Socks (per pair)', price: 200, icon: '/icons/services/socks.svg', category: 'Extras' },
   { id: 'hats', name: 'Hat', price: 500, icon: '/icons/services/hats.svg', category: 'Extras' },
   { id: 'sneakers-white', name: 'Sneakers (White)', price: 1000, icon: '/icons/services/sneakers-white.svg', category: 'Shoes' },

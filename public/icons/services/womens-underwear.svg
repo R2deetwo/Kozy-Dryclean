@@ -1,0 +1,10 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Women's Underwear (brief — narrower contoured silhouette, curved waistband, high-cut legs) -->
+  <!-- Distinct from the men's brief icon: ~25% narrower, waistband CURVES down at the centre front -->
+  <!-- (vs the men's straight band), higher-cut leg openings, small gold bow at the centre front. -->
+  <path d="M10 7 C11.8 8.6 13.7 9.2 16 9.2 C18.3 9.2 20.2 8.6 22 7 L23.5 12.5 C22 14 20.6 15.6 19.4 17.4 C18.1 19.3 17.2 21 16 21 C14.8 21 13.9 19.3 12.6 17.4 C11.4 15.6 10 14 8.5 12.5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Gold waistband following the contoured top edge -->
+  <path d="M10 7 C11.8 8.6 13.7 9.2 16 9.2 C18.3 9.2 20.2 8.6 22 7" stroke="#D4AF37" strokeWidth="1.4" strokeLinecap="round" fill="none"/>
+  <!-- Tiny gold bow at centre front -->
+  <path d="M16 10.8 L14.2 10 L14.2 11.6 Z M16 10.8 L17.8 10 L17.8 11.6 Z" fill="#D4AF37"/>
+</svg>

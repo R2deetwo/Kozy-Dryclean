@@ -1,0 +1,8 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Jumpsuit (ONE connected piece — fitted sleeveless top with V-neck flowing into wide legs) -->
+  <!-- Not two garments: bodice and trousers share a waist; very wide legs + low crotch V, gold drawstring waist. -->
+  <!-- Distinct from Trousers (no top half, narrow legs) and from Dress (skirt, no crotch division). -->
+  <path d="M12 5 L9.5 6 L8.5 8.2 L9.8 10.5 L10.8 13 L5 28 L11 28 L16 18 L21 28 L27 28 L21.2 13 L22.2 10.5 L23.5 8.2 L22.5 6 L20 5 L16 10.5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" fill="none"/>
+  <!-- Gold drawstring waist seam — emphasises the single-piece construction -->
+  <line x1="10.8" y1="13" x2="21.2" y2="13" stroke="#D4AF37" strokeWidth="1.4" strokeLinecap="round"/>
+</svg>

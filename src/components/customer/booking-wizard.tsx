@@ -739,6 +739,12 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                               <p className="text-xs text-navy-300">
                                 {formatNaira(settings.garmentPrices[g.id] ?? g.price)} each
                               </p>
+                              {/* Disambiguation line (e.g. Lace / Aso-Ebi Gown vs Dress vs Ankara Gown) */}
+                              {g.description && (
+                                <p className="mt-0.5 max-w-[30ch] text-[11px] leading-snug text-navy-300/90">
+                                  {g.description}
+                                </p>
+                              )}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5">

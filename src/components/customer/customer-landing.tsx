@@ -42,6 +42,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   Trousers: 'Trousers',
   Suits: 'Suits & Blazers',
   Traditional: 'Traditional',
+  "Women's Wear": 'Women’s Wear',
   Household: 'Household',
   Extras: 'Extras',
   Shoes: 'Shoes & Sneakers',
@@ -247,7 +248,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
           <Tabs value={pricing} onValueChange={(v) => setPricing(v as 'retail' | 'corporate')}>
             <TabsContent value="retail" className="mt-8">
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {(['Shirts', 'Trousers', 'Suits', 'Traditional', 'Household', 'Extras', 'Shoes'] as const).map(
+                {(['Shirts', 'Trousers', 'Suits', 'Traditional', "Women's Wear", 'Household', 'Extras', 'Shoes'] as const).map(
                   (cat) => (
                     <Card key={cat} className="border-navy-100 shadow-navy">
                       <CardContent className="p-5">
