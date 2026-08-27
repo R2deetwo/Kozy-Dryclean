@@ -51,13 +51,11 @@ export const metadata: Metadata = {
     url: "https://kozycare.ng",
     siteName: "Kozy Care",
     type: "website",
-    // NOTE: absolute vercel.app URL (not kozycare.ng) so WhatsApp/Facebook
-    // link previews render TODAY while the kozycare.ng DNS is still
-    // propagating. Once kozycare.ng is live, this can be switched to
-    // "/brand/og-image.png" (resolved against metadataBase).
+    // kozycare.ng is LIVE (cert provisioned) — serve the OG image from the
+    // canonical domain so link previews, shares and SEO all agree.
     images: [
       {
-        url: "https://kozy-dryclean.vercel.app/brand/og-image.png",
+        url: "/brand/og-image.png",
         width: 1200,
         height: 630,
         alt: "Kozy Care — Premium Drycleaning & Laundry in Lagos",
@@ -68,7 +66,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Kozy Care — Premium Drycleaning & Laundry Services",
     description: "Uncompromising care. Exceptional convenience.",
-    images: ["https://kozy-dryclean.vercel.app/brand/og-image.png"],
+    images: ["/brand/og-image.png"],
   },
 };
 
