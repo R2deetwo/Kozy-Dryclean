@@ -8,18 +8,23 @@
 // hover (desktop) or entering the viewport (touch) each card plays a short
 // choreographed sequence that demonstrates its step:
 //
-//   01 · Request a pickup — the view swivels round and dives toward the
+//   01 · Request a pickup — the camera drifts and dives toward the
 //        customer's phone; the Kozy app appears, the list scrolls (as if the
 //        character scrolled it) and lands on the gold "BOOK PICKUP NOW"
 //        button, which taps itself — and stays clickable for real.
-//   02 · We collect & treat — swivel + dive to the garment handoff; a live
+//   02 · We collect & treat — drift + dive to the garment handoff; a live
 //        order tracker fills in: picked up → in atelier → pressed.
-//   03 · Pristine return — swivel + dive into the delivery box; the gold
+//   03 · Pristine return — drift + dive into the delivery box; the gold
 //        Kozy seal stamps in, sparkles twinkle, CTA to book the next pickup.
 //
 // Moving the pointer away at ANY point reverses smoothly back to the resting
 // frame (the character looking pleased, mid-booking). prefers-reduced-motion
 // keeps the cards completely static.
+//
+// NOTE: the card itself stays perfectly FLAT — there is no 3D tilt/bend of
+// the card chrome (owner request). All motion happens inside the image
+// window (camera zoom/pan, scrim, overlay UI) so the card never flexes under
+// the pointer.
 //
 // The overlay UI is rendered in the site's own design language (cream cards,
 // navy text, gold accents, the existing /icons/services SVGs) so the artwork
@@ -197,11 +202,6 @@ function StepCard({ step, index }: { step: StepConfig; index: number }) {
     }
   }, [phase, size, step.focus])
 
-  const cardAnim =
-    phase === 'swivel'
-      ? { rotateY: -11, rotateX: 2.5, scale: 1.02 }
-      : { rotateY: 0, rotateX: 0, scale: 1 }
-
   const scrimOpacity =
     phase === 'reveal' ? 0.34 : phase === 'settle' ? 0.3 : phase === 'dive' ? 0.14 : 0
 
@@ -216,98 +216,90 @@ function StepCard({ step, index }: { step: StepConfig; index: number }) {
       viewport={{ once: true }}
       transition={{ delay: index * 0.08 }}
     >
-      <div style={{ perspective: 1400 }}>
-        <motion.div
-          animate={cardAnim}
-          transition={{ type: 'spring', stiffness: 110, damping: 16 }}
-          style={{ transformStyle: 'preserve-3d' }}
+      <Card className="h-full overflow-hidden border-navy-100 bg-white shadow-navy transition hover:shadow-lg">
+        <div
+          ref={winRef}
+          data-phase={phase}
+          className="relative h-44 cursor-pointer select-none overflow-hidden bg-linen-100"
+          onMouseEnter={run}
+          onMouseLeave={stop}
+          onClick={() => {
+            if (phase === 'rest') run()
+          }}
         >
-          <Card className="h-full overflow-hidden border-navy-100 bg-white shadow-navy transition hover:shadow-lg">
-            <div
-              ref={winRef}
-              data-phase={phase}
-              className="relative h-44 cursor-pointer select-none overflow-hidden bg-linen-100"
-              onMouseEnter={run}
-              onMouseLeave={stop}
-              onClick={() => {
-                if (phase === 'rest') run()
-              }}
-            >
-              {/* Artwork (untouched) — camera dives toward the focus point */}
-              <motion.div
-                className="absolute inset-0"
-                animate={zoom}
-                transition={{ type: 'spring', stiffness: 80, damping: 19 }}
-                style={{ willChange: 'transform' }}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={step.image}
-                  alt={step.title}
-                  draggable={false}
-                  className="h-full w-full object-cover"
-                />
-              </motion.div>
+          {/* Artwork (untouched) — camera dives toward the focus point */}
+          <motion.div
+            className="absolute inset-0"
+            animate={zoom}
+            transition={{ type: 'spring', stiffness: 80, damping: 19 }}
+            style={{ willChange: 'transform' }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={step.image}
+              alt={step.title}
+              draggable={false}
+              className="h-full w-full object-cover"
+            />
+          </motion.div>
 
-              {/* Navy scrim so the overlay UI pops off the artwork */}
+          {/* Navy scrim so the overlay UI pops off the artwork */}
+          <motion.div
+            className="pointer-events-none absolute inset-0 bg-navy-700"
+            animate={{ opacity: scrimOpacity }}
+            transition={{ duration: 0.5 }}
+          />
+
+          {/* Light sheen sweeping across during the opening drift */}
+          <AnimatePresence>
+            {phase === 'swivel' && (
               <motion.div
-                className="pointer-events-none absolute inset-0 bg-navy-700"
-                animate={{ opacity: scrimOpacity }}
-                transition={{ duration: 0.5 }}
+                key="sheen"
+                className="pointer-events-none absolute inset-y-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent"
+                initial={{ x: '-170%', opacity: 0 }}
+                animate={{ x: '270%', opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.9, ease: 'easeInOut' }}
               />
+            )}
+          </AnimatePresence>
 
-              {/* Light sheen sweeping across during the swivel */}
-              <AnimatePresence>
-                {phase === 'swivel' && (
-                  <motion.div
-                    key="sheen"
-                    className="pointer-events-none absolute inset-y-0 w-1/2 -skew-x-12 bg-gradient-to-r from-transparent via-white/25 to-transparent"
-                    initial={{ x: '-170%', opacity: 0 }}
-                    animate={{ x: '270%', opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    transition={{ duration: 0.9, ease: 'easeInOut' }}
-                  />
-                )}
-              </AnimatePresence>
-
-              {/* Step overlay — the "story" of this card */}
-              <AnimatePresence>
-                {overlayVisible && (
-                  <motion.div
-                    key="overlay"
-                    className="absolute inset-0 z-10 flex items-center justify-center px-3"
-                    initial={{ opacity: 0, scale: 0.94, y: 10 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.96, y: 6 }}
-                    transition={{ type: 'spring', stiffness: 260, damping: 24 }}
-                  >
-                    {step.overlay === 'app' && <PhoneAppCard />}
-                    {step.overlay === 'tracker' && <TrackerCard />}
-                    {step.overlay === 'delivery' && <DeliveryCard />}
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              {/* Step badge — same chrome as before, tiny parallax on swivel */}
+          {/* Step overlay — the "story" of this card */}
+          <AnimatePresence>
+            {overlayVisible && (
               <motion.div
-                className="absolute left-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-xl bg-navy text-gold-400 shadow-navy"
-                animate={{ x: phase === 'swivel' ? 5 : 0 }}
-                transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+                key="overlay"
+                className="absolute inset-0 z-10 flex items-center justify-center px-3"
+                initial={{ opacity: 0, scale: 0.94, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.96, y: 6 }}
+                transition={{ type: 'spring', stiffness: 260, damping: 24 }}
               >
-                <Icon className="h-5 w-5" />
+                {step.overlay === 'app' && <PhoneAppCard />}
+                {step.overlay === 'tracker' && <TrackerCard />}
+                {step.overlay === 'delivery' && <DeliveryCard />}
               </motion.div>
-            </div>
-            <CardContent className="p-6">
-              <h3 className="font-serif text-lg font-semibold text-navy">
-                {step.title}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-navy-300">
-                {step.body}
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
-      </div>
+            )}
+          </AnimatePresence>
+
+          {/* Step badge — same chrome as before, tiny nudge on drift */}
+          <motion.div
+            className="absolute left-4 top-4 z-20 flex h-10 w-10 items-center justify-center rounded-xl bg-navy text-gold-400 shadow-navy"
+            animate={{ x: phase === 'swivel' ? 5 : 0 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 20 }}
+          >
+            <Icon className="h-5 w-5" />
+          </motion.div>
+        </div>
+        <CardContent className="p-6">
+          <h3 className="font-serif text-lg font-semibold text-navy">
+            {step.title}
+          </h3>
+          <p className="mt-2 text-sm leading-relaxed text-navy-300">
+            {step.body}
+          </p>
+        </CardContent>
+      </Card>
     </motion.div>
   )
 }

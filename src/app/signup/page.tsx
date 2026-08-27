@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,11 +12,36 @@ import { cn } from '@/lib/utils'
 import { Logo } from '@/components/shell/logo'
 import Link from 'next/link'
 
+/** Only allow same-site relative redirect targets (no open redirects). */
+function safePath(p: string | null | undefined): string | null {
+  return p && p.startsWith('/') && !p.startsWith('//') ? p : null
+}
+
 export default function SignupPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-linen">
+          <div className="text-sm text-navy-300">Loading...</div>
+        </div>
+      }
+    >
+      <SignupForm />
+    </Suspense>
+  )
+}
+
+function SignupForm() {
   const router = useRouter()
-  const [name, setName] = useState('')
-  const [email, setEmail] = useState('')
-  const [phone, setPhone] = useState('')
+  const searchParams = useSearchParams()
+  // Prefill from the booking wizard's member gate (email known there) and
+  // carry the return destination through to the login page, so after email
+  // verification + sign-in the customer lands back on their saved booking.
+  const callbackUrl = safePath(searchParams.get('callbackUrl'))
+
+  const [name, setName] = useState(searchParams.get('name') || '')
+  const [email, setEmail] = useState(searchParams.get('email') || '')
+  const [phone, setPhone] = useState(searchParams.get('phone') || '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [accountType, setAccountType] = useState<'B2C' | 'B2B'>('B2C')
@@ -133,7 +158,16 @@ export default function SignupPage() {
                 </p>
               </>
             )}
-            <Button onClick={() => router.push('/login')} className="bg-gold-gradient text-navy hover:opacity-90 w-full">
+            <Button
+              onClick={() =>
+                router.push(
+                  `/login?email=${encodeURIComponent(email)}${
+                    callbackUrl ? `&callbackUrl=${encodeURIComponent(callbackUrl)}` : ''
+                  }`
+                )
+              }
+              className="bg-gold-gradient text-navy hover:opacity-90 w-full"
+            >
               Go to login
             </Button>
           </CardContent>

@@ -9,7 +9,13 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Logo } from '@/components/shell/logo'
+import { consumeAuthRedirect } from '@/lib/booking-draft'
 import Link from 'next/link'
+
+/** Only allow same-site relative redirect targets (no open redirects). */
+function safePath(p: string | null | undefined): string | null {
+  return p && p.startsWith('/') && !p.startsWith('//') ? p : null
+}
 
 export default function LoginPage() {
   return (
@@ -22,9 +28,9 @@ export default function LoginPage() {
 function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const callbackUrl = searchParams.get('callbackUrl') || '/portal'
+  const callbackUrl = safePath(searchParams.get('callbackUrl'))
 
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(searchParams.get('email') || '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -60,9 +66,16 @@ function LoginForm() {
       const meRes = await fetch('/api/users/me')
       const meData = await meRes.json()
       const role = meData.user?.role
+      // Consume any stored post-auth destination (set by the booking wizard's
+      // member gate) regardless of role, so stale entries never linger.
+      const storedRedirect = consumeAuthRedirect()
       if (role === 'ADMIN') router.push('/admin')
       else if (role === 'DRIVER') router.push('/driver')
-      else router.push('/portal')
+      else {
+        // Customers: an explicit return destination wins (e.g. back to a
+        // saved booking), then the stored redirect, then the portal.
+        router.push(callbackUrl || storedRedirect || '/portal')
+      }
       router.refresh()
     }
   }

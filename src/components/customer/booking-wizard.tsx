@@ -1,5 +1,23 @@
 'use client'
 
+// =============================================================================
+// BookingWizard — 4-step checkout (Service → Condition → Logistics → Pay)
+// =============================================================================
+// Member-gated skip (owner-requested):
+//   The condition-photo step (Return-as-Received Guarantee) is optional, but
+//   moving PAST it without uploading photos is a member perk. Signed-in
+//   customers skip freely; guests are asked for their email — existing
+//   accounts are routed to /login, new emails to /signup — and their basket
+//   is saved as a draft so they land back on the exact step they left.
+//   Guests who upload at least one photo continue as guests (guest checkout
+//   stays intact for engaged users).
+//
+// Draft persistence:
+//   Selections (items, addresses, step, guest details) auto-save to
+//   localStorage (see src/lib/booking-draft.ts) and restore the next time the
+//   wizard opens — "Welcome back — continue where you left off."
+// =============================================================================
+
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
@@ -15,6 +33,7 @@ import {
   Building2,
   User,
   Shield,
+  ShieldCheck,
   Plus,
   Minus,
   Info,
@@ -31,6 +50,12 @@ import {
 } from '@/lib/types'
 import { useStore } from '@/lib/store'
 import { useSession } from 'next-auth/react'
+import {
+  loadDraft,
+  saveDraft,
+  clearDraft,
+  rememberAuthRedirect,
+} from '@/lib/booking-draft'
 
 // Zustand is now only used for settings (pricing config) — orders/payments go through the API
 import { cn } from '@/lib/utils'
@@ -71,6 +96,15 @@ const TIME_SLOTS = [
   '16:00 - 17:00',
 ]
 
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+/** Default pickup date: tomorrow. */
+function defaultPickupDate() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
 export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Props) {
   const settings = useStore((s) => s.settings)
   const { data: session, status: sessionStatus } = useSession()
@@ -93,11 +127,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   const [photos, setPhotos] = useState<{ url: string; name: string }[]>([])
   const [guaranteeAck, setGuaranteeAck] = useState(false)
   const [pickupAddress, setPickupAddress] = useState('')
-  const [pickupDate, setPickupDate] = useState(() => {
-    const d = new Date()
-    d.setDate(d.getDate() + 1)
-    return d.toISOString().slice(0, 10)
-  })
+  const [pickupDate, setPickupDate] = useState(defaultPickupDate)
   const [pickupSlot, setPickupSlot] = useState(TIME_SLOTS[1])
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'BANK_TRANSFER' | 'PAYSTACK'>('BANK_TRANSFER')
@@ -106,6 +136,15 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const receiptInputRef = useRef<HTMLInputElement>(null)
+
+  // ----- Member gate + draft resume state -----
+  const [showAuthGate, setShowAuthGate] = useState(false)
+  const [gateEmail, setGateEmail] = useState('')
+  const [gateChecking, setGateChecking] = useState(false)
+  const [resumedAt, setResumedAt] = useState<number | null>(null)
+  /** Set once the restore effect has run — auto-save waits for it. */
+  const hydrated = useRef(false)
+  const gateEmailValid = EMAIL_RE.test(gateEmail.trim())
 
   // ----- Guest checkout contact details (collected in step 3) -----
   const [guestName, setGuestName] = useState('')
@@ -117,17 +156,68 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   const guestValid =
     guestName.trim().length >= 2 && guestEmailValid && guestPhoneValid
 
-  // Populate address fields once we have the current user
+  // ----- Restore a saved draft ("continue where you left off") -----
+  // Runs once on mount, BEFORE the profile prefill effect below so a restored
+  // address is never clobbered.
+  useEffect(() => {
+    hydrated.current = true
+    const d = loadDraft()
+    if (!d) return
+    setResumedAt(d.savedAt)
+    // B2B drafts can never sit on the (hidden) condition step
+    setStep(d.type === 'KG' && d.step === 2 ? 3 : d.step)
+    setType(d.type)
+    setItems(d.items)
+    setPickupAddress(d.pickupAddress || '')
+    setPickupDate(d.pickupDate || defaultPickupDate())
+    setPickupSlot(d.pickupSlot || TIME_SLOTS[1])
+    setDeliveryAddress(d.deliveryAddress || '')
+    if (d.paymentMethod === 'BANK_TRANSFER' || d.paymentMethod === 'PAYSTACK') {
+      setPaymentMethod(d.paymentMethod)
+    }
+    if (d.guestName) setGuestName(d.guestName)
+    if (d.guestEmail) setGuestEmail(d.guestEmail)
+    if (d.guestPhone) setGuestPhone(d.guestPhone)
+  }, [])
+
+  // Populate address fields once we have the current user (never overwrite
+  // an address the customer — or a restored draft — already filled in)
   useEffect(() => {
     if (effectiveUser?.address) {
-      setPickupAddress(effectiveUser.address)
-      setDeliveryAddress(effectiveUser.address)
+      setPickupAddress((prev) => prev || effectiveUser.address!)
+      setDeliveryAddress((prev) => prev || effectiveUser.address!)
     }
   }, [effectiveUser?.address])
   // If this user is B2B, default the type to KG
   useEffect(() => {
     if (effectiveUser?.role === "B2B") setType("KG")
   }, [effectiveUser?.role])
+
+  // ----- Auto-save the draft as the customer progresses -----
+  useEffect(() => {
+    if (!hydrated.current) return // never save before the restore pass has run
+    const hasContent =
+      step > 1 ||
+      Object.keys(items).length > 0 ||
+      Boolean(pickupAddress) ||
+      Boolean(deliveryAddress) ||
+      Boolean(guestEmail)
+    if (!hasContent) return
+    saveDraft({
+      savedAt: Date.now(),
+      step,
+      type,
+      items,
+      pickupAddress,
+      pickupDate,
+      pickupSlot,
+      deliveryAddress,
+      paymentMethod,
+      guestName,
+      guestEmail,
+      guestPhone,
+    })
+  }, [step, type, items, pickupAddress, pickupDate, pickupSlot, deliveryAddress, paymentMethod, guestName, guestEmail, guestPhone])
 
   // ----- Computed pricing (memoized for performance) -----
   // Must be called BEFORE any early returns (Rules of Hooks)
@@ -206,8 +296,9 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   }
 
   const next = () => {
-    if (step === 2 && type === 'KG') {
-      // Skip condition capture step for B2B
+    // B2B (per-kg) orders have no condition-capture step — jump straight
+    // over it (both when leaving step 1 and defensively from step 2)
+    if (type === 'KG' && (step === 1 || step === 2)) {
       setStep(3)
       return
     }
@@ -220,6 +311,107 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
       return
     }
     if (step > 1) setStep(step - 1)
+  }
+
+  // ---- Member gate helpers ----------------------------------------------
+  // Moving past the condition-photo step WITHOUT photos is a member perk:
+  // signed-in customers sail through; guests are asked to sign in (existing
+  // account) or sign up (new email) with their basket saved as a draft.
+
+  /** Force-save the current state as a draft (used right before the gate
+   *  redirects the customer away to login/signup). */
+  const ensureDraftSaved = () => {
+    saveDraft({
+      savedAt: Date.now(),
+      step,
+      type,
+      items,
+      pickupAddress,
+      pickupDate,
+      pickupSlot,
+      deliveryAddress,
+      paymentMethod,
+      guestName,
+      guestEmail,
+      guestPhone,
+    })
+  }
+
+  const openAuthGate = () => {
+    ensureDraftSaved()
+    setGateEmail((prev) => prev || guestEmail)
+    setShowAuthGate(true)
+  }
+
+  const handleSkipPhotos = () => {
+    if (isGuest) {
+      openAuthGate()
+      return
+    }
+    setStep(3) // members skip straight past
+  }
+
+  const handleNext = () => {
+    if (step === 2 && type === 'ITEM') {
+      // Condition capture: photos present (or member) -> continue;
+      // guest without photos -> member gate
+      if (photos.length > 0 || !isGuest) {
+        setStep(3)
+      } else {
+        openAuthGate()
+      }
+      return
+    }
+    next()
+  }
+
+  /** Gate submit: check the email against accounts and route to /login
+   *  (account exists) or /signup (new email). The draft is already saved,
+   *  so both paths land back on this exact step after auth. */
+  const submitAuthGate = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const email = gateEmail.trim().toLowerCase()
+    if (!EMAIL_RE.test(email)) return
+    setGateChecking(true)
+    ensureDraftSaved()
+    rememberAuthRedirect('/book')
+    try {
+      const res = await fetch('/api/auth/check-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      })
+      if (!res.ok) throw new Error('check failed')
+      const data = await res.json()
+      const params = `email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent('/book')}`
+      window.location.href = data.exists === true ? `/login?${params}` : `/signup?${params}`
+    } catch {
+      setGateChecking(false)
+      toast({
+        title: 'Something went wrong',
+        description: 'We could not check that email. Please try again in a moment.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  /** Discard the saved draft and start the wizard from scratch. */
+  const resetToFresh = () => {
+    clearDraft()
+    setResumedAt(null)
+    setStep(1)
+    setType(effectiveUser?.role === 'B2B' ? 'KG' : 'ITEM')
+    setItems({})
+    setPhotos([])
+    setGuaranteeAck(false)
+    setPickupAddress('')
+    setPickupDate(defaultPickupDate())
+    setPickupSlot(TIME_SLOTS[1])
+    setDeliveryAddress('')
+    setPaymentMethod('BANK_TRANSFER')
+    setGuestName('')
+    setGuestEmail('')
+    setGuestPhone('')
   }
 
   const handleConfirm = async () => {
@@ -264,6 +456,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
 
       const data = await res.json()
       const order = data.order
+
+      // The order is placed — the saved draft is no longer needed
+      clearDraft()
+      setResumedAt(null)
 
       // ----- Online card payment: redirect to Paystack's hosted checkout -----
       if (type === 'ITEM' && paymentMethod === 'PAYSTACK' && order.totalPrice) {
@@ -377,6 +573,32 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
       </div>
 
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+        {/* Draft resumed — let the customer know their basket came back */}
+        {resumedAt && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-5 flex flex-col gap-2 rounded-xl border border-gold-200 bg-gold-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <p className="text-sm text-navy">
+              <strong>Welcome back.</strong> We saved your booking on{' '}
+              {new Date(resumedAt).toLocaleDateString('en-NG', {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+              })}{' '}
+              — continue right where you left off.
+            </p>
+            <button
+              type="button"
+              onClick={resetToFresh}
+              className="shrink-0 text-xs font-semibold text-navy-300 underline decoration-gold-300 decoration-2 underline-offset-2 hover:text-navy"
+            >
+              Start fresh
+            </button>
+          </motion.div>
+        )}
+
         <AnimatePresence mode="wait">
           {/* ====================================================
               STEP 1 — SERVICE SELECTION
@@ -666,6 +888,20 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                     <strong>Guarantee Activated.</strong> You saved{' '}
                     {formatNaira(discount)} ({settings.guaranteeDiscountPercent}% off).
                   </span>
+                </div>
+              )}
+
+              {/* Guests: skipping without photos is a member perk — explain
+                  the choice before they hit the buttons */}
+              {isGuest && (
+                <div className="mt-4 flex items-start gap-2 rounded-lg bg-linen-100 p-3 text-xs text-navy-300">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
+                  <p>
+                    <strong className="text-navy">No photos right now?</strong> Skipping this
+                    step is a Kozy Care member perk — we&apos;ll save your basket and you can
+                    pick up right where you left off after a quick sign-in. Prefer not to create
+                    an account? Add at least one photo to continue as a guest.
+                  </p>
                 </div>
               )}
             </motion.div>
@@ -1045,30 +1281,124 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
         </AnimatePresence>
 
         {/* Footer nav */}
-        <div className="mt-8 flex items-center justify-between border-t pt-5">
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
           <Button variant="ghost" onClick={prev} disabled={step === 1}>
             <ArrowLeft className="mr-2 h-4 w-4" /> Back
           </Button>
-          {step < 4 ? (
-            <Button
-              onClick={next}
-              disabled={!canContinue()}
-              className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
-            >
-              Continue <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          ) : (
-            <Button
-              onClick={handleConfirm}
-              disabled={loading}
-              className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
-            >
-              <Sparkles className="mr-2 h-4 w-4" />
-              {loading ? 'Placing order...' : type === 'ITEM' ? `Pay & Confirm ${formatNaira(total)}` : 'Confirm pickup request'}
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {step === 2 && type === 'ITEM' && (
+              <Button
+                variant="outline"
+                onClick={handleSkipPhotos}
+                className="rounded-full border-navy-200 text-navy-300 hover:border-gold-300 hover:text-navy"
+              >
+                Skip for now
+              </Button>
+            )}
+            {step < 4 ? (
+              <Button
+                onClick={handleNext}
+                disabled={!canContinue()}
+                className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
+              >
+                Continue <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleConfirm}
+                disabled={loading}
+                className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                {loading ? 'Placing order...' : type === 'ITEM' ? `Pay & Confirm ${formatNaira(total)}` : 'Confirm pickup request'}
+              </Button>
+            )}
+          </div>
         </div>
       </div>
+
+      {/* ====================================================
+          MEMBER GATE — guests skipping the photo upload
+      ==================================================== */}
+      <AnimatePresence>
+        {showAuthGate && (
+          <motion.div
+            key="auth-gate"
+            className="fixed inset-0 z-[70] flex items-center justify-center bg-[#0A192F]/70 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => {
+              if (!gateChecking) setShowAuthGate(false)
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: 6 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+              className="w-full max-w-md rounded-2xl bg-white p-6 shadow-navy ring-1 ring-navy-100 sm:p-7"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gold-100">
+                <ShieldCheck className="h-6 w-6 text-gold-600" />
+              </div>
+              <h3 className="mt-4 text-center font-serif text-xl font-semibold text-navy">
+                Skipping is a member perk
+              </h3>
+              <p className="mt-2 text-center text-sm leading-relaxed text-navy-300">
+                Moving on without condition photos is reserved for Kozy Care members.
+                Your basket is saved — enter your email and we&apos;ll take you straight
+                back here to finish checkout.
+              </p>
+              <form onSubmit={submitAuthGate} className="mt-5 space-y-3">
+                <div>
+                  <Label
+                    htmlFor="gate-email"
+                    className="text-xs uppercase tracking-wide text-navy-300"
+                  >
+                    Your email
+                  </Label>
+                  <Input
+                    id="gate-email"
+                    type="email"
+                    value={gateEmail}
+                    onChange={(e) => setGateEmail(e.target.value)}
+                    placeholder="you@example.com"
+                    className="mt-1.5"
+                    autoFocus
+                    required
+                    disabled={gateChecking}
+                    autoComplete="email"
+                  />
+                  {gateEmail && !gateEmailValid && (
+                    <p className="mt-1 text-xs text-red-500">Enter a valid email address</p>
+                  )}
+                </div>
+                <Button
+                  type="submit"
+                  disabled={gateChecking || !gateEmailValid}
+                  className="w-full bg-gold-gradient text-navy hover:opacity-90"
+                >
+                  {gateChecking ? 'Checking…' : 'Continue'}
+                </Button>
+              </form>
+              <p className="mt-3 text-center text-[11px] leading-relaxed text-navy-300/80">
+                Already have an account? We&apos;ll sign you back in. New here? Sign-up
+                takes 60 seconds and your basket will be waiting.
+              </p>
+              <button
+                type="button"
+                onClick={() => setShowAuthGate(false)}
+                disabled={gateChecking}
+                className="mt-4 w-full text-center text-xs font-semibold text-navy-300 hover:text-navy"
+              >
+                Cancel — stay and add photos instead
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
