@@ -51,6 +51,7 @@ import {
   SERVICE_SPEEDS,
   allowsExpress24,
   formatNaira,
+  type GarmentCatalogItem,
   type OrderItem,
   type OrderType,
   type Order,
@@ -58,6 +59,16 @@ import {
 } from '@/lib/types'
 import { useStore } from '@/lib/store'
 import { useServerPrices } from '@/lib/hooks'
+import {
+  MEN_CATALOG_GROUPS,
+  WOMEN_CATALOG_GROUPS,
+  WIZARD_SHARED_GROUPS,
+  SHOES_GROUP,
+  itemsForGroup,
+  catalogTabForCategory,
+  type CatalogDisplayGroup,
+  type CatalogTab,
+} from '@/lib/pricing-groups'
 import { useSession } from 'next-auth/react'
 import {
   loadDraft,
@@ -85,6 +96,10 @@ interface Props {
    *  contact details are collected in step 3 and a customer record is
    *  created server-side. */
   allowGuest?: boolean
+  /** Tab the "Select service" step opens on — used for deep links such as
+   *  the landing page's "Book shoe care" CTA (/book?service=shoes). When
+   *  omitted the tab is derived from the restored draft (if any) or Men. */
+  initialCatalogTab?: CatalogTab
 }
 
 const STEPS = [
@@ -118,7 +133,7 @@ function defaultPickupDate() {
   return d.toISOString().slice(0, 10)
 }
 
-export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Props) {
+export function BookingWizard({ onComplete, onCancel, allowGuest = false, initialCatalogTab }: Props) {
   const settings = useStore((s) => s.settings)
   const { data: session, status: sessionStatus } = useSession()
   const sessionUser = session?.user
@@ -146,7 +161,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'BANK_TRANSFER' | 'PAYSTACK'>('BANK_TRANSFER')
   const [receiptUploaded, setReceiptUploaded] = useState(false)
-  const [catalogTab, setCatalogTab] = useState<'garments' | 'shoes'>('garments')
+  const [catalogTab, setCatalogTab] = useState<CatalogTab>(initialCatalogTab ?? 'men')
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const receiptInputRef = useRef<HTMLInputElement>(null)
@@ -215,6 +230,22 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
     if (d.guestName) setGuestName(d.guestName)
     if (d.guestEmail) setGuestEmail(d.guestEmail)
     if (d.guestPhone) setGuestPhone(d.guestPhone)
+
+    // Land the catalog on the tab that holds most of the restored items, so
+    // a returning customer sees their basket's tab instead of a default that
+    // looks empty while the selection bar says otherwise. An explicit
+    // initialCatalogTab (URL deep link) always wins.
+    if (!initialCatalogTab) {
+      const counts: Record<CatalogTab, number> = { men: 0, women: 0, shoes: 0 }
+      for (const [id, qty] of Object.entries(d.items)) {
+        counts[catalogTabForCategory(GARMENT_CATALOG.find((g) => g.id === id)?.category)] += qty
+      }
+      const best = (Object.keys(counts) as CatalogTab[]).reduce(
+        (a, b) => (counts[b] > counts[a] ? b : a),
+        'men'
+      )
+      if (counts[best] > 0) setCatalogTab(best)
+    }
   }, [])
 
   // Populate address fields once we have the current user (never overwrite
@@ -312,6 +343,68 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
       return next
     })
   }
+
+  // ----- Catalog item card (one row of the Select-service grids) -----
+  const renderCatalogCard = (g: GarmentCatalogItem) => {
+    const qty = items[g.id] ?? 0
+    return (
+      <div
+        key={g.id}
+        className={cn(
+          'flex items-center justify-between rounded-xl border p-3 transition',
+          qty > 0
+            ? 'border-gold-300 bg-gold-50/50 ring-1 ring-gold-200'
+            : 'border-navy-100 hover:border-gold-200'
+        )}
+      >
+        <div className="flex items-center gap-2">
+          <img src={g.icon} alt="" className="h-7 w-7" />
+          <div>
+            <p className="text-sm font-medium text-navy">{g.name}</p>
+            <p className="text-xs text-navy-300">
+              {formatNaira(serverPrices?.[g.id] ?? settings.garmentPrices[g.id] ?? g.price)} each
+            </p>
+            {/* Disambiguation line (e.g. Lace / Aso-Ebi Gown vs Dress vs Ankara Gown) */}
+            {g.description && (
+              <p className="mt-0.5 max-w-[30ch] text-[11px] leading-snug text-navy-300/90">
+                {g.description}
+              </p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={() => setQty(g.id, -1)}
+            disabled={qty === 0}
+            className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy-200 text-navy transition hover:bg-navy-100 disabled:opacity-30 disabled:cursor-not-allowed"
+            aria-label={`Remove one ${g.name}`}
+          >
+            <Minus className="h-4 w-4" />
+          </button>
+          <span className="w-8 text-center text-sm font-bold text-navy">{qty}</span>
+          <button
+            onClick={() => setQty(g.id, 1)}
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0A192F] text-white shadow-md transition hover:bg-[#1B3A5F] active:scale-95"
+            aria-label={`Add one ${g.name}`}
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // ----- A titled block of catalog cards (e.g. "Shirts & Tops") -----
+  const renderCatalogGroup = (group: CatalogDisplayGroup) => (
+    <div key={group.title} className="mt-4">
+      <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-600">
+        {group.title}
+      </p>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {itemsForGroup(group).map(renderCatalogCard)}
+      </div>
+    </div>
+  )
 
   const onPhotos = (files: FileList | null) => {
     if (!files) return
@@ -725,7 +818,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                     <div className="flex-1">
                       <p className="font-semibold text-navy">Per-item (Retail)</p>
                       <p className="text-xs text-navy-300">
-                        Pick your garments. Exact total at checkout.
+                        Pick your items. Exact total at checkout.
                       </p>
                     </div>
                   </label>
@@ -771,92 +864,51 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
 
               {type === 'ITEM' && (
                 <div className="mt-6">
-                  {/* Pick your garments / Pick your shoes — two tabs on the same line.
-                      "Pick your garments" stays in the muted navy-300 tone of the old label;
-                      "Pick your shoes" uses a navy fill + white text so it's unmissable,
-                      but still inside the brand palette (navy + gold). */}
-                  <div className="flex items-stretch gap-2 border-b border-navy-100">
-                    <button
-                      type="button"
-                      onClick={() => setCatalogTab('garments')}
-                      className={cn(
-                        '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-wide transition',
-                        catalogTab === 'garments'
-                          ? 'border-gold-400 text-navy'
-                          : 'border-transparent text-navy-300 hover:text-navy'
-                      )}
-                    >
-                      Pick your garments
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCatalogTab('shoes')}
-                      className={cn(
-                        '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-wide transition',
-                        catalogTab === 'shoes'
-                          ? 'border-gold-400 bg-navy text-white'
-                          : 'border-transparent bg-navy text-white hover:bg-[#1B3A5F]'
-                      )}
-                    >
-                      Pick your shoes
-                    </button>
+                  {/* Men / Women / Shoes — separated exactly like the landing
+                      pricing section. Shoes keep their own tab; all three tabs
+                      share the same quiet underline style (the old navy-filled
+                      shoes tab read like a banner, not a tab). */}
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
+                    Pick your items
+                  </p>
+                  <div className="mt-1 flex items-stretch gap-2 border-b border-navy-100">
+                    {(['men', 'women', 'shoes'] as const).map((tab) => (
+                      <button
+                        key={tab}
+                        type="button"
+                        onClick={() => setCatalogTab(tab)}
+                        className={cn(
+                          '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-wide transition',
+                          catalogTab === tab
+                            ? 'border-gold-400 text-navy'
+                            : 'border-transparent text-navy-300 hover:text-navy'
+                        )}
+                      >
+                        {tab === 'men' ? 'Men' : tab === 'women' ? 'Women' : 'Shoes'}
+                      </button>
+                    ))}
                   </div>
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {GARMENT_CATALOG.filter(
-                      (g) => (catalogTab === 'garments' ? g.category !== 'Shoes' : g.category === 'Shoes')
-                    ).map((g) => {
-                      const qty = items[g.id] ?? 0
-                      return (
-                        <div
-                          key={g.id}
-                          className={cn(
-                            'flex items-center justify-between rounded-xl border p-3 transition',
-                            qty > 0
-                              ? 'border-gold-300 bg-gold-50/50 ring-1 ring-gold-200'
-                              : 'border-navy-100 hover:border-gold-200'
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            <img
-                              src={g.icon}
-                              alt=""
-                              className="h-7 w-7"
-                            />
-                            <div>
-                              <p className="text-sm font-medium text-navy">{g.name}</p>
-                              <p className="text-xs text-navy-300">
-                                {formatNaira(serverPrices?.[g.id] ?? settings.garmentPrices[g.id] ?? g.price)} each
-                              </p>
-                              {/* Disambiguation line (e.g. Lace / Aso-Ebi Gown vs Dress vs Ankara Gown) */}
-                              {g.description && (
-                                <p className="mt-0.5 max-w-[30ch] text-[11px] leading-snug text-navy-300/90">
-                                  {g.description}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-1.5">
-                            <button
-                              onClick={() => setQty(g.id, -1)}
-                              disabled={qty === 0}
-                              className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy-200 text-navy transition hover:bg-navy-100 disabled:opacity-30 disabled:cursor-not-allowed"
-                              aria-label={`Remove one ${g.name}`}
-                            >
-                              <Minus className="h-4 w-4" />
-                            </button>
-                            <span className="w-8 text-center text-sm font-bold text-navy">{qty}</span>
-                            <button
-                              onClick={() => setQty(g.id, 1)}
-                              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0A192F] text-white shadow-md transition hover:bg-[#1B3A5F] active:scale-95"
-                              aria-label={`Add one ${g.name}`}
-                            >
-                              <Plus className="h-4 w-4" />
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
+
+                  {/* Gendered groups for the active tab */}
+                  {(catalogTab === 'men'
+                    ? MEN_CATALOG_GROUPS
+                    : catalogTab === 'women'
+                      ? WOMEN_CATALOG_GROUPS
+                      : [SHOES_GROUP]
+                  ).map(renderCatalogGroup)}
+
+                  {/* Shared strip — household & extras serve everyone, so they
+                      show under BOTH the Men and Women tabs (mirrors the
+                      landing page's "For the home & everything else" row).
+                      Shoes are excluded here — they have their own tab above. */}
+                  {catalogTab !== 'shoes' && (
+                    <div className="mt-6 border-t border-navy-100 pt-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
+                        For the home &amp; everything else
+                      </p>
+                      {WIZARD_SHARED_GROUPS.map(renderCatalogGroup)}
+                    </div>
+                  )}
 
                   {selectedItems.length > 0 && (
                     <div className="mt-4 flex items-center justify-between rounded-xl bg-navy px-4 py-3 text-white">

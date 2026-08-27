@@ -20,9 +20,14 @@ import {
   Zap,
 } from 'lucide-react'
 import {
-  GARMENT_CATALOG,
   formatNaira,
 } from '@/lib/types'
+import {
+  MEN_CATALOG_GROUPS,
+  WOMEN_CATALOG_GROUPS,
+  LANDING_SHARED_GROUPS,
+  itemsForGroup,
+} from '@/lib/pricing-groups'
 import { useStore } from '@/lib/store'
 import { useServerPrices } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
@@ -36,6 +41,9 @@ import { HowItWorksSection } from '@/components/customer/how-it-works'
 interface Props {
   onBook: () => void
   onPortal: () => void
+  /** Deep-link straight into the wizard's Shoes tab (shoe-care section CTA).
+   *  Falls back to onBook when not provided. */
+  onBookShoes?: () => void
 }
 
 // ---------------------------------------------------------------------------
@@ -44,42 +52,11 @@ interface Props {
 // Fashion-retail convention is "Men" / "Women" (not "male/female"), matching
 // the catalog's category names. Gendered traditional wear is split by item so
 // Agbada sits under Men and Iro & Buba under Women; household, shoes and
-// extras are shared and shown under both retail tabs.
-interface PricingDisplayGroup {
-  title: string
-  /** Either a catalog category or an explicit item-id list (not both) */
-  category?: string
-  itemIds?: string[]
-}
+// extras are shared and shown under both retail tabs. The group definitions
+// live in src/lib/pricing-groups.ts and are shared with the booking wizard,
+// so the two surfaces can never drift apart.
 
-const MEN_PRICING_GROUPS: PricingDisplayGroup[] = [
-  { title: 'Shirts & Tops', category: 'Shirts' },
-  { title: 'Trousers & Jeans', category: 'Trousers' },
-  { title: 'Suits & Blazers', category: 'Suits' },
-  { title: "Men's Traditional", itemIds: ['agbada', 'kaftan'] },
-]
-
-const WOMEN_PRICING_GROUPS: PricingDisplayGroup[] = [
-  { title: 'Everyday Wear', itemIds: ['blouse', 'skirt', 'womens-dress', 'jumpsuit'] },
-  {
-    title: 'Occasion & Traditional',
-    itemIds: ['lace-gown', 'gele', 'iro-buba', 'ankara-gown'],
-  },
-]
-
-const SHARED_PRICING_GROUPS: PricingDisplayGroup[] = [
-  { title: 'Household', category: 'Household' },
-  { title: 'Shoes & Sneakers', category: 'Shoes' },
-  { title: 'Extras', category: 'Extras' },
-]
-
-function itemsForGroup(group: PricingDisplayGroup) {
-  return group.itemIds
-    ? group.itemIds.map((id) => GARMENT_CATALOG.find((g) => g.id === id)).filter(Boolean)
-    : GARMENT_CATALOG.filter((g) => g.category === group.category)
-}
-
-export function CustomerLanding({ onBook, onPortal }: Props) {
+export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
   const [pricing, setPricing] = useState<'men' | 'women' | 'corporate'>('men')
   const settings = useStore((s) => s.settings)
   // Live prices from PriceCatalog (what the server charges) — the persisted
@@ -291,7 +268,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
             {(['men', 'women'] as const).map((tab) => (
               <TabsContent key={tab} value={tab} className="mt-8">
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {(tab === 'men' ? MEN_PRICING_GROUPS : WOMEN_PRICING_GROUPS).map((group) => (
+                  {(tab === 'men' ? MEN_CATALOG_GROUPS : WOMEN_CATALOG_GROUPS).map((group) => (
                     <Card key={group.title} className="border-navy-100 shadow-navy">
                       <CardContent className="p-5">
                         <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
@@ -300,20 +277,20 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                         <ul className="space-y-2">
                           {itemsForGroup(group).map((g) => (
                             <li
-                              key={g!.id}
+                              key={g.id}
                               className="flex items-center justify-between text-sm"
                             >
                               <span className="flex items-center gap-2.5 text-navy/80">
                                 <img
-                                  src={g!.icon}
+                                  src={g.icon}
                                   alt=""
                                   className="h-5 w-5 text-navy"
                                   style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
                                 />
-                                {g!.name}
+                                {g.name}
                               </span>
                               <span className="font-semibold text-navy">
-                                {formatNaira(priceOf(g!.id, g!.price))}
+                                {formatNaira(priceOf(g.id, g.price))}
                               </span>
                             </li>
                           ))}
@@ -329,7 +306,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                     For the home &amp; everything else
                   </p>
                   <div className="grid gap-4 md:grid-cols-3">
-                    {SHARED_PRICING_GROUPS.map((group) => (
+                    {LANDING_SHARED_GROUPS.map((group) => (
                       <Card key={group.title} className="border-navy-100 shadow-navy">
                         <CardContent className="p-5">
                           <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
@@ -338,20 +315,20 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                           <ul className="space-y-2">
                             {itemsForGroup(group).map((g) => (
                               <li
-                                key={g!.id}
+                                key={g.id}
                                 className="flex items-center justify-between text-sm"
                               >
                                 <span className="flex items-center gap-2.5 text-navy/80">
                                   <img
-                                    src={g!.icon}
+                                    src={g.icon}
                                     alt=""
                                     className="h-5 w-5 text-navy"
                                     style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
                                   />
-                                  {g!.name}
+                                  {g.name}
                                 </span>
                                 <span className="font-semibold text-navy">
-                                  {formatNaira(priceOf(g!.id, g!.price))}
+                                  {formatNaira(priceOf(g.id, g.price))}
                                 </span>
                               </li>
                             ))}
@@ -612,7 +589,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                 ))}
               </ul>
               <Button
-                onClick={onBook}
+                onClick={onBookShoes ?? onBook}
                 className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
               >
                 Book shoe care <ArrowRight className="ml-2 h-4 w-4" />

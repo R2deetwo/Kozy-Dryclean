@@ -33,6 +33,11 @@ export default function Home() {
           // Straight to booking — guests can check out without an account
           window.location.href = '/book'
         }}
+        onBookShoes={() => {
+          // Shoe-care section CTA — deep-link straight into the wizard's
+          // Shoes tab so sneaker customers land on the shoe list.
+          window.location.href = '/book?service=shoes'
+        }}
         onPortal={() => {
           window.location.href = '/login'
         }}

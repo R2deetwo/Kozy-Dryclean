@@ -6,18 +6,42 @@
 // The landing page's "Book Pickup" CTAs send visitors here instead of /signup.
 // Signed-in users book normally; guests provide contact details in the wizard
 // and a customer record is created server-side with their order.
+//
+// Deep links: /book?service=shoes (or women|men) opens the wizard's "Select
+// service" step directly on that catalog tab — used by the landing page's
+// "Book shoe care" CTA so shoe customers land on the shoe list, not garments.
 // =============================================================================
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { CheckCircle2, ArrowLeft, KeyRound, CreditCard } from 'lucide-react'
 import { BookingWizard } from '@/components/customer/booking-wizard'
+import type { CatalogTab } from '@/lib/pricing-groups'
 import { Logo } from '@/components/shell/logo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatNaira, type Order } from '@/lib/types'
 import { useStore } from '@/lib/store'
+
+/** Reads the ?service= deep-link param and starts the wizard on that tab. */
+function BookingWizardFromUrl(props: {
+  onComplete: (order: Order, meta?: { guestAccountCreated?: boolean }) => void
+  onCancel: () => void
+}) {
+  const searchParams = useSearchParams()
+  const service = searchParams.get('service')
+  const initialCatalogTab: CatalogTab | undefined =
+    service === 'shoes' || service === 'women' || service === 'men' ? service : undefined
+  return (
+    <BookingWizard
+      {...props}
+      allowGuest
+      initialCatalogTab={initialCatalogTab}
+    />
+  )
+}
 
 export default function BookPage() {
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null)
@@ -158,14 +182,17 @@ export default function BookPage() {
   // ===== The wizard itself =====
   return (
     <div className="min-h-screen bg-gradient-to-b from-linen-200 to-white">
-      <BookingWizard
-        allowGuest
-        onComplete={(order, meta) => {
-          setPlacedOrder(order)
-          setGuestCreated(!!meta?.guestAccountCreated)
-        }}
-        onCancel={() => (window.location.href = '/')}
-      />
+      {/* useSearchParams() forces this subtree to render client-side, so it
+          must sit inside a Suspense boundary for the static page shell. */}
+      <Suspense fallback={null}>
+        <BookingWizardFromUrl
+          onComplete={(order, meta) => {
+            setPlacedOrder(order)
+            setGuestCreated(!!meta?.guestAccountCreated)
+          }}
+          onCancel={() => (window.location.href = '/')}
+        />
+      </Suspense>
     </div>
   )
 }
