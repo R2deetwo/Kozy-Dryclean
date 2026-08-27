@@ -14,28 +14,59 @@ import {
   formatDateTime,
   formatDate,
   type Order,
+  type OrderItem,
 } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 
+/** The API order shape (GET /api/orders includes user + payments and carries
+ *  the item manifest as a JSON string). Legacy store-shaped orders (with
+ *  `items` pre-parsed) still work through the fallbacks below. */
+type InvoiceOrder = Order & {
+  itemsManifest?: string | null
+  user?: { id: string; name: string; email: string; phone?: string } | null
+  payments?: {
+    id: string
+    orderId: string
+    amount: number
+    method: string
+    status: string
+    verifiedAt?: string | null
+    createdAt?: string
+  }[]
+}
+
 interface Props {
-  order: Order
+  order: InvoiceOrder
   onBack: () => void
 }
 
 export function InvoiceView({ order, onBack }: Props) {
-  const customer = useUserById(order.userId)
-  const allPayments = useStore((s) => s.payments)
-  const settings = useStore((s) => s.settings)
+  // Customer + payment records come from the API order object (server
+  // includes them) — NOT the Zustand store, whose `payments`/`users` arrays
+  // are demo seed data that would never match a real order.
+  const fallbackUser = useUserById(order.userId)
+  const customer = order.user ?? fallbackUser
+  const settings = useStore((s) => s.settings) // UI/config state — allowed
   const payments = useMemo(
-    () => allPayments.filter((p) => p.orderId === order.id),
-    [allPayments, order.id]
+    () => (order.payments ?? []).filter((p) => p.orderId === order.id),
+    [order.payments, order.id]
   )
+  // API orders carry the manifest as JSON; store-shaped orders have items
+  // pre-parsed. Support both.
+  const items: OrderItem[] = useMemo(() => {
+    if (order.items && order.items.length > 0) return order.items
+    try {
+      return JSON.parse(order.itemsManifest || '[]') as OrderItem[]
+    } catch {
+      return []
+    }
+  }, [order.items, order.itemsManifest])
   const verifiedPayment = payments.find((p) => p.status === 'VERIFIED')
 
   const subtotal =
     order.type === 'ITEM'
-      ? order.items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+      ? items.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
       : (order.finalWeight ?? 0) * settings.pricePerKg
   const guaranteeDiscount =
     order.guaranteeActive && order.type === 'ITEM'
@@ -124,7 +155,7 @@ export function InvoiceView({ order, onBack }: Props) {
               </thead>
               <tbody>
                 {order.type === 'ITEM' ? (
-                  order.items.map((i) => (
+                  items.map((i) => (
                     <tr key={i.id} className="border-b border-linen-200 last:border-0">
                       <td className="py-2 text-navy">{i.name}</td>
                       <td className="py-2 text-center text-navy-300">{i.quantity}</td>
@@ -158,7 +189,7 @@ export function InvoiceView({ order, onBack }: Props) {
             {/* Mobile: stacked cards */}
             <div className="space-y-2 sm:hidden">
               {order.type === 'ITEM' ? (
-                order.items.map((i) => (
+                items.map((i) => (
                   <div key={i.id} className="flex items-center justify-between gap-2 rounded-lg bg-linen-100 px-3 py-2 text-sm">
                     <div className="min-w-0">
                       <p className="font-medium text-navy truncate">{i.name}</p>
@@ -221,7 +252,7 @@ export function InvoiceView({ order, onBack }: Props) {
                   {verifiedPayment.method === 'BANK_TRANSFER'
                     ? 'Bank transfer verified by admin'
                     : 'Paystack webhook auto-verified'}{' '}
-                  · {formatDateTime(verifiedPayment.verifiedAt)}
+                  · {formatDateTime(verifiedPayment.verifiedAt ?? payments[0]?.createdAt ?? order.updatedAt)}
                 </p>
               </div>
             )}

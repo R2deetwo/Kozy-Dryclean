@@ -25,10 +25,13 @@ import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
 export function PaymentQueue() {
-  const { data: paymentsData, isLoading } = usePayments()
+  // fetchAll: the queue must see every PENDING receipt (a pending payment
+  // beyond page 1 would otherwise be invisible), and the orders lookup map
+  // needs the full set to resolve any receipt's order.
+  const { data: paymentsData, isLoading } = usePayments({ fetchAll: true })
   const verifyMutation = useVerifyPayment()
   const payments = (paymentsData ?? []).filter((p) => p.status === 'PENDING')
-  const orders = useOrders().data ?? []
+  const orders = useOrders({ fetchAll: true }).data ?? []
   const [selectedId, setSelectedId] = useState<string | undefined>(payments[0]?.id)
   const [zoom, setZoom] = useState(1)
 

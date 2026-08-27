@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
   // blocks scripted spam.
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  const rl = rateLimit(`review-post:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
+  const rl = await rateLimit(`review-post:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
   if (!rl.success) {
     return NextResponse.json(
       { error: 'Too many submissions. Please try again later.' },

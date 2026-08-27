@@ -15,7 +15,7 @@ import { rateLimit, getClientIP } from '@/lib/rate-limit'
 export async function GET(req: NextRequest) {
   // Rate limit: 30 lookups per IP per 5 minutes
   const ip = getClientIP(req)
-  const limit = rateLimit(`paystack-verify:${ip}`, { max: 30, windowMs: 5 * 60 * 1000 })
+  const limit = await rateLimit(`paystack-verify:${ip}`, { max: 30, windowMs: 5 * 60 * 1000 })
   if (!limit.success) {
     return NextResponse.json({ error: 'Too many requests.' }, { status: 429 })
   }

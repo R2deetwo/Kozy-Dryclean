@@ -13,7 +13,7 @@ import { rateLimit, getClientIP } from '@/lib/rate-limit'
 export async function POST(req: Request) {
   // Rate limit: 3 resends per hour per IP
   const ip = getClientIP(req)
-  const limit = rateLimit(`resend:${ip}`, { max: 3, windowMs: 60 * 60 * 1000 })
+  const limit = await rateLimit(`resend:${ip}`, { max: 3, windowMs: 60 * 60 * 1000 })
   if (!limit.success) {
     return NextResponse.json(
       { error: 'Too many resend attempts. Please try again later.' },

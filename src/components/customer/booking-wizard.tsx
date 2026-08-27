@@ -3,19 +3,23 @@
 // =============================================================================
 // BookingWizard — 4-step checkout (Service → Condition → Logistics → Pay)
 // =============================================================================
-// Member-gated skip (owner-requested):
-//   The condition-photo step (Return-as-Received Guarantee) is optional, but
-//   moving PAST it without uploading photos is a member perk. Signed-in
-//   customers skip freely; guests are asked for their email — existing
-//   accounts are routed to /login, new emails to /signup — and their basket
-//   is saved as a draft so they land back on the exact step they left.
-//   Guests who upload at least one photo continue as guests (guest checkout
-//   stays intact for engaged users).
+// Condition-photo step (Return-as-Received Guarantee) — button contract:
+//   - "Skip for now" is the GUEST escape hatch: anyone (guest or member)
+//     moves on without photos, no login required, no guarantee / no 5%.
+//   - "Continue" is the upload path: it nudges the customer to add photos
+//     and acknowledge the terms. A guest who has uploaded photos is asked
+//     to sign in / create an account so the guarantee is tied to their
+//     identity (that's how claims can be honoured). Members sail through.
+//   - The auth-gate modal's escape button performs the skip ("Skip for now —
+//     continue without the guarantee"), so declining to sign in never dead-
+//     ends the checkout.
 //
 // Draft persistence:
 //   Selections (items, addresses, step, guest details) auto-save to
 //   localStorage (see src/lib/booking-draft.ts) and restore the next time the
-//   wizard opens — "Welcome back — continue where you left off."
+//   wizard opens — "Welcome back — continue where you left off." Photos
+//   stashed for the auth gate ride in sessionStorage (same tab) so they
+//   survive the login round-trip.
 // =============================================================================
 
 import { useState, useRef, useEffect, useMemo } from 'react'
@@ -103,6 +107,10 @@ const TIME_SLOTS = [
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+/** sessionStorage key for photos stashed while a guest hops through the
+ *  login/signup round-trip to claim the guarantee (same tab only). */
+const GATE_PHOTOS_KEY = 'kozy:gate-photos'
+
 /** Default pickup date: tomorrow. */
 function defaultPickupDate() {
   const d = new Date()
@@ -172,6 +180,22 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   useEffect(() => {
     hydrated.current = true
     const d = loadDraft()
+
+    // Photos stashed before the guarantee gate's login round-trip: restore
+    // them (once) so the customer doesn't have to re-upload after signing in.
+    // The terms checkbox is deliberately NOT restored — acknowledging the
+    // guarantee terms must stay an explicit, current action.
+    try {
+      const stashed = sessionStorage.getItem(GATE_PHOTOS_KEY)
+      if (stashed) {
+        const parsed = JSON.parse(stashed) as { url: string; name: string }[]
+        if (Array.isArray(parsed) && parsed.length > 0) setPhotos(parsed)
+        sessionStorage.removeItem(GATE_PHOTOS_KEY)
+      }
+    } catch {
+      /* corrupt stash or unavailable sessionStorage — ignore */
+    }
+
     if (!d) return
     setResumedAt(d.savedAt)
     // B2B drafts can never sit on the (hidden) condition step
@@ -261,7 +285,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   const speedOption =
     SERVICE_SPEEDS.find((s) => s.id === effectiveSpeed) ?? SERVICE_SPEEDS[0]
   const expressSurcharge = Math.round(subtotal * speedOption.surcharge)
-  const guaranteeActive = type === 'ITEM' && photos.length > 0 && guaranteeAck
+  const guaranteeActive =
+    type === 'ITEM' && !isGuest && photos.length > 0 && guaranteeAck
   const grossTotal = subtotal + expressSurcharge
   const discount = guaranteeActive ? grossTotal * (settings.guaranteeDiscountPercent / 100) : 0
   const total = grossTotal - discount
@@ -343,10 +368,11 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
     if (step > 1) setStep(step - 1)
   }
 
-  // ---- Member gate helpers ----------------------------------------------
-  // Moving past the condition-photo step WITHOUT photos is a member perk:
-  // signed-in customers sail through; guests are asked to sign in (existing
-  // account) or sign up (new email) with their basket saved as a draft.
+  // ---- Guest guarantee-gate helpers -------------------------------------
+  // "Skip for now" is free for everyone (guests included) — it simply forgoes
+  // the guarantee. The auth gate only appears when a GUEST who has uploaded
+  // photos tries to CONTINUE, because claiming the guarantee (5% off + damage
+  // coverage) requires an account we can honour claims against.
 
   /** Force-save the current state as a draft (used right before the gate
    *  redirects the customer away to login/signup). */
@@ -369,27 +395,57 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
 
   const openAuthGate = () => {
     ensureDraftSaved()
+    // Stash the photos for the login round-trip (sessionStorage survives
+    // same-tab navigation to /login and back, unlike component state).
+    // Best-effort: quota errors just mean re-uploading after sign-in.
+    try {
+      if (photos.length > 0) {
+        sessionStorage.setItem(GATE_PHOTOS_KEY, JSON.stringify(photos))
+      } else {
+        sessionStorage.removeItem(GATE_PHOTOS_KEY)
+      }
+    } catch {
+      /* sessionStorage full or unavailable — proceed without the stash */
+    }
     setGateEmail((prev) => prev || guestEmail)
     setShowAuthGate(true)
   }
 
+  /** Skip = move on without the guarantee. Free for guests AND members —
+   *  this is the low-friction escape hatch, never gated. */
   const handleSkipPhotos = () => {
-    if (isGuest) {
-      openAuthGate()
-      return
-    }
-    setStep(3) // members skip straight past
+    setGuaranteeAck(false) // skipping always forfeits the 5%
+    setStep(3)
   }
 
   const handleNext = () => {
     if (step === 2 && type === 'ITEM') {
-      // Condition capture: photos present (or member) -> continue;
-      // guest without photos -> member gate
-      if (photos.length > 0 || !isGuest) {
-        setStep(3)
-      } else {
-        openAuthGate()
+      // Continue is the UPLOAD path:
+      //   no photos yet            -> nudge to upload (or skip)
+      //   photos, terms not ticked -> nudge to acknowledge the terms
+      //   photos + terms, guest    -> sign-in gate to claim the guarantee
+      //   photos + terms, member   -> proceed with the guarantee active
+      if (photos.length === 0) {
+        toast({
+          title: 'Please upload a photo to activate your guarantee',
+          description:
+            'Add at least one condition photo for the Return-as-Received Guarantee and its 5% discount — or tap "Skip for now" to continue without it.',
+        })
+        return
       }
+      if (!guaranteeAck) {
+        toast({
+          title: 'One more tick',
+          description:
+            'Tick the confirmation box above to accept the Return-as-Received Guarantee terms and activate your 5% discount.',
+        })
+        return
+      }
+      if (isGuest) {
+        openAuthGate()
+        return
+      }
+      setStep(3)
       return
     }
     next()
@@ -929,16 +985,18 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                 </div>
               )}
 
-              {/* Guests: skipping without photos is a member perk — explain
-                  the choice before they hit the buttons */}
+              {/* Guests: explain the choice in plain terms — skipping is
+                  free but forfeits the guarantee; photos + continue claims it */}
               {isGuest && (
                 <div className="mt-4 flex items-start gap-2 rounded-lg bg-linen-100 p-3 text-xs text-navy-300">
                   <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
                   <p>
-                    <strong className="text-navy">No photos right now?</strong> Skipping this
-                    step is a Kozy Care member perk — we&apos;ll save your basket and you can
-                    pick up right where you left off after a quick sign-in. Prefer not to create
-                    an account? Add at least one photo to continue as a guest.
+                    <strong className="text-navy">Checking out as a guest?</strong> Skip the
+                    photos and continue — you just won&apos;t be covered by the
+                    Return-as-Received Guarantee or its{' '}
+                    {settings.guaranteeDiscountPercent}% discount. Want the coverage? Add your
+                    photos and continue — we&apos;ll ask you to sign in so claims are tied to
+                    your account, and your basket will be waiting right here.
                   </p>
                 </div>
               )}
@@ -1439,7 +1497,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
       </div>
 
       {/* ====================================================
-          MEMBER GATE — guests skipping the photo upload
+          GUARANTEE GATE — guests claiming the Return-as-Received
+          Guarantee (uploaded photos + tapped Continue)
       ==================================================== */}
       <AnimatePresence>
         {showAuthGate && (
@@ -1465,12 +1524,13 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                 <ShieldCheck className="h-6 w-6 text-gold-600" />
               </div>
               <h3 className="mt-4 text-center font-serif text-xl font-semibold text-navy">
-                Skipping is a member perk
+                Claim your {settings.guaranteeDiscountPercent}% guarantee
               </h3>
               <p className="mt-2 text-center text-sm leading-relaxed text-navy-300">
-                Moving on without condition photos is reserved for Kozy Care members.
-                Your basket is saved — enter your email and we&apos;ll take you straight
-                back here to finish checkout.
+                The Return-as-Received Guarantee is tied to a Kozy Care account —
+                that&apos;s how we verify and honour claims. Your basket and photos
+                are saved; enter your email and we&apos;ll take you straight back to
+                finish checkout.
               </p>
               <form onSubmit={submitAuthGate} className="mt-5 space-y-3">
                 <div>
@@ -1510,11 +1570,16 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
               </p>
               <button
                 type="button"
-                onClick={() => setShowAuthGate(false)}
+                onClick={() => {
+                  // Declining to sign in performs the skip — checkout never
+                  // dead-ends. The guarantee (and its 5%) is forfeited.
+                  setShowAuthGate(false)
+                  handleSkipPhotos()
+                }}
                 disabled={gateChecking}
                 className="mt-4 w-full text-center text-xs font-semibold text-navy-300 hover:text-navy"
               >
-                Cancel — stay and add photos instead
+                Skip for now — continue without the guarantee
               </button>
             </motion.div>
           </motion.div>

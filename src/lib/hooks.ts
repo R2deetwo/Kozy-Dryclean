@@ -5,7 +5,8 @@
 // (form drafts, modal open/close, wizard step, theme).
 // =============================================================================
 
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
 
 // ----- Types (match API responses) -----
 export interface ApiOrder {
@@ -66,25 +67,97 @@ export interface ApiUser {
   createdAt: string
 }
 
+// ----- Paginated list hook plumbing -----
+// GET /api/{orders,payments,users} are cursor-paginated ({ items, nextCursor }).
+// These hooks expose:
+//   data       — the ACCUMULATED items across all loaded pages (so existing
+//                consumers keep receiving a plain array, exactly as before)
+//   hasMore    — true when nextCursor is non-null
+//   loadMore() — fetch the next page (wired to "Load more" controls)
+//   isFetchingMore — fetch-next-page in flight
+//   fetchAll   — auto-load every page up front (bounded, see MAX_PAGES) for
+//                views that MUST see the complete collection to be correct:
+//                dashboard aggregates, finance totals, lookup maps (e.g.
+//                driver-assignment dropdowns, payment→order joins).
+// Primary list surfaces (admin kanban, driver route, customer portal, CRM
+// table) use plain incremental loading instead.
+const PAGE_SIZE = 25
+const MAX_PAGES = 50 // hard bound for fetchAll (50 × 100... practically 50 × 25)
+
+interface Page<T> {
+  items: T[]
+  nextCursor: string | null
+}
+
+function usePaginatedList<T>(
+  queryKeyBase: string,
+  endpoint: string,
+  options?: {
+    fetchAll?: boolean
+    enabled?: boolean
+    refetchInterval?: number | false
+    staleTime?: number
+  }
+) {
+  const fetchAll = options?.fetchAll ?? false
+
+  const query = useInfiniteQuery<Page<T>>({
+    queryKey: [queryKeyBase, fetchAll ? 'all' : 'paged'],
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams({ limit: String(PAGE_SIZE) })
+      // pageParam is string | undefined at runtime (initialPageParam and
+      // getNextPageParam only ever produce strings) — the single-generic
+      // useInfiniteQuery signature just widens it to unknown.
+      if (pageParam) params.set('cursor', pageParam as string)
+      const res = await fetch(`${endpoint}?${params.toString()}`)
+      if (!res.ok) throw new Error(`Failed to fetch ${queryKeyBase}`)
+      return (await res.json()) as Page<T>
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    staleTime: options?.staleTime ?? 10 * 1000,
+    enabled: options?.enabled ?? true,
+    refetchInterval: options?.refetchInterval ?? false,
+  })
+
+  // Auto-advance: fetchAll mode pages through everything; in paged mode we
+  // also auto-advance past a page that came back EMPTY but has a cursor —
+  // this happens for drivers when the whole page was hidden by the geofence.
+  const pages = query.data?.pages ?? []
+  const lastPage = pages[pages.length - 1]
+  const shouldAutoAdvance =
+    !!query.data &&
+    pages.length < MAX_PAGES &&
+    !!lastPage?.nextCursor &&
+    (fetchAll || lastPage.items.length === 0)
+
+  useEffect(() => {
+    if (shouldAutoAdvance && !query.isFetchingNextPage && !query.isLoading) {
+      query.fetchNextPage()
+    }
+  }, [shouldAutoAdvance, query.isFetchingNextPage, query.isLoading])
+
+  const data = query.data ? query.data.pages.flatMap((p) => p.items) : undefined
+
+  return {
+    ...query,
+    data,
+    hasMore: !!lastPage?.nextCursor && pages.length < MAX_PAGES,
+    loadMore: query.fetchNextPage,
+    isFetchingMore: query.isFetchingNextPage,
+  }
+}
+
 // ----- Orders -----
 export function useOrders(options?: {
   /** Set false to pause polling (e.g. driver outside the geofence) */
   enabled?: boolean
   /** Live-refresh interval in ms (e.g. 15000 for the driver app) */
   refetchInterval?: number | false
+  /** Auto-load every page (aggregates/lookups) instead of incremental */
+  fetchAll?: boolean
 }) {
-  return useQuery({
-    queryKey: ['orders'],
-    queryFn: async () => {
-      const res = await fetch('/api/orders')
-      if (!res.ok) throw new Error('Failed to fetch orders')
-      const data = await res.json()
-      return data.orders as ApiOrder[]
-    },
-    staleTime: 10 * 1000, // 10 seconds
-    enabled: options?.enabled ?? true,
-    refetchInterval: options?.refetchInterval ?? false,
-  })
+  return usePaginatedList<ApiOrder>('orders', '/api/orders', options)
 }
 
 export function useOrder(id?: string) {
@@ -147,17 +220,8 @@ export function useUpdateOrder() {
 }
 
 // ----- Payments -----
-export function usePayments() {
-  return useQuery({
-    queryKey: ['payments'],
-    queryFn: async () => {
-      const res = await fetch('/api/payments')
-      if (!res.ok) throw new Error('Failed to fetch payments')
-      const data = await res.json()
-      return data.payments as ApiPayment[]
-    },
-    staleTime: 10 * 1000,
-  })
+export function usePayments(options?: { fetchAll?: boolean }) {
+  return usePaginatedList<ApiPayment>('payments', '/api/payments', options)
 }
 
 export function useCreatePayment() {
@@ -207,16 +271,10 @@ export function useVerifyPayment() {
 }
 
 // ----- Users (admin-only) -----
-export function useUsers() {
-  return useQuery({
-    queryKey: ['users'],
-    queryFn: async () => {
-      const res = await fetch('/api/users')
-      if (!res.ok) throw new Error('Failed to fetch users')
-      const data = await res.json()
-      return data.users as ApiUser[]
-    },
+export function useUsers(options?: { fetchAll?: boolean }) {
+  return usePaginatedList<ApiUser>('users', '/api/users', {
     staleTime: 30 * 1000,
+    ...options,
   })
 }
 

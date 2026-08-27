@@ -36,8 +36,10 @@ type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'revie
 
 export function AdminDashboard() {
   const admin = { name: 'Admin', email: 'admin@kozy.ng' }
-  const { data: orders } = useOrders()
-  const { data: payments } = usePayments()
+  // fetchAll: sidebar badges (active orders, pending payments) are counts over
+  // the whole collections — the hooks page through the cursor API for them.
+  const { data: orders } = useOrders({ fetchAll: true })
+  const { data: payments } = usePayments({ fetchAll: true })
   const notifications: any[] = []
   const [tab, setTab] = useState<Tab>('overview')
 
@@ -205,9 +207,11 @@ export function AdminDashboard() {
 }
 
 function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
-  const { data: orders } = useOrders()
-  const { data: payments } = usePayments()
-  const { data: allUsers } = useUsers()
+  // fetchAll: overview aggregates (revenue, active orders, customer counts)
+  // must see every record — shared cache with the sidebar badges above.
+  const { data: orders } = useOrders({ fetchAll: true })
+  const { data: payments } = usePayments({ fetchAll: true })
+  const { data: allUsers } = useUsers({ fetchAll: true })
   const customers = useMemo(
     () => (allUsers ?? []).filter((u) => u.role === 'B2C' || u.role === 'B2B'),
     [allUsers]
@@ -386,9 +390,12 @@ function QuickActionCard({
 }
 
 function RecentOrdersCard() {
-  const { data: allOrders } = useOrders()
+  // Only the 5 newest orders are shown, but this shares the ['orders','all']
+  // cache with the Overview aggregates — no extra requests, and the user
+  // lookup map below needs the full users set anyway.
+  const { data: allOrders } = useOrders({ fetchAll: true })
   const orders = useMemo(() => (allOrders ?? []).slice(0, 5), [allOrders])
-  const { data: users } = useUsers()
+  const { data: users } = useUsers({ fetchAll: true })
   return (
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between">

@@ -32,8 +32,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
 export function FinanceView() {
-  const { data: orders } = useOrders()
-  const { data: payments } = usePayments()
+  // fetchAll: finance totals/revenue charts must see every order/payment —
+  // the hooks page through the cursor API (bounded by MAX_PAGES).
+  const { data: orders } = useOrders({ fetchAll: true })
+  const { data: payments } = usePayments({ fetchAll: true })
 
   const stats = useMemo(() => {
     const verified = (payments ?? []).filter((p: any) => p.status === 'VERIFIED')

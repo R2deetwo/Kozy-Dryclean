@@ -71,8 +71,9 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
   const updateOrderMutation = useUpdateOrder()
   const verifyPaymentMutation = useVerifyPayment()
 
-  // Users list for driver assignment
-  const { data: usersData } = useUsers()
+  // Users list for driver assignment — fetchAll so the dropdown contains
+  // EVERY driver, not just the newest 25 users.
+  const { data: usersData } = useUsers({ fetchAll: true })
   const drivers = (usersData ?? []).filter((u: any) => u.role === 'DRIVER')
 
   // Parse items from itemsManifest JSON string

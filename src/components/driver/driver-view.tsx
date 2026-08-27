@@ -46,7 +46,7 @@ export function DriverView() {
   const geofence = useDriverGeofence(true)
   const ordersPaused = geofence.status === 'outside'
 
-  const { data: allOrders, isLoading } = useOrders({
+  const { data: allOrders, isLoading, hasMore, loadMore, isFetchingMore } = useOrders({
     enabled: !ordersPaused, // pause polling + new activity while outside the fence
     refetchInterval: 15000, // live route updates (new assignments appear automatically)
   })
@@ -172,6 +172,17 @@ export function DriverView() {
               />
             ))}
           </ul>
+        )}
+
+        {/* Orders are cursor-paginated — older assignments load on demand */}
+        {!ordersPaused && hasMore && (
+          <button
+            onClick={() => loadMore()}
+            disabled={isFetchingMore}
+            className="mt-3 w-full rounded-full border border-slate-600 py-2 text-xs font-semibold text-slate-300 transition hover:border-gold-400 hover:text-white disabled:opacity-50"
+          >
+            {isFetchingMore ? 'Loading…' : `Load more (${orders.length} shown)`}
+          </button>
         )}
 
         <p className="mt-6 text-center text-[10px] text-slate-500">

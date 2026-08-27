@@ -39,7 +39,7 @@ function baseUrl(): string {
 export async function POST(req: Request) {
   // Rate limit: 10 initialize attempts per IP per 10 minutes
   const ip = getClientIP(req)
-  const limit = rateLimit(`paystack-init:${ip}`, { max: 10, windowMs: 10 * 60 * 1000 })
+  const limit = await rateLimit(`paystack-init:${ip}`, { max: 10, windowMs: 10 * 60 * 1000 })
   if (!limit.success) {
     return NextResponse.json({ error: 'Too many payment attempts. Please try again shortly.' }, { status: 429 })
   }

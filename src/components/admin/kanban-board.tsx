@@ -57,7 +57,7 @@ const COLUMN_META: Record<OrderStatus, { label: string; icon: any; tone: string 
 }
 
 export function KanbanBoard() {
-  const { data: ordersData, isLoading } = useOrders()
+  const { data: ordersData, isLoading, hasMore, loadMore, isFetchingMore } = useOrders()
   const updateOrderMutation = useUpdateOrder()
   const [activeId, setActiveId] = useState<string | null>(null)
   const [selected, setSelected] = useState<any | undefined>(undefined)
@@ -104,29 +104,41 @@ export function KanbanBoard() {
                 : 'Sortable list of all orders. Click any row to view details.'}
             </p>
           </div>
-          <div className="flex items-center gap-1 rounded-full bg-linen-200 p-1">
-            <button
-              onClick={() => setView('kanban')}
-              className={cn(
-                'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
-                view === 'kanban'
-                  ? 'bg-navy text-white'
-                  : 'text-navy-300 hover:text-navy'
-              )}
-            >
-              <KanbanSquare className="h-3.5 w-3.5" /> Kanban
-            </button>
-            <button
-              onClick={() => setView('list')}
-              className={cn(
-                'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
-                view === 'list'
-                  ? 'bg-navy text-white'
-                  : 'text-navy-300 hover:text-navy'
-              )}
-            >
-              <List className="h-3.5 w-3.5" /> List
-            </button>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-full bg-linen-200 p-1">
+              <button
+                onClick={() => setView('kanban')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
+                  view === 'kanban'
+                    ? 'bg-navy text-white'
+                    : 'text-navy-300 hover:text-navy'
+                )}
+              >
+                <KanbanSquare className="h-3.5 w-3.5" /> Kanban
+              </button>
+              <button
+                onClick={() => setView('list')}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
+                  view === 'list'
+                    ? 'bg-navy text-white'
+                    : 'text-navy-300 hover:text-navy'
+                )}
+              >
+                <List className="h-3.5 w-3.5" /> List
+              </button>
+            </div>
+            {/* Orders are cursor-paginated — pull in the next page on demand */}
+            {hasMore && (
+              <button
+                onClick={() => loadMore()}
+                disabled={isFetchingMore}
+                className="rounded-full border border-navy-200 px-3 py-1.5 text-xs font-semibold text-navy transition hover:border-gold-300 disabled:opacity-50"
+              >
+                {isFetchingMore ? 'Loading…' : `Load more (${orders?.length ?? 0} loaded)`}
+              </button>
+            )}
           </div>
         </div>
       </div>

@@ -21,7 +21,7 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 export async function POST(req: Request) {
   // ----- Rate limit: 30 checks per hour per IP -----
   const ip = getClientIP(req)
-  const limit = rateLimit(`check-account:${ip}`, {
+  const limit = await rateLimit(`check-account:${ip}`, {
     max: 30,
     windowMs: 60 * 60 * 1000,
   })

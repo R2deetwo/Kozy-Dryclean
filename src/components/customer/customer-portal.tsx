@@ -123,8 +123,9 @@ function CustomerDashboard({
   onViewInvoice: (o: any) => void
   onCloseDetail: () => void
 }) {
-  // Fetch orders from the real API (already RBAC-filtered server-side to this user)
-  const { data: orders, isLoading } = useOrders()
+  // Fetch orders from the real API (already RBAC-filtered server-side to this
+  // user) — cursor-paginated, older orders load on demand.
+  const { data: orders, isLoading, hasMore, loadMore, isFetchingMore } = useOrders()
   const [tab, setTab] = useState<'active' | 'invoices'>('active')
   const [selected, setSelected] = useState<any | undefined>(
     highlightedId ? orders?.find((o) => o.id === highlightedId) : undefined
@@ -271,6 +272,15 @@ function CustomerDashboard({
                   />
                 ))}
               </div>
+              {hasMore && (
+                <button
+                  onClick={() => loadMore()}
+                  disabled={isFetchingMore}
+                  className="mx-auto mt-4 block rounded-full border border-navy-200 px-5 py-2 text-xs font-semibold text-navy transition hover:border-gold-300 disabled:opacity-50"
+                >
+                  {isFetchingMore ? 'Loading…' : 'Load older orders'}
+                </button>
+              )}
             </TabsContent>
           </Tabs>
         )}

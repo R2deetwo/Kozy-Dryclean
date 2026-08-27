@@ -10,7 +10,7 @@ import { requireRole } from '@/lib/auth'
 
 export async function POST(req: Request) {
   const ip = getClientIP(req)
-  const limit = rateLimit(`rider-app:${ip}`, { max: 3, windowMs: 60 * 60 * 1000 })
+  const limit = await rateLimit(`rider-app:${ip}`, { max: 3, windowMs: 60 * 60 * 1000 })
   if (!limit.success) {
     return NextResponse.json({ error: 'Too many applications. Please try again later.' }, { status: 429 })
   }

@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   // Rate limit: 60 lookups per IP per 5 minutes — stops careless enumeration.
   const ip =
     req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown'
-  const rl = rateLimit(`review-context:${ip}`, {
+  const rl = await rateLimit(`review-context:${ip}`, {
     max: 60,
     windowMs: 5 * 60 * 1000,
   })

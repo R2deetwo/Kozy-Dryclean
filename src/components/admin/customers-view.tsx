@@ -31,8 +31,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
 export function CustomersView() {
-  const { data: users } = useUsers()
-  const { data: orders } = useOrders()
+  // Users are the primary list here → incremental paging with a "Load more"
+  // control (orders joined per-row need the full set → fetchAll).
+  const { data: users, hasMore, loadMore, isFetchingMore } = useUsers()
+  const { data: orders } = useOrders({ fetchAll: true })
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'RETAIL' | 'CORPORATE' | 'DRIVER'>('all')
   const [selected, setSelected] = useState<any | undefined>(undefined)
@@ -152,6 +154,20 @@ export function CustomersView() {
             No customers match your search.
           </div>
         )}
+        {hasMore && (
+          <div className="flex items-center justify-center gap-3 border-t bg-linen-100 px-4 py-3">
+            <p className="text-xs text-navy-300">
+              Showing {filtered.length} loaded — more records available.
+            </p>
+            <button
+              onClick={() => loadMore()}
+              disabled={isFetchingMore}
+              className="rounded-full border border-navy-200 px-4 py-1.5 text-xs font-semibold text-navy transition hover:border-gold-300 hover:text-navy disabled:opacity-50"
+            >
+              {isFetchingMore ? 'Loading…' : 'Load more'}
+            </button>
+          </div>
+        )}
       </div>
 
       {selected && (
@@ -175,7 +191,9 @@ function RoleBadge({ role }: { role: any }) {
 }
 
 function CustomerDetailModal({ user, onClose }: { user: any; onClose: () => void }) {
-  const allOrders = useOrders().data ?? []
+  // fetchAll: the modal computes this customer's LTV/order counts over the
+  // whole order history, not just the first page.
+  const allOrders = useOrders({ fetchAll: true }).data ?? []
   const orders = useMemo(
     () => allOrders.filter((o) => o.userId === user.id),
     [allOrders, user.id]

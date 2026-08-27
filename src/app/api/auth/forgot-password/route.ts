@@ -10,7 +10,7 @@ import { rateLimit, getClientIP } from '@/lib/rate-limit'
 
 export async function POST(req: Request) {
   const ip = getClientIP(req)
-  const limit = rateLimit(`forgot:${ip}`, { max: 3, windowMs: 60 * 60 * 1000 })
+  const limit = await rateLimit(`forgot:${ip}`, { max: 3, windowMs: 60 * 60 * 1000 })
   if (!limit.success) {
     return NextResponse.json({ error: 'Too many attempts. Please try again later.' }, { status: 429 })
   }

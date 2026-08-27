@@ -1,5 +1,5 @@
 // =============================================================================
-// GET /api/orders — list orders (RBAC-filtered)
+// GET /api/orders — list orders (RBAC-filtered, cursor-paginated)
 // POST /api/orders — create a new order (authed OR guest checkout)
 // =============================================================================
 // RBAC rules:
@@ -7,6 +7,11 @@
 //     - ADMIN: sees all orders
 //     - DRIVER: sees only orders where driverId === their own ID
 //     - B2C/B2B: sees only orders where userId === their own ID
+//   Pagination (GET):
+//     - `?cursor=<id>&limit=<n>` — cursor-based, default limit 25, hard cap 100.
+//     - Ordered by (createdAt DESC, id DESC) so the cursor is stable.
+//     - Response shape: { items, nextCursor, ... } — nextCursor is null on the
+//       last page. RBAC filters compose with the cursor exactly as before.
 //   POST:
 //     - Authenticated users create orders for themselves (userId is forced to
 //       the session user's ID; ADMIN can optionally pass userId for someone else)
@@ -35,11 +40,17 @@ import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 import { getServiceSpeed, allowsExpress24 } from '@/lib/types'
 
 // ----- GET /api/orders -----
-export async function GET() {
+export async function GET(req: Request) {
   const session = await getSession()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // ----- Cursor pagination params -----
+  const { searchParams } = new URL(req.url)
+  const limitRaw = parseInt(searchParams.get('limit') ?? '', 10)
+  const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 25, 1), 100)
+  const cursor = searchParams.get('cursor') || undefined
 
   let where: any = {}
 
@@ -52,6 +63,7 @@ export async function GET() {
   }
   // ADMIN sees all orders (no filter)
 
+  // take limit+1 rows so we can tell whether another page exists
   let orders = await db.order.findMany({
     where,
     include: {
@@ -60,12 +72,21 @@ export async function GET() {
       payments: true,
       media: true,
     },
-    orderBy: { createdAt: 'desc' },
+    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    take: limit + 1,
+    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
   })
 
+  const hasMore = orders.length > limit
+  if (hasMore) orders = orders.slice(0, limit)
+  const nextCursor = hasMore ? orders[orders.length - 1].id : null
+
   // ----- Rider geofencing (DRIVER only) -----
+  // Applied to the current PAGE (the query is already RBAC-filtered and
+  // cursor-paginated; visibility is a per-order computation). hiddenCount is
+  // therefore page-scoped.
   // With a fresh GPS ping on file, gate the rider's activity:
-  //   - outside every service zone  -> order activity paused (empty list)
+  //   - outside every service zone  -> order activity paused (empty page)
   //   - inside a zone               -> only stops within ORDER_VISIBILITY_RADIUS_KM
   // No ping / stale ping / lookup error -> legacy behaviour (no filtering),
   // so the feature can never brick the driver app.
@@ -113,7 +134,7 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({ orders, ...(geofence ? { geofence } : {}) })
+  return NextResponse.json({ items: orders, nextCursor, ...(geofence ? { geofence } : {}) })
 }
 
 // ----- POST /api/orders -----
@@ -124,7 +145,7 @@ export async function POST(req: Request) {
   // (authed users are identified by their session — no extra limit needed)
   if (!session) {
     const ip = getClientIP(req)
-    const limit = rateLimit(`guest-order:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
+    const limit = await rateLimit(`guest-order:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
     if (!limit.success) {
       return NextResponse.json(
         { error: 'Too many bookings from this device. Please try again later or sign in.' },
@@ -142,7 +163,15 @@ export async function POST(req: Request) {
     )
   }
 
-  const { type, items, guaranteeActive, serviceSpeed, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
+  const { type, items, serviceSpeed, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
+
+  // ----- Guarantee integrity (aligns the server with the wizard's UX) -----
+  // The Return-as-Received Guarantee (5% off + damage coverage) requires an
+  // authenticated account in the booking flow — a guest cannot activate it.
+  // Ignore the client flag for unauthenticated requests so the discount can
+  // never be claimed by crafting a request. (Server-side pricing integrity,
+  // same class of fix as unitPrice coming from PriceCatalog.)
+  const guaranteeActive = session ? Boolean(parsed.data.guaranteeActive) : false
 
   // ----- Determine the order's owner (authed) or guest customer -----
   let ownerId: string | undefined

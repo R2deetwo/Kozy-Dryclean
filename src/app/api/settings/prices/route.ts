@@ -40,7 +40,7 @@ export async function PUT(req: Request) {
 
   // Light rate limit — admin edits are rare
   const ip = getClientIP(req)
-  const limit = rateLimit(`admin-prices:${session.user.id}:${ip}`, {
+  const limit = await rateLimit(`admin-prices:${session.user.id}:${ip}`, {
     max: 30,
     windowMs: 60 * 60 * 1000,
   })

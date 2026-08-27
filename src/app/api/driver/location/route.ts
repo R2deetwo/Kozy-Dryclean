@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const limit = rateLimit(`driver-ping:${session.user.id}`, PING_RATE_LIMIT)
+  const limit = await rateLimit(`driver-ping:${session.user.id}`, PING_RATE_LIMIT)
   if (!limit.success) {
     return NextResponse.json(
       { error: 'Too many location pings. Slow down.' },
