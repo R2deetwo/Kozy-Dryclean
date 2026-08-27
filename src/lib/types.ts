@@ -1,4 +1,4 @@
-// Type system for Kozy Drycleaning and Laundry Services
+// Type system for Kozy Care — Premium Drycleaning & Laundry Services
 // Mirrors the Prisma schema but as plain TS types for client-side state.
 
 export type Role = 'ADMIN' | 'DRIVER' | 'B2C' | 'B2B'

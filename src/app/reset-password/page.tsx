@@ -68,7 +68,7 @@ function ResetPasswordContent() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-linen px-4 py-8">
       <div className="w-full max-w-md">
-        <div className="mb-6 flex justify-center"><Link href="/"><Logo size="md" subtitle="Drycleaning & Laundry" /></Link></div>
+        <div className="mb-6 flex justify-center"><Link href="/"><Logo size="md" subtitle="Premium Drycleaning & Laundry" /></Link></div>
         <Card className="border-navy-100 shadow-navy">
           <CardContent className="p-6 sm:p-8">
             <h1 className="font-serif text-2xl font-semibold text-[#0A192F] text-center mb-2">Set new password</h1>

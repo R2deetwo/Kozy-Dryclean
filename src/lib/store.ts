@@ -1,4 +1,4 @@
-// Zustand store for Kozy Drycleaning and Laundry Services.
+// Zustand store for Kozy Care — Premium Drycleaning & Laundry Services.
 // Holds Users, Orders, Payments, GarmentMedia, and Notifications in client state.
 // Persisted to localStorage so the demo survives reloads.
 

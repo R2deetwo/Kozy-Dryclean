@@ -87,7 +87,7 @@ export default function PaymentCallbackPage() {
       {/* Top nav */}
       <div className="w-full border-b border-navy-100 bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
-          <Logo size="md" subtitle="Drycleaning & Laundry" onClick={() => (window.location.href = '/')} />
+          <Logo size="md" subtitle="Premium Drycleaning & Laundry" onClick={() => (window.location.href = '/')} />
         </div>
       </div>
 

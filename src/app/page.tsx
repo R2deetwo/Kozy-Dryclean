@@ -12,7 +12,7 @@ export default function Home() {
       {/* Top nav with login/signup buttons */}
       <div className="sticky top-0 z-50 w-full border-b border-navy-100 bg-white shadow-sm">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
-          <Logo size="md" subtitle="Drycleaning & Laundry" onClick={() => window.location.href = '/'} />
+          <Logo size="md" subtitle="Premium Drycleaning & Laundry" onClick={() => window.location.href = '/'} />
           <div className="flex items-center gap-2">
             <Link href="/login">
               <Button variant="outline" size="sm" className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white">

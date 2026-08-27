@@ -156,7 +156,7 @@ function brandedEmail(opts: {
         <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
           ${
             footer ||
-            'Questions? Call us on +234 800 569 3789 or reply to this email.<br>Kozy Care — Uncompromising care. Exceptional convenience.'
+            'Questions? Call us on +234 803 175 5230 or reply to this email.<br>Kozy Care — Uncompromising care. Exceptional convenience.'
           }
         </p>
       </div>

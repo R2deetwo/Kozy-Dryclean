@@ -17,6 +17,8 @@ const SIZES = {
   lg: { mark: 56, text: 'text-2xl', subtitle: 'text-[10px]', gap: 'gap-3' },
 }
 
+const DEFAULT_SUBTITLE = 'Premium Drycleaning & Laundry'
+
 export function Logo({ size = 'md', showText = true, subtitle, className, onClick, variant = 'light' }: LogoProps) {
   const s = SIZES[size]
   const textColor = variant === 'dark' ? 'text-white' : 'text-[#0A192F]'
@@ -28,10 +30,10 @@ export function Logo({ size = 'md', showText = true, subtitle, className, onClic
       className={cn('flex items-center', s.gap, className)}
       disabled={!onClick}
     >
-      {/* Kozy brand mark — refactored from the attached logo image, transparent background.
-          Raster mark scales crisply via the high-res 512px source. */}
+      {/* Kozy Care brand mark — v4 stylized K with tapered hanger-wire (vector,
+          transparent background; gold reads on both light and navy surfaces). */}
       <img
-        src="/brand/kozy-mark.png"
+        src="/brand/kozy-mark.svg"
         alt="Kozy Care mark"
         width={s.mark}
         height={s.mark}
@@ -43,9 +45,9 @@ export function Logo({ size = 'md', showText = true, subtitle, className, onClic
           <p className={cn('font-serif font-bold tracking-tight', textColor, s.text)} style={{ lineHeight: 1.15 }}>
             Kozy Care
           </p>
-          {subtitle && (
+          {subtitle !== null && (
             <p className={cn('uppercase tracking-[0.15em] font-medium mt-1', subtitleColor, s.subtitle)}>
-              {subtitle}
+              {subtitle ?? DEFAULT_SUBTITLE}
             </p>
           )}
         </div>

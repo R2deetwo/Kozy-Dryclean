@@ -72,7 +72,7 @@ function LoginForm() {
       <div className="w-full max-w-md">
         <div className="mb-6 flex justify-center">
           <Link href="/">
-            <Logo size="md" subtitle="Drycleaning & Laundry" />
+            <Logo size="md" subtitle="Premium Drycleaning & Laundry" />
           </Link>
         </div>
 
