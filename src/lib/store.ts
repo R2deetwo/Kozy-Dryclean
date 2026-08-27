@@ -638,7 +638,7 @@ export const useStore = create<StoreState>()(
     }),
     {
       name: 'lagos-laundry-store',
-      version: 2,
+      version: 3,
       // Don't persist currentUserId so it resets to a sensible default
       partialize: (s) => ({
         users: s.users,
@@ -650,9 +650,21 @@ export const useStore = create<StoreState>()(
       }),
       // v2: reviews moved to the database (served via /api/reviews) — any
       // reviews left over in old localStorage are simply dropped.
+      // v3: garment prices now come from the server (PriceCatalog via
+      // /api/settings/prices). The persisted per-browser copy is reset to
+      // the current catalog defaults so stale prices from a previous visit
+      // can never override what the server actually charges.
       migrate: (persisted: any, version: number) => {
         if (persisted && persisted.reviews) {
           delete persisted.reviews
+        }
+        if (persisted && persisted.settings) {
+          persisted.settings = {
+            ...persisted.settings,
+            garmentPrices: Object.fromEntries(
+              GARMENT_CATALOG.map((g) => [g.id, g.price])
+            ),
+          }
         }
         return persisted
       },

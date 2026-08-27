@@ -14,6 +14,7 @@ import {
   PlusCircle,
   LogOut,
   Loader2,
+  Zap,
 } from 'lucide-react'
 import { useOrders, type ApiOrder } from '@/lib/hooks'
 import { formatNaira, formatDate } from '@/lib/types'
@@ -328,6 +329,11 @@ function ActiveOrderCard({
                 <Badge variant="outline" className="rounded-full text-[10px] text-navy border-navy-200">
                   {order.type === 'ITEM' ? 'Retail' : 'Corporate'}
                 </Badge>
+                {order.serviceSpeed && order.serviceSpeed !== 'STANDARD' && (
+                  <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">
+                    <Zap className="mr-1 h-2.5 w-2.5" /> {order.serviceSpeed === 'EXPRESS_24' ? 'Express 24' : 'Express 48'}
+                  </Badge>
+                )}
                 {order.guaranteeActive && <GuaranteeBadge />}
               </div>
               <p className="mt-1 text-xs text-navy-300">

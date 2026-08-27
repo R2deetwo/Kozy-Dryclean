@@ -22,6 +22,7 @@ export const OrderStatusSchema = z.enum([
   'CANCELLED',
 ])
 export const OrderTypeSchema = z.enum(['ITEM', 'KG'])
+export const ServiceSpeedSchema = z.enum(['STANDARD', 'EXPRESS_48', 'EXPRESS_24'])
 export const PaymentMethodSchema = z.enum(['BANK_TRANSFER', 'PAYSTACK'])
 export const PaymentStatusSchema = z.enum(['PENDING', 'VERIFIED', 'REJECTED'])
 
@@ -46,6 +47,9 @@ export const CreateOrderSchema = z.object({
   type: OrderTypeSchema,
   items: z.array(OrderItemSchema).optional().default([]),
   guaranteeActive: z.boolean().optional().default(false),
+  // Turnaround tier (retail only — KG orders are always STANDARD; the server
+  // enforces this and prices the surcharge itself, never trusting the client)
+  serviceSpeed: ServiceSpeedSchema.optional().default('STANDARD'),
   pickupAddress: z.string().min(1, 'Pickup address is required'),
   pickupDate: z.string().min(1, 'Pickup date is required'), // ISO string
   pickupTimeSlot: z.string().min(1, 'Pickup time slot is required'),

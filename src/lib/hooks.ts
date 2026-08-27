@@ -18,6 +18,7 @@ export interface ApiOrder {
   finalWeight: number | null
   totalPrice: number | null
   guaranteeActive: boolean
+  serviceSpeed?: string | null
   itemsManifest: string | null
   pickupAddress: string
   pickupDate: string
@@ -315,4 +316,26 @@ export function useModerateReview() {
       qc.invalidateQueries({ queryKey: ['reviews'] })
     },
   })
+}
+
+// -----------------------------------------------------------------------------
+// LIVE GARMENT PRICES — PriceCatalog is the single source of truth
+// -----------------------------------------------------------------------------
+// The landing page and booking wizard use this so customers always see the
+// price the server will actually charge (server-side pricing reads the same
+// table). Falls back silently to the bundled catalog defaults when the API
+// is unreachable, so the storefront never breaks.
+export function useServerPrices() {
+  const { data } = useQuery({
+    queryKey: ['server-prices'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/prices')
+      if (!res.ok) throw new Error('Failed to fetch prices')
+      const data = await res.json()
+      return (data.garmentPrices ?? {}) as Record<string, number>
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  })
+  return data
 }

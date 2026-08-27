@@ -32,6 +32,7 @@ import { CreateOrderSchema } from '@/lib/schemas'
 import { notifyOrderCreated, notifyGuestAccountCreated } from '@/lib/notifications'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
+import { getServiceSpeed, allowsExpress24 } from '@/lib/types'
 
 // ----- GET /api/orders -----
 export async function GET() {
@@ -141,7 +142,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const { type, items, guaranteeActive, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
+  const { type, items, guaranteeActive, serviceSpeed, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
 
   // ----- Determine the order's owner (authed) or guest customer -----
   let ownerId: string | undefined
@@ -219,6 +220,28 @@ export async function POST(req: Request) {
   // Calculate total price for ITEM orders — SERVER-SIDE PRICING ONLY
   let totalPrice: number | undefined
   let appliedDiscounts: string[] = []
+
+  // ----- Service speed (turnaround tier) -----
+  // KG / corporate orders always run on the standard SLA. For ITEM orders
+  // the tier must be live (enabled) and the 24-hour tier is blocked for
+  // bulky household items — they cannot honestly be finished in 24h.
+  let speed = getServiceSpeed(type === 'ITEM' ? serviceSpeed : 'STANDARD')
+  if (!speed.enabled) {
+    speed = getServiceSpeed('STANDARD')
+  }
+  if (type === 'ITEM' && speed.id === 'EXPRESS_24') {
+    const itemIds = items.map((i: any) => (i.id || '').replace('item_', ''))
+    if (!allowsExpress24(itemIds)) {
+      return NextResponse.json(
+        {
+          error: 'EXPRESS_24_UNAVAILABLE',
+          message: '24-hour express is not available for bulky home items (duvets, curtains, bedsheets). Please choose Standard or Express 48.',
+        },
+        { status: 400 }
+      )
+    }
+  }
+
   if (type === 'ITEM') {
     // Look up prices from PriceCatalog (Item 3 — server-side price validation)
     const itemKeys = items.map((i: any) => (i.id || '').replace('item_', '') || i.name)
@@ -262,7 +285,14 @@ export async function POST(req: Request) {
       // If signupDiscount is null or inactive, signupDiscountUsed stays false
     }
 
-    totalPrice = Math.round(subtotal * (1 - Math.min(totalDiscount, 0.95)))
+    // Express surcharge on the item subtotal, then percentage discounts apply
+    // to the combined service charge (item cleaning + express premium)
+    const expressSurcharge = Math.round(subtotal * speed.surcharge)
+    if (expressSurcharge > 0) {
+      appliedDiscounts.push(`${speed.label} surcharge (+${Math.round(speed.surcharge * 100)}%)`)
+    }
+
+    totalPrice = Math.round((subtotal + expressSurcharge) * (1 - Math.min(totalDiscount, 0.95)))
     // Update items with server-side prices for storage
     items.length = 0
     items.push(...pricedItems)
@@ -286,6 +316,7 @@ export async function POST(req: Request) {
       status: bankTransferAmount !== null ? 'PAYMENT_PENDING_VERIFICATION' : 'REQUESTED',
       type,
       guaranteeActive,
+      serviceSpeed: speed.id,
       itemsManifest: JSON.stringify(items),
       totalPrice,
       pickupAddress,

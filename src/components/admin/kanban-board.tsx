@@ -24,6 +24,7 @@ import {
   User,
   Shield,
   Clock,
+  Zap,
   List,
   KanbanSquare,
   ChevronRight,
@@ -288,6 +289,13 @@ function OrderCard({
           <Clock className="h-3 w-3" />
           {formatDate(order.pickupDate)} · {order.pickupTimeSlot}
         </div>
+
+        {order.serviceSpeed && order.serviceSpeed !== 'STANDARD' && (
+          <div className="mt-1.5 flex w-fit items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+            <Zap className="h-3 w-3" />
+            {order.serviceSpeed === 'EXPRESS_24' ? 'Express 24' : 'Express 48'}
+          </div>
+        )}
 
         <div className="mt-1 truncate text-[10px] text-navy-300">
           {order.pickupAddress}

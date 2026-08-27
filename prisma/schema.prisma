@@ -69,6 +69,9 @@ model Order {
   totalPrice        Float?
   // B2C condition-capture guarantee
   guaranteeActive   Boolean        @default(false)
+  // Turnaround tier: STANDARD (3–5 days) / EXPRESS_48 / EXPRESS_24.
+  // Express surcharge is baked into totalPrice at creation time.
+  serviceSpeed      String         @default("STANDARD")
   // Per-item manifest snapshot for B2C, JSON-stringified
   itemsManifest     String?
   // Logistics

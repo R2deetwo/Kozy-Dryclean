@@ -203,6 +203,68 @@ export const GARMENT_CATALOG: GarmentCatalogItem[] = [
 ]
 
 // =====================================================
+// SERVICE SPEED — turnaround tiers for retail (ITEM) orders
+// =====================================================
+// Market research (2026): express dry cleaning typically runs
+//   • next-day / 48h express: +25–50% over standard rates
+//   • same-day / 24h express: +50–100% over standard rates
+// Kozy's client survey puts the Lagos standard at 3–5 days, so speed is
+// sold as a premium rather than given away free. Surcharges sit in the
+// upper half of the industry band because Kozy is a premium brand that
+// also fronts pickup + delivery logistics on every express order.
+export type ServiceSpeed = 'STANDARD' | 'EXPRESS_48' | 'EXPRESS_24'
+
+export interface ServiceSpeedOption {
+  id: ServiceSpeed
+  label: string
+  /** Customer-facing turnaround promise */
+  window: string
+  /** Surcharge as a fraction of the item subtotal (0 / 0.5 / 1.0) */
+  surcharge: number
+  description: string
+  /** Master switch — flip to false to pull a tier off the market instantly */
+  enabled: boolean
+}
+
+export const SERVICE_SPEEDS: ServiceSpeedOption[] = [
+  {
+    id: 'STANDARD',
+    label: 'Standard',
+    window: '3–5 days',
+    surcharge: 0,
+    description: 'Careful cleaning, pressing and packaging. Our usual thorough window.',
+    enabled: true,
+  },
+  {
+    id: 'EXPRESS_48',
+    label: 'Express 48',
+    window: '48 hours',
+    surcharge: 0.5,
+    description: 'Your items jump the queue — cleaned, pressed and back within 2 days of pickup.',
+    enabled: true,
+  },
+  {
+    id: 'EXPRESS_24',
+    label: 'Express 24',
+    window: '24 hours',
+    surcharge: 1.0,
+    description: 'Next-day return from pickup. Not available for bulky home items (duvets, curtains).',
+    enabled: true,
+  },
+]
+
+export function getServiceSpeed(id: string | null | undefined): ServiceSpeedOption {
+  return SERVICE_SPEEDS.find((s) => s.id === id) ?? SERVICE_SPEEDS[0]
+}
+
+/** True when an order with these garment ids may use the 24-hour tier.
+ *  Bulky household items (duvets, curtains, bedsheets) physically cannot be
+ *  washed, dried and finished in 24 hours — the promise would be dishonest. */
+export function allowsExpress24(itemIds: string[]): boolean {
+  return !itemIds.some((id) => GARMENT_CATALOG.find((g) => g.id === id)?.category === 'Household')
+}
+
+// =====================================================
 // B2B pricing — per-KG tiered structure
 // =====================================================
 export const B2B_PRICING = {

@@ -11,6 +11,7 @@ import {
   Shield,
   Receipt,
   Scale,
+  Zap,
   User as UserIcon,
   CheckCircle2,
   XCircle,
@@ -129,6 +130,13 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
             <Badge variant="outline" className="rounded-full text-[10px] text-[#0A192F] border-[#E2E5E9]">
               {order.type === 'ITEM' ? 'Retail' : 'Corporate'}
             </Badge>
+            {order.serviceSpeed && order.serviceSpeed !== 'STANDARD' && (
+              <Badge className="rounded-full bg-amber-100 text-amber-800">
+                <Zap className="mr-1 h-2.5 w-2.5" />
+                {order.serviceSpeed === 'EXPRESS_24' ? 'Express 24' : 'Express 48'} · due within{' '}
+                {order.serviceSpeed === 'EXPRESS_24' ? '24h' : '48h'} of pickup
+              </Badge>
+            )}
             {order.guaranteeActive && (
               <Badge className="rounded-full bg-[#FBF5E0] text-[#0A192F]">
                 <Shield className="mr-1 h-2.5 w-2.5" /> Guarantee

@@ -23,6 +23,7 @@ type NotifiableOrder = {
   status: string
   type: string
   totalPrice?: number | null
+  serviceSpeed?: string | null
   pickupAddress: string
   pickupDate: Date | string
   pickupTimeSlot: string
@@ -33,6 +34,13 @@ type NotifiableOrder = {
     email: string
     phone: string
   }
+}
+
+/** Customer-facing turnaround promise for an order's service-speed tier. */
+function turnaroundCopy(speed?: string | null): string {
+  if (speed === 'EXPRESS_48') return 'Express 48 — back within 48 hours of pickup'
+  if (speed === 'EXPRESS_24') return 'Express 24 — back within 24 hours of pickup'
+  return 'Standard — back within 3–5 days'
 }
 
 // ----- Status copy (single source of truth for customer-facing wording) -----
@@ -115,6 +123,9 @@ function brandedEmail(opts: {
     { label: 'Pickup', value: `${fmtDate(order.pickupDate)} · ${order.pickupTimeSlot}` },
     { label: 'Pickup address', value: order.pickupAddress },
   ]
+  if (order.serviceSpeed && order.serviceSpeed !== 'STANDARD') {
+    rows.push({ label: 'Turnaround', value: turnaroundCopy(order.serviceSpeed) })
+  }
   if (order.totalPrice) {
     rows.push({ label: 'Total', value: formatNaira(order.totalPrice) })
   }

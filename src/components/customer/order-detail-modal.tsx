@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import {
-  MapPin, Calendar, Clock, Phone, Shield, Truck, Receipt,
+  MapPin, Calendar, Clock, Phone, Shield, Truck, Receipt, Zap,
   User as UserIcon, CheckCircle2, XCircle, AlertCircle,
 } from 'lucide-react'
 import { formatNaira, formatDateTime, formatDate } from '@/lib/types'
@@ -11,6 +11,13 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Separator } from '@/components/ui/separator'
+
+/** Short human label for a service-speed enum value. */
+function speedLabel(speed: string): string {
+  if (speed === 'EXPRESS_48') return 'Express 48'
+  if (speed === 'EXPRESS_24') return 'Express 24'
+  return 'Standard'
+}
 
 interface Props {
   order: any
@@ -42,6 +49,9 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
             <DialogTitle className="flex flex-wrap items-center gap-2 text-left">
               <span className="font-mono text-base sm:text-lg text-[#0A192F]">#{order.orderNumber}</span>
               <Badge variant="outline" className="rounded-full text-[10px] border-[#E2E5E9] text-[#0A192F]">{order.type === 'ITEM' ? 'Retail' : 'Corporate'}</Badge>
+              {order.serviceSpeed && order.serviceSpeed !== 'STANDARD' && (
+                <Badge className="rounded-full bg-[#FBF5E0] text-[#0A192F]"><Zap className="mr-1 h-2.5 w-2.5" /> {speedLabel(order.serviceSpeed)}</Badge>
+              )}
               {order.guaranteeActive && <Badge className="rounded-full bg-[#FBF5E0] text-[#0A192F]"><Shield className="mr-1 h-2.5 w-2.5" /> Guarantee</Badge>}
             </DialogTitle>
             <DialogDescription className="text-[#6F88A8]">Booked on {formatDateTime(order.createdAt)}</DialogDescription>
@@ -66,6 +76,12 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                     <span className="font-medium text-[#0A192F]">{formatNaira(i.quantity * i.unitPrice)}</span>
                   </li>
                 ))}
+                {order.serviceSpeed && order.serviceSpeed !== 'STANDARD' && (
+                  <li className="text-xs text-[#D4AF37] pt-1">
+                    Includes {speedLabel(order.serviceSpeed)} express surcharge (+{order.serviceSpeed === 'EXPRESS_24' ? '100' : '50'}%)
+                    — turnaround within {order.serviceSpeed === 'EXPRESS_24' ? '24 hours' : '48 hours'} of pickup.
+                  </li>
+                )}
                 {order.guaranteeActive && <li className="text-xs text-[#D4AF37] pt-1">Includes Return-as-Received discount.</li>}
               </ul>
             ) : (

@@ -15,15 +15,16 @@ import {
   Phone,
   Mail,
   Building2,
-  User,
   ShoppingBag,
   Sparkles,
+  Zap,
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
   formatNaira,
 } from '@/lib/types'
 import { useStore } from '@/lib/store'
+import { useServerPrices } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -37,20 +38,55 @@ interface Props {
   onPortal: () => void
 }
 
-const CATEGORY_LABELS: Record<string, string> = {
-  Shirts: 'Shirts & Tops',
-  Trousers: 'Trousers',
-  Suits: 'Suits & Blazers',
-  Traditional: 'Traditional',
-  "Women's Wear": 'Women’s Wear',
-  Household: 'Household',
-  Extras: 'Extras',
-  Shoes: 'Shoes & Sneakers',
+// ---------------------------------------------------------------------------
+// PRICING TABS — Men / Women / Corporate (men first, per owner directive)
+// ---------------------------------------------------------------------------
+// Fashion-retail convention is "Men" / "Women" (not "male/female"), matching
+// the catalog's category names. Gendered traditional wear is split by item so
+// Agbada sits under Men and Iro & Buba under Women; household, shoes and
+// extras are shared and shown under both retail tabs.
+interface PricingDisplayGroup {
+  title: string
+  /** Either a catalog category or an explicit item-id list (not both) */
+  category?: string
+  itemIds?: string[]
+}
+
+const MEN_PRICING_GROUPS: PricingDisplayGroup[] = [
+  { title: 'Shirts & Tops', category: 'Shirts' },
+  { title: 'Trousers & Jeans', category: 'Trousers' },
+  { title: 'Suits & Blazers', category: 'Suits' },
+  { title: "Men's Traditional", itemIds: ['agbada', 'kaftan'] },
+]
+
+const WOMEN_PRICING_GROUPS: PricingDisplayGroup[] = [
+  { title: 'Everyday Wear', itemIds: ['blouse', 'skirt', 'womens-dress', 'jumpsuit'] },
+  {
+    title: 'Occasion & Traditional',
+    itemIds: ['lace-gown', 'gele', 'iro-buba', 'ankara-gown'],
+  },
+]
+
+const SHARED_PRICING_GROUPS: PricingDisplayGroup[] = [
+  { title: 'Household', category: 'Household' },
+  { title: 'Shoes & Sneakers', category: 'Shoes' },
+  { title: 'Extras', category: 'Extras' },
+]
+
+function itemsForGroup(group: PricingDisplayGroup) {
+  return group.itemIds
+    ? group.itemIds.map((id) => GARMENT_CATALOG.find((g) => g.id === id)).filter(Boolean)
+    : GARMENT_CATALOG.filter((g) => g.category === group.category)
 }
 
 export function CustomerLanding({ onBook, onPortal }: Props) {
-  const [pricing, setPricing] = useState<'retail' | 'corporate'>('retail')
+  const [pricing, setPricing] = useState<'men' | 'women' | 'corporate'>('men')
   const settings = useStore((s) => s.settings)
+  // Live prices from PriceCatalog (what the server charges) — the persisted
+  // store and bundle defaults are only fallbacks.
+  const serverPrices = useServerPrices()
+  const priceOf = (id: string, fallback: number) =>
+    serverPrices?.[id] ?? settings.garmentPrices[id] ?? fallback
 
   return (
     <div className="bg-linen">
@@ -121,7 +157,7 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
                 <Shield className="h-3.5 w-3.5 text-gold-400" /> Return-as-Received Guarantee
               </span>
               <span className="flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5 text-gold-400" /> 48-hour standard turnaround
+                <Clock className="h-3.5 w-3.5 text-gold-400" /> Express turnaround from 24 hours
               </span>
               <span className="flex items-center gap-1.5">
                 <Truck className="h-3.5 w-3.5 text-gold-400" /> Complimentary island-wide pickup
@@ -226,14 +262,20 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
             </div>
             <Tabs
               value={pricing}
-              onValueChange={(v) => setPricing(v as 'retail' | 'corporate')}
+              onValueChange={(v) => setPricing(v as 'men' | 'women' | 'corporate')}
             >
               <TabsList className="bg-linen-200">
                 <TabsTrigger
-                  value="retail"
+                  value="men"
                   className="data-[state=active]:bg-navy data-[state=active]:text-white"
                 >
-                  <User className="mr-1 h-3 w-3" /> Retail
+                  Men
+                </TabsTrigger>
+                <TabsTrigger
+                  value="women"
+                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
+                >
+                  Women
                 </TabsTrigger>
                 <TabsTrigger
                   value="corporate"
@@ -245,43 +287,104 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
             </Tabs>
           </div>
 
-          <Tabs value={pricing} onValueChange={(v) => setPricing(v as 'retail' | 'corporate')}>
-            <TabsContent value="retail" className="mt-8">
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {(['Shirts', 'Trousers', 'Suits', 'Traditional', "Women's Wear", 'Household', 'Extras', 'Shoes'] as const).map(
-                  (cat) => (
-                    <Card key={cat} className="border-navy-100 shadow-navy">
+          <Tabs value={pricing} onValueChange={(v) => setPricing(v as 'men' | 'women' | 'corporate')}>
+            {(['men', 'women'] as const).map((tab) => (
+              <TabsContent key={tab} value={tab} className="mt-8">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {(tab === 'men' ? MEN_PRICING_GROUPS : WOMEN_PRICING_GROUPS).map((group) => (
+                    <Card key={group.title} className="border-navy-100 shadow-navy">
                       <CardContent className="p-5">
                         <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
-                          {CATEGORY_LABELS[cat]}
+                          {group.title}
                         </h3>
                         <ul className="space-y-2">
-                          {GARMENT_CATALOG.filter((g) => g.category === cat).map((g) => (
+                          {itemsForGroup(group).map((g) => (
                             <li
-                              key={g.id}
+                              key={g!.id}
                               className="flex items-center justify-between text-sm"
                             >
                               <span className="flex items-center gap-2.5 text-navy/80">
                                 <img
-                                  src={g.icon}
+                                  src={g!.icon}
                                   alt=""
                                   className="h-5 w-5 text-navy"
                                   style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
                                 />
-                                {g.name}
+                                {g!.name}
                               </span>
                               <span className="font-semibold text-navy">
-                                {formatNaira(settings.garmentPrices[g.id] ?? g.price)}
+                                {formatNaira(priceOf(g!.id, g!.price))}
                               </span>
                             </li>
                           ))}
                         </ul>
                       </CardContent>
                     </Card>
-                  )
-                )}
-              </div>
-            </TabsContent>
+                  ))}
+                </div>
+
+                {/* Shared categories — home, shoes and extras serve everyone */}
+                <div className="mt-8">
+                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
+                    For the home &amp; everything else
+                  </p>
+                  <div className="grid gap-4 md:grid-cols-3">
+                    {SHARED_PRICING_GROUPS.map((group) => (
+                      <Card key={group.title} className="border-navy-100 shadow-navy">
+                        <CardContent className="p-5">
+                          <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
+                            {group.title}
+                          </h3>
+                          <ul className="space-y-2">
+                            {itemsForGroup(group).map((g) => (
+                              <li
+                                key={g!.id}
+                                className="flex items-center justify-between text-sm"
+                              >
+                                <span className="flex items-center gap-2.5 text-navy/80">
+                                  <img
+                                    src={g!.icon}
+                                    alt=""
+                                    className="h-5 w-5 text-navy"
+                                    style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
+                                  />
+                                  {g!.name}
+                                </span>
+                                <span className="font-semibold text-navy">
+                                  {formatNaira(priceOf(g!.id, g!.price))}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Express upsell */}
+                <div className="mt-6 flex flex-col items-start justify-between gap-3 rounded-xl bg-navy p-4 text-white ring-1 ring-gold-400/25 sm:flex-row sm:items-center">
+                  <div className="flex items-start gap-3">
+                    <Zap className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
+                    <div>
+                      <p className="text-sm font-semibold">
+                        In a hurry? Express turnaround at checkout.
+                      </p>
+                      <p className="mt-0.5 text-xs text-navy-100/70">
+                        Standard care returns in 3–5 days. Express 48 (+50%) or Express 24
+                        (+100%) jumps the cleaning queue — ideal for last-minute events.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={onBook}
+                    className="shrink-0 rounded-full bg-gold-gradient px-4 text-navy hover:opacity-90"
+                  >
+                    Book express <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </TabsContent>
+            ))}
 
             <TabsContent value="corporate" className="mt-8">
               <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
@@ -545,13 +648,13 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
               </h2>
               <p className="mt-4 max-w-xl text-navy-300">
                 From your favourite Ankara gown to that designer blazer you save for special
-                occasions — we treat every garment with the same level of attention. Our
-                pickup and delivery service means you never have to leave home.
+                occasions — we treat every garment with the same level of attention. Every
+                order returns within 3–5 days, or as fast as 24 hours with Express.
               </p>
               <div className="mt-6 grid gap-4 sm:grid-cols-3">
                 <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
-                  <p className="font-serif text-2xl font-bold text-navy">48h</p>
-                  <p className="text-xs text-navy-300">Standard turnaround</p>
+                  <p className="font-serif text-2xl font-bold text-navy">24h</p>
+                  <p className="text-xs text-navy-300">Express turnaround from</p>
                 </div>
                 <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
                   <p className="font-serif text-2xl font-bold text-navy">₦500+</p>
@@ -580,13 +683,17 @@ export function CustomerLanding({ onBook, onPortal }: Props) {
         <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
           <div className="grid gap-8 md:grid-cols-3">
             <div>
-              <div className="flex items-center gap-2">
-                <svg width="32" height="32" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
-                  <rect width="40" height="40" rx="9" fill="#102740"/>
-                  <path d="M11 12 L20 20 L11 28" stroke="#D4AF37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  <path d="M29 12 L20 20 L29 28" stroke="#D4AF37" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-                  <circle cx="20" cy="20" r="2.2" fill="#D4AF37"/>
-                </svg>
+              <div className="flex items-center gap-2.5">
+                {/* v4 Kozy K mark — same asset as the header (gold K with
+                    tapered hanger-wire flourish, transparent background). */}
+                <img
+                  src="/brand/kozy-mark.svg"
+                  alt="Kozy Care mark"
+                  width={36}
+                  height={36}
+                  className="shrink-0"
+                  style={{ width: 36, height: 36 }}
+                />
                 <div className="leading-none">
                   <p className="font-serif text-lg font-bold text-white">Kozy Care</p>
                   <p className="text-[8px] uppercase tracking-[0.15em] text-gold-300 font-medium mt-0.5">DRYCLEANING &amp; LAUNDRY</p>

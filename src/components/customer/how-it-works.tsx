@@ -546,7 +546,7 @@ function DeliveryCard() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.6, duration: 0.35 }}
           >
-            Delivered within 48 hours
+            Delivered in 3–5 days
           </motion.p>
           <motion.p
             className="mt-0.5 text-[8.5px] font-medium text-navy-300"
@@ -610,7 +610,7 @@ const STEPS: StepConfig[] = [
     icon: CheckCircle2,
     image: '/brand/images/how-3-return.png',
     title: '03 · Pristine return',
-    body: 'Your garments are folded, packaged, and delivered within 48 hours (retail) — sealed in protective Kozy garment bags, ready for your wardrobe.',
+    body: 'Your garments are folded, packaged, and delivered within 3–5 days (retail) — or as fast as 24 hours with Express — sealed in protective Kozy garment bags, ready for your wardrobe.',
     focus: { x: 64, y: 50, scale: 1.9 },
     overlay: 'delivery',
   },

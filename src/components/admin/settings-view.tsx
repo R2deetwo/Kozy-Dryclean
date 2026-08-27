@@ -43,7 +43,7 @@ export function SettingsView() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  const handleSave = () => {
+  const handleSave = async () => {
     setSaving(true)
     // Save bank/contact/pricing settings
     updateSettings({
@@ -57,12 +57,37 @@ export function SettingsView() {
       minimumKg: draft.minimumKg,
       guaranteeDiscountPercent: draft.guaranteeDiscountPercent,
     })
-    // Save individual garment prices
+    // Save individual garment prices locally…
+    const changedPrices: Record<string, number> = {}
     Object.entries(draft.garmentPrices).forEach(([id, price]) => {
       if (settings.garmentPrices[id] !== price) {
         setGarmentPrice(id, price)
+        changedPrices[id] = price
       }
     })
+    // …and push them to the server (PriceCatalog) so they go live on the
+    // storefront and match what customers are charged at checkout.
+    if (Object.keys(changedPrices).length > 0) {
+      try {
+        const res = await fetch('/api/settings/prices', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ garmentPrices: changedPrices }),
+        })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}))
+          throw new Error(err.error || 'Server rejected the price update')
+        }
+      } catch (e: any) {
+        toast({
+          title: 'Prices saved locally only',
+          description: e?.message || 'Could not reach the server — storefront prices were not updated.',
+          variant: 'destructive',
+        })
+        setSaving(false)
+        return
+      }
+    }
     setTimeout(() => {
       setSaving(false)
       setSaved(true)

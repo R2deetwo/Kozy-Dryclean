@@ -40,15 +40,20 @@ import {
   Upload,
   X,
   Sparkles,
+  Zap,
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
+  SERVICE_SPEEDS,
+  allowsExpress24,
   formatNaira,
   type OrderItem,
   type OrderType,
   type Order,
+  type ServiceSpeed,
 } from '@/lib/types'
 import { useStore } from '@/lib/store'
+import { useServerPrices } from '@/lib/hooks'
 import { useSession } from 'next-auth/react'
 import {
   loadDraft,
@@ -129,6 +134,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   const [pickupAddress, setPickupAddress] = useState('')
   const [pickupDate, setPickupDate] = useState(defaultPickupDate)
   const [pickupSlot, setPickupSlot] = useState(TIME_SLOTS[1])
+  const [serviceSpeed, setServiceSpeed] = useState<ServiceSpeed>('STANDARD')
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'BANK_TRANSFER' | 'PAYSTACK'>('BANK_TRANSFER')
   const [receiptUploaded, setReceiptUploaded] = useState(false)
@@ -156,6 +162,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
   const guestValid =
     guestName.trim().length >= 2 && guestEmailValid && guestPhoneValid
 
+  // ----- Live prices from the server (PriceCatalog) -----
+  // Displayed prices must match what POST /api/orders will actually charge.
+  const serverPrices = useServerPrices()
+
   // ----- Restore a saved draft ("continue where you left off") -----
   // Runs once on mount, BEFORE the profile prefill effect below so a restored
   // address is never clobbered.
@@ -172,6 +182,9 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
     setPickupDate(d.pickupDate || defaultPickupDate())
     setPickupSlot(d.pickupSlot || TIME_SLOTS[1])
     setDeliveryAddress(d.deliveryAddress || '')
+    if (d.serviceSpeed === 'EXPRESS_48' || d.serviceSpeed === 'EXPRESS_24') {
+      setServiceSpeed(d.serviceSpeed)
+    }
     if (d.paymentMethod === 'BANK_TRANSFER' || d.paymentMethod === 'PAYSTACK') {
       setPaymentMethod(d.paymentMethod)
     }
@@ -211,13 +224,14 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
       pickupAddress,
       pickupDate,
       pickupSlot,
+      serviceSpeed,
       deliveryAddress,
       paymentMethod,
       guestName,
       guestEmail,
       guestPhone,
     })
-  }, [step, type, items, pickupAddress, pickupDate, pickupSlot, deliveryAddress, paymentMethod, guestName, guestEmail, guestPhone])
+  }, [step, type, items, pickupAddress, pickupDate, pickupSlot, serviceSpeed, deliveryAddress, paymentMethod, guestName, guestEmail, guestPhone])
 
   // ----- Computed pricing (memoized for performance) -----
   // Must be called BEFORE any early returns (Rules of Hooks)
@@ -227,14 +241,30 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
       .filter(([, q]) => q > 0)
       .map(([id, q]) => {
         const g = GARMENT_CATALOG.find((c) => c.id === id)!
-        const unitPrice = settings.garmentPrices[id] ?? g.price
+        // Server prices (PriceCatalog) win; persisted settings and bundle
+        // defaults are only fallbacks — the customer must see what the
+        // server will charge at checkout.
+        const unitPrice = serverPrices?.[id] ?? settings.garmentPrices[id] ?? g.price
         return { id: 'item_' + id, name: g.name, quantity: q, unitPrice }
       })
-  }, [items, settings.garmentPrices, effectiveUser, isGuest])
+  }, [items, serverPrices, settings.garmentPrices, effectiveUser, isGuest])
   const subtotal = selectedItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  // ----- Turnaround tier -----
+  // Express 24 is blocked when bulky household items are in the basket
+  // (matches the server-side rule in POST /api/orders).
+  const selectedItemIds = Object.entries(items)
+    .filter(([, q]) => q > 0)
+    .map(([id]) => id)
+  const express24Allowed = allowsExpress24(selectedItemIds)
+  const effectiveSpeed: ServiceSpeed =
+    !express24Allowed && serviceSpeed === 'EXPRESS_24' ? 'STANDARD' : serviceSpeed
+  const speedOption =
+    SERVICE_SPEEDS.find((s) => s.id === effectiveSpeed) ?? SERVICE_SPEEDS[0]
+  const expressSurcharge = Math.round(subtotal * speedOption.surcharge)
   const guaranteeActive = type === 'ITEM' && photos.length > 0 && guaranteeAck
-  const discount = guaranteeActive ? subtotal * (settings.guaranteeDiscountPercent / 100) : 0
-  const total = subtotal - discount
+  const grossTotal = subtotal + expressSurcharge
+  const discount = guaranteeActive ? grossTotal * (settings.guaranteeDiscountPercent / 100) : 0
+  const total = grossTotal - discount
 
   // Defensive guard — auth gate should prevent this, but we don't want to
   // crash. Guest mode (allowGuest) bypasses the session requirement.
@@ -407,6 +437,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
     setPickupAddress('')
     setPickupDate(defaultPickupDate())
     setPickupSlot(TIME_SLOTS[1])
+    setServiceSpeed('STANDARD')
     setDeliveryAddress('')
     setPaymentMethod('BANK_TRANSFER')
     setGuestName('')
@@ -427,6 +458,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
           type,
           items: type === 'ITEM' ? selectedItems : [],
           guaranteeActive,
+          serviceSpeed: type === 'ITEM' ? effectiveSpeed : 'STANDARD',
           pickupAddress,
           pickupDate: new Date(pickupDate).toISOString(),
           pickupTimeSlot: pickupSlot,
@@ -737,7 +769,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                             <div>
                               <p className="text-sm font-medium text-navy">{g.name}</p>
                               <p className="text-xs text-navy-300">
-                                {formatNaira(settings.garmentPrices[g.id] ?? g.price)} each
+                                {formatNaira(serverPrices?.[g.id] ?? settings.garmentPrices[g.id] ?? g.price)} each
                               </p>
                               {/* Disambiguation line (e.g. Lace / Aso-Ebi Gown vs Dress vs Ankara Gown) */}
                               {g.description && (
@@ -1041,6 +1073,71 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                     ))}
                   </div>
                 </div>
+
+                {/* ----- Turnaround speed (retail orders only) ----- */}
+                {type === 'ITEM' && (
+                  <div>
+                    <Label className="text-navy">How fast do you need it back?</Label>
+                    <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                      {SERVICE_SPEEDS.filter((s) => s.enabled).map((s) => {
+                        const selected = effectiveSpeed === s.id
+                        const blocked = s.id === 'EXPRESS_24' && !express24Allowed
+                        return (
+                          <button
+                            key={s.id}
+                            type="button"
+                            disabled={blocked}
+                            onClick={() => setServiceSpeed(s.id)}
+                            className={cn(
+                              'rounded-xl border-2 p-3 text-left transition',
+                              blocked && 'cursor-not-allowed opacity-50',
+                              !blocked && 'cursor-pointer',
+                              selected
+                                ? s.id === 'STANDARD'
+                                  ? 'border-[#0A192F] bg-[#E8ECF2]'
+                                  : 'border-gold-400 bg-gold-50/60'
+                                : 'border-[#E2E5E9] hover:border-gold-300'
+                            )}
+                          >
+                            <div className="flex items-center gap-1.5">
+                              {s.id === 'STANDARD' ? (
+                                <Clock className="h-3.5 w-3.5 text-navy" />
+                              ) : (
+                                <Zap className="h-3.5 w-3.5 text-gold-600" />
+                              )}
+                              <span className="text-sm font-semibold text-navy">{s.label}</span>
+                            </div>
+                            <p className="mt-1 text-[11px] font-medium text-navy-300">
+                              {s.window}
+                            </p>
+                            <p
+                              className={cn(
+                                'mt-1 text-[11px] font-semibold',
+                                s.id === 'STANDARD' ? 'text-navy-300' : 'text-gold-600'
+                              )}
+                            >
+                              {s.surcharge === 0
+                                ? 'Included'
+                                : `+${Math.round(s.surcharge * 100)}% · ${formatNaira(
+                                    Math.round(subtotal * s.surcharge)
+                                  )}`}
+                            </p>
+                            {blocked && (
+                              <p className="mt-1 text-[10px] leading-snug text-red-400">
+                                Not available with bulky home items (duvets, curtains)
+                              </p>
+                            )}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    <p className="mt-2 text-[11px] leading-snug text-navy-300">
+                      Standard turnaround is 3–5 days. Express orders jump the cleaning
+                      queue and return within the express window from pickup — perfect for
+                      last-minute events.
+                    </p>
+                  </div>
+                )}
                 <div>
                   <Label htmlFor="pickup-address">Pickup address</Label>
                   <Textarea
@@ -1066,8 +1163,9 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
               <div className="mt-4 flex items-start gap-2 rounded-lg bg-linen-200 p-3 text-xs text-navy-300">
                 <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-400" />
                 <p>
-                  Standard turnaround is 48 hours from pickup for retail orders. Corporate
-                  bulk orders may take up to 72 hours depending on volume.
+                  {type === 'ITEM'
+                    ? `Turnaround: ${speedOption.label} (${speedOption.window} from pickup). Corporate bulk orders run on a dedicated SLA set up with your account manager.`
+                    : 'Corporate bulk orders run on a dedicated SLA set up with your account manager — typically up to 72 hours depending on volume.'}
                 </p>
               </div>
             </motion.div>
@@ -1095,9 +1193,17 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                 <CardContent className="p-5">
                   <div className="flex items-center justify-between border-b pb-3">
                     <span className="text-sm font-medium text-navy-300">Order summary</span>
-                    <Badge variant="outline" className="rounded-full">
-                      {type === 'ITEM' ? 'Per-item' : 'Per-kg (Corporate)'}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      {type === 'ITEM' && effectiveSpeed !== 'STANDARD' && (
+                        <Badge className="rounded-full bg-gold-100 text-gold-700 hover:bg-gold-100">
+                          <Zap className="mr-1 h-3 w-3" />
+                          {speedOption.label} · {speedOption.window}
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="rounded-full">
+                        {type === 'ITEM' ? 'Per-item' : 'Per-kg (Corporate)'}
+                      </Badge>
+                    </div>
                   </div>
 
                   {type === 'ITEM' && (
@@ -1112,6 +1218,15 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false }: Prop
                           </span>
                         </li>
                       ))}
+                      {expressSurcharge > 0 && (
+                        <li className="flex items-center justify-between text-navy-300">
+                          <span className="flex items-center gap-1">
+                            <Zap className="h-3.5 w-3.5 text-gold-500" />
+                            {speedOption.label} surcharge (+{Math.round(speedOption.surcharge * 100)}%)
+                          </span>
+                          <span>+{formatNaira(expressSurcharge)}</span>
+                        </li>
+                      )}
                       {guaranteeActive && (
                         <li className="flex items-center justify-between text-navy-300">
                           <span className="flex items-center gap-1">

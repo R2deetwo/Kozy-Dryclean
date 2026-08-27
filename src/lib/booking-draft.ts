@@ -18,7 +18,7 @@
 // localStorage, not in the URL.
 // =============================================================================
 
-import type { OrderType } from '@/lib/types'
+import type { OrderType, ServiceSpeed } from '@/lib/types'
 
 const DRAFT_KEY = 'kozy.booking.draft.v1'
 const DRAFT_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
@@ -37,6 +37,8 @@ export interface BookingDraft {
   pickupAddress: string
   pickupDate: string
   pickupSlot: string
+  /** Turnaround tier (retail orders only) */
+  serviceSpeed?: ServiceSpeed
   deliveryAddress: string
   paymentMethod: 'BANK_TRANSFER' | 'PAYSTACK'
   /** Guest contact details (guest checkout only) */
