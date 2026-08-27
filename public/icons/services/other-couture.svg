@@ -1,0 +1,11 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Other — Wedding Dress & Couture (gown silhouette on a hanger, quoted work) -->
+  <!-- Hanger hook + bar -->
+  <path d="M16 3 C14.5 3 13.5 4 13.5 5.3 C13.5 6.3 14.2 7 15.2 7.3 L7 12.5 L25 12.5 L16.8 7.3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+  <!-- Gown: fitted bodice flowing into an A-line skirt -->
+  <path d="M12 12.5 L11 16 L13 17 L10.5 26 C10.5 26.6 11 27 11.6 27 L20.4 27 C21 27 21.5 26.6 21.5 26 L19 17 L21 16 L20 12.5" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Waist seam -->
+  <line x1="12.6" y1="16.4" x2="19.4" y2="16.4" stroke="currentColor" strokeWidth="1" stroke-linecap="round"/>
+  <!-- Couture sparkle accent (gold) -->
+  <path d="M23.5 20 L24.1 21.9 L26 22.5 L24.1 23.1 L23.5 25 L22.9 23.1 L21 22.5 L22.9 21.9 Z" stroke="#D4AF37" strokeWidth="1.1" strokeLinejoin="round" fill="none"/>
+</svg>

@@ -37,7 +37,7 @@ import { CreateOrderSchema } from '@/lib/schemas'
 import { notifyOrderCreated, notifyGuestAccountCreated } from '@/lib/notifications'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
-import { getServiceSpeed, allowsExpress24 } from '@/lib/types'
+import { getServiceSpeed, allowsExpress24, GARMENT_CATALOG } from '@/lib/types'
 
 // ----- GET /api/orders -----
 export async function GET(req: Request) {
@@ -286,7 +286,16 @@ export async function POST(req: Request) {
       const catalog = catalogMap.get(key)
       const unitPrice = catalog?.unitPrice ?? 0 // 0 if not found in catalog
       subtotal += unitPrice * i.quantity
-      return { ...i, unitPrice } // override with server-side price
+      // Quoted items (wedding dress, couture) carry no fixed price until the
+      // assessment quote is approved — annotate the stored manifest so admin
+      // sees "quote to follow" instead of a bare ₦0 line and knows to send
+      // the customer a quote after assessment.
+      const isQuote = GARMENT_CATALOG.find((g) => g.id === key)?.pricingMode === 'quote'
+      return {
+        ...i,
+        unitPrice,
+        ...(isQuote ? { name: `${i.name} — quote to follow` } : {}),
+      }
     })
 
     let totalDiscount = 0

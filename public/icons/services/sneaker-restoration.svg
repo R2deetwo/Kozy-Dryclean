@@ -1,0 +1,14 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Sneaker Restoration — sneaker profile under a sparkle burst (the "back to box-fresh" promise) -->
+  <!-- Sneaker upper outline (same family as the sneaker icons) -->
+  <path d="M3 23 L4 18 L7 15 L10 15 L12 12 L15 12 L17 15 L22 15 L25 18 L25 23 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Sole -->
+  <path d="M3 23 L25 23 L25 26 L3 26 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Lace area -->
+  <line x1="10" y1="14" x2="12" y2="14" stroke="currentColor" strokeWidth="1" stroke-linecap="round"/>
+  <line x1="11" y1="13" x2="13" y2="13" stroke="currentColor" strokeWidth="1" stroke-linecap="round"/>
+  <!-- Sparkle burst (restored to new) -->
+  <path d="M23 4 L24 7 L27 8 L24 9 L23 12 L22 9 L19 8 L22 7 Z" stroke="#D4AF37" strokeWidth="1.2" strokeLinejoin="round" fill="none"/>
+  <!-- Small companion sparkle -->
+  <path d="M27.5 12.5 L28 14 L29.5 14.5 L28 15 L27.5 16.5 L27 15 L25.5 14.5 L27 14 Z" stroke="#D4AF37" strokeWidth="1" strokeLinejoin="round" fill="none"/>
+</svg>

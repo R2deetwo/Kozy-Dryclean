@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import {
   formatNaira,
+  type GarmentCatalogItem,
 } from '@/lib/types'
 import {
   MEN_CATALOG_GROUPS,
@@ -64,6 +65,16 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
   const serverPrices = useServerPrices()
   const priceOf = (id: string, fallback: number) =>
     serverPrices?.[id] ?? settings.garmentPrices[id] ?? fallback
+  // Price cell for the pricing cards — quote-mode items (wedding dress,
+  // couture) read "Quoted"; from-mode items (restoration) read "From ₦X".
+  const priceCell = (g: GarmentCatalogItem) =>
+    g.pricingMode === 'quote' ? (
+      <span className="font-semibold text-gold-600">Quoted</span>
+    ) : g.pricingMode === 'from' ? (
+      <span className="font-semibold text-navy">From {formatNaira(priceOf(g.id, g.price))}</span>
+    ) : (
+      <span className="font-semibold text-navy">{formatNaira(priceOf(g.id, g.price))}</span>
+    )
 
   return (
     <div className="bg-linen">
@@ -289,9 +300,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                                 />
                                 {g.name}
                               </span>
-                              <span className="font-semibold text-navy">
-                                {formatNaira(priceOf(g.id, g.price))}
-                              </span>
+                              {priceCell(g)}
                             </li>
                           ))}
                         </ul>
@@ -327,15 +336,46 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                                   />
                                   {g.name}
                                 </span>
-                                <span className="font-semibold text-navy">
-                                  {formatNaira(priceOf(g.id, g.price))}
-                                </span>
+                                {priceCell(g)}
                               </li>
                             ))}
                           </ul>
                         </CardContent>
                       </Card>
                     ))}
+                  </div>
+                </div>
+
+                {/* OTHER — wedding dress, couture & bespoke (owner directive):
+                    there was no category for these, so a full-width banner lets
+                    customers know a quote is available. Data comes from the same
+                    OTHER_COUTURE_GROUP the wizard uses — content can't drift. */}
+                <div className="mt-6 overflow-hidden rounded-2xl border border-gold-200 bg-linen-50 shadow-navy">
+                  <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-4">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-100">
+                        <Sparkles className="h-5 w-5 text-gold-600" />
+                      </div>
+                      <div>
+                        <p className="font-serif text-lg font-semibold text-navy">
+                          Something not on the menu?
+                        </p>
+                        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-300">
+                          Wedding dresses, couture and bespoke pieces are{' '}
+                          <span className="font-medium text-navy">quoted, not priced</span> —
+                          beading, fabric and detail change the work. Book a pickup, we
+                          assess your piece free of charge, and send a quote for your
+                          approval before any work begins.
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      onClick={onBook}
+                      variant="outline"
+                      className="shrink-0 rounded-full border-gold-300 bg-white text-navy hover:bg-gold-50"
+                    >
+                      Get a quote <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </div>
 
@@ -581,6 +621,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   'Insole & lace replacement options',
                   'Repainting & colour restoration for scuffed uppers',
                   'Protective coating to keep them fresh longer',
+                  'Free assessment — we confirm your pair can be saved before you commit',
                 ].map((t) => (
                   <li key={t} className="flex items-start gap-3">
                     <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
@@ -588,6 +629,17 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   </li>
                 ))}
               </ul>
+              {/* Restoration consultation (owner directive): assessment-first,
+                  exactly like a wedding-dress wash — a pair that is beyond
+                  restoration should be declined BEFORE the trip, not after. */}
+              <p className="mt-6 rounded-xl border border-gold-400/30 bg-white/5 p-4 text-sm leading-relaxed text-white/90">
+                <span className="font-semibold text-gold-300">Restorations from ₦5,000</span> —
+                priced by the extent of work after a free assessment. Every restoration
+                starts with a consultation: our specialist inspects the pair, tells you
+                honestly whether it can be saved, and sends the final quote for your
+                approval before any work begins. If it&apos;s beyond restoration, we say so
+                upfront — no charge, no wasted collection.
+              </p>
               <Button
                 onClick={onBookShoes ?? onBook}
                 className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"

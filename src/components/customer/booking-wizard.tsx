@@ -304,6 +304,17 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
       })
   }, [items, serverPrices, settings.garmentPrices, effectiveUser, isGuest])
   const subtotal = selectedItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  // ----- Quoted items (wedding dress, couture) -----
+  // They sit in the basket at ₦0 and are priced after a free assessment —
+  // the summary and checkout surfaces call this out so the ₦0 never reads
+  // as "free".
+  const quoteItemNames: string[] = Object.entries(items)
+    .filter(([, q]) => q > 0)
+    .map(([id]) => GARMENT_CATALOG.find((c) => c.id === id))
+    .filter((c): c is GarmentCatalogItem => c?.pricingMode === 'quote')
+    .map((c) => c.name)
+  const hasQuoteItems = quoteItemNames.length > 0
+  const quoteOnly = hasQuoteItems && subtotal === 0
   // ----- Turnaround tier -----
   // Express 24 is blocked when bulky household items are in the basket
   // (matches the server-side rule in POST /api/orders).
@@ -347,6 +358,15 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // ----- Catalog item card (one row of the Select-service grids) -----
   const renderCatalogCard = (g: GarmentCatalogItem) => {
     const qty = items[g.id] ?? 0
+    // 'from' → price is a floor (Restoration); 'quote' → no price yet
+    // (wedding dress & couture — assessed, then quoted for approval).
+    const unitPrice = serverPrices?.[g.id] ?? settings.garmentPrices[g.id] ?? g.price
+    const priceLine =
+      g.pricingMode === 'quote'
+        ? 'By quote — after assessment'
+        : g.pricingMode === 'from'
+          ? `From ${formatNaira(unitPrice)}`
+          : `${formatNaira(unitPrice)} each`
     return (
       <div
         key={g.id}
@@ -361,8 +381,13 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
           <img src={g.icon} alt="" className="h-7 w-7" />
           <div>
             <p className="text-sm font-medium text-navy">{g.name}</p>
-            <p className="text-xs text-navy-300">
-              {formatNaira(serverPrices?.[g.id] ?? settings.garmentPrices[g.id] ?? g.price)} each
+            <p
+              className={cn(
+                'text-xs',
+                g.pricingMode ? 'font-semibold text-gold-600' : 'text-navy-300'
+              )}
+            >
+              {priceLine}
             </p>
             {/* Disambiguation line (e.g. Lace / Aso-Ebi Gown vs Dress vs Ankara Gown) */}
             {g.description && (
@@ -683,6 +708,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
         description: `Order #${order.orderNumber} is confirmed. ${
           type === 'KG'
             ? 'We will weigh your items at the station and send the invoice.'
+            : quoteOnly
+            ? 'Our specialist will assess your pieces and send your quote for approval.'
             : paymentMethod === 'BANK_TRANSFER'
             ? receiptUploaded
               ? 'Your receipt is in the verification queue.'
@@ -889,6 +916,28 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                     ))}
                   </div>
 
+                  {/* Restoration consultation (owner directive): assessment
+                    comes BEFORE the trip, not after — a pair that can't be
+                    saved shouldn't be collected only to be returned as-is. */}
+                  {catalogTab === 'shoes' && (
+                    <div className="mt-4 flex items-start gap-3 rounded-xl border border-gold-200 bg-gold-50/60 p-4">
+                      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+                      <div>
+                        <p className="text-sm font-semibold text-navy">
+                          Restorations start with a free assessment
+                        </p>
+                        <p className="mt-1 text-xs leading-relaxed text-navy-300">
+                          Restoration projects are priced by the extent of work —
+                          sole whitening, repaints, repairs — and begin at ₦5,000.
+                          Our specialist assesses your pair first and sends the
+                          final quote for your approval before any work begins.
+                          If a pair is beyond saving, we tell you straight — no
+                          charge, no wasted collection.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Gendered groups for the active tab */}
                   {(catalogTab === 'men'
                     ? MEN_CATALOG_GROUPS
@@ -911,12 +960,27 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                   )}
 
                   {selectedItems.length > 0 && (
-                    <div className="mt-4 flex items-center justify-between rounded-xl bg-navy px-4 py-3 text-white">
-                      <span className="text-sm">
-                        {selectedItems.reduce((s, i) => s + i.quantity, 0)} item
-                        {selectedItems.reduce((s, i) => s + i.quantity, 0) === 1 ? '' : 's'} selected
-                      </span>
-                      <span className="text-lg font-bold">{formatNaira(subtotal)}</span>
+                    <div className="mt-4 rounded-xl bg-navy px-4 py-3 text-white">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm">
+                          {selectedItems.reduce((s, i) => s + i.quantity, 0)} item
+                          {selectedItems.reduce((s, i) => s + i.quantity, 0) === 1 ? '' : 's'} selected
+                        </span>
+                        <span className="text-lg font-bold">
+                          {formatNaira(subtotal)}
+                          {hasQuoteItems && (
+                            <span className="ml-1.5 align-middle text-[11px] font-medium text-gold-300">
+                              + quote
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      {hasQuoteItems && (
+                        <p className="mt-1 text-[11px] leading-snug text-white/70">
+                          {quoteItemNames.join(', ')} — priced by quote after a
+                          free assessment, not included in the total above.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1318,16 +1382,35 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
 
                   {type === 'ITEM' && (
                     <ul className="mt-3 space-y-2 text-sm">
-                      {selectedItems.map((i) => (
-                        <li key={i.id} className="flex items-center justify-between">
-                          <span className="text-navy-300">
-                            {i.quantity}× {i.name}
-                          </span>
-                          <span className="font-medium">
-                            {formatNaira(i.quantity * i.unitPrice)}
+                      {selectedItems.map((i) => {
+                        // Quoted items sit at ₦0 until the assessment quote is
+                        // approved — show "Quoted" instead of a misleading ₦0.
+                        const isQuote =
+                          GARMENT_CATALOG.find((c) => c.id === i.id.replace('item_', ''))
+                            ?.pricingMode === 'quote'
+                        return (
+                          <li key={i.id} className="flex items-center justify-between">
+                            <span className="text-navy-300">
+                              {i.quantity}× {i.name}
+                            </span>
+                            <span
+                              className={cn('font-medium', isQuote && 'text-gold-600')}
+                            >
+                              {isQuote ? 'Quoted' : formatNaira(i.quantity * i.unitPrice)}
+                            </span>
+                          </li>
+                        )
+                      })}
+                      {hasQuoteItems && (
+                        <li className="flex items-start gap-1.5 rounded-lg bg-gold-50 px-3 py-2 text-xs leading-relaxed text-navy-300 ring-1 ring-gold-200">
+                          <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
+                          <span>
+                            Quoted item{quoteItemNames.length > 1 ? 's are' : ' is'} assessed free
+                            at pickup — we send the final quote for your approval
+                            before any work begins.
                           </span>
                         </li>
-                      ))}
+                      )}
                       {expressSurcharge > 0 && (
                         <li className="flex items-center justify-between text-navy-300">
                           <span className="flex items-center gap-1">
@@ -1367,7 +1450,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                     <div className="mt-4 flex items-center justify-between border-t pt-3">
                       <span className="font-semibold">Total</span>
                       <span className="text-xl font-bold text-navy-300">
-                        {formatNaira(total)}
+                        {quoteOnly ? 'Quote to follow' : formatNaira(total)}
                       </span>
                     </div>
                   )}
@@ -1381,7 +1464,25 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                 </CardContent>
               </Card>
 
-              {type === 'ITEM' && (
+              {type === 'ITEM' && quoteOnly ? (
+                /* Quote-only basket (e.g. just a wedding dress): there is
+                 * nothing to pay yet — the assessment comes first and payment
+                 * follows the approved quote. Replaces the payment radios so
+                 * no ₦0 transfer/card flow is ever offered. */
+                <div className="mt-5">
+                  <div className="flex items-start gap-3 rounded-xl border border-gold-200 bg-gold-50/50 p-4">
+                    <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+                    <div>
+                      <p className="font-semibold text-navy">No payment yet — quote first</p>
+                      <p className="mt-1 text-sm leading-relaxed text-navy-300">
+                        Your basket only contains quoted item(s). We&apos;ll assess your
+                        pieces at pickup and send the quote — payment details follow
+                        once you approve the work.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : type === 'ITEM' && (
                 <div className="mt-5">
                   <p className="text-sm font-semibold">Choose payment method</p>
                   <RadioGroup
@@ -1541,7 +1642,13 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                 className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
               >
                 <Sparkles className="mr-2 h-4 w-4" />
-                {loading ? 'Placing order...' : type === 'ITEM' ? `Pay & Confirm ${formatNaira(total)}` : 'Confirm pickup request'}
+                {loading
+                  ? 'Placing order...'
+                  : type === 'ITEM'
+                    ? quoteOnly
+                      ? 'Confirm booking'
+                      : `Pay & Confirm ${formatNaira(total)}`
+                    : 'Confirm pickup request'}
               </Button>
             )}
           </div>

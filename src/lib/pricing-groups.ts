@@ -46,6 +46,13 @@ export const WOMEN_CATALOG_GROUPS: CatalogDisplayGroup[] = [
 export const HOUSEHOLD_GROUP: CatalogDisplayGroup = { title: 'Household', category: 'Household' }
 export const EXTRAS_GROUP: CatalogDisplayGroup = { title: 'Extras', category: 'Extras' }
 export const SHOES_GROUP: CatalogDisplayGroup = { title: 'Shoes & Sneakers', category: 'Shoes' }
+// Other — wedding dress, couture & bespoke. Never flat-priced: booked, then
+// assessed and quoted for approval (owner directive — there was no category
+// for wedding dresses, so "Other" lets customers know a quote is available).
+export const OTHER_COUTURE_GROUP: CatalogDisplayGroup = {
+  title: 'Other & Bespoke — quoted',
+  category: 'Other',
+}
 
 /** Landing pricing section — shared strip under both retail tabs (incl. shoes). */
 export const LANDING_SHARED_GROUPS: CatalogDisplayGroup[] = [
@@ -55,8 +62,14 @@ export const LANDING_SHARED_GROUPS: CatalogDisplayGroup[] = [
 ]
 
 /** Booking wizard — shared strip under the Men and Women tabs. Shoes are
- *  excluded here because they have their own dedicated tab in the wizard. */
-export const WIZARD_SHARED_GROUPS: CatalogDisplayGroup[] = [HOUSEHOLD_GROUP, EXTRAS_GROUP]
+ *  excluded here because they have their own dedicated tab in the wizard.
+ *  The Other & Bespoke quote group IS included — wedding dresses and couture
+ *  apply to everyone, exactly like household and extras. */
+export const WIZARD_SHARED_GROUPS: CatalogDisplayGroup[] = [
+  HOUSEHOLD_GROUP,
+  EXTRAS_GROUP,
+  OTHER_COUTURE_GROUP,
+]
 
 /** Resolve a display group to its catalog items (order preserved). */
 export function itemsForGroup(group: CatalogDisplayGroup): GarmentCatalogItem[] {

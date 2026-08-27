@@ -150,10 +150,19 @@ export interface GarmentCatalogItem {
     | 'Household'
     | 'Extras'
     | 'Shoes'
+    | 'Other'
   // Optional one-line description shown under the item name in the booking
   // wizard — used where a bare name would be ambiguous (e.g. Lace / Aso-Ebi
   // Gown vs the general Dress vs the existing Ankara Gown).
   description?: string
+  // Pricing display mode for items without a flat per-unit price:
+  //  • 'from'  — price is a FLOOR ("Restoration from ₦5,000"). The item is
+  //              charged at this base and the final amount is confirmed after
+  //              assessment, before any work begins (admin can adjust).
+  //  • 'quote' — NO fixed price (wedding dress, couture). The item is booked,
+  //              assessed free of charge, then quoted for customer approval.
+  //              It contributes ₦0 to the order total until the quote is set.
+  pricingMode?: 'from' | 'quote'
 }
 
 export const GARMENT_CATALOG: GarmentCatalogItem[] = [
@@ -196,10 +205,43 @@ export const GARMENT_CATALOG: GarmentCatalogItem[] = [
   { id: 'womens-underwear', name: 'Women\u2019s Underwear', price: 500, icon: '/icons/services/womens-underwear.svg', category: 'Extras' },
   { id: 'socks', name: 'Socks (per pair)', price: 200, icon: '/icons/services/socks.svg', category: 'Extras' },
   { id: 'hats', name: 'Hat', price: 500, icon: '/icons/services/hats.svg', category: 'Extras' },
-  { id: 'sneakers-white', name: 'Sneakers (White)', price: 1000, icon: '/icons/services/sneakers-white.svg', category: 'Shoes' },
-  { id: 'sneakers-coloured', name: 'Sneakers (Coloured)', price: 1200, icon: '/icons/services/sneakers-coloured.svg', category: 'Shoes' },
+  // White sneakers carry the premium (owner directive): every scuff, stain
+  // and yellowing shows on white, so they take the most careful cleaning.
+  // White ₦1,500 / coloured ₦1,000.
+  { id: 'sneakers-white', name: 'Sneakers (White)', price: 1500, icon: '/icons/services/sneakers-white.svg', category: 'Shoes' },
+  { id: 'sneakers-coloured', name: 'Sneakers (Coloured)', price: 1000, icon: '/icons/services/sneakers-coloured.svg', category: 'Shoes' },
   { id: 'leather-shoes', name: 'Leather Shoes', price: 1000, icon: '/icons/services/leather-shoes.svg', category: 'Shoes' },
   { id: 'suede-shoes', name: 'Suede Shoes', price: 2000, icon: '/icons/services/suede-shoes.svg', category: 'Shoes' },
+  // ── Restoration & quoted work (Phase 13) ─────────────────
+  // Restoration is assessment-first: ₦5,000 is a floor, not a flat rate —
+  // the specialist inspects the pair and confirms the final quote (extent of
+  // sole whitening, repaint area, repairs) before any work begins. A pair
+  // that is beyond restoration is turned down at the free assessment, not
+  // discovered after pickup (owner directive — no wasted trips).
+  {
+    id: 'sneaker-restoration',
+    name: 'Sneaker Restoration',
+    price: 5000,
+    icon: '/icons/services/sneaker-restoration.svg',
+    category: 'Shoes',
+    pricingMode: 'from',
+    description:
+      'From ₦5,000 — sole whitening, repaints, repairs. Free assessment first; we quote before any work begins.',
+  },
+  // Wedding dresses & couture are never flat-priced: beading, train length
+  // and fabric all change the work. The customer books the pickup, we assess
+  // free of charge, and send a quote for approval before touching the piece.
+  // price: 0 keeps it out of the subtotal; displays read "By quote".
+  {
+    id: 'other-couture',
+    name: 'Other — Wedding Dress & Couture',
+    price: 0,
+    icon: '/icons/services/other-couture.svg',
+    category: 'Other',
+    pricingMode: 'quote',
+    description:
+      'Wedding dresses, couture & bespoke pieces. Quoted after a free assessment — you approve before we start.',
+  },
 ]
 
 // =====================================================
