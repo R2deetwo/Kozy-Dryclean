@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import {
   Clock,
@@ -105,7 +106,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           >
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30 backdrop-blur">
               <Sparkles className="h-3 w-3 text-gold-400" />
-              Premium dry cleaning &amp; laundry · Serving Ikoyi to Lekki
+              Kozy drycleaning &amp; laundry · Serving Ikoyi to Lekki
             </div>
 
             <h1 className="font-serif text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
@@ -148,7 +149,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 <Clock className="h-3.5 w-3.5 text-gold-400" /> Express turnaround from 24 hours
               </span>
               <span className="flex items-center gap-1.5">
-                <Truck className="h-3.5 w-3.5 text-gold-400" /> Complimentary island-wide pickup
+                <Truck className="h-3.5 w-3.5 text-gold-400" /> Complimentary island-wide pickup*
               </span>
             </div>
           </motion.div>
@@ -176,9 +177,13 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                     Pressed, packaged, and ready for delivery
                   </p>
                 </div>
-                <div className="rounded-full bg-gold-400 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-navy">
+                <Link
+                  href="/signup"
+                  aria-label="Kozy Care — create your account"
+                  className="rounded-full bg-gold-400 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+                >
                   Kozy Care
-                </div>
+                </Link>
               </div>
             </div>
 
@@ -729,7 +734,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 </div>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-navy-100/70">
-                Premium dry cleaning &amp; laundry care for individuals and corporate
+                Kozy drycleaning &amp; laundry care for individuals and corporate
                 partners across Lagos Island.
               </p>
               <p className="mt-3 font-serif text-sm italic text-gold-200">
@@ -752,10 +757,11 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 </li>
                 <li className="flex items-start gap-2 transition">
                   <MapPin className="h-4 w-4 text-gold-400 shrink-0 mt-0.5" />
-                  <span className="text-navy-100/70">
-                    <span className="block">No 20. Westsyde Drive, Ogombo, Lagos State</span>
-                    <span className="block mt-1">Paradise 3 Estate, Road 5/3, Chevron, Lagos State</span>
-                  </span>
+                  <span className="text-navy-100/70">No 20. Westsyde Drive, Ogombo, Lagos State</span>
+                </li>
+                <li className="flex items-start gap-2 transition">
+                  <MapPin className="h-4 w-4 text-gold-400 shrink-0 mt-0.5" />
+                  <span className="text-navy-100/70">Paradise 3 Estate, Road 5/3, Chevron, Lagos State</span>
                 </li>
               </ul>
             </div>
@@ -815,7 +821,11 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
             </div>
           </div>
 
-          <div className="mt-6 flex flex-col items-center justify-between gap-3 border-t border-navy-500 pt-6 text-xs sm:flex-row">
+          <p className="mt-6 text-[10px] leading-relaxed text-navy-100/40">
+            *Free pickup and delivery for first order only.
+          </p>
+
+          <div className="mt-2 flex flex-col items-center justify-between gap-3 border-t border-navy-500 pt-6 text-xs sm:flex-row">
             <p className="text-navy-100/40">© 2026 Kozy Care. All rights reserved.</p>
             <div className="flex flex-wrap gap-4">
               <a href="/terms" className="text-navy-100/40 hover:text-gold-300 transition">Terms of Service</a>

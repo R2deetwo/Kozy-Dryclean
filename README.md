@@ -1,89 +1,105 @@
-# Kozy Drycleaning and Laundry Services
+# Kozy Care — Drycleaning & Laundry Platform
 
-> Uncompromising care. Exceptional convenience.
+> **Live site: [kozycare.ng](https://kozycare.ng)** · Uncompromising care. Exceptional convenience.
 
-Premium dry cleaning & laundry service for Lagos — from designer personal wear to corporate linen programs. Built with Next.js 16, TypeScript, Prisma + Supabase (Postgres), and Tailwind CSS.
+Kozy Care is a Lagos-based premium drycleaning and laundry service. This repository is
+the complete production platform: the customer booking website, guest checkout, online
+and bank-transfer payments, customer portal, admin console (orders, payment
+verification, CRM, pricing, reviews, finance charts), and a GPS-geofenced driver app —
+plus the generator scripts for the brand and print kit.
 
-## ⚠️ Current architecture status (as of Phase 1 cleanup)
+**New here? Read [`HANDOVER.md`](./HANDOVER.md) first.** It is the current, complete
+handover: architecture, deployment pipeline, environment variables, subsystem docs,
+known limitations, and the prioritised roadmap. (`ARCHITECTURE.md` and
+`DEPLOYMENT.md` are historical phase documents kept for context; `worklog.md` is the
+full chronological build record.)
 
-This repo is mid-migration from a UI demo to a production app. The current state:
+## What the platform does
 
-- **Routing**: Single route (`/`) with a **client-side `useState` toggle** in `src/app/page.tsx` that switches between Landing / Customer / Admin / Driver views. There is **no `middleware.ts`** and **no real route guards** — the "Admin" tab is accessible to anyone.
-- **Data layer**: Frontend reads from Zustand (seeded in-memory + persisted to `localStorage`). Supabase Postgres is provisioned and the schema is pushed, but **no `/api/*` routes exist yet** — the frontend does not yet talk to the database.
-- **Auth**: A demo "auth gate" with one-click demo-account buttons. **Not secure** — there is no real session, no NextAuth, no JWT.
+| Surface | Route | Highlights |
+| --- | --- | --- |
+| Landing page | `/` | Live server pricing, testimonials carousel (DB-backed), guarantee, SEO + OG images |
+| Guest booking | `/book` | Book in ~2 minutes with no account; 409 guard for existing accounts |
+| Customer portal | `/portal` | Order tracking, invoices, review submission on delivered orders |
+| Admin console | `/admin` | Kanban/list orders, payment verification queue, CRM, finance charts, pricing settings, review moderation |
+| Driver app | `/driver` | Route view, swipe confirmations, GPS geofencing across 12 Lagos service zones |
+| Rider recruitment | `/join-riders` | Public application page |
 
-### Migration plan (Phases 2-4)
+Payments: bank transfer with admin verification (live today) and Paystack online card
+payment (built; activates when `PAYSTACK_SECRET_KEY` is set). Notifications: branded
+email via Brevo (live) and SMS via Termii (built; activates when `TERMII_API_KEY` is
+set). All integrations degrade gracefully when keys are absent.
 
-- **Phase 2** (config hardening): Remove `ignoreBuildErrors`, add security headers to `next.config.ts`.
-- **Phase 3** (real backend wiring): Build `/api/orders`, `/api/payments`, `/api/users/me` with server-side RBAC. Replace Zustand selectors with React Query fetches.
-- **Phase 4** (real auth + real routes): Convert `/`, `/portal`, `/admin`, `/driver` into real Next.js App Router routes. Add `middleware.ts` enforcing session + role. Delete the demo auth gate and the role-switcher toggle. Unauthenticated visit to `/admin` redirects to login.
+## Tech stack
 
-See `ARCHITECTURE.md` for the full Phase 5/6 plan (Brevo email, Chakra WhatsApp, CRM mass messaging, multi-tenant).
+- **Framework**: Next.js 16 (App Router) · TypeScript 5
+- **Data**: Prisma + Supabase Postgres · Upstash Redis (rate limiting)
+- **UI**: Tailwind CSS 4 · shadcn/ui · Framer Motion · @dnd-kit
+- **Auth**: NextAuth (credentials, server-side sessions, RBAC in middleware + API routes)
+- **State**: React Query for server state; Zustand for ephemeral UI (legacy local
+  persistence is being retired — see HANDOVER.md §10)
+- **Brand**: Kozy Navy `#0A192F` · Champagne Gold `#D4AF37` · Playfair Display + Outfit
 
-## What's in this repo (target architecture)
-
-Four role-based portals:
-
-- **Landing page** (`/`) — public marketing site with hero, pricing toggle (Retail/Corporate), How It Works
-- **Customer Portal** (`/portal`) — auth-gated dashboard with order tracking, booking wizard, invoices
-- **Atelier Console** (`/admin`) — admin dashboard with Kanban/List toggle, payment verification queue, CRM, finance charts, settings (bank account + pricing management)
-- **Driver App** (`/driver`) — mobile-optimized route view with swipe-to-confirm pickups/deliveries
-
-## Tech Stack
-
-- **Framework**: Next.js 16 (App Router) + TypeScript 5
-- **Database**: Prisma ORM + Supabase Postgres
-- **Styling**: Tailwind CSS 4 + shadcn/ui (Kozy brand: Midnight Navy `#0A192F` + Champagne Gold `#D4AF37`)
-- **Typography**: Playfair Display (serif) + Outfit (geometric sans-serif)
-- **State**: Zustand for ephemeral UI state (form drafts, wizard step) — being replaced by React Query + real API routes in Phase 3
-- **DnD**: @dnd-kit for Kanban board
-- **Animations**: Framer Motion
-
-## Quick Start
+## Quick start (local)
 
 ```bash
-# Clone
 git clone https://github.com/R2deetwo/Kozy-Dryclean.git
 cd Kozy-Dryclean
-
-# Install
-bun install   # or: npm install
-
-# Set up env
-cp .env.example .env.local
-# Edit .env.local with your Supabase + NextAuth values
-
-# Push Prisma schema to Supabase
-bun run db:generate
-bun run db:push
-
-# (Optional) Seed demo data
-bun run scripts/seed-supabase.ts
-
-# Run dev server
-bun run dev
+bun install                 # or npm install
+cp .env.example .env        # fill values from Vercel → Settings → Environment Variables
+bun run dev                 # http://localhost:3000
 ```
 
-Visit `http://localhost:3000`.
+⚠️ The local app talks to the **production** database — create test data sparingly and
+clean it up.
 
-## Environment Variables
+Useful scripts (in `scripts/`): `create-admin.ts` (seed an admin account),
+`vercel_deploy.py` (trigger + verify a production deploy via the Vercel API),
+`kozy-brand/` (regenerate the entire print kit — flyers, poster, business cards).
 
-See `.env.example` for the full list. Critical ones:
+## Deployment (read this — it is not what you expect)
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | Supabase pooler URL (port 6543) |
-| `DIRECT_URL` | Supabase direct URL (port 5432) for migrations |
-| `NEXTAUTH_SECRET` | 32-char random string — generate with `openssl rand -base64 32` |
-| `NEXT_PUBLIC_SUPABASE_URL` | `https://[project-ref].supabase.co` |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon public key |
+**Pushing to GitHub does NOT auto-deploy.** The Vercel Git integration is not wired
+for this repository. Production deploys are triggered via the Vercel REST API:
 
-## Documentation
+```bash
+# 1. Push your commit to GitHub (main = production)
+# 2. Trigger the deploy (see scripts/vercel_deploy.py for the full flow):
+VERCEL_TOKEN=... python3 scripts/vercel_deploy.py
+# ...or click "Deploy" on the commit in the Vercel dashboard.
+```
 
-- `DEPLOYMENT.md` — full deployment guide (Vercel + Supabase + Paystack + Termii)
-- `ARCHITECTURE.md` — Phase 2-6 roadmap (auth, notifications, CRM, multi-tenant)
-- `prisma/schema.prisma` — database schema (User, Order, Payment, GarmentMedia, StatusEvent)
+- Vercel project: `kozy-dryclean` · build command `bun run build:vercel`
+  (`prisma db push` + `next build` — the schema auto-syncs on every deploy).
+- Domains: `kozycare.ng` (primary) · `www.kozycare.ng` → apex (308) ·
+  `kozy-dryclean.vercel.app` (legacy).
+- All secrets live in Vercel environment settings — never in the repository.
+  GitHub push protection is enabled and has caught accidental leaks before.
 
-## License
+## Repository map
 
-Proprietary. © 2026 Kozy Drycleaning and Laundry Services.
+```
+src/app/                 App Router pages + API routes (orders, payments, reviews,
+                         paystack, driver/location, auth)
+src/components/          customer / admin / driver / shell UI
+src/lib/                 types (GARMENT_CATALOG), pricing-groups, geo (service zones),
+                         notifications, email, store, hooks
+prisma/schema.prisma     Users, Orders, OrderItem, Payment, Review, DriverLocation,
+                         PriceCatalog, Settings
+scripts/                 ops + brand-kit generators (see scripts/kozy-brand/)
+public/brand/            v4 K mark, OG image, service icons
+worklog.md               chronological build record (start here for "why")
+HANDOVER.md              the current handover document
+```
+
+## Brand & print kit
+
+The print-ready marketing kit (A5 flyers, A3 poster, business cards in navy + white,
+logo system, brand sheet) is delivered alongside this repository, with editable HTML
+sources and one-command regeneration scripts in `scripts/kozy-brand/`. Printed pieces
+carry the offer terms: 15% off the first order, and free pickup & delivery for the
+first order only (asterisked fine print).
+
+---
+
+© 2026 Kozy Care Drycleaning & Laundry Services · Lagos, Nigeria · [kozycare.ng](https://kozycare.ng)
