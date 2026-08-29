@@ -68,3 +68,4 @@ download/*.png
 # Sandbox upload staging area (mounted by Z.ai sandbox, not tracked)
 upload/
 package-lock.json
+.vercel
