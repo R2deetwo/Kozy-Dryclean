@@ -47,6 +47,7 @@ import {
   Zap,
   Truck,
   Tag,
+  Ruler,
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
@@ -71,6 +72,12 @@ import {
   type CatalogDisplayGroup,
   type CatalogTab,
 } from '@/lib/pricing-groups'
+import {
+  loadSavedMeasurements,
+  formatMeasurementsForNote,
+  hasValues,
+  type SavedMeasurements,
+} from '@/lib/measurements'
 import { useSession } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -168,6 +175,11 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // the basket — riders never measure at the door; the seamstress works
   // from this note and calls the customer to confirm before quoting.
   const [alterationNotes, setAlterationNotes] = useState('')
+  // Saved measurements from the free /measurements guide (Phase 18): offered
+  // as a one-tap attach so repeat alteration customers never re-type their
+  // sizes ("if they want alterations, they don't have to put their size in
+  // all the time"). Lives in localStorage — private to this browser.
+  const [savedMeasurements, setSavedMeasurements] = useState<SavedMeasurements | null>(null)
   const [photos, setPhotos] = useState<{ url: string; name: string }[]>([])
   const [guaranteeAck, setGuaranteeAck] = useState(false)
   const [pickupAddress, setPickupAddress] = useState('')
@@ -228,6 +240,13 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     retry: 0,
   })
   const isFirstOrder = !effectiveUser ? true : isFirstOrderEstimate.data === false
+
+  // ----- Saved measurements (Phase 18) -----
+  // Loaded once on mount from localStorage (set by the /measurements guide).
+  // If present and filled, the alterations panel offers a one-tap attach.
+  useEffect(() => {
+    setSavedMeasurements(loadSavedMeasurements())
+  }, [])
 
   // ----- Restore a saved draft ("continue where you left off") -----
   // Runs once on mount, BEFORE the profile prefill effect below so a restored
@@ -1185,6 +1204,57 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                           </button>
                         ))}
                       </div>
+                      {/* Saved measurements from the /measurements guide
+                          (Phase 18): one-tap attach so repeat customers never
+                          re-type their sizes. Cross-links to the guide when
+                          nothing is saved yet. */}
+                      {hasValues(savedMeasurements) ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const snippet = formatMeasurementsForNote(savedMeasurements)
+                            if (!snippet) return
+                            setAlterationNotes((prev) =>
+                              prev.includes('My measurements (')
+                                ? prev
+                                : `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}${snippet}`
+                            )
+                          }}
+                          disabled={alterationNotes.includes('My measurements (')}
+                          className="mt-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition disabled:cursor-default"
+                          style={
+                            alterationNotes.includes('My measurements (')
+                              ? { borderColor: '#EFD87E', backgroundColor: '#FBF5E0', color: '#947621' }
+                              : undefined
+                          }
+                        >
+                          {alterationNotes.includes('My measurements (') ? (
+                            <>
+                              <Check className="h-3.5 w-3.5" /> Measurements attached to your note
+                            </>
+                          ) : (
+                            <>
+                              <Ruler className="h-3.5 w-3.5" /> Attach my saved measurements
+                              <span className="font-normal text-navy-300">
+                                (saved{' '}
+                                {new Date(savedMeasurements.savedAt).toLocaleDateString('en-GB', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                })}
+                                )
+                              </span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <a
+                          href="/measurements"
+                          className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-semibold text-navy-400 underline decoration-gold-300 underline-offset-2 transition hover:text-navy"
+                        >
+                          <Ruler className="h-3.5 w-3.5" />
+                          Not sure of your numbers? Take the free measurement guide
+                        </a>
+                      )}
                       <textarea
                         value={alterationNotes}
                         onChange={(e) => setAlterationNotes(e.target.value)}

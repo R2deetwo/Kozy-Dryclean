@@ -22,6 +22,7 @@ import {
   Scissors,
   BedDouble,
   Droplets,
+  Ruler,
 } from 'lucide-react'
 import {
   formatNaira,
@@ -886,12 +887,27 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 the details, then sends your quote. Nothing is sewn until you approve
                 it.
               </p>
-              <Button
-                onClick={onBook}
-                className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
-              >
-                Book pickup with alterations <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+              <div className="mt-7 flex flex-wrap items-center gap-3">
+                <Button
+                  onClick={onBook}
+                  className="rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+                >
+                  Book pickup with alterations <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+                {/* Free measurement tutorial (Phase 18, client directive:
+                    "besides 'book pickup with alterations', we could also have
+                    'How do I take measurements?'... it should take them to a
+                    separate page... in one of our brand colors, probably the
+                    royal blue"). Royal-blue pill in the brand navy family. */}
+                <Button
+                  asChild
+                  className="rounded-full border border-navy-600 bg-navy-500 px-6 text-white hover:bg-navy-600"
+                >
+                  <Link href="/measurements">
+                    <Ruler className="mr-2 h-4 w-4" /> How do I take measurements?
+                  </Link>
+                </Button>
+              </div>
             </motion.div>
 
             {/* Visual column — a seamstress at her workstation keeps this
@@ -928,7 +944,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid gap-10 lg:grid-cols-2 items-center">
             <div className="overflow-hidden rounded-2xl ring-1 ring-navy-100 shadow-2xl order-2 lg:order-1">
-              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy laundry bag with the gold Kozy K to a smiling customer on her veranda" className="h-full w-full object-cover" />
+              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy suit carrier garment bag with the gold Kozy K monogram to a smiling customer on her veranda" className="h-full w-full object-cover" />
             </div>
             <motion.div
               initial={{ opacity: 0, x: 16 }}
