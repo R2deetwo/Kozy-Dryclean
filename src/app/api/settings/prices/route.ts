@@ -19,7 +19,33 @@ import { GARMENT_CATALOG } from '@/lib/types'
 
 export async function GET() {
   try {
-    const rows = await db.priceCatalog.findMany({ where: { active: true } })
+    let rows = await db.priceCatalog.findMany({ where: { active: true } })
+    const known = new Set(rows.map((r) => r.itemKey))
+
+    // Self-seed: any catalog item the DB doesn't know yet (e.g. the Phase-14
+    // Outerwear additions — Leather Jacket, Jean Jacket, Sweatshirt/Cardigan)
+    // is inserted at its bundled default price so orders can never price at
+    // ₦0 while waiting for a manual seed run. Idempotent + best-effort.
+    const missing = GARMENT_CATALOG.filter((g) => !known.has(g.id))
+    if (missing.length > 0) {
+      await Promise.all(
+        missing.map((g) =>
+          db.priceCatalog.upsert({
+            where: { itemKey: g.id },
+            update: {},
+            create: {
+              itemKey: g.id,
+              label: g.name,
+              unitPrice: g.price,
+              category: g.category,
+              active: true,
+            },
+          })
+        )
+      )
+      rows = await db.priceCatalog.findMany({ where: { active: true } })
+    }
+
     const garmentPrices: Record<string, number> = {}
     for (const row of rows) {
       garmentPrices[row.itemKey] = row.unitPrice

@@ -19,6 +19,8 @@ import {
   ShoppingBag,
   Sparkles,
   Zap,
+  Scissors,
+  BedDouble,
 } from 'lucide-react'
 import {
   formatNaira,
@@ -31,7 +33,7 @@ import {
   itemsForGroup,
 } from '@/lib/pricing-groups'
 import { useStore } from '@/lib/store'
-import { useServerPrices } from '@/lib/hooks'
+import { useServerPrices, useAppSettings } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -39,6 +41,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TestimonialsCarousel } from '@/components/customer/testimonials-carousel'
 import { HowItWorksSection } from '@/components/customer/how-it-works'
+import { FeedbackForm } from '@/components/customer/feedback-form'
 
 interface Props {
   onBook: () => void
@@ -61,6 +64,9 @@ interface Props {
 export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
   const [pricing, setPricing] = useState<'men' | 'women' | 'corporate'>('men')
   const settings = useStore((s) => s.settings)
+  // Server-managed commercial terms (offers, delivery fee, guarantee rules,
+  // alterations pricing) — admin edits reach every visitor instantly.
+  const appSettings = useAppSettings()
   // Live prices from PriceCatalog (what the server charges) — the persisted
   // store and bundle defaults are only fallbacks.
   const serverPrices = useServerPrices()
@@ -227,6 +233,47 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               </div>
             )
           })}
+        </div>
+      </section>
+
+      {/* ============================================================
+          OFFERS — first-order, hotel-guest & picture discounts
+          (Phase 14: one clear strip so the site and flyers tell the
+          same story — 10% first order, HOTEL15 for hotel guests,
+          5% for uploading pictures with each order)
+      ============================================================ */}
+      <section className="border-b border-gold-200 bg-linen-50">
+        <div className="mx-auto grid max-w-7xl gap-3 px-4 py-6 sm:px-6 md:grid-cols-3">
+          <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
+            <Sparkles className="h-6 w-6 shrink-0 text-gold-500" />
+            <div>
+              <p className="text-sm font-bold text-navy">
+                {appSettings.firstOrderDiscountPercent}% off your first order
+              </p>
+              <p className="text-xs text-navy-300">For every new customer — applied automatically at checkout.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl bg-navy p-4 text-white shadow-sm ring-1 ring-gold-400/30">
+            <Building2 className="h-6 w-6 shrink-0 text-gold-400" />
+            <div>
+              <p className="text-sm font-bold text-gold-100">
+                Hotel guests: {appSettings.hotelGuestDiscountPercent}% off + 5%
+              </p>
+              <p className="text-xs text-navy-100/80">
+                Use code <span className="font-mono font-bold text-gold-300">{appSettings.hotelGuestPromoCode}</span> at
+                checkout for your first order — plus the 5% picture discount.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
+            <Shield className="h-6 w-6 shrink-0 text-gold-500" />
+            <div>
+              <p className="text-sm font-bold text-navy">5% off every order with pictures</p>
+              <p className="text-xs text-navy-300">
+                Upload condition photos at booking — it activates the Return-as-Received Guarantee.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -405,6 +452,32 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                     Book express <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                   </Button>
                 </div>
+
+                {/* Pickup & delivery pricing — transparency requested by the
+                    client ("I see first delivery is free but I don't see
+                    pricing for deliveries afterwards"). First delivery is
+                    free; every delivery after that is a flat island-wide rate
+                    that admin can tune in Settings. */}
+                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
+                  <div className="flex items-start gap-3">
+                    <Truck className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-navy">
+                        Pickup &amp; delivery — first one&apos;s on us.
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
+                        Your first pickup and delivery is <span className="font-semibold text-navy">FREE</span>.
+                        After that, every delivery is a flat{' '}
+                        <span className="font-semibold text-navy">{formatNaira(appSettings.deliveryFee)}</span>{' '}
+                        island-wide (Ikoyi to Lekki) — no distance surprises, added at checkout.
+                        Express orders keep the same rate.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className="shrink-0 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+                    First delivery FREE
+                  </Badge>
+                </div>
               </TabsContent>
             ))}
 
@@ -473,6 +546,42 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   </Card>
                 </div>
               </div>
+
+              {/* HOTEL GUEST OFFER — Phase 14 (client directive: hotel guests
+                  are already high-value customers, so they earn the better
+                  first-order deal: 15% + the 5% picture discount). The code
+                  is redeemed at checkout in the booking wizard. */}
+              <div className="mt-6 overflow-hidden rounded-2xl bg-navy-gradient p-6 text-white ring-1 ring-gold-400/30">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-start gap-4">
+                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-400 text-navy">
+                      <Building2 className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-serif text-lg font-semibold">
+                        Staying at a partner hotel? Your first order is{' '}
+                        <span className="text-gold-300">{appSettings.hotelGuestDiscountPercent}% off.</span>
+                      </p>
+                      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-100/85">
+                        Hotel guests deserve the better deal — you&apos;re already our guest. Use code{' '}
+                        <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono font-bold text-gold-300 ring-1 ring-gold-400/40">
+                          {appSettings.hotelGuestPromoCode}
+                        </span>{' '}
+                        at checkout for {appSettings.hotelGuestDiscountPercent}% off your first order,{' '}
+                        <span className="font-semibold text-white">plus</span> the 5% picture discount
+                        when you upload photos with the order — that&apos;s up to{' '}
+                        {appSettings.hotelGuestDiscountPercent + 5}% back on your first clean.
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={onBook}
+                    className="shrink-0 rounded-full bg-gold-gradient px-5 text-navy hover:opacity-90"
+                  >
+                    Claim your offer <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
             </TabsContent>
           </Tabs>
         </div>
@@ -482,6 +591,11 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           TESTIMONIALS — rotating customer reviews (4.5★ and above only)
       ============================================================ */}
       <TestimonialsCarousel />
+
+      {/* ============================================================
+          REVIEWS & COMPLAINTS — public feedback form (Phase 14)
+      ============================================================ */}
+      <FeedbackForm />
 
       {/* ============================================================
           GUARANTEE — Kozy Care Promise
@@ -516,6 +630,30 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   uploaded photos are automatically tagged &quot;Guarantee Activated&quot;
                   and receive a 5% discount on the total.
                 </p>
+
+                {/* ELIGIBLE ORDERS — plain-language definition (client
+                    directive: "what is considered eligible orders… a certain
+                    number garments or amount of total order"). The thresholds
+                    are admin-tunable and served from the DB. */}
+                <div className="mt-4 rounded-lg border border-navy-100 bg-linen-50 p-4">
+                  <p className="font-serif text-sm font-semibold text-navy">
+                    What counts as an eligible order?
+                  </p>
+                  <p className="mt-1.5 text-xs leading-relaxed text-navy-300">
+                    Any retail order with{' '}
+                    <span className="font-semibold text-navy">
+                      at least {appSettings.guaranteeMinGarments} garments
+                    </span>{' '}
+                    <span className="font-semibold text-navy">or</span> a{' '}
+                    <span className="font-semibold text-navy">
+                      {formatNaira(appSettings.guaranteeMinOrderValue)}+ total
+                    </span>{' '}
+                    — whichever comes first — with condition photos uploaded at booking and
+                    the guarantee terms acknowledged. Orders below both thresholds can still
+                    be booked and cleaned; they simply don&apos;t carry the damage-cover
+                    guarantee. In short: two shirts or one suit and you&apos;re covered.
+                  </p>
+                </div>
 
                 <div className="mt-4 rounded-lg border border-gold-200 bg-gold-50 p-4 text-xs leading-relaxed text-navy-300">
                   <p className="font-serif text-sm font-semibold text-navy">
@@ -588,7 +726,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
             <img
               src="/brand/images/atelier-craftsman.png"
-              alt="Kozy master dry cleaner treating a premium garment with care"
+              alt="Kozy master presser finishing a premium garment at the steam station"
               className="h-full w-full object-cover"
             />
           </div>
@@ -660,13 +798,103 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       </section>
 
       {/* ============================================================
+          ALTERATIONS — Exclusive to Kozy Care (Phase 14, client directive)
+          In-house tailoring: hems, tapering, zips, waist adjustments.
+          Pricing is confirmed with the tailor and published the moment it is
+          set — until then every piece is measured and quoted for approval
+          before any work begins (assessment-first, like wedding dresses).
+      ============================================================ */}
+      <section id="alterations" className="bg-linen py-20 scroll-mt-20">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+            <motion.div
+              initial={{ opacity: 0, x: -16 }}
+              whileInView={{ opacity: 1, x: 0 }}
+              viewport={{ once: true }}
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+                  Alterations &amp; Repairs
+                </p>
+                <Badge className="bg-gold-400 text-navy hover:bg-gold-400">
+                  Exclusive to Kozy Care
+                </Badge>
+              </div>
+              <h2 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+                Cleaned, pressed — and made to fit.
+              </h2>
+              <p className="mt-4 max-w-xl leading-relaxed text-navy-300">
+                Our in-house tailor works alongside the cleaning team, so alterations ride
+                the same pickup and delivery as your laundry. No separate trips, no
+                tailoring shop queues — hand your pieces to your Kozy rider and collect
+                them fitting the way they should. Available exclusively to Kozy Care
+                customers; you won&apos;t find this service anywhere else on the island.
+              </p>
+              <ul className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
+                {[
+                  'Trousers & jeans — hems, tapering, waist adjustments',
+                  'Shirts & dresses — take-in, sleeve shortening, re-hemming',
+                  'Zips, buttons & linings replaced with matching materials',
+                  'Traditional wear — agbada, kaftan and iro & buba adjustments',
+                  'Blazers & suits — sleeve and body alterations by a suit tailor',
+                  'Free measurement at pickup — we pin, you approve, we sew',
+                ].map((t) => (
+                  <li key={t} className="flex items-start gap-3">
+                    <Scissors className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+                    <span className="text-navy-300">{t}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-6 rounded-xl border border-gold-200 bg-gold-50 p-4 text-sm leading-relaxed text-navy-300">
+                <span className="font-semibold text-navy">
+                  {appSettings.alterationsFromPrice > 0
+                    ? `Alterations from ${formatNaira(appSettings.alterationsFromPrice)}`
+                    : 'Simple, honest pricing — quoted before we sew'}
+                </span>{' '}
+                — every alteration starts with a free measurement at pickup: we pin the
+                work, send you the quote, and nothing is sewn until you approve it. Add
+                your alteration request as a note when booking.
+              </p>
+              <Button
+                onClick={onBook}
+                className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+              >
+                Book pickup with alterations <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </motion.div>
+
+            {/* Visual column — the atelier interior keeps this section about
+                craft; the illustration style matches the rest of the site. */}
+            <div className="relative">
+              <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
+                <img
+                  src="/brand/images/atelier-interior.png"
+                  alt="Inside the Kozy atelier — dedicated pressing and tailoring stations"
+                  className="h-full w-full object-cover"
+                />
+              </div>
+              <div className="absolute -bottom-4 -right-4 hidden rounded-xl bg-white p-4 shadow-lg ring-1 ring-gold-200 sm:block">
+                <div className="flex items-center gap-2">
+                  <Scissors className="h-5 w-5 text-gold-500" />
+                  <div>
+                    <p className="text-xs font-bold text-navy">In-house tailor</p>
+                    <p className="text-[10px] text-navy-300">Same rider, same delivery</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
           FEMALE LIFESTYLE — representing all customers
       ============================================================ */}
       <section className="bg-linen py-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid gap-10 lg:grid-cols-2 items-center">
             <div className="overflow-hidden rounded-2xl ring-1 ring-navy-100 shadow-2xl order-2 lg:order-1">
-              <img src="/brand/images/female-customer.png" alt="Happy customer receiving her clean laundry" className="h-full w-full object-cover" />
+              <img src="/brand/images/female-customer.png" alt="Happy customer receiving her fresh laundry in a Kozy garment bag from a Kozy rider" className="h-full w-full object-cover" />
             </div>
             <motion.div
               initial={{ opacity: 0, x: 16 }}
@@ -695,7 +923,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   <p className="text-xs text-navy-300">Per item, starting at</p>
                 </div>
                 <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
-                  <p className="font-serif text-2xl font-bold text-navy">5%</p>
+                  <p className="font-serif text-2xl font-bold text-navy">{appSettings.firstOrderDiscountPercent}%</p>
                   <p className="text-xs text-navy-300">Off first order</p>
                 </div>
               </div>
@@ -794,6 +1022,16 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 <li>
                   <a href="#shoe-care" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
                     Shoe Cleaning &amp; Restoration
+                  </a>
+                </li>
+                <li>
+                  <a href="#alterations" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+                    Alterations — Exclusive to Kozy
+                  </a>
+                </li>
+                <li>
+                  <a href="#feedback" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+                    Reviews &amp; Complaints
                   </a>
                 </li>
                 <li>

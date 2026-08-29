@@ -52,6 +52,14 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               {order.serviceSpeed && order.serviceSpeed !== 'STANDARD' && (
                 <Badge className="rounded-full bg-[#FBF5E0] text-[#0A192F]"><Zap className="mr-1 h-2.5 w-2.5" /> {speedLabel(order.serviceSpeed)}</Badge>
               )}
+              {order.modeOfWash && (
+                <Badge className="rounded-full bg-blue-100 text-blue-800">
+                  {order.modeOfWash === 'HANDWASH' ? 'Handwash care' : 'Machine wash'}
+                </Badge>
+              )}
+              {order.promoCode && (
+                <Badge className="rounded-full bg-gold-100 text-gold-800">Code {order.promoCode}</Badge>
+              )}
               {order.guaranteeActive && <Badge className="rounded-full bg-[#FBF5E0] text-[#0A192F]"><Shield className="mr-1 h-2.5 w-2.5" /> Guarantee</Badge>}
             </DialogTitle>
             <DialogDescription className="text-[#6F88A8]">Booked on {formatDateTime(order.createdAt)}</DialogDescription>

@@ -143,6 +143,21 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                 <Shield className="mr-1 h-2.5 w-2.5" /> Guarantee
               </Badge>
             )}
+            {order.modeOfWash && (
+              <Badge className="rounded-full bg-blue-100 text-blue-800">
+                {order.modeOfWash === 'HANDWASH' ? 'Handwash' : 'Machine wash'}
+              </Badge>
+            )}
+            {order.promoCode && (
+              <Badge className="rounded-full bg-gold-100 text-gold-800">
+                Code {order.promoCode}
+              </Badge>
+            )}
+            {typeof order.deliveryFee === 'number' && order.deliveryFee > 0 && (
+              <Badge variant="outline" className="rounded-full text-[10px] text-[#0A192F] border-[#E2E5E9]">
+                Delivery ₦{order.deliveryFee.toLocaleString('en-NG')}
+              </Badge>
+            )}
           </DialogTitle>
           <DialogDescription>Booked on {formatDateTime(order.createdAt)}</DialogDescription>
         </DialogHeader>

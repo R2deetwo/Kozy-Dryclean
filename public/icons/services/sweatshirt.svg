@@ -1,0 +1,14 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Sweatshirt / Cardigan (V-neck pullover with ribbed cuffs + hem) -->
+  <!-- Body: relaxed pullover silhouette with dropped shoulders -->
+  <path d="M12 5 L6 8 L4 14 L8 15 L8 24 L24 24 L24 15 L28 14 L26 8 L20 5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- V-neck -->
+  <path d="M12 5 L16 10 L20 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+  <!-- Cardigan button placket (center line + gold buttons) -->
+  <path d="M16 10 L16 24" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" stroke-dasharray="3 2"/>
+  <circle cx="16" cy="14" r="0.9" fill="#D4AF37"/>
+  <circle cx="16" cy="18" r="0.9" fill="#D4AF37"/>
+  <circle cx="16" cy="22" r="0.9" fill="#D4AF37"/>
+  <!-- Ribbed hem -->
+  <path d="M8 22.5 L24 22.5" stroke="currentColor" strokeWidth="1" strokeLinecap="round" stroke-dasharray="1.5 2"/>
+</svg>

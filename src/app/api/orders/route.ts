@@ -37,7 +37,8 @@ import { CreateOrderSchema } from '@/lib/schemas'
 import { notifyOrderCreated, notifyGuestAccountCreated } from '@/lib/notifications'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
-import { getServiceSpeed, allowsExpress24, GARMENT_CATALOG } from '@/lib/types'
+import { getServiceSpeed, allowsExpress24, GARMENT_CATALOG, GUARANTEE_DISCOUNT } from '@/lib/types'
+import { getAppSettings } from '@/lib/app-settings'
 
 // ----- GET /api/orders -----
 export async function GET(req: Request) {
@@ -163,7 +164,17 @@ export async function POST(req: Request) {
     )
   }
 
-  const { type, items, serviceSpeed, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
+  const { type, items, serviceSpeed, modeOfWash, promoCode, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
+
+  // ----- Mode of wash (client-requested order-form option) -----
+  // Retail orders must carry an explicit choice — the wizard makes it a
+  // required field. KG/corporate orders skip it (washed by weight).
+  if (type === 'ITEM' && !modeOfWash) {
+    return NextResponse.json(
+      { error: 'MODE_OF_WASH_REQUIRED', message: 'Please choose a mode of wash (handwash or machine wash) for your order.' },
+      { status: 400 }
+    )
+  }
 
   // ----- Guarantee integrity (aligns the server with the wizard's UX) -----
   // The Return-as-Received Guarantee (5% off + damage coverage) requires an
@@ -249,6 +260,9 @@ export async function POST(req: Request) {
   // Calculate total price for ITEM orders — SERVER-SIDE PRICING ONLY
   let totalPrice: number | undefined
   let appliedDiscounts: string[] = []
+  // Phase-14 order attributes (mode of wash, promo code, delivery fee) —
+  // filled in by the ITEM pricing block below.
+  const orderExtras: { deliveryFee?: number; modeOfWash?: string | null; promoCode?: string | null } = {}
 
   // ----- Service speed (turnaround tier) -----
   // KG / corporate orders always run on the standard SLA. For ITEM orders
@@ -298,29 +312,123 @@ export async function POST(req: Request) {
       }
     })
 
-    let totalDiscount = 0
+    // ----- Server-managed commercial settings (AppSetting) -----
+    // Delivery fee, handwash surcharge, offer percentages and guarantee
+    // thresholds all come from the DB so admin edits reach every customer.
+    const appSettings = await getAppSettings()
 
-    // Apply guarantee discount if active (5%)
+    // ----- Guarantee eligibility (client-requested transparency) -----
+    // An order qualifies for the Return-as-Received Guarantee when it has
+    // at least N garments OR meets the minimum order value (either counts).
+    // Photos + acknowledgement are still required in the wizard; this check
+    // prevents a single-₦500-shirt order claiming guarantee coverage.
     if (guaranteeActive) {
-      totalDiscount += 0.05
-      appliedDiscounts.push('Return-as-Received Guarantee (5%)')
+      const garmentCount = pricedItems.reduce((s: number, i: any) => s + (i.quantity || 0), 0)
+      const eligible =
+        garmentCount >= appSettings.guaranteeMinGarments ||
+        subtotal >= appSettings.guaranteeMinOrderValue
+      if (!eligible) {
+        return NextResponse.json(
+          {
+            error: 'GUARANTEE_NOT_ELIGIBLE',
+            message: `The Return-as-Received Guarantee covers orders of at least ${appSettings.guaranteeMinGarments} garments or ${appSettings.guaranteeMinOrderValue.toLocaleString('en-NG')} naira. Please continue without the guarantee or add to your basket.`,
+          },
+          { status: 400 }
+        )
+      }
     }
 
-    // Apply signup discount — Item 4 fix: only mark as used if discount was actually applied
-    if (owner.signupDiscountUsed === false) {
-      const signupDiscount = await db.discount.findFirst({
-        where: { appliesTo: 'SIGNUP', active: true }
-      })
-      if (signupDiscount && signupDiscount.type === 'PERCENTAGE') {
-        totalDiscount += signupDiscount.value / 100
-        appliedDiscounts.push(`Signup discount (${signupDiscount.value}%)`)
-        // Item 4 fix: only mark as used INSIDE the if-branch
-        await db.user.update({
-          where: { id: ownerId },
-          data: { signupDiscountUsed: true }
+    let totalDiscount = 0
+
+    // Apply guarantee discount if active (5% photo-upload discount — kept
+    // separate from the first-order offer so the two stack)
+    if (guaranteeActive) {
+      totalDiscount += GUARANTEE_DISCOUNT
+      appliedDiscounts.push('Return-as-Received photo discount (5%)')
+    }
+
+    // ----- First-order offer: promo code (hotel guests) or signup discount -----
+    // A valid offer code REPLACES the standard signup discount — hotel guests
+    // (15%) get the better first-order deal; everyone else gets the standard
+    // 10%. The picture discount (5%) always stacks on top.
+    let appliedPromoCode: string | null = null
+    const isFirstOrder = owner.signupDiscountUsed === false
+    if (isFirstOrder && promoCode) {
+      const code = promoCode.toUpperCase().trim()
+      let promo = await db.discount.findFirst({ where: { code, active: true } })
+      // Built-in hotel-guest offer: the code + percentage live in AppSetting,
+      // so it works even before a Discount row exists. Upsert the row for
+      // admin visibility/auditability.
+      if (!promo && code === appSettings.hotelGuestPromoCode.toUpperCase()) {
+        promo = await db.discount.upsert({
+          where: { code },
+          update: { active: true, value: appSettings.hotelGuestDiscountPercent },
+          create: {
+            name: 'Hotel Guest First-Order Offer',
+            code,
+            type: 'PERCENTAGE',
+            value: appSettings.hotelGuestDiscountPercent,
+            active: true,
+            appliesTo: 'FIRST_ORDER',
+            description: `${appSettings.hotelGuestDiscountPercent}% off the first order for hotel guests (stacks with the 5% picture discount).`,
+          },
         })
       }
-      // If signupDiscount is null or inactive, signupDiscountUsed stays false
+      if (promo && promo.type === 'PERCENTAGE') {
+        appliedPromoCode = code
+        totalDiscount += promo.value / 100
+        appliedDiscounts.push(`Offer code ${code} (${promo.value}% off first order)`)
+        // The promo consumed the first-order benefit (it is strictly better
+        // than the standard signup discount).
+        await db.user.update({
+          where: { id: ownerId },
+          data: { signupDiscountUsed: true },
+        })
+      } else {
+        appliedDiscounts.push(`Offer code ${code} not recognised — standard offers applied`)
+      }
+    } else if (isFirstOrder) {
+      // Standard first-order discount — the percentage ALWAYS comes from
+      // AppSetting (default 10%, admin-tunable). A legacy SIGNUP Discount row
+      // only acts as an on/off switch: if it exists and is inactive, the
+      // first-order offer is switched off entirely.
+      const signupGate = await db.discount.findFirst({
+        where: { appliesTo: 'SIGNUP' },
+      })
+      if (!signupGate || signupGate.active) {
+        const pct = appSettings.firstOrderDiscountPercent
+        totalDiscount += pct / 100
+        appliedDiscounts.push(`First-order discount (${pct}%)`)
+        await db.user.update({
+          where: { id: ownerId },
+          data: { signupDiscountUsed: true },
+        })
+      }
+    }
+
+    // ----- Handwash surcharge (mode of wash) -----
+    // Handwash is per-garment labour-intensive care: +50% of the item
+    // cleaning subtotal (admin-tunable). Machine wash is standard — no fee.
+    const handwashSurcharge =
+      modeOfWash === 'HANDWASH'
+        ? Math.round(subtotal * (appSettings.handwashSurchargePercent / 100))
+        : 0
+    if (handwashSurcharge > 0) {
+      appliedDiscounts.push(`Handwash care (+${appSettings.handwashSurchargePercent}% of cleaning)`)
+    }
+
+    // ----- Delivery fee: first delivery free, then the going rate -----
+    // The free delivery is per CUSTOMER (not per browser): count their
+    // previous orders. Cancelled orders don't consume the free delivery.
+    const previousOrders = await db.order.count({
+      where: { userId: ownerId, status: { not: 'CANCELLED' } },
+    })
+    const isFirstDelivery = previousOrders === 0
+    const deliveryFee = isFirstDelivery ? 0 : appSettings.deliveryFee
+    if (deliveryFee > 0) {
+      appliedDiscounts.push(`Delivery fee`) // informational line in admin
+    } else {
+      appliedDiscounts.push(`Free first delivery`)
     }
 
     // Express surcharge on the item subtotal, then percentage discounts apply
@@ -330,7 +438,14 @@ export async function POST(req: Request) {
       appliedDiscounts.push(`${speed.label} surcharge (+${Math.round(speed.surcharge * 100)}%)`)
     }
 
-    totalPrice = Math.round((subtotal + expressSurcharge) * (1 - Math.min(totalDiscount, 0.95)))
+    // Total = (cleaning + handwash + express) − percentage discounts, plus
+    // the flat delivery fee (fees are never discounted).
+    const serviceTotal = subtotal + handwashSurcharge + expressSurcharge
+    totalPrice = Math.round(serviceTotal * (1 - Math.min(totalDiscount, 0.95))) + deliveryFee
+    // Record the delivery fee + mode + code on the order for transparency
+    orderExtras.deliveryFee = deliveryFee
+    orderExtras.modeOfWash = modeOfWash ?? null
+    orderExtras.promoCode = appliedPromoCode
     // Update items with server-side prices for storage
     items.length = 0
     items.push(...pricedItems)
@@ -355,6 +470,9 @@ export async function POST(req: Request) {
       type,
       guaranteeActive,
       serviceSpeed: speed.id,
+      modeOfWash: orderExtras.modeOfWash ?? null,
+      promoCode: orderExtras.promoCode ?? null,
+      deliveryFee: orderExtras.deliveryFee ?? 0,
       itemsManifest: JSON.stringify(items),
       totalPrice,
       pickupAddress,

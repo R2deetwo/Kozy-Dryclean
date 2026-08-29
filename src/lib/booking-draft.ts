@@ -39,6 +39,10 @@ export interface BookingDraft {
   pickupSlot: string
   /** Turnaround tier (retail orders only) */
   serviceSpeed?: ServiceSpeed
+  /** Mode of wash — required choice on retail orders (Phase 14) */
+  modeOfWash?: 'MACHINE' | 'HANDWASH'
+  /** Offer code being redeemed at checkout (e.g. HOTEL15) */
+  promoCode?: string
   deliveryAddress: string
   paymentMethod: 'BANK_TRANSFER' | 'PAYSTACK'
   /** Guest contact details (guest checkout only) */

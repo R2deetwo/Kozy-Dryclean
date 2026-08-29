@@ -46,6 +46,10 @@ export const WOMEN_CATALOG_GROUPS: CatalogDisplayGroup[] = [
 export const HOUSEHOLD_GROUP: CatalogDisplayGroup = { title: 'Household', category: 'Household' }
 export const EXTRAS_GROUP: CatalogDisplayGroup = { title: 'Extras', category: 'Extras' }
 export const SHOES_GROUP: CatalogDisplayGroup = { title: 'Shoes & Sneakers', category: 'Shoes' }
+// Outerwear (Phase 14 — client menu additions: Leather Jacket, Jean Jacket,
+// Sweatshirt/Cardigan). Unisex → shared strip on both retail tabs, exactly
+// like household and extras.
+export const OUTERWEAR_GROUP: CatalogDisplayGroup = { title: 'Outerwear & Knitwear', category: 'Outerwear' }
 // Other — wedding dress, couture & bespoke. Never flat-priced: booked, then
 // assessed and quoted for approval (owner directive — there was no category
 // for wedding dresses, so "Other" lets customers know a quote is available).
@@ -56,6 +60,7 @@ export const OTHER_COUTURE_GROUP: CatalogDisplayGroup = {
 
 /** Landing pricing section — shared strip under both retail tabs (incl. shoes). */
 export const LANDING_SHARED_GROUPS: CatalogDisplayGroup[] = [
+  OUTERWEAR_GROUP,
   HOUSEHOLD_GROUP,
   SHOES_GROUP,
   EXTRAS_GROUP,
@@ -66,6 +71,7 @@ export const LANDING_SHARED_GROUPS: CatalogDisplayGroup[] = [
  *  The Other & Bespoke quote group IS included — wedding dresses and couture
  *  apply to everyone, exactly like household and extras. */
 export const WIZARD_SHARED_GROUPS: CatalogDisplayGroup[] = [
+  OUTERWEAR_GROUP,
   HOUSEHOLD_GROUP,
   EXTRAS_GROUP,
   OTHER_COUTURE_GROUP,

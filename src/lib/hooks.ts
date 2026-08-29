@@ -20,6 +20,9 @@ export interface ApiOrder {
   totalPrice: number | null
   guaranteeActive: boolean
   serviceSpeed?: string | null
+  modeOfWash?: string | null
+  promoCode?: string | null
+  deliveryFee?: number | null
   itemsManifest: string | null
   pickupAddress: string
   pickupDate: string
@@ -396,4 +399,29 @@ export function useServerPrices() {
     retry: 1,
   })
   return data
+}
+
+// -----------------------------------------------------------------------------
+// APP SETTINGS — server-managed commercial settings (AppSetting table)
+// -----------------------------------------------------------------------------
+// Bank details at checkout, delivery fee, handwash surcharge, guarantee
+// thresholds and offer percentages come from the SERVER so an admin edit
+// reaches every visitor (the old localStorage copy was per-browser — that
+// was the client-reported bug). Falls back to the bundled code defaults
+// when the API is unreachable.
+import { defaultAppSettings, type KozyAppSettings } from '@/lib/types'
+
+export function useAppSettings() {
+  const { data } = useQuery({
+    queryKey: ['app-settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/app')
+      if (!res.ok) throw new Error('Failed to fetch app settings')
+      const data = await res.json()
+      return (data.settings ?? defaultAppSettings()) as KozyAppSettings
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  })
+  return data ?? defaultAppSettings()
 }

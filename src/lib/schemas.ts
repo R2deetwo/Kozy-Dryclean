@@ -50,6 +50,13 @@ export const CreateOrderSchema = z.object({
   // Turnaround tier (retail only — KG orders are always STANDARD; the server
   // enforces this and prices the surcharge itself, never trusting the client)
   serviceSpeed: ServiceSpeedSchema.optional().default('STANDARD'),
+  // Mode of wash (retail orders) — required by the order form. Machine wash
+  // is standard; handwash carries a per-item surcharge priced server-side.
+  modeOfWash: z.enum(['MACHINE', 'HANDWASH']).optional(),
+  // Optional offer code (e.g. HOTEL15 for the hotel-guest first-order deal).
+  // Validated and priced server-side — an unknown/inactive code is ignored
+  // with a warning instead of failing the booking.
+  promoCode: z.string().trim().max(24).optional(),
   pickupAddress: z.string().min(1, 'Pickup address is required'),
   pickupDate: z.string().min(1, 'Pickup date is required'), // ISO string
   pickupTimeSlot: z.string().min(1, 'Pickup time slot is required'),

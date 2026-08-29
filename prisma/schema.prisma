@@ -72,6 +72,16 @@ model Order {
   // Turnaround tier: STANDARD (3–5 days) / EXPRESS_48 / EXPRESS_24.
   // Express surcharge is baked into totalPrice at creation time.
   serviceSpeed      String         @default("STANDARD")
+  // Mode of wash chosen by the customer (retail orders): HANDWASH carries a
+  // per-item surcharge, MACHINE is standard. Null for KG/corporate orders.
+  modeOfWash        String?
+  // Offer code redeemed at checkout (e.g. HOTEL15 for hotel guests).
+  // Null when no code was used.
+  promoCode         String?
+  // Delivery fee charged on this order (naira). 0 when the order qualified
+  // for the free first delivery; the going rate for subsequent deliveries
+  // is admin-configurable in AppSetting (delivery_fee).
+  deliveryFee       Float?  @default(0)
   // Per-item manifest snapshot for B2C, JSON-stringified
   itemsManifest     String?
   // Logistics
@@ -255,6 +265,46 @@ model PriceCatalog {
 
   @@index([category])
   @@index([active])
+}
+
+// =====================================================
+// APP_SETTING — server-side key/value settings (admin-managed)
+// =====================================================
+// Bank account details, delivery fee, handwash surcharge, guarantee
+// thresholds and offer percentages live HERE (not localStorage) so an
+// admin edit instantly reaches every visitor — the persisted zustand
+// copy was per-browser and never propagated (client-reported bug).
+model AppSetting {
+  key       String   @id // e.g. "bank_name", "delivery_fee"
+  value     String // JSON-encoded value
+  updatedAt DateTime @updatedAt
+}
+
+// =====================================================
+// FEEDBACK — general reviews & complaints from the site form
+// =====================================================
+// Complements Review (which is tied to a delivered order): Feedback lets
+// ANY visitor — including prospects and hotel partners — send a review,
+// question or complaint without an order number.
+model Feedback {
+  id          String   @id @default(cuid())
+  // REVIEW | COMPLAINT | QUESTION
+  type        String   @default("REVIEW")
+  name        String
+  email       String
+  phone       String?
+  // Optional reference: an order number (KZ-…) or a hotel/estate name
+  reference   String?
+  rating      Float? // optional 1–5 for reviews
+  message     String
+  // Admin workflow: NEW → IN_PROGRESS → RESOLVED (+ admin note)
+  status      String   @default("NEW")
+  adminNote   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
 }
 
 // =====================================================

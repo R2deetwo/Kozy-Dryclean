@@ -17,6 +17,11 @@ export type OrderStatus =
 
 export type OrderType = 'ITEM' | 'KG'
 
+// Mode of wash — customer-selected on the order form (retail orders).
+// Handwash is labour-intensive per-garment care and carries a surcharge
+// (percentage of the item subtotal, admin-tunable in AppSetting).
+export type ModeOfWash = 'MACHINE' | 'HANDWASH'
+
 export type PaymentMethod = 'BANK_TRANSFER' | 'PAYSTACK'
 export type PaymentStatus = 'PENDING' | 'VERIFIED' | 'REJECTED'
 
@@ -80,6 +85,12 @@ export interface Order {
   finalWeight?: number // kg, for B2B
   totalPrice?: number
   guaranteeActive: boolean
+  // Mode of wash chosen at booking (retail orders): MACHINE | HANDWASH
+  modeOfWash?: string
+  // Offer code redeemed at checkout (e.g. HOTEL15), if any
+  promoCode?: string
+  // Delivery fee charged: 0 when the free-first-delivery applied
+  deliveryFee?: number
   items: OrderItem[] // for B2C
   pickupAddress: string
   pickupDate: string
@@ -147,6 +158,7 @@ export interface GarmentCatalogItem {
     | 'Suits'
     | 'Traditional'
     | "Women's Wear"
+    | 'Outerwear'
     | 'Household'
     | 'Extras'
     | 'Shoes'
@@ -173,6 +185,29 @@ export const GARMENT_CATALOG: GarmentCatalogItem[] = [
   { id: 'suit-2pc', name: 'Suit (2-Piece)', price: 4500, icon: '/icons/services/suit.svg', category: 'Suits' },
   { id: 'suit-3pc', name: 'Suit (3-Piece)', price: 5500, icon: '/icons/services/suit-3pc.svg', category: 'Suits' },
   { id: 'blazer', name: 'Blazer', price: 2500, icon: '/icons/services/blazer.svg', category: 'Suits' },
+  // ── Outerwear (Phase 14 — client menu additions) ─────────
+  // Going rates researched Aug 2026: Lagos lists price leather jackets at
+  // ₦4,000 (specialist leather care); jean jackets sit between jeans (₦800)
+  // and blazers; sweatshirt/cardigan knitwear sits between long-sleeve
+  // shirts and blouses. All three are unisex → shared Outerwear group.
+  {
+    id: 'leather-jacket',
+    name: 'Leather Jacket',
+    price: 4000,
+    icon: '/icons/services/leather-jacket.svg',
+    category: 'Outerwear',
+    description:
+      'Specialist leather care — cleaned, conditioned and re-nourished to prevent cracking.',
+  },
+  { id: 'jean-jacket', name: 'Jean Jacket', price: 1200, icon: '/icons/services/jean-jacket.svg', category: 'Outerwear' },
+  {
+    id: 'sweatshirt-cardigan',
+    name: 'Sweatshirt / Cardigan',
+    price: 1000,
+    icon: '/icons/services/sweatshirt.svg',
+    category: 'Outerwear',
+    description: 'Knitwear washed flat and dried to shape — no stretching, no bobbling.',
+  },
   { id: 'agbada', name: 'Agbada', price: 3500, icon: '/icons/services/agbada.svg', category: 'Traditional' },
   { id: 'iro-buba', name: 'Iro & Buba', price: 2000, icon: '/icons/services/iro-buba.svg', category: 'Traditional' },
   { id: 'kaftan', name: 'Kaftan', price: 1500, icon: '/icons/services/kaftan.svg', category: 'Traditional' },
@@ -317,6 +352,88 @@ export const B2B_PRICING = {
 
 // B2C condition-capture incentive
 export const GUARANTEE_DISCOUNT = 0.05 // 5% off when photos uploaded
+
+// =====================================================
+// PHASE 14 — server-managed commercial settings (AppSetting table)
+// =====================================================
+// These defaults ship in code; the admin can override every one of them in
+// Settings (they live in the DB so an edit reaches ALL visitors instantly —
+// the previous localStorage copy was per-browser and never propagated).
+
+/** Flat delivery fee for every delivery AFTER the free first one.
+ *  Research (Aug 2026): Lagos dispatch platforms default to ₦800/order and
+ *  island routes (Ikoyi→Lekki) typically run ₦1,000–₦2,500 — ₦1,500 sits
+ *  mid-market for a premium brand that fronts the logistics. */
+export const DEFAULT_DELIVERY_FEE = 1500
+
+/** Handwash surcharge as a share of the item subtotal. Lagos delicate-care
+ *  lists (e.g. "Caftan (Delicate) ₦2,500" vs ₦1,500–2,000 regular) price
+ *  hand-finished pieces ~25–60% above standard — 50% is the mid-band and
+ *  simple to communicate. Admin-tunable. */
+export const DEFAULT_HANDWASH_SURCHARGE_PERCENT = 50
+
+/** First-order discount for every new customer (10% — client directive
+ *  Aug 2026: "make it 10% off first order because you already give 5% for
+ *  uploading pic"). The picture-upload guarantee discount (5%) is separate
+ *  and stacks with it. */
+export const FIRST_ORDER_DISCOUNT_PERCENT = 10
+
+/** Hotel-guest first-order offer: 15% + the 5% picture discount. Hotel
+ *  guests are already high-value customers, so they earn the better deal.
+ *  Redeemed with the offer code HOTEL15 at checkout. */
+export const HOTEL_GUEST_DISCOUNT_PERCENT = 15
+export const HOTEL_GUEST_PROMO_CODE = 'HOTEL15'
+
+/** Guarantee eligibility (client directive: "be more transparent on what's
+ *  considered eligible — a certain number of garments or amount of total
+ *  order"). An order qualifies when EITHER threshold is met. Admin-tunable. */
+export const DEFAULT_GUARANTEE_MIN_GARMENTS = 2
+export const DEFAULT_GUARANTEE_MIN_ORDER_VALUE = 2500
+
+/** The typed shape returned by GET /api/settings/app. */
+export interface KozyAppSettings {
+  // Bank account shown at checkout (bank transfer)
+  bankName: string
+  accountName: string
+  accountNumber: string
+  // Contact
+  contactPhone: string
+  contactEmail: string
+  // Commercial terms
+  deliveryFee: number
+  handwashSurchargePercent: number
+  guaranteeMinGarments: number
+  guaranteeMinOrderValue: number
+  firstOrderDiscountPercent: number
+  hotelGuestDiscountPercent: number
+  hotelGuestPromoCode: string
+  // Alterations — "Exclusive to Kozy Care"; pricing confirmed with the
+  // tailor, so the site says "quoted after assessment" until set (> 0).
+  alterationsFromPrice: number
+}
+
+/** Code defaults for every app setting — CLIENT-SAFE (no server imports).
+ *  Used as the fallback whenever /api/settings/app is unreachable, and
+ *  self-seeded into the AppSetting table on first server read. */
+export function defaultAppSettings(): KozyAppSettings {
+  return {
+    bankName: COMPANY_BANK.bankName,
+    accountName: COMPANY_BANK.accountName,
+    accountNumber: COMPANY_BANK.accountNumber,
+    contactPhone: '+234 803 175 5230',
+    contactEmail: 'kozygarmentcare@gmail.com',
+    deliveryFee: DEFAULT_DELIVERY_FEE,
+    handwashSurchargePercent: DEFAULT_HANDWASH_SURCHARGE_PERCENT,
+    guaranteeMinGarments: DEFAULT_GUARANTEE_MIN_GARMENTS,
+    guaranteeMinOrderValue: DEFAULT_GUARANTEE_MIN_ORDER_VALUE,
+    firstOrderDiscountPercent: FIRST_ORDER_DISCOUNT_PERCENT,
+    hotelGuestDiscountPercent: HOTEL_GUEST_DISCOUNT_PERCENT,
+    hotelGuestPromoCode: HOTEL_GUEST_PROMO_CODE,
+    // 0 = pricing not confirmed with the tailor yet → the storefront shows
+    // "quoted after assessment" instead of a from-price.
+    alterationsFromPrice: 0,
+  }
+}
 
 // Bank account details for manual transfers (demo)
 export const COMPANY_BANK = {

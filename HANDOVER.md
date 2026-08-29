@@ -116,6 +116,40 @@ Local dev: `bun install`, `cp .env.example .env`, fill from Vercel, `bun run dev
 
 ## 5. Subsystem notes
 
+### Phase 14 (Aug 2026) — commercial settings, mode of wash, offers, feedback
+
+- **AppSetting table = single source of truth for commercial terms.** Bank
+  details, delivery fee (₦1,500 after the free first delivery), handwash
+  surcharge (50% of the cleaning subtotal), first-order discount (10%),
+  hotel-guest offer (15%, code `HOTEL15`), guarantee thresholds (2 garments
+  or ₦2,500) and the alterations from-price all live in the DB and are
+  served by `GET /api/settings/app` (public) / `PUT` (admin). The API
+  self-seeds code defaults on first read, so a fresh database needs no
+  migration step. The admin Settings page saves through this API — the old
+  localStorage-only flow (which never propagated to customers) is gone.
+- **Mode of Wash** is a required field on retail orders (wizard step 1,
+  `Order.modeOfWash`). The server rejects ITEM orders without it
+  (`MODE_OF_WASH_REQUIRED`). Handwash adds the surcharge server-side; the
+  wizard mirrors the math for the live estimate.
+- **Offer codes.** `Order.promoCode` — a valid active `Discount` row by code
+  applies its percentage INSTEAD of the standard first-order discount and
+  marks `signupDiscountUsed`. The built-in hotel code self-upserts from
+  AppSetting when first redeemed (no pre-seeding needed). Unknown codes are
+  ignored with a notice, never a dead end.
+- **Delivery fee.** `Order.deliveryFee` — 0 on a customer's first
+  non-cancelled order, else the AppSetting rate. Fees are never discounted;
+  percentage discounts apply to the service total only (cleaning + handwash
+  + express).
+- **Feedback.** `Feedback` model + `/api/feedback` (public POST,
+  admin GET/PATCH) + `FeedbackForm` on the landing page + admin "Feedback"
+  tab. Complements the order-linked Review system.
+- **New catalog items** (Leather Jacket ₦4,000 / Jean Jacket ₦1,200 /
+  Sweatshirt-Cardigan ₦1,000, Outerwear category) self-seed into
+  PriceCatalog from `GET /api/settings/prices`.
+- **Marketing kit v5** (`scripts/kozy-brand/build_v5.py` +
+  `package_v5.sh`): 10% offer everywhere, HOTEL15 strip, Flyer B model now
+  holds a KOZY CARE garment bag.
+
 - **Reviews** — DB-backed end to end; Rate button on delivered orders →
   `/review/[orderId]`; moderation in admin (`/api/reviews/admin`); carousel min 6
   (seed-padded), cap 12.

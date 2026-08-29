@@ -12,9 +12,13 @@ import {
   Tag,
   Percent,
   Scale,
+  Truck,
+  Sparkles,
+  Scissors,
 } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@/lib/store'
-import { GARMENT_CATALOG, formatNaira, type KozySettings } from '@/lib/types'
+import { GARMENT_CATALOG, formatNaira, type KozySettings, type KozyAppSettings } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -29,6 +33,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   Suits: 'Suits & Blazers',
   Traditional: 'Traditional',
   "Women's Wear": 'Women’s Wear',
+  Outerwear: 'Outerwear & Knitwear',
   Household: 'Household',
   Extras: 'Extras',
   Shoes: 'Shoes & Sneakers',
@@ -39,6 +44,29 @@ export function SettingsView() {
   const settings = useStore((s) => s.settings)
   const updateSettings = useStore((s) => s.updateSettings)
   const setGarmentPrice = useStore((s) => s.setGarmentPrice)
+  const queryClient = useQueryClient()
+
+  // ----- Server-managed app settings (Phase 14) -----
+  // Bank details, commercial terms and offers live in the AppSetting table
+  // so an edit reaches EVERY visitor instantly — the old flow only updated
+  // this browser's localStorage and customers kept seeing stale details
+  // (the client-reported bug). Load current values from the server.
+  const { data: appSettings } = useQuery({
+    queryKey: ['app-settings'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/app')
+      if (!res.ok) throw new Error('Failed to load settings')
+      const data = await res.json()
+      return data.settings as KozyAppSettings
+    },
+    staleTime: 30 * 1000,
+  })
+
+  const [appDraft, setAppDraft] = useState<KozyAppSettings | null>(null)
+  // The draft starts from whatever the server currently says (once loaded).
+  const app = appDraft ?? appSettings
+  const setApp = (patch: Partial<KozyAppSettings>) =>
+    setAppDraft({ ...(app as KozyAppSettings), ...patch })
 
   const [draft, setDraft] = useState<KozySettings>(settings)
   const [saving, setSaving] = useState(false)
@@ -46,19 +74,45 @@ export function SettingsView() {
 
   const handleSave = async () => {
     setSaving(true)
-    // Save bank/contact/pricing settings
+    // ----- 1. Server-side app settings (bank, contact, commercial) -----
+    if (appDraft && appSettings) {
+      const changed: Partial<KozyAppSettings> = {}
+      ;(Object.keys(appDraft) as (keyof KozyAppSettings)[]).forEach((k) => {
+        if (appDraft[k] !== appSettings[k]) {
+          ;(changed as Record<string, unknown>)[k] = appDraft[k]
+        }
+      })
+      if (Object.keys(changed).length > 0) {
+        try {
+          const res = await fetch('/api/settings/app', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings: changed }),
+          })
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}))
+            throw new Error(err.error || 'Server rejected the settings update')
+          }
+          await queryClient.invalidateQueries({ queryKey: ['app-settings'] })
+        } catch (e: any) {
+          toast({
+            title: 'Settings not saved',
+            description: e?.message || 'Could not reach the server — nothing was changed.',
+            variant: 'destructive',
+          })
+          setSaving(false)
+          return
+        }
+      }
+    }
+
+    // ----- 2. Legacy local settings (B2B per-kg pricing, guarantee note) -----
     updateSettings({
-      bankName: draft.bankName,
-      accountName: draft.accountName,
-      accountNumber: draft.accountNumber,
-      contactPhone: draft.contactPhone,
-      contactEmail: draft.contactEmail,
-      atelierAddress: draft.atelierAddress,
       pricePerKg: draft.pricePerKg,
       minimumKg: draft.minimumKg,
       guaranteeDiscountPercent: draft.guaranteeDiscountPercent,
     })
-    // Save individual garment prices locally…
+    // ----- 3. Garment prices -> PriceCatalog (server-side, live for all) -----
     const changedPrices: Record<string, number> = {}
     Object.entries(draft.garmentPrices).forEach(([id, price]) => {
       if (settings.garmentPrices[id] !== price) {
@@ -89,6 +143,7 @@ export function SettingsView() {
         return
       }
     }
+    setAppDraft(null)
     setTimeout(() => {
       setSaving(false)
       setSaved(true)
@@ -149,12 +204,16 @@ export function SettingsView() {
           <TabsTrigger value="pricing" className="data-[state=active]:bg-navy data-[state=active]:text-white">
             <Tag className="mr-1.5 h-3.5 w-3.5" /> Pricing
           </TabsTrigger>
+          <TabsTrigger value="terms" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+            <Truck className="mr-1.5 h-3.5 w-3.5" /> Offers & Delivery
+          </TabsTrigger>
           <TabsTrigger value="guarantee" className="data-[state=active]:bg-navy data-[state=active]:text-white">
             <Percent className="mr-1.5 h-3.5 w-3.5" /> Guarantee
           </TabsTrigger>
         </TabsList>
 
-        {/* BANK ACCOUNT TAB */}
+        {/* BANK ACCOUNT TAB — server-backed (Phase 14): edits are saved to
+            the AppSetting table and reach EVERY customer's checkout screen. */}
         <TabsContent value="bank" className="mt-4">
           <Card className="border-navy-100 shadow-navy">
             <CardHeader>
@@ -163,74 +222,81 @@ export function SettingsView() {
               </CardTitle>
               <p className="text-xs text-navy-300">
                 These details appear during checkout when customers choose
-                &ldquo;Bank Transfer&rdquo; as their payment method.
+                &ldquo;Bank Transfer&rdquo; — saved on the server, so every customer sees
+                your changes immediately after you hit Save.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="bank-name" className="text-xs uppercase tracking-wide text-navy-300">
-                  Bank Name
-                </Label>
-                <Input
-                  id="bank-name"
-                  value={draft.bankName}
-                  onChange={(e) => setDraft({ ...draft, bankName: e.target.value })}
-                  placeholder="e.g. Guaranty Trust Bank (GTB)"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="account-name" className="text-xs uppercase tracking-wide text-navy-300">
-                  Account Name
-                </Label>
-                <Input
-                  id="account-name"
-                  value={draft.accountName}
-                  onChange={(e) => setDraft({ ...draft, accountName: e.target.value })}
-                  placeholder="e.g. Kozy Premium Dry Cleaning Ltd"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="account-number" className="text-xs uppercase tracking-wide text-navy-300">
-                  Account Number
-                </Label>
-                <Input
-                  id="account-number"
-                  value={draft.accountNumber}
-                  onChange={(e) => setDraft({ ...draft, accountNumber: e.target.value })}
-                  placeholder="10-digit account number"
-                  className="mt-1.5 font-mono"
-                />
-              </div>
+              {!app ? (
+                <p className="py-6 text-center text-sm text-navy-300">Loading current account details…</p>
+              ) : (
+                <>
+                  <div>
+                    <Label htmlFor="bank-name" className="text-xs uppercase tracking-wide text-navy-300">
+                      Bank Name
+                    </Label>
+                    <Input
+                      id="bank-name"
+                      value={app.bankName}
+                      onChange={(e) => setApp({ bankName: e.target.value })}
+                      placeholder="e.g. Guaranty Trust Bank (GTB)"
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="account-name" className="text-xs uppercase tracking-wide text-navy-300">
+                      Account Name
+                    </Label>
+                    <Input
+                      id="account-name"
+                      value={app.accountName}
+                      onChange={(e) => setApp({ accountName: e.target.value })}
+                      placeholder="e.g. Kozy Premium Dry Cleaning Ltd"
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="account-number" className="text-xs uppercase tracking-wide text-navy-300">
+                      Account Number
+                    </Label>
+                    <Input
+                      id="account-number"
+                      value={app.accountNumber}
+                      onChange={(e) => setApp({ accountNumber: e.target.value })}
+                      placeholder="10-digit account number"
+                      className="mt-1.5 font-mono"
+                    />
+                  </div>
 
-              {/* Preview */}
-              <div className="mt-6 rounded-xl bg-navy p-5 text-white">
-                <p className="text-xs uppercase tracking-wider text-gold-300">
-                  Customer sees this during checkout:
-                </p>
-                <div className="mt-3 space-y-1 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-navy-100/70">Bank</span>
-                    <span className="font-medium">{draft.bankName || '—'}</span>
+                  {/* Preview */}
+                  <div className="mt-6 rounded-xl bg-navy p-5 text-white">
+                    <p className="text-xs uppercase tracking-wider text-gold-300">
+                      Customer sees this during checkout:
+                    </p>
+                    <div className="mt-3 space-y-1 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-navy-100/70">Bank</span>
+                        <span className="font-medium">{app.bankName || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-navy-100/70">Account Name</span>
+                        <span className="font-medium">{app.accountName || '—'}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-navy-100/70">Account Number</span>
+                        <span className="font-mono font-bold text-gold-300">
+                          {app.accountNumber || '—'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-navy-100/70">Account Name</span>
-                    <span className="font-medium">{draft.accountName || '—'}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-navy-100/70">Account Number</span>
-                    <span className="font-mono font-bold text-gold-300">
-                      {draft.accountNumber || '—'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* CONTACT TAB */}
+        {/* CONTACT TAB — server-backed, same as bank */}
         <TabsContent value="contact" className="mt-4">
           <Card className="border-navy-100 shadow-navy">
             <CardHeader>
@@ -238,48 +304,42 @@ export function SettingsView() {
                 <Phone className="h-4 w-4 text-gold-400" /> Contact Information
               </CardTitle>
               <p className="text-xs text-navy-300">
-                Shown in the landing page footer, customer dashboard, and order
-                confirmation messages.
+                Shown at checkout and on the offers strip — saved on the server for
+                every visitor, not just this browser.
               </p>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="contact-phone" className="text-xs uppercase tracking-wide text-navy-300">
-                  <Phone className="mr-1 inline h-3 w-3" /> Phone Number
-                </Label>
-                <Input
-                  id="contact-phone"
-                  value={draft.contactPhone}
-                  onChange={(e) => setDraft({ ...draft, contactPhone: e.target.value })}
-                  placeholder="+234 800 569 3789"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="contact-email" className="text-xs uppercase tracking-wide text-navy-300">
-                  <Mail className="mr-1 inline h-3 w-3" /> Email Address
-                </Label>
-                <Input
-                  id="contact-email"
-                  type="email"
-                  value={draft.contactEmail}
-                  onChange={(e) => setDraft({ ...draft, contactEmail: e.target.value })}
-                  placeholder="concierge@kozy.ng"
-                  className="mt-1.5"
-                />
-              </div>
-              <div>
-                <Label htmlFor="atelier-address" className="text-xs uppercase tracking-wide text-navy-300">
-                  <MapPin className="mr-1 inline h-3 w-3" /> Atelier Address
-                </Label>
-                <Input
-                  id="atelier-address"
-                  value={draft.atelierAddress}
-                  onChange={(e) => setDraft({ ...draft, atelierAddress: e.target.value })}
-                  placeholder="Kozy Atelier, 12 Gerard Rd, Ikoyi, Lagos"
-                  className="mt-1.5"
-                />
-              </div>
+              {!app ? (
+                <p className="py-6 text-center text-sm text-navy-300">Loading contact details…</p>
+              ) : (
+                <>
+                  <div>
+                    <Label htmlFor="contact-phone" className="text-xs uppercase tracking-wide text-navy-300">
+                      <Phone className="mr-1 inline h-3 w-3" /> Phone Number
+                    </Label>
+                    <Input
+                      id="contact-phone"
+                      value={app.contactPhone}
+                      onChange={(e) => setApp({ contactPhone: e.target.value })}
+                      placeholder="+234 803 175 5230"
+                      className="mt-1.5"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="contact-email" className="text-xs uppercase tracking-wide text-navy-300">
+                      <Mail className="mr-1 inline h-3 w-3" /> Email Address
+                    </Label>
+                    <Input
+                      id="contact-email"
+                      type="email"
+                      value={app.contactEmail}
+                      onChange={(e) => setApp({ contactEmail: e.target.value })}
+                      placeholder="kozygarmentcare@gmail.com"
+                      className="mt-1.5"
+                    />
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -347,7 +407,7 @@ export function SettingsView() {
               </p>
             </CardHeader>
             <CardContent>
-              {(['Shirts', 'Trousers', 'Suits', 'Traditional', "Women's Wear", 'Household', 'Extras', 'Shoes', 'Other'] as const).map(
+              {(['Shirts', 'Trousers', 'Suits', 'Traditional', "Women's Wear", 'Outerwear', 'Household', 'Extras', 'Shoes', 'Other'] as const).map(
                 (cat) => (
                   <div key={cat} className="mb-5 last:mb-0">
                     <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold-400">
@@ -401,6 +461,194 @@ export function SettingsView() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* OFFERS & DELIVERY TAB — the commercial terms customers see
+            (offers strip, delivery pricing, handwash surcharge, guarantee
+            eligibility, alterations from-price). All server-backed. */}
+        <TabsContent value="terms" className="mt-4 space-y-4">
+          {!app ? (
+            <Card className="border-navy-100 shadow-navy">
+              <CardContent className="py-10 text-center text-sm text-navy-300">
+                Loading commercial terms…
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Offers */}
+              <Card className="border-navy-100 shadow-navy">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 font-serif text-navy">
+                    <Sparkles className="h-4 w-4 text-gold-400" /> Discounts & Offers
+                  </CardTitle>
+                  <p className="text-xs text-navy-300">
+                    Shown on the site&apos;s offers strip and applied automatically at
+                    checkout. The picture discount is set on the Guarantee tab.
+                  </p>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="first-order-pct" className="text-xs uppercase tracking-wide text-navy-300">
+                      First-order discount (%)
+                    </Label>
+                    <Input
+                      id="first-order-pct"
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={app.firstOrderDiscountPercent}
+                      onChange={(e) => setApp({ firstOrderDiscountPercent: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-32"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">Applied to every new customer&apos;s first order.</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="hotel-guest-pct" className="text-xs uppercase tracking-wide text-navy-300">
+                      Hotel-guest first-order discount (%)
+                    </Label>
+                    <Input
+                      id="hotel-guest-pct"
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={app.hotelGuestDiscountPercent}
+                      onChange={(e) => setApp({ hotelGuestDiscountPercent: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-32"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Redeemed with the offer code below — replaces the standard first-order
+                      discount and stacks with the 5% picture discount.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="hotel-promo-code" className="text-xs uppercase tracking-wide text-navy-300">
+                      Hotel-guest offer code
+                    </Label>
+                    <Input
+                      id="hotel-promo-code"
+                      value={app.hotelGuestPromoCode}
+                      onChange={(e) => setApp({ hotelGuestPromoCode: e.target.value.toUpperCase() })}
+                      placeholder="HOTEL15"
+                      className="mt-1.5 w-40 font-mono uppercase"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Customers type this at checkout. Print it on hotel partner cards.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Delivery + handwash */}
+              <Card className="border-navy-100 shadow-navy">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 font-serif text-navy">
+                    <Truck className="h-4 w-4 text-gold-400" /> Delivery & Wash Surcharges
+                  </CardTitle>
+                  <p className="text-xs text-navy-300">
+                    First delivery is always free — these rates apply after that, and to
+                    the handwash option on the order form.
+                  </p>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="delivery-fee" className="text-xs uppercase tracking-wide text-navy-300">
+                      Delivery fee after the first free one (₦)
+                    </Label>
+                    <Input
+                      id="delivery-fee"
+                      type="number"
+                      min="0"
+                      value={app.deliveryFee}
+                      onChange={(e) => setApp({ deliveryFee: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-40"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Currently {formatNaira(app.deliveryFee)} flat, island-wide. Research
+                      benchmark: Lagos dispatch platforms ₦800–₦2,500 per delivery.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="handwash-pct" className="text-xs uppercase tracking-wide text-navy-300">
+                      Handwash surcharge (% of cleaning subtotal)
+                    </Label>
+                    <Input
+                      id="handwash-pct"
+                      type="number"
+                      min="0"
+                      max="200"
+                      value={app.handwashSurchargePercent}
+                      onChange={(e) => setApp({ handwashSurchargePercent: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-32"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Machine wash stays free of surcharge — this is the gentle-care premium
+                      for hand-finished pieces.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Guarantee eligibility + alterations */}
+              <Card className="border-navy-100 shadow-navy">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 font-serif text-navy">
+                    <Percent className="h-4 w-4 text-gold-400" /> Guarantee Eligibility & Alterations
+                  </CardTitle>
+                  <p className="text-xs text-navy-300">
+                    &ldquo;Eligible order&rdquo; thresholds are shown word-for-word on the
+                    Guarantee section; set 0 to disable a threshold.
+                  </p>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-3">
+                  <div>
+                    <Label htmlFor="guarantee-min-garments" className="text-xs uppercase tracking-wide text-navy-300">
+                      Minimum garments
+                    </Label>
+                    <Input
+                      id="guarantee-min-garments"
+                      type="number"
+                      min="0"
+                      value={app.guaranteeMinGarments}
+                      onChange={(e) => setApp({ guaranteeMinGarments: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-28"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">e.g. 2 garments</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="guarantee-min-value" className="text-xs uppercase tracking-wide text-navy-300">
+                      …or minimum order value (₦)
+                    </Label>
+                    <Input
+                      id="guarantee-min-value"
+                      type="number"
+                      min="0"
+                      value={app.guaranteeMinOrderValue}
+                      onChange={(e) => setApp({ guaranteeMinOrderValue: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-36"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">Either threshold qualifies.</p>
+                  </div>
+                  <div>
+                    <Label htmlFor="alterations-from" className="text-xs uppercase tracking-wide text-navy-300">
+                      Alterations from-price (₦)
+                    </Label>
+                    <Input
+                      id="alterations-from"
+                      type="number"
+                      min="0"
+                      value={app.alterationsFromPrice}
+                      onChange={(e) => setApp({ alterationsFromPrice: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-36"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      <Scissors className="mr-1 inline h-3 w-3" />
+                      Set once the tailor confirms — 0 shows &ldquo;quoted before we sew&rdquo;.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         {/* GUARANTEE TAB */}

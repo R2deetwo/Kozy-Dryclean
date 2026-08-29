@@ -45,6 +45,8 @@ import {
   X,
   Sparkles,
   Zap,
+  Truck,
+  Tag,
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
@@ -58,7 +60,7 @@ import {
   type ServiceSpeed,
 } from '@/lib/types'
 import { useStore } from '@/lib/store'
-import { useServerPrices } from '@/lib/hooks'
+import { useServerPrices, useAppSettings } from '@/lib/hooks'
 import {
   MEN_CATALOG_GROUPS,
   WOMEN_CATALOG_GROUPS,
@@ -70,6 +72,7 @@ import {
   type CatalogTab,
 } from '@/lib/pricing-groups'
 import { useSession } from 'next-auth/react'
+import { useQuery } from '@tanstack/react-query'
 import {
   loadDraft,
   saveDraft,
@@ -152,6 +155,13 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const [step, setStep] = useState(1)
   const [type, setType] = useState<OrderType>('ITEM')
   const [items, setItems] = useState<Record<string, number>>({})
+  // Mode of wash — required choice on retail orders (client-requested
+  // order-form option). MACHINE is standard; HANDWASH adds the gentle-care
+  // surcharge. Kept as null until the customer picks, so the choice is
+  // genuinely explicit.
+  const [modeOfWash, setModeOfWash] = useState<'MACHINE' | 'HANDWASH' | null>(null)
+  // Optional offer code (hotel guests: HOTEL15 for 15% off the first order).
+  const [promoCode, setPromoCode] = useState('')
   const [photos, setPhotos] = useState<{ url: string; name: string }[]>([])
   const [guaranteeAck, setGuaranteeAck] = useState(false)
   const [pickupAddress, setPickupAddress] = useState('')
@@ -189,6 +199,30 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // Displayed prices must match what POST /api/orders will actually charge.
   const serverPrices = useServerPrices()
 
+  // ----- Server-managed app settings (bank details, fees, offers) -----
+  // The server is the single source of truth — an admin edit reaches this
+  // checkout on the next page load (fixes stale per-browser bank details).
+  const appSettings = useAppSettings()
+
+  // ----- First-order / first-delivery detection -----
+  // The server decides authoritatively at order time; this only powers the
+  // live estimate. Authed customers: their order list answers it. Guests:
+  // assume first order (their guest account is brand new, or the server
+  // will correct the total when reusing an existing guest account).
+  const isFirstOrderEstimate = useQuery({
+    queryKey: ['wizard-orders', effectiveUser?.id ?? 'guest'],
+    queryFn: async () => {
+      const res = await fetch('/api/orders?limit=1')
+      if (!res.ok) throw new Error('failed')
+      const data = await res.json()
+      return (data.items?.length ?? 0) > 0
+    },
+    enabled: Boolean(effectiveUser),
+    staleTime: 60 * 1000,
+    retry: 0,
+  })
+  const isFirstOrder = !effectiveUser ? true : isFirstOrderEstimate.data === false
+
   // ----- Restore a saved draft ("continue where you left off") -----
   // Runs once on mount, BEFORE the profile prefill effect below so a restored
   // address is never clobbered.
@@ -224,6 +258,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     if (d.serviceSpeed === 'EXPRESS_48' || d.serviceSpeed === 'EXPRESS_24') {
       setServiceSpeed(d.serviceSpeed)
     }
+    if (d.modeOfWash === 'MACHINE' || d.modeOfWash === 'HANDWASH') {
+      setModeOfWash(d.modeOfWash)
+    }
+    if (typeof d.promoCode === 'string') setPromoCode(d.promoCode)
     if (d.paymentMethod === 'BANK_TRANSFER' || d.paymentMethod === 'PAYSTACK') {
       setPaymentMethod(d.paymentMethod)
     }
@@ -280,13 +318,15 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
       pickupDate,
       pickupSlot,
       serviceSpeed,
+      modeOfWash: modeOfWash ?? undefined,
+      promoCode: promoCode || undefined,
       deliveryAddress,
       paymentMethod,
       guestName,
       guestEmail,
       guestPhone,
     })
-  }, [step, type, items, pickupAddress, pickupDate, pickupSlot, serviceSpeed, deliveryAddress, paymentMethod, guestName, guestEmail, guestPhone])
+  }, [step, type, items, pickupAddress, pickupDate, pickupSlot, serviceSpeed, modeOfWash, promoCode, deliveryAddress, paymentMethod, guestName, guestEmail, guestPhone])
 
   // ----- Computed pricing (memoized for performance) -----
   // Must be called BEFORE any early returns (Rules of Hooks)
@@ -329,9 +369,36 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const expressSurcharge = Math.round(subtotal * speedOption.surcharge)
   const guaranteeActive =
     type === 'ITEM' && !isGuest && photos.length > 0 && guaranteeAck
+
+  // ----- Phase-14 pricing components -----
+  // Handwash gentle-care surcharge: +50% (admin-tunable) of the cleaning
+  // subtotal — machine wash is standard and free of surcharge.
+  const handwashSurcharge =
+    type === 'ITEM' && modeOfWash === 'HANDWASH'
+      ? Math.round(subtotal * (appSettings.handwashSurchargePercent / 100))
+      : 0
+  // Delivery: free on the first order, the going rate (admin-tunable)
+  // afterwards. Estimate only — the server re-verifies at order time.
+  const deliveryFeeEstimate = isFirstOrder ? 0 : appSettings.deliveryFee
+  // First-order offer: the hotel-guest code REPLACES the standard first-order
+  // discount (15% vs 10%); the 5% picture discount stacks on top of either.
+  const trimmedCode = promoCode.trim().toUpperCase()
+  const isHotelCode =
+    isFirstOrder && trimmedCode === appSettings.hotelGuestPromoCode.toUpperCase()
+  const firstOrderPercent = isHotelCode
+    ? appSettings.hotelGuestDiscountPercent
+    : appSettings.firstOrderDiscountPercent
+  const firstOrderDiscountActive =
+    type === 'ITEM' && isFirstOrder && subtotal > 0
+  // Discounts apply to the SERVICE charge (cleaning + handwash + express),
+  // never to the delivery fee — mirrors the server's math exactly.
+  const serviceSubtotal = subtotal + handwashSurcharge + expressSurcharge
+  const discountPercent =
+    (guaranteeActive ? settings.guaranteeDiscountPercent : 0) +
+    (firstOrderDiscountActive ? firstOrderPercent : 0)
+  const discount = serviceSubtotal * (discountPercent / 100)
   const grossTotal = subtotal + expressSurcharge
-  const discount = guaranteeActive ? grossTotal * (settings.guaranteeDiscountPercent / 100) : 0
-  const total = grossTotal - discount
+  const total = Math.max(0, Math.round(serviceSubtotal - discount)) + deliveryFeeEstimate
 
   // Defensive guard — auth gate should prevent this, but we don't want to
   // crash. Guest mode (allowGuest) bypasses the session requirement.
@@ -456,7 +523,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
 
   const canContinue = () => {
     if (step === 1) {
-      if (type === 'ITEM') return selectedItems.length > 0
+      if (type === 'ITEM')
+        // Mode of wash is a REQUIRED choice on the order form (client
+        // directive) — the customer must pick handwash or machine wash.
+        return selectedItems.length > 0 && modeOfWash !== null
       return true // B2B always continues (just requests pickup)
     }
     if (step === 2) return true // condition capture is optional
@@ -612,6 +682,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     setPickupDate(defaultPickupDate())
     setPickupSlot(TIME_SLOTS[1])
     setServiceSpeed('STANDARD')
+    setModeOfWash(null)
+    setPromoCode('')
     setDeliveryAddress('')
     setPaymentMethod('BANK_TRANSFER')
     setGuestName('')
@@ -633,6 +705,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
           items: type === 'ITEM' ? selectedItems : [],
           guaranteeActive,
           serviceSpeed: type === 'ITEM' ? effectiveSpeed : 'STANDARD',
+          modeOfWash: type === 'ITEM' ? modeOfWash : undefined,
+          promoCode: type === 'ITEM' && promoCode.trim() ? promoCode.trim().toUpperCase() : undefined,
           pickupAddress,
           pickupDate: new Date(pickupDate).toISOString(),
           pickupTimeSlot: pickupSlot,
@@ -655,6 +729,17 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
         if (err.error === 'ACCOUNT_EXISTS') {
           setAccountExists(true)
           setLoading(false)
+          return
+        }
+        // Friendly copy for the Phase-14 server validations — never raw JSON.
+        if (err.error === 'MODE_OF_WASH_REQUIRED' || err.error === 'GUARANTEE_NOT_ELIGIBLE') {
+          toast({
+            title: 'Almost there',
+            description: err.message || 'Please review your order details.',
+            variant: 'destructive',
+          })
+          setLoading(false)
+          setStep(1)
           return
         }
         throw new Error(err.error === 'Validation failed' ? 'Please check your details and try again.' : err.error || 'Failed to create order')
@@ -956,6 +1041,83 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         For the home &amp; everything else
                       </p>
                       {WIZARD_SHARED_GROUPS.map(renderCatalogGroup)}
+                    </div>
+                  )}
+
+                  {/* MODE OF WASH — required order-form option (client directive:
+                      "customer special request, on mode of wash of clothes,
+                      either handwash or Machine wash"). Machine is standard;
+                      handwash adds the gentle-care surcharge. */}
+                  {type === 'ITEM' && (
+                    <div className="mt-6">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-600">
+                          Mode of wash <span className="text-red-500">*</span>
+                        </p>
+                        <p className="text-[10px] text-navy-300">Required</p>
+                      </div>
+                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                        <button
+                          type="button"
+                          onClick={() => setModeOfWash('MACHINE')}
+                          aria-pressed={modeOfWash === 'MACHINE'}
+                          className={cn(
+                            'flex items-start gap-3 rounded-xl border-2 p-3 text-left transition',
+                            modeOfWash === 'MACHINE'
+                              ? 'border-gold-400 bg-gold-50/60 ring-1 ring-gold-200'
+                              : 'border-navy-100 hover:border-gold-200'
+                          )}
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-100 text-navy">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="4" y="3" width="16" height="18" rx="2" />
+                              <circle cx="12" cy="13" r="4.5" />
+                              <path d="M8 3h8" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-navy">Machine Wash</p>
+                            <p className="text-xs text-navy-300">
+                              Standard professional care — no extra charge.
+                            </p>
+                          </div>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setModeOfWash('HANDWASH')}
+                          aria-pressed={modeOfWash === 'HANDWASH'}
+                          className={cn(
+                            'flex items-start gap-3 rounded-xl border-2 p-3 text-left transition',
+                            modeOfWash === 'HANDWASH'
+                              ? 'border-gold-400 bg-gold-50/60 ring-1 ring-gold-200'
+                              : 'border-navy-100 hover:border-gold-200'
+                          )}
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-100 text-navy">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 20c0-4 1.5-6 4-6.5C12.5 13 13 11 12 9s-.5-5 3-5c2 0 3 1.5 3 3.5S17 11 17 13s1.5 3.5 4 3.5" />
+                              <path d="M7 20h10" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-navy">
+                              Handwash{' '}
+                              <span className="ml-1 rounded-full bg-gold-100 px-1.5 py-0.5 text-[10px] font-bold text-gold-700">
+                                +{appSettings.handwashSurchargePercent}%
+                              </span>
+                            </p>
+                            <p className="text-xs text-navy-300">
+                              Gentle per-garment hand care for delicate fabrics.
+                            </p>
+                          </div>
+                        </button>
+                      </div>
+                      {modeOfWash === 'HANDWASH' && (
+                        <p className="mt-2 text-[11px] leading-snug text-navy-300">
+                          Handwash adds {appSettings.handwashSurchargePercent}% of your cleaning
+                          subtotal — every piece is washed and finished by hand.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -1411,6 +1573,18 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                           </span>
                         </li>
                       )}
+                      {handwashSurcharge > 0 && (
+                        <li className="flex items-center justify-between text-navy-300">
+                          <span className="flex items-center gap-1">
+                            <svg className="h-3.5 w-3.5 text-gold-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M6 20c0-4 1.5-6 4-6.5C12.5 13 13 11 12 9s-.5-5 3-5c2 0 3 1.5 3 3.5S17 11 17 13s1.5 3.5 4 3.5" />
+                              <path d="M7 20h10" />
+                            </svg>
+                            Handwash gentle care (+{appSettings.handwashSurchargePercent}%)
+                          </span>
+                          <span>+{formatNaira(handwashSurcharge)}</span>
+                        </li>
+                      )}
                       {expressSurcharge > 0 && (
                         <li className="flex items-center justify-between text-navy-300">
                           <span className="flex items-center gap-1">
@@ -1424,11 +1598,38 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         <li className="flex items-center justify-between text-navy-300">
                           <span className="flex items-center gap-1">
                             <Shield className="h-3.5 w-3.5" />
-                            Return-as-Received discount ({settings.guaranteeDiscountPercent}%)
+                            Photo discount ({settings.guaranteeDiscountPercent}%)
                           </span>
-                          <span>−{formatNaira(discount)}</span>
+                          <span>−{formatNaira(Math.round(serviceSubtotal * (settings.guaranteeDiscountPercent / 100)))}</span>
                         </li>
                       )}
+                      {firstOrderDiscountActive && !isHotelCode && (
+                        <li className="flex items-center justify-between text-navy-300">
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="h-3.5 w-3.5 text-gold-500" />
+                            First-order discount ({firstOrderPercent}%) — applied at confirmation
+                          </span>
+                          <span>−{formatNaira(Math.round(serviceSubtotal * (firstOrderPercent / 100)))}</span>
+                        </li>
+                      )}
+                      {isHotelCode && (
+                        <li className="flex items-center justify-between rounded-lg bg-gold-50 px-2 text-navy-300 ring-1 ring-gold-200">
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="h-3.5 w-3.5 text-gold-500" />
+                            Hotel guest offer {appSettings.hotelGuestPromoCode} ({firstOrderPercent}%) — applied at confirmation
+                          </span>
+                          <span>−{formatNaira(Math.round(serviceSubtotal * (firstOrderPercent / 100)))}</span>
+                        </li>
+                      )}
+                      <li className="flex items-center justify-between text-navy-300">
+                        <span className="flex items-center gap-1">
+                          <Truck className="h-3.5 w-3.5 text-gold-500" />
+                          Delivery {isFirstOrder ? '' : '(subsequent delivery)'}
+                        </span>
+                        <span className={cn(deliveryFeeEstimate === 0 && 'font-semibold text-emerald-600')}>
+                          {deliveryFeeEstimate === 0 ? 'FREE — first order' : formatNaira(deliveryFeeEstimate)}
+                        </span>
+                      </li>
                     </ul>
                   )}
 
@@ -1484,6 +1685,55 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                 </div>
               ) : type === 'ITEM' && (
                 <div className="mt-5">
+                  {/* Offer code — hotel guests redeem their 15% first-order deal
+                      here (stacks with the 5% picture discount). Unknown codes
+                      are ignored by the server with a notice, never a dead end. */}
+                  {isFirstOrder && (
+                    <div className="mb-4 rounded-xl border border-navy-100 bg-linen-50 p-4">
+                      <label
+                        htmlFor="promo-code"
+                        className="flex items-center gap-1.5 text-sm font-semibold text-navy"
+                      >
+                        <Tag className="h-4 w-4 text-gold-500" /> Have an offer code?
+                      </label>
+                      <div className="mt-2 flex gap-2">
+                        <Input
+                          id="promo-code"
+                          value={promoCode}
+                          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                          placeholder={`e.g. ${appSettings.hotelGuestPromoCode}`}
+                          className="font-mono uppercase"
+                          maxLength={24}
+                          autoComplete="off"
+                        />
+                        {promoCode && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="shrink-0"
+                            onClick={() => setPromoCode('')}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                      <p className="mt-1.5 text-[11px] leading-snug text-navy-300">
+                        {isHotelCode ? (
+                          <span className="font-semibold text-emerald-700">
+                            {appSettings.hotelGuestPromoCode} recognised — {appSettings.hotelGuestDiscountPercent}% off your first order (+ the 5% photo discount if you upload pictures).
+                          </span>
+                        ) : (
+                          <>
+                            Hotel guests: use code{' '}
+                            <span className="font-mono font-semibold text-navy">{appSettings.hotelGuestPromoCode}</span>{' '}
+                            for {appSettings.hotelGuestDiscountPercent}% off your first order. Codes are
+                            validated when you confirm.
+                          </>
+                        )}
+                      </p>
+                    </div>
+                  )}
+
                   <p className="text-sm font-semibold">Choose payment method</p>
                   <RadioGroup
                     value={paymentMethod}
@@ -1541,16 +1791,16 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         <div className="mt-2 space-y-1 text-sm">
                           <div className="flex items-center justify-between">
                             <span className="text-navy-300">Bank</span>
-                            <span className="font-medium">{settings.bankName}</span>
+                            <span className="font-medium">{appSettings.bankName}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-navy-300">Account Name</span>
-                            <span className="font-medium">{settings.accountName}</span>
+                            <span className="font-medium">{appSettings.accountName}</span>
                           </div>
                           <div className="flex items-center justify-between">
                             <span className="text-navy-300">Account Number</span>
                             <span className="font-mono font-bold text-navy-300">
-                              {settings.accountNumber}
+                              {appSettings.accountNumber}
                             </span>
                           </div>
                           <div className="flex items-center justify-between">
@@ -1558,6 +1808,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                             <span className="font-bold text-navy-300">{formatNaira(total)}</span>
                           </div>
                         </div>
+                        <p className="mt-2 text-[10px] leading-snug text-navy-300/80">
+                          Pay before pickup — your rider is dispatched as soon as payment is
+                          verified. Details above are managed by Kozy admin and always current.
+                        </p>
                         <div className="mt-4 border-t pt-3">
                           <p className="text-xs text-navy-300">
                             Upload your transfer receipt:

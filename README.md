@@ -18,15 +18,20 @@ full chronological build record.)
 
 | Surface | Route | Highlights |
 | --- | --- | --- |
-| Landing page | `/` | Live server pricing, testimonials carousel (DB-backed), guarantee, SEO + OG images |
+| Landing page | `/` | Live server pricing, offers strip (10% first order, HOTEL15 hotel deal, 5% photos), Outerwear menu, Alterations, Reviews & Complaints form, delivery pricing, guarantee eligibility, testimonials, SEO + OG images |
 | Guest booking | `/book` | Book in ~2 minutes with no account; 409 guard for existing accounts |
 | Customer portal | `/portal` | Order tracking, invoices, review submission on delivered orders |
-| Admin console | `/admin` | Kanban/list orders, payment verification queue, CRM, finance charts, pricing settings, review moderation |
+| Admin console | `/admin` | Kanban/list orders, payment verification queue, CRM, finance charts, pricing settings (server-side — live for every visitor), review moderation, Feedback inbox (reviews & complaints) |
 | Driver app | `/driver` | Route view, swipe confirmations, GPS geofencing across 12 Lagos service zones |
 | Rider recruitment | `/join-riders` | Public application page |
 
 Payments: bank transfer with admin verification (live today) and Paystack online card
-payment (built; activates when `PAYSTACK_SECRET_KEY` is set). Notifications: branded
+payment (built; activates when `PAYSTACK_SECRET_KEY` is set). Bank details live in the
+`AppSetting` table — admin edits reach every customer's checkout instantly. Orders also
+carry a required Mode of Wash (machine vs handwash +50%), an optional offer code
+(`HOTEL15` = 15% first order for hotel guests, stacking with the 5% photo discount), a
+flat delivery fee after the free first delivery, and server-validated guarantee
+eligibility (min 2 garments or a 2,500+ total). Notifications: branded
 email via Brevo (live) and SMS via Termii (built; activates when `TERMII_API_KEY` is
 set). All integrations degrade gracefully when keys are absent.
 
