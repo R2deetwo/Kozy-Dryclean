@@ -237,10 +237,10 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       </section>
 
       {/* ============================================================
-          OFFERS — first-order, hotel-guest & picture discounts
+          OFFERS — first-order, hotel/corporate & picture discounts
           (Phase 14: one clear strip so the site and flyers tell the
-          same story — 10% first order, HOTEL15 for hotel guests,
-          5% for uploading pictures with each order)
+          same story — 10% first order, HOTEL15 for hotels & corporate
+          clients, 5% for uploading pictures with each order)
       ============================================================ */}
       <section className="border-b border-gold-200 bg-linen-50">
         <div className="mx-auto grid max-w-7xl gap-3 px-4 py-6 sm:px-6 md:grid-cols-3">
@@ -257,7 +257,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
             <Building2 className="h-6 w-6 shrink-0 text-gold-400" />
             <div>
               <p className="text-sm font-bold text-gold-100">
-                Hotel guests: {appSettings.hotelGuestDiscountPercent}% off + 5%
+                Hotels &amp; corporate clients: {appSettings.hotelGuestDiscountPercent}% off + 5%
               </p>
               <p className="text-xs text-navy-100/80">
                 Use code <span className="font-mono font-bold text-gold-300">{appSettings.hotelGuestPromoCode}</span> at
@@ -547,10 +547,12 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 </div>
               </div>
 
-              {/* HOTEL GUEST OFFER — Phase 14 (client directive: hotel guests
-                  are already high-value customers, so they earn the better
-                  first-order deal: 15% + the 5% picture discount). The code
-                  is redeemed at checkout in the booking wizard. */}
+              {/* HOTEL & CORPORATE OFFER — Phase 14. Client directive via PM:
+                  hotels (corporate clients) are already high-value customers
+                  who bring volume, so they earn the better first-order deal:
+                  15% + the 5% picture discount. Wording deliberately targets
+                  the hotel as the business client, not individual guests.
+                  The code is redeemed at checkout in the booking wizard. */}
               <div className="mt-6 overflow-hidden rounded-2xl bg-navy-gradient p-6 text-white ring-1 ring-gold-400/30">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                   <div className="flex items-start gap-4">
@@ -559,11 +561,12 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                     </div>
                     <div>
                       <p className="font-serif text-lg font-semibold">
-                        Staying at a partner hotel? Your first order is{' '}
+                        Hotels &amp; corporate clients — your first order is{' '}
                         <span className="text-gold-300">{appSettings.hotelGuestDiscountPercent}% off.</span>
                       </p>
                       <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-100/85">
-                        Hotel guests deserve the better deal — you&apos;re already our guest. Use code{' '}
+                        Our hotel and corporate partners earn the better deal — you already trust Kozy with your
+                        volumes. Use code{' '}
                         <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono font-bold text-gold-300 ring-1 ring-gold-400/40">
                           {appSettings.hotelGuestPromoCode}
                         </span>{' '}

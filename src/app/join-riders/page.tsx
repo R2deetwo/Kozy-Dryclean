@@ -92,7 +92,7 @@ export default function JoinRidersPage() {
       <div className="border-b border-navy-100 bg-white">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
           <Link href="/">
-            <Logo size="md" subtitle="Premium Drycleaning & Laundry" />
+            <Logo size="md" subtitle="Drycleaning & Laundry" />
           </Link>
           <Link href="/" className="flex items-center gap-1 text-xs text-navy-300 hover:text-navy">
             <ArrowLeft className="h-3.5 w-3.5" /> Back to home

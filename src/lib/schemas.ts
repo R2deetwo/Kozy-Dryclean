@@ -53,9 +53,9 @@ export const CreateOrderSchema = z.object({
   // Mode of wash (retail orders) — required by the order form. Machine wash
   // is standard; handwash carries a per-item surcharge priced server-side.
   modeOfWash: z.enum(['MACHINE', 'HANDWASH']).optional(),
-  // Optional offer code (e.g. HOTEL15 for the hotel-guest first-order deal).
-  // Validated and priced server-side — an unknown/inactive code is ignored
-  // with a warning instead of failing the booking.
+  // Optional offer code (e.g. HOTEL15 for the hotel & corporate first-order
+  // deal). Validated and priced server-side — an unknown/inactive code is
+  // ignored with a warning instead of failing the booking.
   promoCode: z.string().trim().max(24).optional(),
   pickupAddress: z.string().min(1, 'Pickup address is required'),
   pickupDate: z.string().min(1, 'Pickup date is required'), // ISO string

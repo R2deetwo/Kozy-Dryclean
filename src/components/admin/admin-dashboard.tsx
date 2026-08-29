@@ -15,6 +15,7 @@ import {
   Truck,
   Sparkles,
   Settings,
+  LifeBuoy,
   LogOut,
 } from 'lucide-react'
 import { useOrders, usePayments, useUsers } from '@/lib/hooks'
@@ -30,10 +31,11 @@ import { NotificationsPanel } from './notifications-panel'
 import { SettingsView } from './settings-view'
 import { ReviewsView } from './reviews-view'
 import { FeedbackView } from './feedback-view'
+import { HelpView } from './help-view'
 import { Logo } from '@/components/shell/logo'
 import { Star, MessageSquareHeart } from 'lucide-react'
 
-type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'reviews' | 'feedback' | 'notifications' | 'settings'
+type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'reviews' | 'feedback' | 'notifications' | 'settings' | 'help'
 
 export function AdminDashboard() {
   const admin = { name: 'Admin', email: 'admin@kozy.ng' }
@@ -65,6 +67,7 @@ export function AdminDashboard() {
     { key: 'feedback', label: 'Feedback', icon: MessageSquareHeart },
     { key: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.length },
     { key: 'settings', label: 'Settings', icon: Settings },
+    { key: 'help', label: 'Help', icon: LifeBuoy },
   ]
 
   return (
@@ -203,6 +206,7 @@ export function AdminDashboard() {
           {tab === 'feedback' && <FeedbackView />}
           {tab === 'notifications' && <NotificationsPanel />}
           {tab === 'settings' && <SettingsView />}
+          {tab === 'help' && <HelpView />}
         </main>
       </div>
     </div>

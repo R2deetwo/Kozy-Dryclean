@@ -160,7 +160,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // surcharge. Kept as null until the customer picks, so the choice is
   // genuinely explicit.
   const [modeOfWash, setModeOfWash] = useState<'MACHINE' | 'HANDWASH' | null>(null)
-  // Optional offer code (hotel guests: HOTEL15 for 15% off the first order).
+  // Optional offer code (hotels & corporate clients: HOTEL15 for 15% off
+  // the first order).
   const [promoCode, setPromoCode] = useState('')
   const [photos, setPhotos] = useState<{ url: string; name: string }[]>([])
   const [guaranteeAck, setGuaranteeAck] = useState(false)
@@ -380,7 +381,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // Delivery: free on the first order, the going rate (admin-tunable)
   // afterwards. Estimate only — the server re-verifies at order time.
   const deliveryFeeEstimate = isFirstOrder ? 0 : appSettings.deliveryFee
-  // First-order offer: the hotel-guest code REPLACES the standard first-order
+  // First-order offer: the hotel/corporate code REPLACES the standard first-order
   // discount (15% vs 10%); the 5% picture discount stacks on top of either.
   const trimmedCode = promoCode.trim().toUpperCase()
   const isHotelCode =
@@ -1616,7 +1617,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         <li className="flex items-center justify-between rounded-lg bg-gold-50 px-2 text-navy-300 ring-1 ring-gold-200">
                           <span className="flex items-center gap-1">
                             <Sparkles className="h-3.5 w-3.5 text-gold-500" />
-                            Hotel guest offer {appSettings.hotelGuestPromoCode} ({firstOrderPercent}%) — applied at confirmation
+                            Hotel &amp; corporate offer {appSettings.hotelGuestPromoCode} ({firstOrderPercent}%) — applied at confirmation
                           </span>
                           <span>−{formatNaira(Math.round(serviceSubtotal * (firstOrderPercent / 100)))}</span>
                         </li>
@@ -1685,9 +1686,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                 </div>
               ) : type === 'ITEM' && (
                 <div className="mt-5">
-                  {/* Offer code — hotel guests redeem their 15% first-order deal
-                      here (stacks with the 5% picture discount). Unknown codes
-                      are ignored by the server with a notice, never a dead end. */}
+                  {/* Offer code — hotels & corporate clients redeem their 15%
+                      first-order deal here (stacks with the 5% picture discount).
+                      Unknown codes are ignored by the server with a notice,
+                      never a dead end. */}
                   {isFirstOrder && (
                     <div className="mb-4 rounded-xl border border-navy-100 bg-linen-50 p-4">
                       <label
@@ -1724,7 +1726,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                           </span>
                         ) : (
                           <>
-                            Hotel guests: use code{' '}
+                            Hotels &amp; corporate clients: use code{' '}
                             <span className="font-mono font-semibold text-navy">{appSettings.hotelGuestPromoCode}</span>{' '}
                             for {appSettings.hotelGuestDiscountPercent}% off your first order. Codes are
                             validated when you confirm.

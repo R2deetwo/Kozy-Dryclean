@@ -17,7 +17,7 @@ const SIZES = {
   lg: { mark: 56, text: 'text-2xl', subtitle: 'text-[10px]', gap: 'gap-3' },
 }
 
-const DEFAULT_SUBTITLE = 'Premium Drycleaning & Laundry'
+const DEFAULT_SUBTITLE = 'Drycleaning & Laundry'
 
 export function Logo({ size = 'md', showText = true, subtitle, className, onClick, variant = 'light' }: LogoProps) {
   const s = SIZES[size]

@@ -52,7 +52,7 @@ export default function ForgotPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-linen px-4 py-8">
       <div className="w-full max-w-md">
         <div className="mb-6 flex justify-center">
-          <Link href="/"><Logo size="md" subtitle="Premium Drycleaning & Laundry" /></Link>
+          <Link href="/"><Logo size="md" subtitle="Drycleaning & Laundry" /></Link>
         </div>
         <Card className="border-navy-100 shadow-navy">
           <CardContent className="p-6 sm:p-8">

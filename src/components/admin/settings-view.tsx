@@ -504,7 +504,7 @@ export function SettingsView() {
                   </div>
                   <div>
                     <Label htmlFor="hotel-guest-pct" className="text-xs uppercase tracking-wide text-navy-300">
-                      Hotel-guest first-order discount (%)
+                      Hotel &amp; corporate first-order discount (%)
                     </Label>
                     <Input
                       id="hotel-guest-pct"
@@ -522,7 +522,7 @@ export function SettingsView() {
                   </div>
                   <div>
                     <Label htmlFor="hotel-promo-code" className="text-xs uppercase tracking-wide text-navy-300">
-                      Hotel-guest offer code
+                      Hotel &amp; corporate offer code
                     </Label>
                     <Input
                       id="hotel-promo-code"
@@ -532,7 +532,7 @@ export function SettingsView() {
                       className="mt-1.5 w-40 font-mono uppercase"
                     />
                     <p className="mt-1 text-xs text-navy-300">
-                      Customers type this at checkout. Print it on hotel partner cards.
+                      Hotels &amp; corporate clients type this at checkout. Print it on hotel partner cards.
                     </p>
                   </div>
                 </CardContent>

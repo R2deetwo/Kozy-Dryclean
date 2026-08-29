@@ -378,9 +378,10 @@ export const DEFAULT_HANDWASH_SURCHARGE_PERCENT = 50
  *  and stacks with it. */
 export const FIRST_ORDER_DISCOUNT_PERCENT = 10
 
-/** Hotel-guest first-order offer: 15% + the 5% picture discount. Hotel
- *  guests are already high-value customers, so they earn the better deal.
- *  Redeemed with the offer code HOTEL15 at checkout. */
+/** Hotel & corporate first-order offer: 15% + the 5% picture discount.
+ *  Hotels (corporate clients) are already high-value customers who bring
+ *  volume, so they earn the better deal. Redeemed with the offer code
+ *  HOTEL15 at checkout. */
 export const HOTEL_GUEST_DISCOUNT_PERCENT = 15
 export const HOTEL_GUEST_PROMO_CODE = 'HOTEL15'
 

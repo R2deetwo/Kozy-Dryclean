@@ -347,30 +347,36 @@ export async function POST(req: Request) {
       appliedDiscounts.push('Return-as-Received photo discount (5%)')
     }
 
-    // ----- First-order offer: promo code (hotel guests) or signup discount -----
-    // A valid offer code REPLACES the standard signup discount — hotel guests
-    // (15%) get the better first-order deal; everyone else gets the standard
-    // 10%. The picture discount (5%) always stacks on top.
+    // ----- First-order offer: promo code (hotels & corporate clients) or
+    // signup discount -----
+    // A valid offer code REPLACES the standard signup discount — hotels &
+    // corporate clients (15%) get the better first-order deal; everyone else
+    // gets the standard 10%. The picture discount (5%) always stacks on top.
     let appliedPromoCode: string | null = null
     const isFirstOrder = owner.signupDiscountUsed === false
     if (isFirstOrder && promoCode) {
       const code = promoCode.toUpperCase().trim()
       let promo = await db.discount.findFirst({ where: { code, active: true } })
-      // Built-in hotel-guest offer: the code + percentage live in AppSetting,
-      // so it works even before a Discount row exists. Upsert the row for
-      // admin visibility/auditability.
+      // Built-in hotel/corporate offer: the code + percentage live in
+      // AppSetting, so it works even before a Discount row exists. Upsert the
+      // row for admin visibility/auditability.
       if (!promo && code === appSettings.hotelGuestPromoCode.toUpperCase()) {
         promo = await db.discount.upsert({
           where: { code },
-          update: { active: true, value: appSettings.hotelGuestDiscountPercent },
+          update: {
+            active: true,
+            value: appSettings.hotelGuestDiscountPercent,
+            name: 'HOTEL15 First-Order Offer (Hotels & Corporate)',
+            description: `${appSettings.hotelGuestDiscountPercent}% off the first order for hotels & corporate clients (stacks with the 5% picture discount).`,
+          },
           create: {
-            name: 'Hotel Guest First-Order Offer',
+            name: 'HOTEL15 First-Order Offer (Hotels & Corporate)',
             code,
             type: 'PERCENTAGE',
             value: appSettings.hotelGuestDiscountPercent,
             active: true,
             appliesTo: 'FIRST_ORDER',
-            description: `${appSettings.hotelGuestDiscountPercent}% off the first order for hotel guests (stacks with the 5% picture discount).`,
+            description: `${appSettings.hotelGuestDiscountPercent}% off the first order for hotels & corporate clients (stacks with the 5% picture discount).`,
           },
         })
       }
