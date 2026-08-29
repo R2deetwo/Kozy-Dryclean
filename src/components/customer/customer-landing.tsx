@@ -21,6 +21,7 @@ import {
   Zap,
   Scissors,
   BedDouble,
+  Droplets,
 } from 'lucide-react'
 import {
   formatNaira,
@@ -453,6 +454,34 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   </Button>
                 </div>
 
+                {/* Mode of wash pricing — visibility requested by the
+                    client (handwash is the LABOUR premium: every piece is
+                    washed and finished by hand, so it costs MORE than
+                    machine wash, not less). Percent comes live from
+                    AppSetting so admin tuning reflects here instantly. */}
+                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
+                  <div className="flex items-start gap-3">
+                    <Droplets className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+                    <div>
+                      <p className="text-sm font-semibold text-navy">
+                        Machine or handwash — you choose at checkout.
+                      </p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
+                        Every price above is standard machine wash. Handwash adds{' '}
+                        <span className="font-semibold text-navy">
+                          +{appSettings.handwashSurchargePercent}%
+                        </span>{' '}
+                        to your cleaning subtotal — each piece is washed and finished
+                        by hand, which takes more time and expert care, so it carries
+                        a premium.
+                      </p>
+                    </div>
+                  </div>
+                  <Badge className="shrink-0 bg-gold-100 text-gold-800 hover:bg-gold-100">
+                    Handwash +{appSettings.handwashSurchargePercent}%
+                  </Badge>
+                </div>
+
                 {/* Pickup & delivery pricing — transparency requested by the
                     client ("I see first delivery is free but I don't see
                     pricing for deliveries afterwards"). First delivery is
@@ -866,13 +895,16 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               </Button>
             </motion.div>
 
-            {/* Visual column — the atelier interior keeps this section about
-                craft; the illustration style matches the rest of the site. */}
+            {/* Visual column — a seamstress at her workstation keeps this
+                section about the craft of alterations (client directive:
+                "have a seamstress working at her workstation in terms of
+                alterations and repairs — be professional about it"). Style
+                matches the marketing materials: photoreal, navy/gold. */}
             <div className="relative">
               <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
                 <img
-                  src="/brand/images/atelier-interior.png"
-                  alt="Inside the Kozy atelier — dedicated pressing and tailoring stations"
+                  src="/brand/images/seamstress.png"
+                  alt="Kozy in-house seamstress assessing a garment at her alterations workstation"
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -897,7 +929,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid gap-10 lg:grid-cols-2 items-center">
             <div className="overflow-hidden rounded-2xl ring-1 ring-navy-100 shadow-2xl order-2 lg:order-1">
-              <img src="/brand/images/female-customer.png" alt="Happy customer receiving her fresh laundry in a Kozy garment bag from a Kozy rider" className="h-full w-full object-cover" />
+              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy K laundry bag to a smiling customer at her door" className="h-full w-full object-cover" />
             </div>
             <motion.div
               initial={{ opacity: 0, x: 16 }}
