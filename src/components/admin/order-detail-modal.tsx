@@ -11,6 +11,7 @@ import {
   Shield,
   Receipt,
   Scale,
+  Scissors,
   Zap,
   User as UserIcon,
   CheckCircle2,
@@ -205,6 +206,19 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               </div>
             )}
           </section>
+
+          {order.alterationNotes && (
+            <section className="rounded-lg border border-[#E3BE4F] bg-[#FBF5E0] p-4">
+              <p className="flex items-center gap-1.5 font-medium text-[#0A192F]">
+                <Scissors className="h-4 w-4 text-[#D4AF37]" /> Alteration note (from the customer)
+              </p>
+              <p className="mt-1.5 whitespace-pre-wrap text-sm leading-relaxed text-[#6F88A8]">{order.alterationNotes}</p>
+              <p className="mt-2 text-xs text-[#6F88A8]">
+                Seamstress workflow: assess each piece → call the customer to confirm details → send
+                the quote → sew only after approval. Update the customer by phone or SMS.
+              </p>
+            </section>
+          )}
 
           {order.type === 'KG' && (
             <section className="rounded-lg border border-[#C8D2DF] bg-[#FBF5E0] p-4">

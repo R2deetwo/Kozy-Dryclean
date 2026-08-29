@@ -22,6 +22,7 @@ import {
   Route,
   ListChecks,
   LogOut,
+  Scissors,
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useOrders, useUpdateOrder } from '@/lib/hooks'
@@ -444,6 +445,17 @@ function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }
               <p className="mt-2 flex items-center gap-1 text-xs text-gold-300">
                 <AlertCircle className="h-3 w-3" /> Handle with care — Guarantee active. Inspect items before confirming pickup.
               </p>
+            )}
+            {order.alterationNotes && (
+              <div className="mt-2 rounded-lg bg-gold-400/10 p-3 ring-1 ring-gold-400/30">
+                <p className="flex items-center gap-1 text-xs font-semibold text-gold-300">
+                  <Scissors className="h-3 w-3" /> Alteration pieces on this pickup
+                </p>
+                <p className="mt-1 text-xs leading-relaxed text-white/80">{order.alterationNotes}</p>
+                <p className="mt-1 text-[10px] text-slate-400">
+                  Just collect and tag the pieces — the seamstress assesses and quotes at the studio (no measuring at the door).
+                </p>
+              </div>
             )}
           </div>
 

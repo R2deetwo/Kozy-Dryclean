@@ -163,6 +163,11 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // Optional offer code (hotels & corporate clients: HOTEL15 for 15% off
   // the first order).
   const [promoCode, setPromoCode] = useState('')
+  // Alterations note (Phase 17): what the seamstress should change on which
+  // garment. Collected via a guided panel whenever alteration items are in
+  // the basket — riders never measure at the door; the seamstress works
+  // from this note and calls the customer to confirm before quoting.
+  const [alterationNotes, setAlterationNotes] = useState('')
   const [photos, setPhotos] = useState<{ url: string; name: string }[]>([])
   const [guaranteeAck, setGuaranteeAck] = useState(false)
   const [pickupAddress, setPickupAddress] = useState('')
@@ -263,6 +268,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
       setModeOfWash(d.modeOfWash)
     }
     if (typeof d.promoCode === 'string') setPromoCode(d.promoCode)
+    if (typeof d.alterationNotes === 'string') setAlterationNotes(d.alterationNotes)
     if (d.paymentMethod === 'BANK_TRANSFER' || d.paymentMethod === 'PAYSTACK') {
       setPaymentMethod(d.paymentMethod)
     }
@@ -321,13 +327,14 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
       serviceSpeed,
       modeOfWash: modeOfWash ?? undefined,
       promoCode: promoCode || undefined,
+      alterationNotes: alterationNotes || undefined,
       deliveryAddress,
       paymentMethod,
       guestName,
       guestEmail,
       guestPhone,
     })
-  }, [step, type, items, pickupAddress, pickupDate, pickupSlot, serviceSpeed, modeOfWash, promoCode, deliveryAddress, paymentMethod, guestName, guestEmail, guestPhone])
+  }, [step, type, items, pickupAddress, pickupDate, pickupSlot, serviceSpeed, modeOfWash, promoCode, alterationNotes, deliveryAddress, paymentMethod, guestName, guestEmail, guestPhone])
 
   // ----- Computed pricing (memoized for performance) -----
   // Must be called BEFORE any early returns (Rules of Hooks)
@@ -356,6 +363,9 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     .map((c) => c.name)
   const hasQuoteItems = quoteItemNames.length > 0
   const quoteOnly = hasQuoteItems && subtotal === 0
+  // ----- Alterations (Phase 17) -----
+  const hasAlterationItems = (items['alteration'] ?? 0) > 0
+  const alterationNotesValid = alterationNotes.trim().length >= 10
   // ----- Turnaround tier -----
   // Express 24 is blocked when bulky household items are in the basket
   // (matches the server-side rule in POST /api/orders).
@@ -693,6 +703,19 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   }
 
   const handleConfirm = async () => {
+    // Alterations (Phase 17): the seamstress works from the customer's note —
+    // block checkout until the note describes the work.
+    if (type === 'ITEM' && hasAlterationItems && !alterationNotesValid) {
+      toast({
+        title: 'Describe the alteration work',
+        description:
+          'Please tell our seamstress what to change on which garment — add a short note on the service step (e.g. "navy trousers — waist taken in").',
+        variant: 'destructive',
+      })
+      setStep(1)
+      setLoading(false)
+      return
+    }
     setLoading(true)
     setAccountExists(false)
     try {
@@ -708,6 +731,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
           serviceSpeed: type === 'ITEM' ? effectiveSpeed : 'STANDARD',
           modeOfWash: type === 'ITEM' ? modeOfWash : undefined,
           promoCode: type === 'ITEM' && promoCode.trim() ? promoCode.trim().toUpperCase() : undefined,
+          alterationNotes:
+            type === 'ITEM' && alterationNotes.trim() ? alterationNotes.trim() : undefined,
           pickupAddress,
           pickupDate: new Date(pickupDate).toISOString(),
           pickupTimeSlot: pickupSlot,
@@ -733,7 +758,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
           return
         }
         // Friendly copy for the Phase-14 server validations — never raw JSON.
-        if (err.error === 'MODE_OF_WASH_REQUIRED' || err.error === 'GUARANTEE_NOT_ELIGIBLE') {
+        if (err.error === 'MODE_OF_WASH_REQUIRED' || err.error === 'GUARANTEE_NOT_ELIGIBLE' || err.error === 'ALTERATION_NOTES_REQUIRED') {
           toast({
             title: 'Almost there',
             description: err.message || 'Please review your order details.',
@@ -1119,6 +1144,61 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                           subtotal — every piece is washed and finished by hand.
                         </p>
                       )}
+                    </div>
+                  )}
+
+                  {/* ALTERATIONS NOTE (Phase 17, client directive: riders never
+                      measure at the door — the customer describes the work and
+                      the seamstress takes it from there). Shown whenever an
+                      alterations item is in the basket; quick chips seed common
+                      requests, the note is required before placing the order. */}
+                  {type === 'ITEM' && hasAlterationItems && (
+                    <div className="mt-6">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-600">
+                          Tell the seamstress what you need <span className="text-red-500">*</span>
+                        </p>
+                        <p className="text-[10px] text-navy-300">For the alteration items</p>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {[
+                          'Waist taken in',
+                          'Trouser hem',
+                          'Sleeves shortened',
+                          'Zip replaced',
+                          'Buttons / lining',
+                          'Take-in / taper',
+                        ].map((chip) => (
+                          <button
+                            key={chip}
+                            type="button"
+                            onClick={() =>
+                              setAlterationNotes((prev) =>
+                                prev.toLowerCase().includes(chip.toLowerCase())
+                                  ? prev
+                                  : `${prev}${prev && !prev.endsWith(' ') ? ' ' : ''}${chip.toLowerCase()}. `
+                              )
+                            }
+                            className="rounded-full border border-navy-100 bg-white px-2.5 py-1 text-[11px] font-medium text-navy-300 transition hover:border-gold-300 hover:text-navy"
+                          >
+                            + {chip}
+                          </button>
+                        ))}
+                      </div>
+                      <textarea
+                        value={alterationNotes}
+                        onChange={(e) => setAlterationNotes(e.target.value)}
+                        rows={3}
+                        placeholder="e.g. Navy work trousers — take the waist in about 2 inches. Green kaftan — shorten the left sleeve to match the right."
+                        className="mt-2 w-full resize-none rounded-xl border border-navy-200 bg-white px-3 py-2.5 text-sm text-navy placeholder:text-navy-300 focus:border-gold-300 focus:outline-none focus:ring-2 focus:ring-gold-200"
+                      />
+                      <p className="mt-1 text-[11px] leading-snug text-navy-300">
+                        {alterationNotes.trim().length >= 10 ? (
+                          <>Our seamstress reads every note — she&apos;ll call you to confirm details, then send your quote. Nothing is sewn until you approve it.</>
+                        ) : (
+                          <>Describe the issue on each garment (10+ characters) — this is what our seamstress works from.</>
+                        )}
+                      </p>
                     </div>
                   )}
 
@@ -1568,10 +1648,28 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         <li className="flex items-start gap-1.5 rounded-lg bg-gold-50 px-3 py-2 text-xs leading-relaxed text-navy-300 ring-1 ring-gold-200">
                           <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
                           <span>
-                            Quoted item{quoteItemNames.length > 1 ? 's are' : ' is'} assessed free
-                            at pickup — we send the final quote for your approval
-                            before any work begins.
+                            {hasAlterationItems ? (
+                              <>
+                                Alterations ride the same pickup as your cleaning — the seamstress
+                                assesses each piece, calls you to confirm the details, and sends your
+                                quote. Nothing is sewn until you approve it.
+                              </>
+                            ) : (
+                              <>
+                                Quoted item{quoteItemNames.length > 1 ? 's are' : ' is'} assessed free
+                                at pickup — we send the final quote for your approval
+                                before any work begins.
+                              </>
+                            )}
                           </span>
+                        </li>
+                      )}
+                      {hasAlterationItems && alterationNotes.trim() && (
+                        <li className="rounded-lg border border-navy-100 bg-linen-50 px-3 py-2 text-xs leading-relaxed text-navy-300">
+                          <span className="font-semibold text-navy">For the seamstress:</span>{' '}
+                          {alterationNotes.trim().length > 220
+                            ? `${alterationNotes.trim().slice(0, 220)}…`
+                            : alterationNotes.trim()}
                         </li>
                       )}
                       {handwashSurcharge > 0 && (

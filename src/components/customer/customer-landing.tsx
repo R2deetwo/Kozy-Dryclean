@@ -42,7 +42,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TestimonialsCarousel } from '@/components/customer/testimonials-carousel'
 import { HowItWorksSection } from '@/components/customer/how-it-works'
-import { FeedbackForm } from '@/components/customer/feedback-form'
 
 interface Props {
   onBook: () => void
@@ -620,14 +619,12 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       </section>
 
       {/* ============================================================
-          TESTIMONIALS — rotating customer reviews (4.5★ and above only)
+          TESTIMONIALS — rotating customer reviews (order-verified,
+          4.5★ and above only). The feedback form lives on its own page
+          (/feedback — linked from this section) so browsing stays
+          uninterrupted (Phase 17, client directive).
       ============================================================ */}
       <TestimonialsCarousel />
-
-      {/* ============================================================
-          REVIEWS & COMPLAINTS — public feedback form (Phase 14)
-      ============================================================ */}
-      <FeedbackForm />
 
       {/* ============================================================
           GUARANTEE — Kozy Care Promise
@@ -869,7 +866,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   'Zips, buttons & linings replaced with matching materials',
                   'Traditional wear — agbada, kaftan and iro & buba adjustments',
                   'Blazers & suits — sleeve and body alterations by a suit tailor',
-                  'Free measurement at pickup — we pin, you approve, we sew',
+                  'You describe, she assesses — you approve the quote before we sew',
                 ].map((t) => (
                   <li key={t} className="flex items-start gap-3">
                     <Scissors className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
@@ -883,9 +880,11 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                     ? `Alterations from ${formatNaira(appSettings.alterationsFromPrice)}`
                     : 'Simple, honest pricing — quoted before we sew'}
                 </span>{' '}
-                — every alteration starts with a free measurement at pickup: we pin the
-                work, send you the quote, and nothing is sewn until you approve it. Add
-                your alteration request as a note when booking.
+                — tell us what needs changing when you book: "waist too loose", "sleeves
+                too long", "zip needs replacing". No one measures you at the door —
+                our seamstress assesses every piece at the studio, calls you to confirm
+                the details, then sends your quote. Nothing is sewn until you approve
+                it.
               </p>
               <Button
                 onClick={onBook}
@@ -904,7 +903,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
                 <img
                   src="/brand/images/seamstress.png"
-                  alt="Kozy in-house seamstress assessing a garment at her alterations workstation"
+                  alt="Young Kozy in-house seamstress sewing at her machine in a bright white-walled studio"
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -929,7 +928,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid gap-10 lg:grid-cols-2 items-center">
             <div className="overflow-hidden rounded-2xl ring-1 ring-navy-100 shadow-2xl order-2 lg:order-1">
-              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy K laundry bag to a smiling customer at her door" className="h-full w-full object-cover" />
+              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy laundry bag with the gold Kozy K to a smiling customer on her veranda" className="h-full w-full object-cover" />
             </div>
             <motion.div
               initial={{ opacity: 0, x: 16 }}
@@ -1065,8 +1064,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   </a>
                 </li>
                 <li>
-                  <a href="#feedback" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
-                    Reviews &amp; Complaints
+                  <a href="/feedback" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+                    Leave a review / feedback
                   </a>
                 </li>
                 <li>

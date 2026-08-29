@@ -1,0 +1,17 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Alterations — open scissors over a stitched seam (the made-to-fit promise) -->
+  <!-- Fabric edge with running stitches -->
+  <path d="M4 8 L28 8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeDasharray="2.5 2.5"/>
+  <!-- Garment body hint -->
+  <path d="M9 8 L11 13 L16 11.5 L21 13 L23 8" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Open scissors: two blades crossing at the pivot -->
+  <path d="M12 27 L18.5 14.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+  <path d="M20 27 L13.5 14.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"/>
+  <!-- Handles (rings) -->
+  <circle cx="11" cy="28.5" r="2.6" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+  <circle cx="21" cy="28.5" r="2.6" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+  <!-- Pivot -->
+  <circle cx="16" cy="20.5" r="1.1" fill="currentColor"/>
+  <!-- Needle sparkle -->
+  <path d="M24.5 16.5 L25.5 14.5 L26.5 16.5 L25.5 18.5 Z" fill="currentColor"/>
+</svg>

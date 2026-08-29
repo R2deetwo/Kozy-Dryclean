@@ -43,6 +43,9 @@ export interface BookingDraft {
   modeOfWash?: 'MACHINE' | 'HANDWASH'
   /** Offer code being redeemed at checkout (e.g. HOTEL15) */
   promoCode?: string
+  /** Alterations note (Phase 17): what the seamstress should change on
+   *  which garment — collected when alteration items are in the basket. */
+  alterationNotes?: string
   deliveryAddress: string
   paymentMethod: 'BANK_TRANSFER' | 'PAYSTACK'
   /** Guest contact details (guest checkout only) */

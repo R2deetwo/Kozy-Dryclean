@@ -2,7 +2,7 @@
 
 import { useMemo } from 'react'
 import {
-  MapPin, Calendar, Clock, Phone, Shield, Truck, Receipt, Zap,
+  MapPin, Calendar, Clock, Phone, Shield, Truck, Receipt, Zap, Scissors,
   User as UserIcon, CheckCircle2, XCircle, AlertCircle,
 } from 'lucide-react'
 import { formatNaira, formatDateTime, formatDate } from '@/lib/types'
@@ -101,6 +101,16 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               </div>
             )}
           </section>
+
+          {order.alterationNotes && (
+            <section className="rounded-lg bg-[#FBF5E0] p-3 text-sm ring-1 ring-[#E3BE4F]">
+              <p className="flex items-center gap-1.5 font-medium text-[#0A192F]">
+                <Scissors className="h-3.5 w-3.5 shrink-0 text-[#D4AF37]" /> Alteration note for the seamstress
+              </p>
+              <p className="mt-1 whitespace-pre-wrap leading-relaxed text-[#6F88A8]">{order.alterationNotes}</p>
+              <p className="mt-1 text-xs text-[#6F88A8]">Quoted after the seamstress assesses each piece — you approve before anything is sewn.</p>
+            </section>
+          )}
 
           <section className="grid gap-2 sm:gap-3 sm:grid-cols-2">
             <div className="rounded-lg bg-[#EEF0F2] p-3 text-sm">

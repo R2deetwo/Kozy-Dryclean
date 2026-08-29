@@ -325,6 +325,8 @@ export interface ApiTestimonial {
   displayLocation?: string
   rating: number
   comment: string
+  // Masked order reference for order-verified reviews (e.g. KZ-••3846)
+  orderNumberMasked?: string
   createdAt: string
 }
 

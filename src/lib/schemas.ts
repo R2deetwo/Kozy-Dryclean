@@ -57,6 +57,11 @@ export const CreateOrderSchema = z.object({
   // deal). Validated and priced server-side — an unknown/inactive code is
   // ignored with a warning instead of failing the booking.
   promoCode: z.string().trim().max(24).optional(),
+  // Alterations (Phase 17): the customer's description of the alteration work
+  // (what changes on which garment). REQUIRED by the server whenever the
+  // manifest contains an alterations item — the seamstress works from this
+  // note; riders never measure at the door.
+  alterationNotes: z.string().trim().max(1500, 'Alteration notes are too long (max 1500 characters)').optional(),
   pickupAddress: z.string().min(1, 'Pickup address is required'),
   pickupDate: z.string().min(1, 'Pickup date is required'), // ISO string
   pickupTimeSlot: z.string().min(1, 'Pickup time slot is required'),
@@ -89,15 +94,36 @@ export const UpdatePaymentSchema = z.object({
 })
 
 // ----- Review schemas -----
-export const CreateReviewSchema = z.object({
-  // Must be the full order id (cuid) from the customer's review link —
-  // not the human-readable orderNumber (which is guessable).
-  orderId: z.string().min(10, 'Invalid order reference'),
-  rating: z.number().min(1, 'Rating must be at least 1 star').max(5, 'Rating can be at most 5 stars'),
-  comment: z.string().min(10, 'Please write at least a sentence').max(2000, 'Comment is too long'),
-  displayName: z.string().max(100).optional().nullable(),
-  displayLocation: z.string().max(100).optional().nullable(),
-})
+// Two accepted references to the order being reviewed:
+//   • orderId — the full order id (cuid) from the customer's private review
+//     link (/review/[orderId]). The cuid is an unguessable capability token.
+//   • orderNumber + contact — the public path (Phase 17, client directive:
+//     non-registered customers can review, but ONLY with an order number).
+//     The contact (email or phone used at booking) must match the order's
+//     customer record, so a guessed KZ-number alone is never enough.
+// Exactly one of the two paths must be provided.
+export const CreateReviewSchema = z
+  .object({
+    // Full order id (cuid) from the review link — not the human-readable
+    // orderNumber (which is guessable on its own).
+    orderId: z.string().min(10, 'Invalid order reference').optional(),
+    // Human-readable order number (KZ-XXXXXXXX) for the public feedback page.
+    orderNumber: z
+      .string()
+      .trim()
+      .regex(/^KZ-?\d{6,10}$/i, 'Enter your order number as KZ-12345678')
+      .optional(),
+    // Email or phone used at booking — required to verify the public
+    // orderNumber path (skipped when the caller is signed in as the owner).
+    contact: z.string().trim().max(120).optional(),
+    rating: z.number().min(1, 'Rating must be at least 1 star').max(5, 'Rating can be at most 5 stars'),
+    comment: z.string().min(10, 'Please write at least a sentence').max(2000, 'Comment is too long'),
+    displayName: z.string().max(100).optional().nullable(),
+    displayLocation: z.string().max(100).optional().nullable(),
+  })
+  .refine((d) => Boolean(d.orderId) !== Boolean(d.orderNumber), {
+    message: 'Provide either the review link reference or your order number — not both.',
+  })
 
 export const ModerateReviewSchema = z.object({
   action: z.enum(['approve', 'unapprove', 'hide', 'unhide']),

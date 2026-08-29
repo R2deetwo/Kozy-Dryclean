@@ -4,22 +4,38 @@
 // =============================================================================
 // Public (no auth):
 //   GET  returns approved + non-hidden + rating >= 4.5 reviews (newest first),
-//        mapped to the public Testimonial shape. Starter marketing
-//        testimonials fill the carousel up to MIN_TESTIMONIALS so the landing
-//        page never looks empty while real reviews accumulate.
-//   POST accepts a review for a DELIVERED order. The orderId (cuid) in the
-//        customer's review link acts as the capability token — no login
-//        required (review links arrive by SMS/email). Rate-limited by IP.
+//        mapped to the public Testimonial shape. Real reviews carry a MASKED
+//        order reference ("KZ-••3846") — the order number shows (client
+//        directive: "order number has to show") without publishing a complete
+//        number scammers could harvest. Starter marketing testimonials fill
+//        the carousel up to MIN_TESTIMONIALS so the landing page never looks
+//        empty while real reviews accumulate.
+//   POST accepts a review for a DELIVERED order via one of two paths:
+//        (a) orderId (full cuid) — the customer's private review link
+//            (/review/[orderId]). The cuid acts as an unguessable capability
+//            token, no login required (links arrive by SMS/email).
+//        (b) orderNumber + contact — the PUBLIC /feedback page path (Phase 17,
+//            client directive: non-registered customers can review, but only
+//            with an order number). The contact (email or phone used at
+//            booking) must match the order's customer record, so a guessed
+//            KZ-number alone is never enough. A signed-in owner skips the
+//            contact check.
+//        Every submission passes the content-moderation screen
+//        (src/lib/content-filter.ts) — improper content can never reach the
+//        wall, regardless of the star rating. Rate-limited by IP.
 //
-// Auto-approval rule (same as before):
-//   rating >= 4.5  → isApproved = true (shows publicly immediately)
+// Auto-approval rule:
+//   rating >= 4.5  → isApproved = true (shows publicly immediately,
+//                    after passing moderation)
 //   rating <  4.5  → isApproved = false (sent privately to admin moderation)
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { CreateReviewSchema } from '@/lib/schemas'
+import { moderatePublicText } from '@/lib/content-filter'
 import { Testimonial } from '@/lib/types'
 import {
   STARTER_TESTIMONIALS,
@@ -30,6 +46,32 @@ import {
 // This route reads the DB on every request — never statically cached.
 export const dynamic = 'force-dynamic'
 
+/** Mask an order number for public display: KZ-62238346 → KZ-••3846 */
+function maskOrderNumber(orderNumber: string): string {
+  const tail = orderNumber.replace(/[^0-9]/g, '').slice(-4)
+  return `KZ-••${tail}`
+}
+
+/** Compare a submitted contact (email or phone) with the order owner's
+ *  records. Phones match on the last 9 digits so 0803…, +234803… and
+ *  234803… all compare equal; emails compare case-insensitively. */
+function contactMatches(
+  submitted: string,
+  owner: { email: string | null; phone: string | null }
+): boolean {
+  const s = submitted.trim().toLowerCase()
+  if (s.includes('@')) {
+    return !!owner.email && owner.email.toLowerCase() === s
+  }
+  const digits = (v: string | null | undefined) => (v || '').replace(/[^0-9]/g, '')
+  const sDigits = digits(submitted)
+  if (sDigits.length < 7 || !owner.phone) return false
+  const ownerDigits = digits(owner.phone)
+  return (
+    ownerDigits.endsWith(sDigits.slice(-9)) || sDigits.endsWith(ownerDigits.slice(-9))
+  )
+}
+
 // ----- GET /api/reviews (public testimonials) -----
 export async function GET() {
   try {
@@ -37,7 +79,10 @@ export async function GET() {
       where: { isApproved: true, isHidden: false, rating: { gte: 4.5 } },
       orderBy: { createdAt: 'desc' },
       take: MAX_TESTIMONIALS,
-      include: { user: { select: { name: true } } },
+      include: {
+        user: { select: { name: true } },
+        order: { select: { orderNumber: true } },
+      },
     })
 
     const real: Testimonial[] = reviews.map((r) => ({
@@ -46,6 +91,7 @@ export async function GET() {
       displayLocation: r.displayLocation || undefined,
       rating: r.rating,
       comment: r.comment,
+      orderNumberMasked: r.order?.orderNumber ? maskOrderNumber(r.order.orderNumber) : undefined,
       createdAt: r.createdAt.toISOString(),
     }))
 
@@ -95,7 +141,8 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { orderId, rating, comment, displayName, displayLocation } = parsed.data
+  const { orderId, orderNumber, contact, rating, comment, displayName, displayLocation } =
+    parsed.data
 
   // Snap rating to the nearest half star (4.2 → 4.0, 4.3 → 4.5)
   const snappedRating = Math.round(rating * 2) / 2
@@ -103,21 +150,69 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Rating must be between 1 and 5' }, { status: 400 })
   }
 
+  // ----- Content moderation (Phase 17, client directive) -----
+  // Improper content never reaches the wall — regardless of the star rating.
+  const moderation = moderatePublicText(comment, displayName, displayLocation)
+  if (!moderation.ok) {
+    return NextResponse.json({ error: moderation.message }, { status: 400 })
+  }
+
   try {
-    // Look up by the full cuid only (orderNumbers are guessable — never
-    // accept them here, otherwise anyone could review someone else's order).
-    const order = await db.order.findUnique({
-      where: { id: orderId },
-      select: {
-        id: true,
-        userId: true,
-        driverId: true,
-        status: true,
-      },
-    })
+    // Resolve the order along one of the two accepted paths.
+    let order: { id: string; userId: string; driverId: string | null; status: string } | null =
+      null
+
+    if (orderId) {
+      // Path (a): capability-token link — look up by the full cuid only
+      // (orderNumbers are guessable — never accept them on this path).
+      order = await db.order.findUnique({
+        where: { id: orderId },
+        select: { id: true, userId: true, driverId: true, status: true },
+      })
+    } else {
+      // Path (b): public order-number flow — the order number must exist…
+      const normalized = orderNumber!.toUpperCase().replace(/^KZ-?/, 'KZ-')
+      order = await db.order.findUnique({
+        where: { orderNumber: normalized },
+        select: { id: true, userId: true, driverId: true, status: true },
+      })
+      if (order) {
+        // …AND the caller must prove ownership: either signed in as the
+        // order's owner, or the contact matches the booking record.
+        const session = await getSession()
+        const isOwner = !!session?.user && (session.user as any).id === order.userId
+        if (!isOwner) {
+          if (!contact) {
+            return NextResponse.json(
+              {
+                error:
+                  'Please confirm the email or phone number you booked with so we can verify this order.',
+              },
+              { status: 400 }
+            )
+          }
+          const owner = await db.user.findUnique({
+            where: { id: order.userId },
+            select: { email: true, phone: true },
+          })
+          if (!owner || !contactMatches(contact, owner)) {
+            return NextResponse.json(
+              {
+                error:
+                  'That email or phone number does not match this order. Please use the contact details you booked with.',
+              },
+              { status: 403 }
+            )
+          }
+        }
+      }
+    }
 
     if (!order) {
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+      return NextResponse.json(
+        { error: 'We could not find that order. Please check your order number (e.g. KZ-12345678).' },
+        { status: 404 }
+      )
     }
     if (order.status !== 'DELIVERED') {
       return NextResponse.json(

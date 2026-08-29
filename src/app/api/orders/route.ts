@@ -164,7 +164,25 @@ export async function POST(req: Request) {
     )
   }
 
-  const { type, items, serviceSpeed, modeOfWash, promoCode, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
+  const { type, items, serviceSpeed, modeOfWash, promoCode, alterationNotes, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
+
+  // ----- Alterations note (Phase 17, client directive) -----
+  // Riders never measure at the door: the customer DESCRIBES the work at
+  // booking and the in-house seamstress works from that note. Any ITEM
+  // order containing an alterations item must therefore carry a note of at
+  // least 10 characters — the wizard collects it with a guided panel.
+  const hasAlterationItems =
+    type === 'ITEM' &&
+    items.some((i: any) => (i.id || '').replace('item_', '') === 'alteration')
+  if (hasAlterationItems && (!alterationNotes || alterationNotes.trim().length < 10)) {
+    return NextResponse.json(
+      {
+        error: 'ALTERATION_NOTES_REQUIRED',
+        message: 'Please describe the alteration work (what should change on which garment) — our seamstress works from your note and will call you to confirm before quoting.',
+      },
+      { status: 400 }
+    )
+  }
 
   // ----- Mode of wash (client-requested order-form option) -----
   // Retail orders must carry an explicit choice — the wizard makes it a
@@ -480,6 +498,7 @@ export async function POST(req: Request) {
       promoCode: orderExtras.promoCode ?? null,
       deliveryFee: orderExtras.deliveryFee ?? 0,
       itemsManifest: JSON.stringify(items),
+      alterationNotes: hasAlterationItems ? alterationNotes!.trim() : (alterationNotes?.trim() || null),
       totalPrice,
       pickupAddress,
       pickupDate: new Date(pickupDate),

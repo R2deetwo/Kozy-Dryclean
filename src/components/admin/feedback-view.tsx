@@ -91,11 +91,13 @@ export function FeedbackView() {
     <div className="p-4 sm:p-6">
       <div className="mb-6">
         <h1 className="font-serif text-2xl font-semibold tracking-tight text-navy">
-          Reviews &amp; Complaints
+          Complaints &amp; Questions
         </h1>
         <p className="mt-1 text-sm text-navy-300">
-          Every submission from the site&apos;s feedback form — reviews, complaints and
-          questions. Aim to resolve complaints within one working day.
+          Every submission from the /feedback page — complaints and questions,
+          read by a human and tracked to resolution. Aim to resolve complaints
+          within one working day. (Public reviews are order-verified and live in
+          the Reviews tab.)
         </p>
       </div>
 
@@ -132,7 +134,7 @@ export function FeedbackView() {
           <p className="mt-3 text-sm font-medium text-navy">Nothing here yet</p>
           <p className="mt-1 max-w-xs text-xs text-navy-300">
             {filter === 'ALL'
-              ? 'Submissions from the site’s Reviews & Complaints form will appear here.'
+              ? 'Complaints and questions from the /feedback page will appear here.'
               : `No ${STATUS_META[filter as FeedbackItem['status']].label.toLowerCase()} items right now.`}
           </p>
         </div>

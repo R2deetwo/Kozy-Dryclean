@@ -154,7 +154,7 @@ export function HelpView() {
             {
               icon: MessageSquareHeart,
               name: 'Feedback',
-              body: 'The public Reviews & Complaints form on the website lands here. Work items New → In progress → Resolved and keep an internal note on each.',
+              body: 'Complaints and questions from the /feedback page land here (reviews are order-verified and live in the Reviews tab). Work items New → In progress → Resolved and keep an internal note on each.',
             },
             {
               icon: Bell,

@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Star, Quote, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Star, Quote, ChevronLeft, ChevronRight, PenLine, BadgeCheck } from 'lucide-react'
 import { usePublicTestimonials } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 
@@ -12,6 +13,10 @@ import { cn } from '@/lib/utils'
  * marketing testimonials fill the carousel while real reviews accumulate.
  * Auto-rotates every 6 seconds, pauses on hover, allows manual navigation.
  * Includes dots indicator + arrow controls.
+ *
+ * Phase 17: the "Leave a review" button opens the standalone /feedback page
+ * (order-number verified) so the form never interrupts browsing; real
+ * reviews carry a masked verified-order chip (e.g. KZ-••3846).
  */
 export function TestimonialsCarousel() {
   const { data: testimonials, isLoading } = usePublicTestimonials()
@@ -73,6 +78,13 @@ export function TestimonialsCarousel() {
           <p className="mt-2 max-w-xl mx-auto text-navy-100/80">
             Real feedback from customers who trusted us with their garments.
           </p>
+          <Link
+            href="/feedback"
+            className="mt-5 inline-flex items-center gap-2 rounded-full bg-gold-400 px-5 py-2 text-sm font-semibold text-navy shadow-sm transition hover:bg-gold-300"
+          >
+            <PenLine className="h-4 w-4" />
+            Leave a review
+          </Link>
         </div>
 
         {/* Carousel */}
@@ -119,6 +131,12 @@ export function TestimonialsCarousel() {
                   <p className="text-xs uppercase tracking-[0.15em] text-navy-100/60">
                     {current.displayLocation}
                   </p>
+                )}
+                {current.orderNumberMasked && (
+                  <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/5 px-2.5 py-0.5 text-[10px] font-medium tracking-wide text-gold-200/90 ring-1 ring-gold-400/20">
+                    <BadgeCheck className="h-3 w-3" />
+                    Verified order {current.orderNumberMasked}
+                  </span>
                 )}
               </div>
             </motion.div>

@@ -69,3 +69,4 @@ download/*.png
 upload/
 package-lock.json
 .vercel
+.env.dbpush

@@ -57,6 +57,15 @@ export const OTHER_COUTURE_GROUP: CatalogDisplayGroup = {
   title: 'Other & Bespoke — quoted',
   category: 'Other',
 }
+// Alterations & repairs (Phase 17 — client directive). Quote item: the
+// customer describes the work at booking; the in-house seamstress assesses
+// and quotes before sewing. Shared strip under both retail tabs in the
+// WIZARD (the landing page has its own dedicated alterations section, so
+// the landing pricing strip stays as-is).
+export const ALTERATIONS_GROUP: CatalogDisplayGroup = {
+  title: 'Alterations & Repairs — quoted',
+  category: 'Alterations',
+}
 
 /** Landing pricing section — shared strip under both retail tabs (incl. shoes). */
 export const LANDING_SHARED_GROUPS: CatalogDisplayGroup[] = [
@@ -69,12 +78,15 @@ export const LANDING_SHARED_GROUPS: CatalogDisplayGroup[] = [
 /** Booking wizard — shared strip under the Men and Women tabs. Shoes are
  *  excluded here because they have their own dedicated tab in the wizard.
  *  The Other & Bespoke quote group IS included — wedding dresses and couture
- *  apply to everyone, exactly like household and extras. */
+ *  apply to everyone, exactly like household and extras. Alterations &
+ *  Repairs (Phase 17) sits here too: one quote item per garment, with a
+ *  guided "tell the seamstress" note collected in the wizard. */
 export const WIZARD_SHARED_GROUPS: CatalogDisplayGroup[] = [
   OUTERWEAR_GROUP,
   HOUSEHOLD_GROUP,
   EXTRAS_GROUP,
   OTHER_COUTURE_GROUP,
+  ALTERATIONS_GROUP,
 ]
 
 /** Resolve a display group to its catalog items (order preserved). */

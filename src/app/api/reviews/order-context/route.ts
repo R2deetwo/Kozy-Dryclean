@@ -1,17 +1,24 @@
 // =============================================================================
 // GET /api/reviews/order-context?orderId=<cuid>
+// GET /api/reviews/order-context?orderNumber=KZ-…&contact=<email or phone>
 // =============================================================================
-// Lightweight context for the customer review form (/review/[orderId]).
-// Returns just enough to render the form's states — no PII, no auth required.
-// The order cuid in the customer's link acts as the capability token.
+// Lightweight context for the customer review forms:
+//   • /review/[orderId] uses the cuid path — the order id in the customer's
+//     private link acts as an unguessable capability token.
+//   • /feedback (Phase 17) uses the orderNumber path — the client directive
+//     lets non-registered customers review, but ONLY with an order number,
+//     and the contact (email or phone used at booking) must match the order's
+//     customer record so nobody can review somebody else's order.
 //
-// Response:
-//   { found: false }                                — link is invalid
+// Response (both paths):
+//   { found: false }                                — invalid reference or
+//                                                    contact mismatch
 //   { found: true, orderNumber, status,
 //     alreadyReviewed, canReview, customerName? }   — order context
 //
 // customerName is ONLY included when the caller is logged in as the order's
-// owner (used to pre-fill the display name field).
+// owner (used to pre-fill the display name field). No cuids are ever
+// returned — the public page posts with orderNumber + contact directly.
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -20,6 +27,25 @@ import { getSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 
 export const dynamic = 'force-dynamic'
+
+/** Phones match on the last 9 digits (0803…, +234803…, 234803… all equal);
+ *  emails compare case-insensitively. */
+function contactMatches(
+  submitted: string,
+  owner: { email: string | null; phone: string | null }
+): boolean {
+  const s = submitted.trim().toLowerCase()
+  if (s.includes('@')) {
+    return !!owner.email && owner.email.toLowerCase() === s
+  }
+  const digits = (v: string | null | undefined) => (v || '').replace(/[^0-9]/g, '')
+  const sDigits = digits(submitted)
+  if (sDigits.length < 7 || !owner.phone) return false
+  const ownerDigits = digits(owner.phone)
+  return (
+    ownerDigits.endsWith(sDigits.slice(-9)) || sDigits.endsWith(ownerDigits.slice(-9))
+  )
+}
 
 export async function GET(req: NextRequest) {
   // Rate limit: 60 lookups per IP per 5 minutes — stops careless enumeration.
@@ -36,23 +62,53 @@ export async function GET(req: NextRequest) {
     )
   }
 
+  const orderNumberRaw = req.nextUrl.searchParams.get('orderNumber')?.trim() || ''
+  const contact = req.nextUrl.searchParams.get('contact')?.trim() || ''
   const orderId = req.nextUrl.searchParams.get('orderId')?.trim() || ''
 
-  // Only full cuids are accepted — orderNumbers (KZ-1024) are guessable.
-  if (!orderId || orderId.length < 10) {
-    return NextResponse.json({ found: false })
-  }
-
   try {
-    const order = await db.order.findUnique({
-      where: { id: orderId },
-      select: {
-        id: true,
-        orderNumber: true,
-        status: true,
-        userId: true,
-      },
-    })
+    let order:
+      | { id: string; orderNumber: string; status: string; userId: string }
+      | null = null
+
+    if (orderNumberRaw) {
+      // ----- Public /feedback path: order number + contact verification -----
+      if (!/^KZ-?\d{6,10}$/i.test(orderNumberRaw)) {
+        return NextResponse.json({ found: false, error: 'invalid_number' })
+      }
+      const normalized = orderNumberRaw.toUpperCase().replace(/^KZ-?/, 'KZ-')
+      order = await db.order.findUnique({
+        where: { orderNumber: normalized },
+        select: { id: true, orderNumber: true, status: true, userId: true },
+      })
+      if (!order) return NextResponse.json({ found: false })
+
+      // Ownership: signed-in owner OR matching booking contact.
+      const session = await getSession()
+      const isOwner = !!session?.user && (session.user as any).id === order.userId
+      if (!isOwner) {
+        if (!contact) {
+          return NextResponse.json({ found: false, error: 'contact_required' })
+        }
+        const owner = await db.user.findUnique({
+          where: { id: order.userId },
+          select: { email: true, phone: true },
+        })
+        if (!owner || !contactMatches(contact, owner)) {
+          // Same response as not-found — no oracle for guessing contacts.
+          return NextResponse.json({ found: false, error: 'contact_required' })
+        }
+      }
+    } else {
+      // ----- Private link path: full cuid only (orderNumbers are guessable) -----
+      if (!orderId || orderId.length < 10) {
+        return NextResponse.json({ found: false })
+      }
+      order = await db.order.findUnique({
+        where: { id: orderId },
+        select: { id: true, orderNumber: true, status: true, userId: true },
+      })
+    }
 
     if (!order) {
       return NextResponse.json({ found: false })

@@ -1,8 +1,10 @@
 // =============================================================================
-// POST /api/feedback — PUBLIC. Submit a review, complaint or question from
-//                      the site's "Reviews & Complaints" form (no account or
-//                      order needed — complements the order-linked Review
-//                      system, which stays untouched).
+// POST /api/feedback — PUBLIC. Submit a complaint or question from the
+//                      standalone /feedback page. Submissions land in the
+//                      admin Feedback inbox (NEW → IN_PROGRESS → RESOLVED)
+//                      and are NEVER shown publicly (the testimonial wall is
+//                      fed exclusively by order-verified reviews via
+//                      /api/reviews — Phase 17, client directive).
 // GET  /api/feedback — ADMIN. List feedback, newest first, filterable.
 // PATCH /api/feedback — ADMIN. Update status (NEW → IN_PROGRESS → RESOLVED)
 //                      and attach an admin note.
@@ -13,6 +15,7 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
+import { moderateText } from '@/lib/content-filter'
 
 export const dynamic = 'force-dynamic'
 
@@ -66,6 +69,14 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     const first = parsed.error.issues[0]?.message ?? 'Please check your details.'
     return NextResponse.json({ error: first }, { status: 400 })
+  }
+
+  // ----- Content moderation (Phase 17, client directive) -----
+  // Complaints and questions are private to the team, but they still pass
+  // the improper-content screen (sexual content, slurs, illegal goods).
+  const moderation = moderateText(parsed.data.name, parsed.data.message)
+  if (!moderation.ok) {
+    return NextResponse.json({ error: moderation.message }, { status: 400 })
   }
 
   try {

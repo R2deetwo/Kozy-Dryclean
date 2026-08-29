@@ -84,6 +84,11 @@ model Order {
   deliveryFee       Float?  @default(0)
   // Per-item manifest snapshot for B2C, JSON-stringified
   itemsManifest     String?
+  // Alterations (Phase 17): the customer's description of the alteration
+  // work, captured at booking ("navy trousers — take the waist in 2 inches").
+  // Required whenever the manifest contains an alterations item — the
+  // seamstress works from this note; riders never measure at the door.
+  alterationNotes   String?
   // Logistics
   pickupAddress     String
   pickupDate        DateTime

@@ -140,6 +140,9 @@ export interface Testimonial {
   displayLocation?: string
   rating: number
   comment: string
+  // Masked order reference for order-verified reviews, e.g. "KZ-••3846".
+  // Absent on starter marketing testimonials.
+  orderNumberMasked?: string
   // ISO date — used to show "2 weeks ago" etc.
   createdAt: string
 }
@@ -163,6 +166,7 @@ export interface GarmentCatalogItem {
     | 'Extras'
     | 'Shoes'
     | 'Other'
+    | 'Alterations'
   // Optional one-line description shown under the item name in the booking
   // wizard — used where a bare name would be ambiguous (e.g. Lace / Aso-Ebi
   // Gown vs the general Dress vs the existing Ankara Gown).
@@ -276,6 +280,23 @@ export const GARMENT_CATALOG: GarmentCatalogItem[] = [
     pricingMode: 'quote',
     description:
       'Wedding dresses, couture & bespoke pieces. Quoted after a free assessment — you approve before we start.',
+  },
+  // ── Alterations (Phase 17 — client directive) ────────────
+  // One bookable quote item per garment. The CUSTOMER describes the issue at
+  // booking (wizard collects a guided note — riders never measure at the
+  // door); the in-house seamstress assesses each piece at the studio, calls
+  // to confirm detail if needed, and sends the quote for approval before
+  // anything is sewn. price: 0 + pricingMode 'quote' keeps it out of the
+  // subtotal until the quote is set.
+  {
+    id: 'alteration',
+    name: 'Alteration / Repair (per garment)',
+    price: 0,
+    icon: '/icons/services/alteration.svg',
+    category: 'Alterations',
+    pricingMode: 'quote',
+    description:
+      'Hems, waist, sleeves, zips, buttons, traditional wear — describe the work when booking; the seamstress quotes before she sews.',
   },
 ]
 

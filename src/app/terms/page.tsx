@@ -32,6 +32,23 @@ export default function TermsPage() {
             <p className="text-sm text-[#6F88A8]">Total liability shall not exceed the amount paid for the specific order. Not liable for indirect, consequential, or punitive damages, or force majeure delays.</p></div>
           <div><h2 className="font-serif text-xl font-semibold mb-2 text-[#0A192F]">9. Governing Law</h2>
             <p className="text-sm text-[#6F88A8]">Governed by the laws of the Federal Republic of Nigeria. Disputes resolved through mediation in Lagos State, then Lagos State High Court.</p></div>
+          <div><h2 className="font-serif text-xl font-semibold mb-2 text-[#0A192F]">10. Reviews &amp; Testimonials</h2>
+            <p className="text-sm text-[#6F88A8] leading-relaxed">
+              Customer reviews are tied to completed, delivered orders and may be submitted either
+              through the private review link sent after delivery or through our feedback page by
+              providing your order number together with the email address or phone number used at
+              booking. One review per order. Reviews rated 4.5 stars and above may appear on our
+              public testimonials wall, displayed with the display name and location you choose
+              and a masked order reference (e.g. KZ-••1234); reviews below 4.5 stars are sent
+              privately to our team and are not published. All submissions pass automated and human
+              moderation: content containing profanity, sexual or unlawful material, slurs,
+              personal information or spam links will not be published, regardless of rating, and
+              may be declined outright. Kozy Care may hide or remove any review at its discretion
+              but never edits the text of a customer review. Complaints and questions submitted
+              through the feedback page are private communications to our team and are never
+              published. By submitting a review you grant Kozy Care permission to display it, with
+              your chosen display name and location, on our website and marketing materials.
+            </p></div>
         </div>
       </div>
     </div>

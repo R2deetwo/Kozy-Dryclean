@@ -358,21 +358,17 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
               </div>
             </div>
 
-            {/* Public visibility notice */}
+            {/* Public visibility notice (Phase 17): the display rules live in
+                the Terms of Service — the client directive is to keep the
+                4.5★-wall policy in the legal documentation, not on the form. */}
             <div className="mt-6 rounded-xl bg-gold-50 p-4 text-xs leading-relaxed text-navy-300 ring-1 ring-gold-200">
-              {rating >= 4.5 ? (
-                <>
-                  <strong className="text-navy">Reviews rated 4.5★ and above</strong> are shown
-                  publicly on our testimonials carousel. You can edit your display name and
-                  location above if you&apos;d prefer to stay anonymous.
-                </>
-              ) : (
-                <>
-                  <strong className="text-navy">Reviews below 4.5★ are sent privately</strong> to
-                  our team — they won&apos;t appear publicly, but we read every one and will follow
-                  up if you&apos;d like us to.
-                </>
-              )}
+              <strong className="text-navy">Your review goes to the Kozy team.</strong> You
+              can choose the display name and location above — or stay anonymous
+              by leaving them blank. See our{' '}
+              <a href="/terms" className="font-medium text-gold-600 underline-offset-2 hover:underline">
+                Terms of Service
+              </a>{' '}
+              for how customer reviews are handled and displayed.
             </div>
 
             {/* Error */}
@@ -410,8 +406,12 @@ export function ReviewForm({ orderId, onDone }: ReviewFormProps) {
         </Card>
 
         <p className="mt-6 text-center text-xs text-navy-300">
-          By submitting, you agree to let Kozy Care display your review (with the display name and
-          location you chose) on our public website.
+          By submitting, you agree to our{' '}
+          <a href="/terms" className="font-medium text-gold-600 underline-offset-2 hover:underline">
+            Terms of Service
+          </a>
+          , which covers how Kozy Care may display customer reviews on our
+          website.
         </p>
       </motion.div>
     </div>
