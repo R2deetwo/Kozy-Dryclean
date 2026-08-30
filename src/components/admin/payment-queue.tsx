@@ -52,7 +52,7 @@ export function PaymentQueue() {
     verifyMutation.mutate({ id: p.id, status: 'REJECTED' })
     toast({
       title: 'Payment rejected',
-      description: 'Order remains in pending verification until re-uploaded.',
+      description: 'The customer has been emailed with what to check and what to do next.',
       variant: 'destructive',
     })
     const idx = payments.findIndex((x) => x.id === p.id)
@@ -73,8 +73,10 @@ export function PaymentQueue() {
             </div>
             <p className="font-medium text-navy">Inbox zero!</p>
             <p className="max-w-sm text-sm text-navy-300">
-              When customers upload transfer receipts, they&apos;ll appear here for manual
-              verification. Paystack payments are auto-verified via webhook.
+              When customers confirm a bank-transfer order, it appears here for
+              verification — with their receipt screenshot when they attached one.
+              Verifying emails the customer instantly; Paystack payments are
+              auto-verified via webhook.
             </p>
           </CardContent>
         </Card>
@@ -92,7 +94,9 @@ export function PaymentQueue() {
               Payment Verification Queue
             </h1>
             <p className="text-xs text-navy-300">
-              Review each uploaded receipt against the order total, then verify or reject.
+              Match the transfer against your bank statement (and the customer&apos;s
+              receipt when attached), then verify or reject — the customer is
+              emailed automatically either way.
             </p>
           </div>
           <Badge className="rounded-full bg-amber-100 text-amber-800 hover:bg-amber-100">
@@ -190,31 +194,48 @@ export function PaymentQueue() {
                   style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
                   className="mx-auto w-full max-w-md"
                 >
-                  {/* Mock receipt — in production this would be the actual uploaded image */}
-                  <div className="overflow-hidden rounded-lg border bg-white">
-                    <div className="bg-navy-gradient px-5 py-4 text-white">
-                      <p className="text-xs uppercase tracking-wider opacity-80">
-                        Transfer receipt
-                      </p>
-                      <p className="font-mono text-base font-bold">
-                        {"0123456789"}
-                      </p>
-                      <p className="text-xs opacity-80">{"Guaranty Trust Bank (GTB)"}</p>
-                    </div>
-                    <div className="space-y-2 p-5 text-sm">
-                      <Row label="Sender" value={customer?.name ?? '—'} />
-                      <Row label="Amount" value={formatNaira(selected.amount)} bold />
-                      <Row label="Date" value={formatDateTime(selected.createdAt)} />
-                      <Row label="Reference" value={`TRX-${selected.id.slice(-8).toUpperCase()}`} mono />
-                      <Row label="Status" value="Success" tone="emerald" />
-                      <div className="mt-3 border-t pt-3">
-                        <p className="text-xs text-navy-300">
-                          ⚠ This is a mock receipt rendered for the demo. In production, the actual
-                          screenshot uploaded by the customer will be displayed here.
+                  {selected.receiptUrl ? (
+                    /* The customer's actual transfer screenshot (downscaled at
+                     * upload, stored on the payment record) — verify against
+                     * this AND your bank statement. */
+                    <figure className="overflow-hidden rounded-lg border bg-white">
+                      <img
+                        src={selected.receiptUrl}
+                        alt={`Transfer receipt for order #${order?.orderNumber ?? ''}`}
+                        className="block w-full"
+                      />
+                      <figcaption className="border-t bg-linen-50 px-4 py-2 text-[11px] text-navy-300">
+                        Uploaded by the customer at checkout · cross-check with your bank
+                        statement before verifying.
+                      </figcaption>
+                    </figure>
+                  ) : (
+                    /* No receipt attached — verification still works: match the
+                     * expected amount + narration against the bank statement. */
+                    <div className="overflow-hidden rounded-lg border bg-white">
+                      <div className="bg-navy-gradient px-5 py-4 text-white">
+                        <p className="text-xs uppercase tracking-wider opacity-80">
+                          No receipt attached
+                        </p>
+                        <p className="font-mono text-base font-bold">
+                          #{order?.orderNumber ?? '—'}
                         </p>
                       </div>
+                      <div className="space-y-2 p-5 text-sm">
+                        <Row label="Customer" value={customer?.name ?? '—'} />
+                        <Row label="Amount" value={formatNaira(selected.amount)} bold />
+                        <Row label="Requested" value={formatDateTime(selected.createdAt)} />
+                        <Row label="Expected narration" value={`#${order?.orderNumber ?? '—'}`} mono />
+                        <div className="mt-3 border-t pt-3">
+                          <p className="text-xs leading-relaxed text-navy-300">
+                            The customer didn&apos;t attach a screenshot. Verify by matching the
+                            amount above against your bank statement — the customer is told to use
+                            the order number as the transfer narration.
+                          </p>
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               </div>
 

@@ -48,6 +48,7 @@ import {
   Truck,
   Tag,
   Ruler,
+  MailCheck,
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
@@ -189,6 +190,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const [deliveryAddress, setDeliveryAddress] = useState('')
   const [paymentMethod, setPaymentMethod] = useState<'BANK_TRANSFER' | 'PAYSTACK'>('BANK_TRANSFER')
   const [receiptUploaded, setReceiptUploaded] = useState(false)
+  // The downscaled transfer-receipt image (data URL) — sent with the order
+  // and stored on the BANK_TRANSFER payment record so admin verifies against
+  // the actual screenshot, not a mock.
+  const [receiptData, setReceiptData] = useState<string | null>(null)
   const [catalogTab, setCatalogTab] = useState<CatalogTab>(initialCatalogTab ?? 'men')
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -221,6 +226,18 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // The server is the single source of truth — an admin edit reaches this
   // checkout on the next page load (fixes stale per-browser bank details).
   const appSettings = useAppSettings()
+
+  // ----- Card payments availability (Paystack) -----
+  // Derived server-side from the presence of PAYSTACK_SECRET_KEY. While card
+  // payments are off, the Paystack option renders greyed-out & disabled with
+  // a clear "not available at the moment" note — the customer is steered to
+  // bank transfer instead of selecting card and hitting a dead end.
+  const paystackAvailable = appSettings.paystackAvailable === true
+  useEffect(() => {
+    if (!paystackAvailable && paymentMethod === 'PAYSTACK') {
+      setPaymentMethod('BANK_TRANSFER')
+    }
+  }, [paystackAvailable, paymentMethod])
 
   // ----- First-order / first-delivery detection -----
   // The server decides authoritatively at order time; this only powers the
@@ -288,6 +305,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     }
     if (typeof d.promoCode === 'string') setPromoCode(d.promoCode)
     if (typeof d.alterationNotes === 'string') setAlterationNotes(d.alterationNotes)
+    // A restored PAYSTACK choice is safe: if card payments are switched off,
+    // the paystackAvailable effect below forces BANK_TRANSFER immediately.
     if (d.paymentMethod === 'BANK_TRANSFER' || d.paymentMethod === 'PAYSTACK') {
       setPaymentMethod(d.paymentMethod)
     }
@@ -539,16 +558,60 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     })
   }
 
-  const onReceipt = (files: FileList | null) => {
+  /** Downscale an image file to a compact JPEG data URL (max edge 1200px,
+   *  quality 0.82) — keeps the transfer-receipt upload small enough to ride
+   *  along with the order request (~150–350KB) while staying legible for the
+   *  admin verification queue. */
+  const downscaleImage = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = () => reject(new Error('Could not read the image'))
+      reader.onload = () => {
+        const img = new Image()
+        img.onerror = () => reject(new Error('Could not decode the image'))
+        img.onload = () => {
+          const maxEdge = 1200
+          const scale = Math.min(1, maxEdge / Math.max(img.width, img.height))
+          const canvas = document.createElement('canvas')
+          canvas.width = Math.max(1, Math.round(img.width * scale))
+          canvas.height = Math.max(1, Math.round(img.height * scale))
+          const ctx = canvas.getContext('2d')
+          if (!ctx) {
+            reject(new Error('Canvas unavailable'))
+            return
+          }
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+          resolve(canvas.toDataURL('image/jpeg', 0.82))
+        }
+        img.src = reader.result as string
+      }
+      reader.readAsDataURL(file)
+    })
+
+  const onReceipt = async (files: FileList | null) => {
     if (!files || files.length === 0) return
     const file = files[0]
-    const reader = new FileReader()
-    reader.onload = () => {
-      setReceiptUploaded(true)
-      // Store receipt as a mock marker — in a real app this would upload to OSS
-      // For the demo we just remember it was uploaded
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: 'Receipt not attached',
+        description: 'Please attach a screenshot or photo of your transfer receipt.',
+        variant: 'destructive',
+      })
+      return
     }
-    reader.readAsDataURL(file)
+    try {
+      // Real receipt capture: downscaled client-side, then sent with the
+      // order and stored on the payment record for the admin queue.
+      const dataUrl = await downscaleImage(file)
+      setReceiptData(dataUrl)
+      setReceiptUploaded(true)
+    } catch {
+      toast({
+        title: 'Receipt not attached',
+        description: "We couldn't read that image — you can continue without it.",
+        variant: 'destructive',
+      })
+    }
   }
 
   const canContinue = () => {
@@ -766,6 +829,11 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
               }
             : {}),
           ...(type === 'ITEM' ? { paymentMethod } : {}),
+          // The optional transfer-receipt screenshot rides along with the
+          // order — the server stores it on the payment record.
+          ...(type === 'ITEM' && paymentMethod === 'BANK_TRANSFER' && receiptData
+            ? { transferReceipt: receiptData }
+            : {}),
         }),
       })
 
@@ -796,6 +864,23 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
       // The order is placed — the saved draft is no longer needed
       clearDraft()
       setResumedAt(null)
+
+      // ----- Bank transfer: straight to the payment-verification page -----
+      // The dedicated /payment/pending screen states unmistakably that the
+      // transfer is being verified, an email is coming, and the customer
+      // must NOT pay or submit again — and it live-polls until admin
+      // verifies. This replaces the old toast + generic success screen that
+      // left customers unsure whether their payment had gone through.
+      // (Applies to fresh orders AND de-duplicated re-submissions — the
+      // server flags the latter with duplicate: true, but the customer
+      // experience is identical either way.)
+      if (type === 'ITEM' && paymentMethod === 'BANK_TRANSFER' && order.totalPrice) {
+        const emailForLookup = order.user?.email || (isGuest ? guestEmail.trim() : '')
+        window.location.href = `/payment/pending?order=${encodeURIComponent(
+          order.orderNumber
+        )}&email=${encodeURIComponent(emailForLookup)}`
+        return
+      }
 
       // ----- Online card payment: redirect to Paystack's hosted checkout -----
       if (type === 'ITEM' && paymentMethod === 'PAYSTACK' && order.totalPrice) {
@@ -1923,30 +2008,47 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         <Building2 className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-navy">Bank Transfer (Manual)</p>
+                        <p className="font-semibold text-navy">Bank Transfer</p>
                         <p className="text-xs text-navy-300">
-                          Transfer to our account, then upload your receipt. Admin verifies within
-                          minutes.
+                          Send the transfer first, then tap “I’ve made the transfer” below. We
+                          verify within minutes and email you the moment it’s confirmed.
                         </p>
                       </div>
                     </label>
+                    {/* Card option — while Paystack keys are not configured it renders
+                     * greyed-out and unselectable with a plain-language notice, so
+                     * customers are steered to transfer instead of hitting a dead end. */}
                     <label
                       className={cn(
-                        'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
-                        paymentMethod === 'PAYSTACK'
+                        'flex items-start gap-3 rounded-xl border-2 p-4 transition',
+                        paystackAvailable && 'cursor-pointer',
+                        !paystackAvailable && 'cursor-not-allowed bg-linen-100/70 opacity-60',
+                        paymentMethod === 'PAYSTACK' && paystackAvailable
                           ? 'border-gold-400 bg-gold-50/50'
                           : 'border-navy-100'
                       )}
                     >
-                      <RadioGroupItem value="PAYSTACK" className="sr-only" />
-                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
+                      <RadioGroupItem
+                        value="PAYSTACK"
+                        className="sr-only"
+                        disabled={!paystackAvailable}
+                      />
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-linen-200 text-navy-300">
                         <CreditCard className="h-5 w-5" />
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-navy">Pay Online — Card</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-navy-300">Pay Online — Card</p>
+                          {!paystackAvailable && (
+                            <span className="rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-300">
+                              Unavailable
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-navy-300">
-                          Pay securely with your debit card via Paystack. Payment is
-                          confirmed instantly — no receipt upload needed.
+                          {paystackAvailable
+                            ? 'Pay securely with your debit card via Paystack. Payment is confirmed instantly — no receipt upload needed.'
+                            : 'Card payment is not available at the moment — please pay by bank transfer instead.'}
                         </p>
                       </div>
                     </label>
@@ -1955,36 +2057,56 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                   {paymentMethod === 'BANK_TRANSFER' && (
                     <Card className="mt-4 border-gold-200 bg-gold-50/40">
                       <CardContent className="p-4">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
-                          Transfer to
-                        </p>
-                        <div className="mt-2 space-y-1 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="text-navy-300">Bank</span>
-                            <span className="font-medium">{appSettings.bankName}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-navy-300">Account Name</span>
-                            <span className="font-medium">{appSettings.accountName}</span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-navy-300">Account Number</span>
-                            <span className="font-mono font-bold text-navy-300">
-                              {appSettings.accountNumber}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-navy-300">Amount</span>
-                            <span className="font-bold text-navy-300">{formatNaira(total)}</span>
+                        {/* Step 1 — the transfer itself */}
+                        <div className="flex items-start gap-3">
+                          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-navy-800 text-xs font-bold text-gold-300">
+                            1
+                          </span>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-navy">
+                              Transfer {formatNaira(total)} to our account
+                            </p>
+                            <div className="mt-2 space-y-1 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="text-navy-300">Bank</span>
+                                <span className="font-medium">{appSettings.bankName}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-navy-300">Account Name</span>
+                                <span className="font-medium">{appSettings.accountName}</span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-navy-300">Account Number</span>
+                                <span className="font-mono font-bold text-navy">
+                                  {appSettings.accountNumber}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                        <p className="mt-2 text-[10px] leading-snug text-navy-300/80">
-                          Pay before pickup — your rider is dispatched as soon as payment is
-                          verified. Details above are managed by Kozy admin and always current.
-                        </p>
-                        <div className="mt-4 border-t pt-3">
+
+                        {/* Step 2 — narration */}
+                        <div className="mt-4 flex items-start gap-3 border-t border-gold-200/70 pt-4">
+                          <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-navy-800 text-xs font-bold text-gold-300">
+                            2
+                          </span>
+                          <div className="flex-1">
+                            <p className="text-sm font-semibold text-navy">
+                              Tap “I’ve made the transfer” below
+                            </p>
+                            <p className="mt-1 text-xs leading-relaxed text-navy-300">
+                              We&apos;ll take you straight to a page confirming your payment is
+                              being verified — and we email you the moment it&apos;s confirmed.
+                              You&apos;ll also get your order number there: use it as the transfer
+                              narration so we can match your payment instantly.
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Optional receipt upload */}
+                        <div className="mt-4 border-t border-gold-200/70 pt-3">
                           <p className="text-xs text-navy-300">
-                            Upload your transfer receipt:
+                            Optional — attach your transfer receipt for faster verification:
                           </p>
                           <input
                             ref={receiptInputRef}
@@ -2002,7 +2124,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                             {receiptUploaded ? (
                               <>
                                 <CheckCircle2 className="mr-2 h-4 w-4 text-gold-400" /> Receipt
-                                uploaded
+                                attached
                               </>
                             ) : (
                               <>
@@ -2010,6 +2132,17 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                               </>
                             )}
                           </Button>
+                        </div>
+
+                        {/* Expectations — kills the "did my payment go through?" doubt */}
+                        <div className="mt-4 flex items-start gap-2 rounded-lg bg-navy-50 p-3">
+                          <MailCheck className="mt-0.5 h-4 w-4 shrink-0 text-navy-400" />
+                          <p className="text-xs leading-relaxed text-navy-300">
+                            After you confirm: our team verifies your transfer — usually within
+                            minutes during business hours — then emails you. Your rider is
+                            dispatched as soon as payment is verified. You never need to pay twice
+                            or re-send anything.
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -2071,7 +2204,9 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                   : type === 'ITEM'
                     ? quoteOnly
                       ? 'Confirm booking'
-                      : `Pay & Confirm ${formatNaira(total)}`
+                      : paymentMethod === 'BANK_TRANSFER'
+                        ? "I've Made the Transfer"
+                        : `Pay & Confirm ${formatNaira(total)}`
                     : 'Confirm pickup request'}
               </Button>
             )}

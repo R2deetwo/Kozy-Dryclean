@@ -72,6 +72,15 @@ export const CreateOrderSchema = z.object({
   // order (single atomic request — also works for guests, who cannot call
   // POST /api/payments). PAYSTACK payments are initialized separately.
   paymentMethod: PaymentMethodSchema.optional(),
+  // Optional transfer-receipt screenshot (bank-transfer checkout). The client
+  // downscales it before sending; stored as a data URL on the payment record
+  // so the admin verification queue shows the real thing. Size-capped to keep
+  // the request body and DB row sane.
+  transferReceipt: z
+    .string()
+    .startsWith('data:image/', 'Receipt must be an image')
+    .max(1_500_000, 'Receipt image is too large (max ~1.1MB)')
+    .optional(),
 })
 
 export const UpdateOrderSchema = z.object({

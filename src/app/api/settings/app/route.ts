@@ -23,7 +23,12 @@ export const dynamic = 'force-dynamic'
 
 export async function GET() {
   const settings = await getAppSettings()
-  return NextResponse.json({ settings })
+  // paystackAvailable is derived from the server env on every read — it is
+  // never persisted, so adding PAYSTACK_SECRET_KEY to the environment
+  // re-enables card checkout for everyone without any DB change.
+  return NextResponse.json({
+    settings: { ...settings, paystackAvailable: Boolean(process.env.PAYSTACK_SECRET_KEY) },
+  })
 }
 
 export async function PUT(req: NextRequest) {
@@ -99,5 +104,8 @@ export async function PUT(req: NextRequest) {
   }
 
   const settings = await saveAppSettings(out)
-  return NextResponse.json({ settings })
+  // Keep the derived flag consistent across GET and PUT responses.
+  return NextResponse.json({
+    settings: { ...settings, paystackAvailable: Boolean(process.env.PAYSTACK_SECRET_KEY) },
+  })
 }

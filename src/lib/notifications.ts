@@ -209,6 +209,41 @@ async function sendSMS(to: string, message: string): Promise<void> {
 // Public API — all functions are safe to call from any route handler
 // =============================================================================
 
+// ----- Bank-transfer order: verification underway -----
+// Sent the moment a bank-transfer order is confirmed. This is the email that
+// answers "did my payment go through?" — it says clearly that verification is
+// underway, another email follows the moment admin confirms, and the customer
+// must NOT pay again.
+export async function notifyTransferPendingVerification(
+  order: NotifiableOrder
+): Promise<void> {
+  try {
+    const amount = order.totalPrice ?? 0
+    const { subject, html } = brandedEmail({
+      heading: 'We’re verifying your transfer',
+      intro:
+        'Thank you for booking with Kozy Care. Your order is in and our team is verifying your bank transfer right now — usually within minutes during business hours (Mon–Sat, 8am–6pm). You’ll get another email the moment it’s confirmed. Please don’t send the transfer again or re-book: if you completed it, we have it, and your rider is dispatched as soon as payment is verified.',
+      order,
+      extraRows: [
+        { label: 'Amount', value: formatNaira(amount) },
+        { label: 'Payment', value: 'Bank transfer — being verified' },
+        { label: 'Narration reference', value: `Use #${order.orderNumber}` },
+      ],
+      cta: { label: 'Check payment status', url: `${baseUrl()}/payment/pending?order=${order.orderNumber}&email=${encodeURIComponent(order.user.email)}` },
+      footer:
+        'The status page updates itself while we verify — no need to refresh or resend anything.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: order.user.email, subject, html })
+
+    await sendSMS(
+      order.user.phone,
+      `Kozy Care: Order #${order.orderNumber} received — we're verifying your transfer of ${formatNaira(amount)}. You'll get an email once confirmed. Please do not pay again.`
+    )
+  } catch (e) {
+    console.error('notifyTransferPendingVerification failed:', e)
+  }
+}
+
 // ----- Booking confirmation (order created — authed or guest) -----
 export async function notifyOrderCreated(order: NotifiableOrder): Promise<void> {
   try {
@@ -231,28 +266,44 @@ export async function notifyOrderCreated(order: NotifiableOrder): Promise<void> 
 }
 
 // ----- Guest account created alongside a booking -----
+// opts.transferPending: the booking was paid by bank transfer and is awaiting
+// verification — the email then leads with that (plus the "don't pay again"
+// reassurance) so a first-time guest is never left wondering.
 export async function notifyGuestAccountCreated(
   order: NotifiableOrder,
-  email: string
+  email: string,
+  opts?: { transferPending?: boolean }
 ): Promise<void> {
   try {
+    const transferPending = opts?.transferPending === true
     const { subject, html } = brandedEmail({
-      heading: 'Your booking is confirmed',
-      intro:
-        'Thank you for choosing Kozy Care. We created an account with this email so you can track this order and book again faster — just set a password with the button below.',
+      heading: transferPending ? 'We’re verifying your transfer' : 'Your booking is confirmed',
+      intro: transferPending
+        ? 'Thank you for booking with Kozy Care. Your order is in and our team is verifying your bank transfer right now — usually within minutes during business hours (Mon–Sat, 8am–6pm). You’ll get another email the moment it’s confirmed, so please don’t send the transfer again or re-book. We also created an account with this email so you can track this order and book again faster — just set a password with the button below.'
+        : 'Thank you for choosing Kozy Care. We created an account with this email so you can track this order and book again faster — just set a password with the button below.',
       order,
+      extraRows: transferPending
+        ? [
+            { label: 'Amount', value: formatNaira(order.totalPrice ?? 0) },
+            { label: 'Payment', value: 'Bank transfer — being verified' },
+            { label: 'Narration reference', value: `Use #${order.orderNumber}` },
+          ]
+        : [],
       cta: {
-        label: 'Set my password',
+        label: transferPending ? 'Check payment status & set password' : 'Set my password',
         url: `${baseUrl()}/forgot-password?email=${encodeURIComponent(email)}`,
       },
-      footer:
-        'You booked as a guest, so no password exists yet. The button above lets you set one — it also works for signing in on future visits.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+      footer: transferPending
+        ? 'You booked as a guest, so no password exists yet — the button above lets you set one for future visits. We’ll email you the moment your transfer is verified.<br>Kozy Care — Uncompromising care. Exceptional convenience.'
+        : 'You booked as a guest, so no password exists yet. The button above lets you set one — it also works for signing in on future visits.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
     })
     await sendEmail({ to: email, subject, html })
 
     await sendSMS(
       order.user.phone,
-      `Kozy Care: Booking confirmed! Order #${order.orderNumber}, pickup ${fmtDate(order.pickupDate)} (${order.pickupTimeSlot}). Set your password: ${baseUrl()}/forgot-password`
+      transferPending
+        ? `Kozy Care: Order #${order.orderNumber} received — we're verifying your transfer. You'll get an email once confirmed. Please do not pay again. Set your password: ${baseUrl()}/forgot-password`
+        : `Kozy Care: Booking confirmed! Order #${order.orderNumber}, pickup ${fmtDate(order.pickupDate)} (${order.pickupTimeSlot}). Set your password: ${baseUrl()}/forgot-password`
     )
   } catch (e) {
     console.error('notifyGuestAccountCreated failed:', e)
@@ -306,5 +357,32 @@ export async function notifyPaymentVerified(order: NotifiableOrder): Promise<voi
     await sendEmail({ to: order.user.email, subject, html })
   } catch (e) {
     console.error('notifyPaymentVerified failed:', e)
+  }
+}
+
+// ----- Bank transfer REJECTED by admin -----
+// The customer must act (their transfer didn't match the order), so the email
+// spells out exactly what to check and what NOT to do (don't pay twice —
+// if they were debited, we sort it out with a phone call).
+export async function notifyPaymentRejected(order: NotifiableOrder): Promise<void> {
+  try {
+    const { subject, html } = brandedEmail({
+      heading: 'We couldn’t match your transfer',
+      intro:
+        'Our team checked but couldn’t match a transfer to this order yet. Please check in your banking app that the transfer went through to the correct account. If you were debited, don’t pay again — call us on +234 803 175 5230 with your order number and we’ll sort it out the same day. If the transfer never left your account, simply send it with your order number as the narration and we’ll verify it right away.',
+      order,
+      extraRows: [{ label: 'Payment', value: 'Bank transfer — not matched yet' }],
+      cta: { label: 'Check payment status', url: `${baseUrl()}/payment/pending?order=${order.orderNumber}&email=${encodeURIComponent(order.user.email)}` },
+      footer:
+        'Nothing is lost — your order is safe with us and we’ll get it moving as soon as the payment is sorted.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: order.user.email, subject, html })
+
+    await sendSMS(
+      order.user.phone,
+      `Kozy Care: We couldn't match a transfer for order #${order.orderNumber} yet. If you were debited, do NOT pay again — call +234 803 175 5230 and we'll sort it out.`
+    )
+  } catch (e) {
+    console.error('notifyPaymentRejected failed:', e)
   }
 }

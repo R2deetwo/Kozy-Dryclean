@@ -432,6 +432,11 @@ export interface KozyAppSettings {
   // Alterations — "Exclusive to Kozy Care"; pricing confirmed with the
   // tailor, so the site says "quoted after assessment" until set (> 0).
   alterationsFromPrice: number
+  // Card payments (Paystack) — NOT stored in the DB: derived server-side
+  // from the presence of PAYSTACK_SECRET_KEY on each /api/settings/app
+  // read. When false, checkout greys the card option out and transfer is
+  // the only payment path.
+  paystackAvailable: boolean
 }
 
 /** Code defaults for every app setting — CLIENT-SAFE (no server imports).
@@ -454,6 +459,9 @@ export function defaultAppSettings(): KozyAppSettings {
     // 0 = pricing not confirmed with the tailor yet → the storefront shows
     // "quoted after assessment" instead of a from-price.
     alterationsFromPrice: 0,
+    // Pessimistic client default — the server response overrides it with
+    // the real env-derived value. Greyed out beats a broken card checkout.
+    paystackAvailable: false,
   }
 }
 

@@ -15,6 +15,7 @@ import {
   Truck,
   Sparkles,
   Scissors,
+  CreditCard,
 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@/lib/store'
@@ -288,6 +289,32 @@ export function SettingsView() {
                           {app.accountNumber || '—'}
                         </span>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Card payments (Paystack) status — read-only, env-derived.
+                   * Makes it obvious to the admin why customers only see the
+                   * transfer option at checkout. */}
+                  <div className="mt-4 flex items-start gap-3 rounded-xl border border-navy-100 bg-linen-50 p-4">
+                    <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-navy-300" />
+                    <div className="text-sm">
+                      <p className="font-semibold text-navy">
+                        Card payments (Paystack){' '}
+                        <span
+                          className={
+                            app.paystackAvailable
+                              ? 'ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700'
+                              : 'ml-1 rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-300'
+                          }
+                        >
+                          {app.paystackAvailable ? 'Live' : 'Unavailable'}
+                        </span>
+                      </p>
+                      <p className="mt-1 text-xs leading-relaxed text-navy-300">
+                        {app.paystackAvailable
+                          ? 'Customers can pay by card — the option is selectable at checkout.'
+                          : 'Customers currently see the card option greyed out with “not available at the moment” and pay by bank transfer only. To enable cards, add PAYSTACK_SECRET_KEY in your deployment environment — it switches on automatically.'}
+                      </p>
                     </div>
                   </div>
                 </>

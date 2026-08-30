@@ -72,6 +72,11 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     hotelGuestDiscountPercent: num('hotel_guest_discount_percent', d.hotelGuestDiscountPercent),
     hotelGuestPromoCode: str('hotel_guest_promo_code', d.hotelGuestPromoCode),
     alterationsFromPrice: num('alterations_from_price', d.alterationsFromPrice),
+    // Not a DB setting — derived from the server env at the API layer. The
+    // false here is a placeholder so this DB-mapped object satisfies the
+    // type; callers that care use the /api/settings/app response, which
+    // overwrites it with the real value.
+    paystackAvailable: false,
   }
 }
 

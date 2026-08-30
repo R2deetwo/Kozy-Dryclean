@@ -34,7 +34,11 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { CreateOrderSchema } from '@/lib/schemas'
-import { notifyOrderCreated, notifyGuestAccountCreated } from '@/lib/notifications'
+import {
+  notifyOrderCreated,
+  notifyGuestAccountCreated,
+  notifyTransferPendingVerification,
+} from '@/lib/notifications'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 import { getServiceSpeed, allowsExpress24, GARMENT_CATALOG, GUARANTEE_DISCOUNT } from '@/lib/types'
@@ -164,7 +168,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const { type, items, serviceSpeed, modeOfWash, promoCode, alterationNotes, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod } = parsed.data
+  const { type, items, serviceSpeed, modeOfWash, promoCode, alterationNotes, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod, transferReceipt } = parsed.data
 
   // ----- Alterations note (Phase 17, client directive) -----
   // Riders never measure at the door: the customer DESCRIBES the work at
@@ -207,6 +211,14 @@ export async function POST(req: Request) {
   let guestAccountCreated = false
   let guestEmail: string | null = null
 
+  // Set when a guest re-books with an email that already has a password.
+  // We no longer reject immediately: pricing + the duplicate-submission guard
+  // run first, so a confused customer RE-SUBMITTING the same transfer order
+  // gets their original order back (and lands on /payment/pending) instead of
+  // a dead-end "sign in" error. Only a genuinely new basket from that email
+  // gets the ACCOUNT_EXISTS prompt, exactly as before.
+  let existingAccountNeedsSignIn = false
+
   if (session) {
     // ADMIN can create orders for other users (by passing userId in the body)
     // Non-admins always create orders for themselves
@@ -222,22 +234,18 @@ export async function POST(req: Request) {
     const email = guest.email.toLowerCase()
     const existing = await db.user.findUnique({ where: { email } })
     if (existing) {
-      if (existing.passwordHash) {
-        // Real account exists — they should sign in (prevents order hijacking)
-        return NextResponse.json(
-          {
-            error: 'ACCOUNT_EXISTS',
-            message: 'An account with this email already exists. Please sign in to book — your details will be waiting.',
-          },
-          { status: 409 }
-        )
-      }
-      // Previous guest account (no password) — reuse and refresh contact info
       ownerId = existing.id
-      await db.user.update({
-        where: { id: existing.id },
-        data: { name: guest.name, phone: guest.phone },
-      })
+      if (existing.passwordHash) {
+        // Account with a password exists — hold the sign-in requirement until
+        // the duplicate guard has had its chance (see comment above).
+        existingAccountNeedsSignIn = true
+      } else {
+        // Previous guest account (no password) — reuse and refresh contact info
+        await db.user.update({
+          where: { id: existing.id },
+          data: { name: guest.name, phone: guest.phone },
+        })
+      }
     } else {
       // First-time guest — create a customer record with a random password.
       // emailVerified is set so the guest can claim the account via the
@@ -486,6 +494,79 @@ export async function POST(req: Request) {
       ? totalPrice
       : null
 
+  // ----- Duplicate-submission guard (bank transfer only) -----
+  // When a customer is unsure whether their payment went through, the
+  // instinct is to hit confirm again — each hit used to create a fresh
+  // order + PENDING payment, flooding the admin queue with the same
+  // verification request. The same basket submitted twice within 15 minutes
+  // is treated as ONE submission: we return the original order and skip both
+  // the DB write and the notification.
+  //
+  // Matched fields: manifest (items + server unit prices), pickup address,
+  // mode of wash, service speed and promo code — every field that defines
+  // the basket. totalPrice is deliberately NOT compared: it is derived, and
+  // one-time benefits (first-order discount, free first delivery) are
+  // consumed by the first submission, so a replay legitimately reprices
+  // higher while still being the SAME order intent. A genuinely different
+  // basket (any item, speed, wash mode or address change) never matches.
+  if (bankTransferAmount !== null) {
+    const manifest = JSON.stringify(items)
+    const duplicate = await db.order.findFirst({
+      where: {
+        userId: ownerId,
+        status: 'PAYMENT_PENDING_VERIFICATION',
+        itemsManifest: manifest,
+        pickupAddress,
+        modeOfWash: orderExtras.modeOfWash ?? null,
+        serviceSpeed: speed.id,
+        promoCode: orderExtras.promoCode ?? null,
+        createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+      },
+      include: {
+        user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+        driver: { select: { id: true, name: true, phone: true } },
+        payments: true,
+        media: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    if (duplicate) {
+      // Trimmed order — the client only needs the identity fields to route
+      // the customer to /payment/pending; no need to echo addresses or
+      // contact details back to an unauthenticated caller.
+      return NextResponse.json(
+        {
+          order: {
+            id: duplicate.id,
+            orderNumber: duplicate.orderNumber,
+            status: duplicate.status,
+            totalPrice: duplicate.totalPrice,
+            user: { email: duplicate.user.email },
+          },
+          guestAccountCreated: false,
+          duplicate: true,
+        },
+        { status: 201 }
+      )
+    }
+  }
+
+  // ----- Guest re-booking with an email that has a real password -----
+  // The duplicate guard above already had its chance (an identical pending
+  // order was returned). This is a genuinely new basket from an email that
+  // belongs to an existing account — they should sign in (prevents order
+  // hijacking), exactly as the flow always worked.
+  if (existingAccountNeedsSignIn) {
+    return NextResponse.json(
+      {
+        error: 'ACCOUNT_EXISTS',
+        message:
+          'An account with this email already exists. Please sign in to book — your details will be waiting.',
+      },
+      { status: 409 }
+    )
+  }
+
   const order = await db.order.create({
     data: {
       orderNumber,
@@ -511,6 +592,10 @@ export async function POST(req: Request) {
                 amount: bankTransferAmount,
                 method: 'BANK_TRANSFER',
                 status: 'PENDING',
+                // The customer's optional transfer screenshot (downscaled
+                // client-side) — the admin queue verifies against the real
+                // receipt instead of the old mock.
+                ...(transferReceipt ? { receiptUrl: transferReceipt } : {}),
               },
             },
           }
@@ -526,8 +611,15 @@ export async function POST(req: Request) {
 
   // ----- Notifications (email + SMS) — never block the booking -----
   // Runs after the DB write so a notification failure can't lose the order.
+  // Bank-transfer orders get a transfer-specific email: it tells the customer
+  // the verification is underway and an email will follow the moment admin
+  // confirms — the exact reassurance that stops double payments.
   if (guestAccountCreated && guestEmail) {
-    await notifyGuestAccountCreated(order, guestEmail)
+    await notifyGuestAccountCreated(order, guestEmail, {
+      transferPending: bankTransferAmount !== null,
+    })
+  } else if (bankTransferAmount !== null) {
+    await notifyTransferPendingVerification(order)
   } else {
     await notifyOrderCreated(order)
   }
