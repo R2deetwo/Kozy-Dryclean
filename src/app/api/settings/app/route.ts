@@ -17,6 +17,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { getAppSettings, saveAppSettings } from '@/lib/app-settings'
+import { isValidEmail } from '@/lib/email-validation'
 import type { KozyAppSettings } from '@/lib/types'
 
 export const dynamic = 'force-dynamic'
@@ -87,6 +88,31 @@ export async function PUT(req: NextRequest) {
   str('accountNumber', 30)
   str('contactPhone', 40)
   str('contactEmail', 120)
+  // Admin alert email — validated as an email shape so a typo can't silently
+  // swallow every future alert.
+  {
+    const v = p.adminAlertsEmail
+    if (v !== undefined) {
+      if (typeof v !== 'string' || !isValidEmail(v)) {
+        errors.push('adminAlertsEmail must be a complete email address (e.g. name@gmail.com)')
+      } else {
+        ;(out as Record<string, unknown>).adminAlertsEmail = v.trim().toLowerCase()
+      }
+    }
+  }
+  // Alert toggles — plain booleans.
+  const flag = (key: keyof KozyAppSettings) => {
+    const v = p[key]
+    if (v === undefined) return
+    if (typeof v !== 'boolean') {
+      errors.push(`${String(key)} must be true or false`)
+      return
+    }
+    ;(out as Record<string, unknown>)[key] = v
+  }
+  flag('adminAlertsNewSignup')
+  flag('adminAlertsNewOrder')
+  flag('adminAlertsPaymentPending')
   pct('deliveryFee', 0, 100000)
   pct('handwashSurchargePercent', 0, 200)
   pct('guaranteeMinGarments', 0, 100)

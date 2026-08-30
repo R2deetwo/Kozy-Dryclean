@@ -16,6 +16,11 @@ import {
   Sparkles,
   Scissors,
   CreditCard,
+  Bell,
+  BellRing,
+  UserPlus,
+  ShoppingBag,
+  Receipt,
 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useStore } from '@/lib/store'
@@ -211,6 +216,9 @@ export function SettingsView() {
           <TabsTrigger value="guarantee" className="data-[state=active]:bg-navy data-[state=active]:text-white">
             <Percent className="mr-1.5 h-3.5 w-3.5" /> Guarantee
           </TabsTrigger>
+          <TabsTrigger value="notifications" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+            <Bell className="mr-1.5 h-3.5 w-3.5" /> Notifications
+          </TabsTrigger>
         </TabsList>
 
         {/* BANK ACCOUNT TAB — server-backed (Phase 14): edits are saved to
@@ -363,6 +371,77 @@ export function SettingsView() {
                       onChange={(e) => setApp({ contactEmail: e.target.value })}
                       placeholder="kozygarmentcare@gmail.com"
                       className="mt-1.5"
+                    />
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* NOTIFICATIONS TAB — admin alert emails: where the business owner
+            gets pinged when a new customer signs up, a new order arrives, or
+            a customer says they've paid (bank-transfer verification). */}
+        <TabsContent value="notifications" className="mt-4">
+          <Card className="border-navy-100 shadow-navy">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+                <BellRing className="h-4 w-4 text-gold-400" /> Admin Alert Emails
+              </CardTitle>
+              <p className="text-xs text-navy-300">
+                Know the moment business happens — an email lands in your inbox whenever a
+                new customer signs up, a new order comes in, or a customer confirms a bank
+                transfer (so you can verify it right away). Saved on the server and live
+                immediately after you hit Save.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {!app ? (
+                <p className="py-6 text-center text-sm text-navy-300">Loading notification settings…</p>
+              ) : (
+                <>
+                  <div>
+                    <Label htmlFor="alerts-email" className="text-xs uppercase tracking-wide text-navy-300">
+                      <Mail className="mr-1 inline h-3 w-3" /> Send alerts to
+                    </Label>
+                    <Input
+                      id="alerts-email"
+                      type="email"
+                      value={app.adminAlertsEmail}
+                      onChange={(e) => setApp({ adminAlertsEmail: e.target.value })}
+                      placeholder="kozygarmentcare@gmail.com"
+                      className="mt-1.5 max-w-md"
+                    />
+                    <p className="mt-1.5 text-[11px] text-navy-300">
+                      Tip: a Gmail address you check on your phone works best — alerts arrive
+                      the second a customer acts.
+                    </p>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
+                      What should trigger an email?
+                    </p>
+                    <AlertToggle
+                      icon={<UserPlus className="h-4 w-4" />}
+                      title="New customer signup"
+                      description="A new account was created and is waiting to verify their email."
+                      checked={app.adminAlertsNewSignup}
+                      onChange={(v) => setApp({ adminAlertsNewSignup: v })}
+                    />
+                    <AlertToggle
+                      icon={<ShoppingBag className="h-4 w-4" />}
+                      title="New order"
+                      description="A pickup booking came in (card/cash orders). Bank-transfer orders trigger the payment alert below instead — no double emails."
+                      checked={app.adminAlertsNewOrder}
+                      onChange={(v) => setApp({ adminAlertsNewOrder: v })}
+                    />
+                    <AlertToggle
+                      icon={<Receipt className="h-4 w-4" />}
+                      title="Customer says they've paid (bank transfer)"
+                      description="The customer confirmed a transfer — verify it in the queue to release their pickup. Includes the expected amount and narration."
+                      checked={app.adminAlertsPaymentPending}
+                      onChange={(v) => setApp({ adminAlertsPaymentPending: v })}
                     />
                   </div>
                 </>
@@ -736,5 +815,51 @@ export function SettingsView() {
         </TabsContent>
       </Tabs>
     </div>
+  )
+}
+
+/** One notification-type row: icon + copy + on/off switch. */
+function AlertToggle({
+  icon,
+  title,
+  description,
+  checked,
+  onChange,
+}: {
+  icon: React.ReactNode
+  title: string
+  description: string
+  checked: boolean
+  onChange: (v: boolean) => void
+}) {
+  return (
+    <label
+      className={cn(
+        'flex cursor-pointer items-start justify-between gap-4 rounded-lg border p-3 transition',
+        checked ? 'border-gold-300 bg-gold-50/50' : 'border-navy-100 bg-white'
+      )}
+    >
+      <span className="flex items-start gap-3">
+        <span
+          className={cn(
+            'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+            checked ? 'bg-gold-100 text-navy' : 'bg-linen-200 text-navy-300'
+          )}
+        >
+          {icon}
+        </span>
+        <span>
+          <span className="block text-sm font-medium text-navy">{title}</span>
+          <span className="mt-0.5 block text-xs leading-relaxed text-navy-300">{description}</span>
+        </span>
+      </span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-1.5 h-4 w-4 shrink-0 accent-[#0A192F]"
+        aria-label={title}
+      />
+    </label>
   )
 }

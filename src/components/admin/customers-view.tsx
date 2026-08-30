@@ -13,12 +13,17 @@ import {
   Shield,
   ShoppingBag,
   PlusCircle,
+  Trash2,
+  AlertTriangle,
+  MailCheck,
+  MailX,
 } from 'lucide-react'
-import { useUsers, useOrders } from '@/lib/hooks'
+import { useUsers, useOrders, useDeleteUser } from '@/lib/hooks'
 import { useMemo } from 'react'
 import { formatNaira, formatDate } from '@/lib/types'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import {
@@ -28,7 +33,24 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { toast } from '@/hooks/use-toast'
+
+/** A customer counts as NEW for their first 7 days after signing up. */
+const NEW_CUSTOMER_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
+
+function isNewCustomer(createdAt: string | Date): boolean {
+  return Date.now() - new Date(createdAt).getTime() < NEW_CUSTOMER_WINDOW_MS
+}
 
 export function CustomersView() {
   // Users are the primary list here → incremental paging with a "Load more"
@@ -55,7 +77,9 @@ export function CustomersView() {
       <div className="mb-4">
         <h1 className="text-lg font-bold tracking-tight text-navy">Customers (CRM)</h1>
         <p className="text-xs text-navy-300">
-          Browse all clients, riders, and admin accounts.
+          Browse all clients, riders, and admin accounts. Recent signups are flagged
+          <span className="mx-1 inline-flex items-center rounded-full bg-gold-400 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-navy">new</span>
+          for their first week.
         </p>
       </div>
 
@@ -95,11 +119,15 @@ export function CustomersView() {
             {filtered.map((u) => {
               const userOrders = (orders ?? []).filter((o) => o.userId === u.id)
               const ltv = userOrders.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
+              const isNew = isNewCustomer(u.createdAt)
               return (
                 <tr
                   key={u.id}
                   onClick={() => setSelected(u)}
-                  className="cursor-pointer border-b transition last:border-0 hover:bg-linen-200"
+                  className={cn(
+                    'cursor-pointer border-b transition last:border-0 hover:bg-linen-200',
+                    isNew && 'bg-gold-50/60'
+                  )}
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
@@ -124,7 +152,27 @@ export function CustomersView() {
                         )}
                       </div>
                       <div className="min-w-0">
-                        <p className="truncate font-medium text-navy">{u.name}</p>
+                        <p className="flex items-center gap-1.5 truncate font-medium text-navy">
+                          {u.name}
+                          {/* NEW badge — recent signups stand out so the owner
+                              can personally welcome fresh customers (and spot
+                              duplicate/junk entries fast). */}
+                          {isNew && (
+                            <span className="inline-flex shrink-0 items-center rounded-full bg-gold-400 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-navy">
+                              new
+                            </span>
+                          )}
+                          {/* Unverified email — the signup verification email
+                              never landed (typically a typo). */}
+                          {!u.emailVerified && (
+                            <span
+                              title="Email not verified — the verification email may never have arrived"
+                              className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-rose-50 px-1.5 py-px text-[9px] font-semibold text-rose-600 ring-1 ring-rose-200"
+                            >
+                              <MailX className="h-2.5 w-2.5" /> unverified
+                            </span>
+                          )}
+                        </p>
                         <p className="truncate text-xs text-navy-300">{u.email}</p>
                       </div>
                     </div>
@@ -171,7 +219,11 @@ export function CustomersView() {
       </div>
 
       {selected && (
-        <CustomerDetailModal user={selected} onClose={() => setSelected(undefined)} />
+        <CustomerDetailModal
+          user={selected}
+          orderCount={(orders ?? []).filter((o) => o.userId === selected.id).length}
+          onClose={() => setSelected(undefined)}
+        />
       )}
     </div>
   )
@@ -190,7 +242,15 @@ function RoleBadge({ role }: { role: any }) {
   return <Badge className="rounded-full bg-gold-100 text-navy hover:bg-gold-100">Retail</Badge>
 }
 
-function CustomerDetailModal({ user, onClose }: { user: any; onClose: () => void }) {
+function CustomerDetailModal({
+  user,
+  orderCount,
+  onClose,
+}: {
+  user: any
+  orderCount: number
+  onClose: () => void
+}) {
   // fetchAll: the modal computes this customer's LTV/order counts over the
   // whole order history, not just the first page.
   const allOrders = useOrders({ fetchAll: true }).data ?? []
@@ -200,6 +260,38 @@ function CustomerDetailModal({ user, onClose }: { user: any; onClose: () => void
   )
   const ltv = orders.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
   const activeCount = orders.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status)).length
+  const reviewCount = 0 // reviews ride along with orders server-side; shown via the warning copy
+
+  // ----- Delete flow -----
+  const deleteMutation = useDeleteUser()
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmText, setConfirmText] = useState('')
+
+  const handleDelete = () => {
+    if (confirmText.trim().toUpperCase() !== 'DELETE') return
+    deleteMutation.mutate(
+      { id: user.id, confirm: 'DELETE' },
+      {
+        onSuccess: (data) => {
+          toast({
+            title: 'Customer deleted',
+            description: `${user.name} and ${data.deleted.orders} order${
+              data.deleted.orders === 1 ? '' : 's'
+            } were permanently removed.`,
+            variant: 'destructive',
+          })
+          setConfirmOpen(false)
+          onClose()
+        },
+        onError: (e: any) =>
+          toast({
+            title: 'Deletion failed',
+            description: e?.message || 'Nothing was removed — please try again.',
+            variant: 'destructive',
+          }),
+      }
+    )
+  }
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -208,9 +300,19 @@ function CustomerDetailModal({ user, onClose }: { user: any; onClose: () => void
           <DialogTitle className="flex items-center gap-2">
             {user.name}
             <RoleBadge role={user.role} />
+            {isNewCustomer(user.createdAt) && (
+              <span className="inline-flex items-center rounded-full bg-gold-400 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-navy">
+                new
+              </span>
+            )}
           </DialogTitle>
           <DialogDescription>
             Joined {formatDate(user.createdAt)}
+            {!user.emailVerified && (
+              <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-rose-50 px-1.5 py-px text-[10px] font-semibold text-rose-600 ring-1 ring-rose-200">
+                <MailX className="h-2.5 w-2.5" /> email unverified
+              </span>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -241,7 +343,14 @@ function CustomerDetailModal({ user, onClose }: { user: any; onClose: () => void
               <p className="flex items-center gap-1.5 font-medium text-navy">
                 <Mail className="h-3.5 w-3.5" /> Email
               </p>
-              <p className="mt-1 text-navy-300">{user.email}</p>
+              <p className="mt-1 flex items-center gap-1.5 text-navy-300">
+                {user.email}
+                {user.emailVerified ? (
+                  <MailCheck className="h-3 w-3 text-emerald-600" aria-label="verified" />
+                ) : (
+                  <MailX className="h-3 w-3 text-rose-500" aria-label="unverified" />
+                )}
+              </p>
             </div>
             <div className="rounded-lg bg-linen-200 p-3 text-sm">
               <p className="flex items-center gap-1.5 font-medium text-navy">
@@ -298,8 +407,76 @@ function CustomerDetailModal({ user, onClose }: { user: any; onClose: () => void
               </ul>
             )}
           </div>
+
+          {/* ----- Danger zone (client-requested): permanent deletion ----- */}
+          {user.role !== 'ADMIN' && (
+            <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-4">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-rose-800">
+                <AlertTriangle className="h-4 w-4" /> Danger zone
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-rose-700">
+                Permanently delete this customer — for duplicate or junk entries (e.g. a
+                re-registration after a mistyped email). This removes{' '}
+                <strong>their entire history</strong>: {orders.length} order
+                {orders.length === 1 ? '' : 's'}, payment records, receipts, reviews and
+                all stats attached to them. <strong>It cannot be undone.</strong>
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => { setConfirmOpen(true); setConfirmText('') }}
+                className="mt-3 border-rose-300 text-rose-700 hover:bg-rose-100"
+              >
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Delete customer
+              </Button>
+            </div>
+          )}
         </div>
       </DialogContent>
+
+      {/* Second-guess dialog: type DELETE to unlock the button. */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-rose-800">
+              <AlertTriangle className="h-5 w-5" /> Delete {user.name}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-left">
+              This will <strong>permanently erase</strong> {user.name} ({user.email}) along
+              with <strong>all {orders.length} of their order{orders.length === 1 ? '' : 's'}</strong>,
+              payment records and receipts, reviews, and every stat attached to this
+              account. <strong>This action cannot be undone or recovered.</strong>
+              <br />
+              <br />
+              If this entry is a duplicate (the customer re-registered), make sure you are
+              deleting the wrong one — not the account with the real order history.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-navy-300">
+              Type <span className="font-mono font-bold text-rose-700">DELETE</span> to confirm:
+            </p>
+            <Input
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="font-mono"
+              autoFocus
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              disabled={confirmText.trim().toUpperCase() !== 'DELETE' || deleteMutation.isPending}
+            >
+              <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+              {deleteMutation.isPending ? 'Deleting…' : 'Delete permanently'}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

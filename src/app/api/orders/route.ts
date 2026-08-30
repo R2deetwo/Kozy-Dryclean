@@ -28,7 +28,7 @@
 //       PAYSTACK payments are initialized separately after the order exists.
 // =============================================================================
 
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
@@ -38,6 +38,8 @@ import {
   notifyOrderCreated,
   notifyGuestAccountCreated,
   notifyTransferPendingVerification,
+  notifyAdminNewOrder,
+  notifyAdminTransferPending,
 } from '@/lib/notifications'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
@@ -610,19 +612,35 @@ export async function POST(req: Request) {
   })
 
   // ----- Notifications (email + SMS) — never block the booking -----
-  // Runs after the DB write so a notification failure can't lose the order.
-  // Bank-transfer orders get a transfer-specific email: it tells the customer
-  // the verification is underway and an email will follow the moment admin
-  // confirms — the exact reassurance that stops double payments.
-  if (guestAccountCreated && guestEmail) {
-    await notifyGuestAccountCreated(order, guestEmail, {
-      transferPending: bankTransferAmount !== null,
-    })
-  } else if (bankTransferAmount !== null) {
-    await notifyTransferPendingVerification(order)
-  } else {
-    await notifyOrderCreated(order)
-  }
+  // Runs AFTER the response is sent (next/server after()): a slow email
+  // provider must not make checkout feel broken. Bank-transfer orders get a
+  // transfer-specific email: it tells the customer the verification is
+  // underway and an email will follow the moment admin confirms — the exact
+  // reassurance that stops double payments.
+  after(async () => {
+    try {
+      if (guestAccountCreated && guestEmail) {
+        await notifyGuestAccountCreated(order, guestEmail, {
+          transferPending: bankTransferAmount !== null,
+        })
+      } else if (bankTransferAmount !== null) {
+        await notifyTransferPendingVerification(order)
+      } else {
+        await notifyOrderCreated(order)
+      }
+
+      // ----- Admin alert (one email per event) -----
+      // Bank transfer → "payment to verify" (the actionable one: the
+      // customer is waiting on the status page). Anything else → "new order".
+      if (bankTransferAmount !== null) {
+        await notifyAdminTransferPending(order)
+      } else {
+        await notifyAdminNewOrder(order)
+      }
+    } catch (e) {
+      console.error('Post-booking notifications failed:', e)
+    }
+  })
 
   return NextResponse.json({ order, guestAccountCreated }, { status: 201 })
 }

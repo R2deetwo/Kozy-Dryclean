@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
+  RotateCcw,
 } from 'lucide-react'
 import { useOrders, useUpdateOrder, usePayments, useVerifyPayment, useUsers } from '@/lib/hooks'
 import { formatNaira, formatDateTime, formatDate, type OrderStatus } from '@/lib/types'
@@ -62,7 +63,9 @@ const STATUS_OPTIONS: OrderStatus[] = [
 ]
 
 export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
-  // Data comes from the order object (nested includes from API)
+  // `order` is the LIVE object derived from the React Query cache (the board
+  // passes selectedId, not a stale snapshot) — so every field below reflects
+  // verify/reject/status mutations the moment they land.
   const customer = order.user
   const driver = order.driver
   const payments = order.payments ?? []
@@ -84,17 +87,32 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
 
   const [weightInput, setWeightInput] = useState(order.finalWeight?.toString() ?? '')
   const [statusSelect, setStatusSelect] = useState<OrderStatus>(order.status)
+  const [receiptZoom, setReceiptZoom] = useState(false)
+
+  // ----- Live-sync the status dropdown with the order -----
+  // React's "adjust state during render" pattern (no useEffect — that
+  // flickers and can loop): when the order's status changes under us
+  // (verify advanced it, a drag moved it, another admin edited it), the
+  // select follows in the same render.
+  if (order.status !== statusSelect) {
+    setStatusSelect(order.status)
+  }
 
   const handleAssignDriver = (driverId: string) => {
     updateOrderMutation.mutate(
       { id: order.id, driverId },
-      { onSuccess: () => toast({ title: 'Driver assigned' }) }
+      {
+        onSuccess: () => toast({ title: 'Driver assigned' }),
+        onError: (e: any) => toast({ title: 'Could not assign driver', description: e?.message, variant: 'destructive' }),
+      }
     )
   }
 
   const handleStatusChange = (newStatus: OrderStatus) => {
     setStatusSelect(newStatus)
-    updateOrderMutation.mutate({ id: order.id, status: newStatus })
+    updateOrderMutation.mutate({ id: order.id, status: newStatus }, {
+      onError: (e: any) => toast({ title: 'Status update failed', description: e?.message, variant: 'destructive' }),
+    })
     toast({ title: 'Status updated', description: `Order is now ${newStatus.replace(/_/g, ' ').toLowerCase()}.` })
   }
 
@@ -104,24 +122,48 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
     // Server calculates totalPrice from weight × pricePerKg
     updateOrderMutation.mutate(
       { id: order.id, finalWeight: kg },
-      { onSuccess: () => toast({ title: 'Weight recorded', description: `${kg}kg — invoice sent.` }) }
+      {
+        onSuccess: () => toast({ title: 'Weight recorded', description: `${kg}kg — invoice sent.` }),
+        onError: (e: any) => toast({ title: 'Could not record weight', description: e?.message, variant: 'destructive' }),
+      }
     )
   }
 
   const handleVerify = (paymentId: string) => {
     verifyPaymentMutation.mutate(
       { id: paymentId, status: 'VERIFIED' },
-      { onSuccess: () => toast({ title: 'Payment verified' }) }
+      {
+        onSuccess: (data) =>
+          toast({
+            title: 'Payment verified',
+            description: data.noOp
+              ? 'Already verified — nothing to do.'
+              : 'Customer emailed · order moved to Ready to Pick Up.',
+          }),
+        onError: (e: any) => toast({ title: 'Verification failed', description: e?.message, variant: 'destructive' }),
+      }
     )
   }
   const handleReject = (paymentId: string) => {
     verifyPaymentMutation.mutate(
       { id: paymentId, status: 'REJECTED' },
-      { onSuccess: () => toast({ title: 'Payment rejected', variant: 'destructive' }) }
+      {
+        onSuccess: () =>
+          toast({
+            title: 'Payment rejected',
+            description: 'The customer has been emailed with what to check and what to do next.',
+            variant: 'destructive',
+          }),
+        onError: (e: any) => toast({ title: 'Rejection failed', description: e?.message, variant: 'destructive' }),
+      }
     )
   }
 
   const pendingPayment = payments.find((p: any) => p.status === 'PENDING')
+  const rejectedBankTransfer = payments.find(
+    (p: any) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER'
+  )
+  const busy = verifyPaymentMutation.isPending
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -271,14 +313,61 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                         {p.status === 'PENDING' && <Badge variant="outline" className="border-amber-200 bg-amber-50 text-amber-700"><AlertCircle className="mr-1 h-3 w-3" /> Pending</Badge>}
                       </div>
                     </div>
+
+                    {/* The customer's transfer screenshot, right where the
+                        verify decision is made — tap to see it full size. */}
+                    {p.receiptUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setReceiptZoom(true)}
+                        className="mt-2 block overflow-hidden rounded-md border border-[#C8D2DF] bg-white transition hover:ring-2 hover:ring-[#D4AF37]"
+                        title="View full receipt"
+                      >
+                        <img
+                          src={p.receiptUrl}
+                          alt="Transfer receipt"
+                          className="block max-h-28 w-auto"
+                        />
+                      </button>
+                    )}
+
                     {p.status === 'PENDING' && p.method === 'BANK_TRANSFER' && (
                       <div className="mt-2 flex gap-2">
-                        <Button size="sm" onClick={() => handleVerify(p.id)} className="bg-[#0A192F] hover:bg-[#1B3A5F]"><CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Verify</Button>
-                        <Button size="sm" variant="outline" onClick={() => handleReject(p.id)} className="border-rose-300 text-rose-700"><XCircle className="mr-1 h-3.5 w-3.5" /> Reject</Button>
+                        <Button size="sm" onClick={() => handleVerify(p.id)} disabled={busy} className="bg-[#0A192F] hover:bg-[#1B3A5F] disabled:opacity-60">
+                          <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> {busy ? 'Verifying…' : 'Verify payment'}
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => handleReject(p.id)} disabled={busy} className="border-rose-300 text-rose-700 disabled:opacity-60">
+                          <XCircle className="mr-1 h-3.5 w-3.5" /> Reject
+                        </Button>
                       </div>
                     )}
                   </div>
                 ))}
+
+                {/* Late-landing money: a rejected transfer can still be
+                    approved — banks sometimes deliver minutes or hours after
+                    the check. One click, same email + pipeline rules as a
+                    fresh verify. */}
+                {rejectedBankTransfer && (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3">
+                    <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-800">
+                      <RotateCcw className="h-4 w-4" /> Approve payment
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-emerald-700">
+                      Transfers can land minutes or hours after a rejection. If the money has now
+                      arrived, approve it — the customer is emailed and the order moves on, exactly
+                      like a fresh verification.
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => handleVerify(rejectedBankTransfer.id)}
+                      disabled={busy}
+                      className="mt-2 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> {busy ? 'Approving…' : 'Approve payment now'}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
             {order.totalPrice !== undefined && onViewInvoice && (
@@ -301,6 +390,28 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           <section><h3 className="mb-2 text-sm font-semibold text-[#0A192F]">Timeline</h3><OrderTimeline order={order} /></section>
         </div>
       </DialogContent>
+
+      {/* Full-size receipt viewer — the thumbnail above opens this. */}
+      {receiptZoom && (
+        <Dialog open onOpenChange={(o) => !o && setReceiptZoom(false)}>
+          <DialogContent className="max-h-[92vh] sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle className="text-sm">Transfer receipt</DialogTitle>
+              <DialogDescription className="text-xs">
+                Uploaded by the customer — cross-check the amount and sender against your bank
+                statement before verifying.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[70vh] overflow-y-auto rounded-lg bg-[#EEF0F2] p-2">
+              <img
+                src={payments.find((p: any) => p.receiptUrl)?.receiptUrl}
+                alt="Transfer receipt"
+                className="block w-full rounded-md bg-white"
+              />
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </Dialog>
   )
 }

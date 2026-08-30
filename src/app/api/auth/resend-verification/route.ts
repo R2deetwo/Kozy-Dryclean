@@ -9,6 +9,7 @@ import { db } from '@/lib/db'
 import crypto from 'crypto'
 import { sendVerificationEmail } from '@/lib/email'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
+import { isValidEmail, normalizeEmail, EMAIL_HELP } from '@/lib/email-validation'
 
 export async function POST(req: Request) {
   // Rate limit: 3 resends per hour per IP
@@ -27,8 +28,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 })
   }
 
+  // Reject obviously-mistyped addresses up front instead of the vague
+  // "if an account exists" message (the typo would otherwise hide itself).
+  if (!isValidEmail(email)) {
+    return NextResponse.json(
+      { error: 'INVALID_EMAIL', message: EMAIL_HELP },
+      { status: 400 }
+    )
+  }
+
   const user = await db.user.findUnique({
-    where: { email: email.toLowerCase() },
+    where: { email: normalizeEmail(email) },
   })
 
   if (!user) {

@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle2, PencilLine } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,6 +10,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { cn } from '@/lib/utils'
 import { Logo } from '@/components/shell/logo'
+import { isValidEmail, EMAIL_HELP } from '@/lib/email-validation'
 import Link from 'next/link'
 
 /** Only allow same-site relative redirect targets (no open redirects). */
@@ -48,11 +49,19 @@ function SignupForm() {
   const [company, setCompany] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [success, setSuccess] = useState(false)
-  const [emailSent, setEmailSent] = useState(false)
   const [emailError, setEmailError] = useState('')
+  const [success, setSuccess] = useState(false)
   const [resending, setResending] = useState(false)
   const [resendMessage, setResendMessage] = useState('')
+  // Rescue flow: if the verification email never arrives (usually a typo in
+  // the address), the customer can correct it right here — the account is
+  // still unverified, so the email is safely updatable.
+  const [fixingEmail, setFixingEmail] = useState(false)
+  const [fixedEmail, setFixedEmail] = useState('')
+  const [fixing, setFixing] = useState(false)
+  const [fixMessage, setFixMessage] = useState('')
+  const [fixError, setFixError] = useState('')
+  const [activeEmail, setActiveEmail] = useState('')
 
   const handleResend = async () => {
     setResending(true)
@@ -61,7 +70,7 @@ function SignupForm() {
       const res = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        body: JSON.stringify({ email: activeEmail || email }),
       })
       const data = await res.json()
       setResendMessage(data.message || data.error || 'Something went wrong.')
@@ -71,10 +80,47 @@ function SignupForm() {
     setResending(false)
   }
 
+  const handleFixEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setFixError('')
+    setFixMessage('')
+    if (!isValidEmail(fixedEmail)) {
+      setFixError(EMAIL_HELP)
+      return
+    }
+    setFixing(true)
+    try {
+      const res = await fetch('/api/auth/update-unverified-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentEmail: email, newEmail: fixedEmail.trim() }),
+      })
+      const data = await res.json()
+      if (!res.ok) {
+        setFixError(data.message || data.error || 'Could not update the email.')
+      } else {
+        setActiveEmail(data.email || fixedEmail.trim())
+        setFixMessage(data.message || `Verification email sent to ${fixedEmail.trim()}.`)
+        setFixingEmail(false)
+      }
+    } catch {
+      setFixError('Network error. Please try again.')
+    }
+    setFixing(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
+    // Strict shape check BEFORE the request — "name@gmail" passes the
+    // browser's built-in type=email rule but nothing can ever be delivered
+    // to it (the exact bug that stranded a real customer).
+    if (!isValidEmail(email)) {
+      setEmailError(EMAIL_HELP)
+      return
+    }
+    setEmailError('')
+    setLoading(true)
 
     try {
       const res = await fetch('/api/auth/signup', {
@@ -93,12 +139,15 @@ function SignupForm() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || 'Signup failed')
+        if (data.error === 'INVALID_EMAIL') {
+          setEmailError(data.message || EMAIL_HELP)
+        } else {
+          setError(data.message || data.error || 'Signup failed')
+        }
         setLoading(false)
       } else {
+        setActiveEmail(email.trim())
         setSuccess(true)
-        setEmailSent(data.emailSent ?? false)
-        setEmailError(data.emailError || '')
         setLoading(false)
       }
     } catch (e: any) {
@@ -112,56 +161,84 @@ function SignupForm() {
       <div className="min-h-screen flex items-center justify-center bg-linen px-4 py-8">
         <Card className="w-full max-w-md border-navy-100 shadow-navy">
           <CardContent className="p-8 text-center">
-            {emailSent ? (
-              <>
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-100">
-                  <CheckCircle2 className="h-7 w-7 text-gold-600" />
-                </div>
-                <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Check your email</h1>
-                <p className="text-sm text-navy-300 mb-2">
-                  We&apos;ve sent a verification link to <strong className="text-navy">{email}</strong>.
-                </p>
-                <p className="text-xs text-navy-300 mb-4">
-                  Click the link to activate your account, then sign in.
-                  <br />
-                  <strong className="text-navy">Didn&apos;t get it?</strong> Check your spam/junk folder.
-                </p>
-                <div className="mb-6">
-                  <button
-                    onClick={handleResend}
-                    disabled={resending}
-                    className="text-xs text-[#0A192F] font-semibold hover:underline disabled:opacity-50"
-                  >
-                    {resending ? 'Sending...' : 'Resend verification email'}
-                  </button>
-                  {resendMessage && (
-                    <p className="mt-2 text-xs text-navy-300">{resendMessage}</p>
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-100">
+              <CheckCircle2 className="h-7 w-7 text-gold-600" />
+            </div>
+            <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Check your email</h1>
+            <p className="text-sm text-navy-300 mb-2">
+              We&apos;ve sent a verification link to <strong className="text-navy">{activeEmail || email}</strong>.
+            </p>
+            <p className="text-xs text-navy-300 mb-4">
+              Click the link to activate your account, then sign in.
+              <br />
+              <strong className="text-navy">Didn&apos;t get it?</strong> Check your spam folder — or fix the address below.
+            </p>
+
+            <div className="mb-6">
+              <button
+                onClick={handleResend}
+                disabled={resending}
+                className="text-xs text-[#0A192F] font-semibold hover:underline disabled:opacity-50"
+              >
+                {resending ? 'Sending...' : 'Resend verification email'}
+              </button>
+              {resendMessage && (
+                <p className="mt-2 text-xs text-navy-300">{resendMessage}</p>
+              )}
+            </div>
+
+            {/* Wrong-email rescue: typos like "name@gmail" (no .com) are the
+                #1 reason verification emails never arrive — the customer can
+                correct the address right here, no support call needed. */}
+            <div className="mb-6 rounded-lg border border-navy-100 bg-linen-100 p-4 text-left">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-navy">
+                <PencilLine className="h-3.5 w-3.5 text-gold-600" />
+                Wrong email address?
+              </p>
+              {fixingEmail ? (
+                <form onSubmit={handleFixEmail} className="mt-2 space-y-2">
+                  <Input
+                    type="email"
+                    value={fixedEmail}
+                    onChange={(e) => setFixedEmail(e.target.value)}
+                    placeholder="correct.email@example.com"
+                    autoFocus
+                    required
+                  />
+                  {fixError && (
+                    <p className="text-xs text-rose-600">{fixError}</p>
                   )}
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-amber-100">
-                  <AlertCircle className="h-7 w-7 text-amber-600" />
-                </div>
-                <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Account created</h1>
-                <p className="text-sm text-navy-300 mb-2">
-                  Your account was created but we couldn&apos;t send the verification email.
-                </p>
-                {emailError && (
-                  <p className="text-xs text-rose-600 mb-4 bg-rose-50 rounded-lg p-2">
-                    Error: {emailError}
+                  <div className="flex gap-2">
+                    <Button type="submit" disabled={fixing} className="flex-1 bg-gold-gradient text-navy hover:opacity-90 text-xs h-9">
+                      {fixing ? 'Updating…' : 'Save & resend link'}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => { setFixingEmail(false); setFixError('') }} className="text-xs h-9">
+                      Cancel
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <>
+                  <p className="mt-1 text-xs text-navy-300">
+                    Typed your address wrong? Correct it and we&apos;ll resend the verification link.
                   </p>
-                )}
-                <p className="text-xs text-navy-300 mb-6">
-                  Please contact support at concierge@kozy.ng to verify your account manually.
-                </p>
-              </>
-            )}
+                  <button
+                    onClick={() => { setFixingEmail(true); setFixedEmail(activeEmail || email); setFixError('') }}
+                    className="mt-2 text-xs font-semibold text-[#0A192F] hover:underline"
+                  >
+                    Fix my email address
+                  </button>
+                </>
+              )}
+              {fixMessage && (
+                <p className="mt-2 rounded bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700">{fixMessage}</p>
+              )}
+            </div>
+
             <Button
               onClick={() =>
                 router.push(
-                  `/login?email=${encodeURIComponent(email)}${
+                  `/login?email=${encodeURIComponent(activeEmail || email)}${
                     callbackUrl ? `&callbackUrl=${encodeURIComponent(callbackUrl)}` : ''
                   }`
                 )
@@ -233,8 +310,27 @@ function SignupForm() {
                 <Label htmlFor="email" className="text-xs uppercase tracking-wide text-navy-300">Email</Label>
                 <div className="relative mt-1.5">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-                  <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" className="pl-9" required />
+                  <Input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); if (emailError) setEmailError('') }}
+                    placeholder="you@example.com"
+                    className={cn('pl-9', emailError && 'border-rose-300 focus-visible:ring-rose-200')}
+                    aria-invalid={!!emailError}
+                    required
+                  />
                 </div>
+                {emailError ? (
+                  <p className="mt-1.5 flex items-start gap-1.5 text-xs text-rose-600">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                    {emailError}
+                  </p>
+                ) : (
+                  <p className="mt-1.5 text-[11px] text-navy-300/80">
+                    Double-check the address — it needs the full ending (e.g. .com or .ng).
+                  </p>
+                )}
               </div>
 
               <div>

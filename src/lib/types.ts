@@ -105,6 +105,31 @@ export interface Order {
   deliveredAt?: string
   createdAt: string
   updatedAt: string
+  // ----- Relations (present when the API includes them; the admin modal,
+  // Kanban cards and payment queue all rely on these nested objects) -----
+  itemsManifest?: string // JSON string — items[] above is the parsed form
+  alterationNotes?: string
+  user?: {
+    id?: string
+    name: string
+    email: string
+    phone: string
+    role?: string
+    address?: string
+  }
+  driver?: { id: string; name: string; phone: string } | null
+  payments?: Array<{
+    id: string
+    orderId: string
+    amount: number
+    method: string
+    status: string
+    receiptUrl?: string | null
+    verifiedAt?: string | null
+    createdAt: string
+    updatedAt: string
+  }>
+  media?: Array<{ id: string; imageUrl: string; notes?: string | null }>
 }
 
 // =====================================================
@@ -421,6 +446,13 @@ export interface KozyAppSettings {
   // Contact
   contactPhone: string
   contactEmail: string
+  // Admin alert emails — where the business owner gets pinged when a new
+  // customer signs up, a new order arrives, or a customer says they've paid
+  // (bank-transfer verification requests). All three types can be toggled.
+  adminAlertsEmail: string
+  adminAlertsNewSignup: boolean
+  adminAlertsNewOrder: boolean
+  adminAlertsPaymentPending: boolean
   // Commercial terms
   deliveryFee: number
   handwashSurchargePercent: number
@@ -449,6 +481,12 @@ export function defaultAppSettings(): KozyAppSettings {
     accountNumber: COMPANY_BANK.accountNumber,
     contactPhone: '+234 803 175 5230',
     contactEmail: 'kozygarmentcare@gmail.com',
+    // The owner's inbox (client-requested default) — changeable in admin
+    // Settings → Notifications without a redeploy.
+    adminAlertsEmail: 'kozygarmentcare@gmail.com',
+    adminAlertsNewSignup: true,
+    adminAlertsNewOrder: true,
+    adminAlertsPaymentPending: true,
     deliveryFee: DEFAULT_DELIVERY_FEE,
     handwashSurchargePercent: DEFAULT_HANDWASH_SURCHARGE_PERCENT,
     guaranteeMinGarments: DEFAULT_GUARANTEE_MIN_GARMENTS,

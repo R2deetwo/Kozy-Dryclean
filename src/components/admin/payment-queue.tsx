@@ -30,56 +30,104 @@ export function PaymentQueue() {
   // needs the full set to resolve any receipt's order.
   const { data: paymentsData, isLoading } = usePayments({ fetchAll: true })
   const verifyMutation = useVerifyPayment()
-  const payments = (paymentsData ?? []).filter((p) => p.status === 'PENDING')
+  // Pending = receipts waiting for a decision. Rejected = transfers we
+  // couldn't match — they STAY listed (with an Approve button) because the
+  // money can land minutes or hours later (client-reported scenario).
+  const [tab, setTab] = useState<'PENDING' | 'REJECTED'>('PENDING')
+  const pending = (paymentsData ?? []).filter(
+    (p) => p.status === 'PENDING' && p.method === 'BANK_TRANSFER'
+  )
+  const rejected = (paymentsData ?? []).filter(
+    (p) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER'
+  )
+  const payments = tab === 'PENDING' ? pending : rejected
   const orders = useOrders({ fetchAll: true }).data ?? []
-  const [selectedId, setSelectedId] = useState<string | undefined>(payments[0]?.id)
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
   const [zoom, setZoom] = useState(1)
 
   const selected = payments.find((p) => p.id === selectedId) ?? payments[0]
   const order = selected ? orders.find((o: any) => o.id === selected.orderId) : undefined
   const customer = order?.user
 
-  const handleVerify = (p: any) => {
-    verifyMutation.mutate({ id: p.id, status: 'VERIFIED' })
-    toast({ title: 'Payment verified', description: 'Customer notified.' })
-    // Select next pending payment if any
-    const idx = payments.findIndex((x) => x.id === p.id)
-    const next = payments[idx + 1] ?? payments[idx - 1]
-    setSelectedId(next?.id)
-    setZoom(1)
-  }
-  const handleReject = (p: any) => {
-    verifyMutation.mutate({ id: p.id, status: 'REJECTED' })
-    toast({
-      title: 'Payment rejected',
-      description: 'The customer has been emailed with what to check and what to do next.',
-      variant: 'destructive',
-    })
+  const advanceSelection = (p: any) => {
     const idx = payments.findIndex((x) => x.id === p.id)
     const next = payments[idx + 1] ?? payments[idx - 1]
     setSelectedId(next?.id)
     setZoom(1)
   }
 
+  const handleVerify = (p: any) => {
+    verifyMutation.mutate(
+      { id: p.id, status: 'VERIFIED' },
+      {
+        onSuccess: (data) => {
+          toast({
+            title: 'Payment verified',
+            description: data.noOp
+              ? 'Already verified — nothing to do.'
+              : 'Customer emailed · order moved to Ready to Pick Up.',
+          })
+          advanceSelection(p)
+        },
+        onError: (e: any) =>
+          toast({ title: 'Verification failed', description: e?.message, variant: 'destructive' }),
+      }
+    )
+  }
+  const handleReject = (p: any) => {
+    verifyMutation.mutate(
+      { id: p.id, status: 'REJECTED' },
+      {
+        onSuccess: () => {
+          toast({
+            title: 'Payment rejected',
+            description: 'The customer has been emailed with what to check and what to do next.',
+            variant: 'destructive',
+          })
+          advanceSelection(p)
+        },
+        onError: (e: any) =>
+          toast({ title: 'Rejection failed', description: e?.message, variant: 'destructive' }),
+      }
+    )
+  }
+
   if (payments.length === 0) {
     return (
       <div className="p-4 sm:p-6">
         <h1 className="text-lg font-bold tracking-tight text-navy">Payment Verification Queue</h1>
-        <p className="text-xs text-navy-300">No pending receipts — you&apos;re all caught up.</p>
-        <Card className="mt-6 border-dashed">
-          <CardContent className="flex flex-col items-center justify-center gap-3 p-10 text-center">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy">
-              <Inbox className="h-7 w-7" />
-            </div>
-            <p className="font-medium text-navy">Inbox zero!</p>
-            <p className="max-w-sm text-sm text-navy-300">
-              When customers confirm a bank-transfer order, it appears here for
-              verification — with their receipt screenshot when they attached one.
-              Verifying emails the customer instantly; Paystack payments are
-              auto-verified via webhook.
-            </p>
-          </CardContent>
-        </Card>
+        <div className="mt-3 flex items-center gap-2">
+          <QueueTabs pending={pending.length} rejected={rejected.length} tab={tab} onChange={setTab} />
+        </div>
+        {tab === 'PENDING' ? (
+          <Card className="mt-6 border-dashed">
+            <CardContent className="flex flex-col items-center justify-center gap-3 p-10 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy">
+                <Inbox className="h-7 w-7" />
+              </div>
+              <p className="font-medium text-navy">Inbox zero!</p>
+              <p className="max-w-sm text-sm text-navy-300">
+                When customers confirm a bank-transfer order, it appears here for
+                verification — with their receipt screenshot when they attached one.
+                Verifying emails the customer instantly; Paystack payments are
+                auto-verified via webhook.
+              </p>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="mt-6 border-dashed">
+            <CardContent className="flex flex-col items-center justify-center gap-3 p-10 text-center">
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                <CheckCircle2 className="h-7 w-7" />
+              </div>
+              <p className="font-medium text-navy">No rejected transfers</p>
+              <p className="max-w-sm text-sm text-navy-300">
+                Rejected transfers stay listed here until they&apos;re approved or the order is
+                resolved — banks sometimes deliver money minutes or hours after a rejection.
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     )
   }
@@ -88,7 +136,7 @@ export function PaymentQueue() {
     <div className="flex h-[calc(100vh-7rem)] flex-col lg:h-[calc(100vh-9rem)]">
       {/* Header */}
       <div className="border-b bg-white px-4 py-3 sm:px-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h1 className="text-lg font-bold tracking-tight text-navy">
               Payment Verification Queue
@@ -99,9 +147,7 @@ export function PaymentQueue() {
               emailed automatically either way.
             </p>
           </div>
-          <Badge className="rounded-full bg-amber-100 text-amber-800 hover:bg-amber-100">
-            {payments.length} pending
-          </Badge>
+          <QueueTabs pending={pending.length} rejected={rejected.length} tab={tab} onChange={setTab} />
         </div>
       </div>
 
@@ -110,7 +156,7 @@ export function PaymentQueue() {
         <aside className="overflow-y-auto border-r bg-linen-100">
           <div className="border-b px-3 py-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
-              Receipts to review
+              {tab === 'PENDING' ? 'Receipts to review' : 'Rejected transfers (re-approvable)'}
             </p>
           </div>
           <ul>
@@ -133,7 +179,11 @@ export function PaymentQueue() {
                     <div
                       className={cn(
                         'mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full',
-                        isActive ? 'bg-navy text-white' : 'bg-linen-200 text-navy-300'
+                        p.status === 'REJECTED'
+                          ? 'bg-rose-100 text-rose-700'
+                          : isActive
+                          ? 'bg-navy text-white'
+                          : 'bg-linen-200 text-navy-300'
                       )}
                     >
                       <Receipt className="h-3.5 w-3.5" />
@@ -241,19 +291,35 @@ export function PaymentQueue() {
 
               {/* Action buttons (mobile-friendly bottom-sheet style) */}
               <div className="sticky bottom-0 flex gap-2 rounded-xl bg-white p-3 shadow-lg ring-1 ring-muted">
-                <Button
-                  onClick={() => handleVerify(selected)}
-                  className="flex-1 bg-gold-gradient text-navy hover:opacity-90"
-                >
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> Verify payment
-                </Button>
-                <Button
-                  onClick={() => handleReject(selected)}
-                  variant="outline"
-                  className="border-rose-300 text-rose-700 hover:bg-rose-50"
-                >
-                  <XCircle className="mr-2 h-4 w-4" /> Reject
-                </Button>
+                {selected.status === 'PENDING' ? (
+                  <>
+                    <Button
+                      onClick={() => handleVerify(selected)}
+                      disabled={verifyMutation.isPending}
+                      className="flex-1 bg-gold-gradient text-navy hover:opacity-90 disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      {verifyMutation.isPending ? 'Verifying…' : 'Verify payment'}
+                    </Button>
+                    <Button
+                      onClick={() => handleReject(selected)}
+                      disabled={verifyMutation.isPending}
+                      variant="outline"
+                      className="border-rose-300 text-rose-700 hover:bg-rose-50 disabled:opacity-60"
+                    >
+                      <XCircle className="mr-2 h-4 w-4" /> Reject
+                    </Button>
+                  </>
+                ) : (
+                  <Button
+                    onClick={() => handleVerify(selected)}
+                    disabled={verifyMutation.isPending}
+                    className="flex-1 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-60"
+                  >
+                    <CheckCircle2 className="mr-2 h-4 w-4" />
+                    {verifyMutation.isPending ? 'Approving…' : 'Approve payment now'}
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -376,6 +442,61 @@ export function PaymentQueue() {
           ) : null}
         </aside>
       </div>
+    </div>
+  )
+}
+
+/** Pending / Rejected tabs — rejected transfers stay reachable so late
+ *  money can still be approved (the #1 client complaint about rejections). */
+function QueueTabs({
+  pending,
+  rejected,
+  tab,
+  onChange,
+}: {
+  pending: number
+  rejected: number
+  tab: 'PENDING' | 'REJECTED'
+  onChange: (t: 'PENDING' | 'REJECTED') => void
+}) {
+  return (
+    <div className="flex items-center gap-1 rounded-full bg-linen-200 p-1">
+      <button
+        onClick={() => onChange('PENDING')}
+        className={cn(
+          'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
+          tab === 'PENDING' ? 'bg-navy text-white' : 'text-navy-300 hover:text-navy'
+        )}
+      >
+        Pending
+        <span
+          className={cn(
+            'rounded-full px-1.5 text-[10px]',
+            tab === 'PENDING' ? 'bg-white/20' : 'bg-white'
+          )}
+        >
+          {pending}
+        </span>
+      </button>
+      <button
+        onClick={() => onChange('REJECTED')}
+        className={cn(
+          'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
+          tab === 'REJECTED'
+            ? 'bg-rose-600 text-white'
+            : 'text-navy-300 hover:text-navy'
+        )}
+      >
+        Rejected
+        <span
+          className={cn(
+            'rounded-full px-1.5 text-[10px]',
+            tab === 'REJECTED' ? 'bg-white/20' : 'bg-white'
+          )}
+        >
+          {rejected}
+        </span>
+      </button>
     </div>
   )
 }

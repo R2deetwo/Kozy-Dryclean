@@ -14,7 +14,7 @@
 //     - B2C/B2B: cannot PATCH orders at all (403)
 // =============================================================================
 
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession, requireSession } from '@/lib/auth'
 import { UpdateOrderSchema } from '@/lib/schemas'
@@ -185,6 +185,43 @@ export async function PATCH(
     },
   })
 
+  // ----- Consistency guard (admin status -> PAYMENT_VERIFIED) -----
+  // When the admin moves an order to PAYMENT_VERIFIED via the dropdown or a
+  // drag, any PENDING/REJECTED bank-transfer payment on it is auto-verified.
+  // Without this, the order says "paid" while the payment queue still flags
+  // the receipt — the exact ghost state that confused the pipeline before
+  // (real-world case: an order at PAYMENT_VERIFIED whose receipt was still
+  // marked REJECTED).
+  if (
+    parsed.data.status === 'PAYMENT_VERIFIED' &&
+    session.user?.role === 'ADMIN' &&
+    order.status !== 'PAYMENT_VERIFIED'
+  ) {
+    const unverified = (updated.payments ?? []).filter(
+      (p: any) => p.method === 'BANK_TRANSFER' && p.status !== 'VERIFIED'
+    )
+    if (unverified.length > 0) {
+      await db.payment.updateMany({
+        where: { id: { in: unverified.map((p: any) => p.id) } },
+        data: {
+          status: 'VERIFIED',
+          verifiedAt: new Date(),
+          verifiedById: session.user?.id,
+        },
+      })
+      const fresh = await db.order.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          payments: true,
+          media: true,
+        },
+      })
+      if (fresh) Object.assign(updated, fresh)
+    }
+  }
+
   // Log the status change as a StatusEvent
   if (parsed.data.status) {
     await db.statusEvent.create({
@@ -195,10 +232,17 @@ export async function PATCH(
       },
     })
 
-    // Email + SMS the customer about the status change.
-    // notifyOrderStatus never throws, so it can't break the update.
+    // Email + SMS the customer about the status change — after the response
+    // so the admin's dropdown/drag feels instant (email providers take
+    // seconds). notifyOrderStatus never throws, so it can't break the update.
     if (parsed.data.status !== order.status) {
-      await notifyOrderStatus(updated, parsed.data.status)
+      after(async () => {
+        try {
+          await notifyOrderStatus(updated, parsed.data.status!)
+        } catch (e) {
+          console.error('Status-change notification failed:', e)
+        }
+      })
     }
   }
 

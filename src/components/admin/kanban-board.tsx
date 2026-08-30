@@ -60,7 +60,11 @@ export function KanbanBoard() {
   const { data: ordersData, isLoading, hasMore, loadMore, isFetchingMore } = useOrders()
   const updateOrderMutation = useUpdateOrder()
   const [activeId, setActiveId] = useState<string | null>(null)
-  const [selected, setSelected] = useState<any | undefined>(undefined)
+  // Store only the ID — the LIVE order object is derived from the React
+  // Query data below. Holding the object itself (the old bug) froze the
+  // modal at its click-time snapshot: verifying a payment moved the card
+  // but the open modal's progress bar, badges and dropdown never caught up.
+  const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
 
   const sensors = useSensors(
@@ -71,6 +75,9 @@ export function KanbanBoard() {
   const visibleOrders = orders.filter((o: any) =>
     KANBAN_COLUMNS.includes(o.status)
   )
+  // The LIVE order behind the open modal — re-derived on every render, so
+  // cache patches from verify/reject/status mutations land here instantly.
+  const selected = selectedId ? orders.find((o) => o.id === selectedId) : undefined
 
   const onDragStart = (e: DragStartEvent) => {
     setActiveId(e.active.id as string)
@@ -146,7 +153,7 @@ export function KanbanBoard() {
       {view === 'list' && (
         <OrdersListView
           orders={visibleOrders}
-          onOpen={(o) => setSelected(o)}
+          onOpen={(o) => setSelectedId(o.id)}
         />
       )}
 
@@ -168,10 +175,10 @@ export function KanbanBoard() {
                 icon={meta.icon}
                 tone={meta.tone}
                 count={colOrders.length}
-                onOpen={(o) => setSelected(o)}
+                onOpen={(o) => setSelectedId(o.id)}
               >
                 {colOrders.map((o) => (
-                  <OrderCard key={o.id} order={o} onOpen={() => setSelected(o)} />
+                  <OrderCard key={o.id} order={o} onOpen={() => setSelectedId(o.id)} />
                 ))}
               </KanbanColumn>
             )
@@ -190,7 +197,7 @@ export function KanbanBoard() {
       {selected && (
         <OrderDetailModal
           order={selected}
-          onClose={() => setSelected(undefined)}
+          onClose={() => setSelectedId(undefined)}
         />
       )}
     </div>
@@ -261,6 +268,9 @@ function OrderCard({
   const driver = order.driver
   const payments = order.payments ?? []
   const pendingPayment = payments.find((p) => p.status === 'PENDING')
+  const rejectedTransfer = payments.find(
+    (p) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER'
+  )
 
   return (
     <Card
@@ -340,6 +350,12 @@ function OrderCard({
         {pendingPayment && (
           <div className="mt-2 rounded bg-amber-100 px-2 py-1 text-[10px] text-amber-800">
             ⚠ Receipt uploaded · needs verification
+          </div>
+        )}
+
+        {rejectedTransfer && (
+          <div className="mt-2 rounded bg-rose-100 px-2 py-1 text-[10px] font-medium text-rose-800">
+            Transfer rejected — customer emailed
           </div>
         )}
 

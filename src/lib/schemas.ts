@@ -6,6 +6,7 @@
 // =============================================================================
 
 import { z } from 'zod'
+import { EMAIL_REGEX, EMAIL_HELP } from '@/lib/email-validation'
 
 // ----- Enums (must match prisma/schema.prisma) -----
 export const RoleSchema = z.enum(['ADMIN', 'DRIVER', 'B2C', 'B2B'])
@@ -39,7 +40,15 @@ export const OrderItemSchema = z.object({
 // find-or-creates a customer record from these details.
 export const GuestInfoSchema = z.object({
   name: z.string().min(2, 'Name is required').max(100),
-  email: z.string().email('A valid email is required').max(255),
+  // Strict shape (dotted domain + TLD) — the same rule the signup form now
+  // enforces. Zod's default .email() still accepts "name@gmail", which once
+  // created an unreachable guest account.
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(255)
+    .regex(EMAIL_REGEX, EMAIL_HELP),
   phone: z.string().min(7, 'Phone number is required').max(20),
 })
 

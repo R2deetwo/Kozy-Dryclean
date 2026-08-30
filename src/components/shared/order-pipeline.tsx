@@ -41,13 +41,18 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
     <>
       {/* Desktop: horizontal progress bar */}
       <div className="hidden sm:block">
-        <div className="flex items-center justify-between gap-1">
+        {/* items-start (NOT items-center): a two-line label like "Payment
+            Confirmed" used to grow its column, vertically center it, and lift
+            its number bubble out of line. Anchoring every column to the top
+            + giving labels a fixed two-line box keeps all 8 bubbles on one
+            horizontal line, no matter how labels wrap. */}
+        <div className="flex items-start justify-between gap-1">
           {PIPELINE_STAGES.map((stage, i) => {
             const done = i < activeIdx
             const active = i === activeIdx
             return (
               <div key={stage.key} className="flex flex-1 flex-col items-center gap-1">
-                <div className="flex w-full items-center">
+                <div className="flex h-6 w-full items-center">
                   {i > 0 && (
                     <div
                       className={cn(
@@ -78,7 +83,7 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
                 {!compact && (
                   <p
                     className={cn(
-                      'text-center text-[10px] leading-tight',
+                      'flex h-7 items-start justify-center text-center text-[10px] leading-tight',
                       active ? 'font-semibold text-navy' : 'text-navy-300'
                     )}
                   >
@@ -170,6 +175,17 @@ function PipelineRail({ activeIdx, compact }: { activeIdx: number; compact?: boo
 export function OrderTimeline({ order }: { order: Order }) {
   const events: Array<{ label: string; at?: string }> = [
     { label: 'Booking Placed', at: order.createdAt },
+    // Shown as soon as the order reaches PAYMENT_VERIFIED — including via
+    // the payment being verified, which the modal's live order object
+    // reflects immediately.
+    {
+      label: 'Payment Verified',
+      at:
+        (order as any).payments?.find?.((p: any) => p.status === 'VERIFIED')?.verifiedAt ??
+        (order.status === 'PAYMENT_VERIFIED' || isPastStage(order.status)
+          ? (order as any).payments?.[0]?.verifiedAt ?? order.updatedAt
+          : undefined),
+    },
     { label: 'Picked Up', at: order.pickedUpAt },
     { label: 'At Station', at: order.atStationAt },
     { label: 'Processing', at: order.processingAt },
@@ -191,4 +207,20 @@ export function OrderTimeline({ order }: { order: Order }) {
       ))}
     </div>
   )
+}
+
+/** True when the order's status is at or beyond `stage` on the pipeline. */
+function isPastStage(status: string): boolean {
+  const order = [
+    'REQUESTED',
+    'PAYMENT_PENDING_VERIFICATION',
+    'PAYMENT_VERIFIED',
+    'PICKED_UP',
+    'AT_STATION',
+    'PROCESSING',
+    'FINISHING',
+    'OUT_FOR_DELIVERY',
+    'DELIVERED',
+  ]
+  return order.indexOf(status) >= order.indexOf('PAYMENT_VERIFIED')
 }

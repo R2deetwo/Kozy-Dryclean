@@ -6,7 +6,13 @@
 // =============================================================================
 
 import { useEffect } from 'react'
-import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query'
+import {
+  useQuery,
+  useMutation,
+  useQueryClient,
+  useInfiniteQuery,
+  type InfiniteData,
+} from '@tanstack/react-query'
 
 // ----- Types (match API responses) -----
 export interface ApiOrder {
@@ -253,7 +259,13 @@ export function useCreatePayment() {
 export function useVerifyPayment() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: 'VERIFIED' | 'REJECTED' }) => {
+    mutationFn: async ({
+      id,
+      status,
+    }: {
+      id: string
+      status: 'VERIFIED' | 'REJECTED'
+    }) => {
       const res = await fetch(`/api/payments/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -264,9 +276,29 @@ export function useVerifyPayment() {
         throw new Error(err.error || 'Failed to update payment')
       }
       const data = await res.json()
-      return data.payment as ApiPayment
+      // The API returns { payment, order } — the fresh order lets the caller
+      // update the board/modal instantly instead of waiting for a refetch.
+      return data as { payment: ApiPayment; order?: ApiOrder; noOp?: boolean }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Patch the fresh order straight into every cached orders list so the
+      // Kanban card, its indicators and any open detail modal update in the
+      // same tick as the click — the invalidation below then reconciles
+      // against the server.
+      if (data.order) {
+        for (const key of ['paged', 'all']) {
+          qc.setQueryData<InfiniteData<Page<ApiOrder>>>(['orders', key], (existing) => {
+            if (!existing) return existing
+            return {
+              ...existing,
+              pages: existing.pages.map((page) => ({
+                ...page,
+                items: page.items.map((o) => (o.id === data.order!.id ? data.order! : o)),
+              })),
+            }
+          })
+        }
+      }
       qc.invalidateQueries({ queryKey: ['payments'] })
       qc.invalidateQueries({ queryKey: ['orders'] })
     },
@@ -278,6 +310,40 @@ export function useUsers(options?: { fetchAll?: boolean }) {
   return usePaginatedList<ApiUser>('users', '/api/users', {
     staleTime: 30 * 1000,
     ...options,
+  })
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async ({
+      id,
+      confirm,
+    }: {
+      id: string
+      confirm: string // must be 'DELETE' — the API double-checks it
+    }) => {
+      const res = await fetch(`/api/users/${id}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirm }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || err.message || 'Failed to delete customer')
+      }
+      return (await res.json()) as {
+        ok: true
+        deleted: { orders: number; reviews: number; payments: number }
+      }
+    },
+    onSuccess: () => {
+      // The CRM list, the orders board and any open customer stats all need
+      // to forget this person immediately.
+      qc.invalidateQueries({ queryKey: ['users'] })
+      qc.invalidateQueries({ queryKey: ['orders'] })
+      qc.invalidateQueries({ queryKey: ['payments'] })
+    },
   })
 }
 

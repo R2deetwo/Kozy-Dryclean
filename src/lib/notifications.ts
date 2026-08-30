@@ -16,6 +16,8 @@
 
 import { sendEmail } from '@/lib/email'
 import { formatNaira } from '@/lib/types'
+import { getAppSettings } from '@/lib/app-settings'
+import { isValidEmail, normalizeEmail } from '@/lib/email-validation'
 
 type NotifiableOrder = {
   id: string
@@ -384,5 +386,186 @@ export async function notifyPaymentRejected(order: NotifiableOrder): Promise<voi
     )
   } catch (e) {
     console.error('notifyPaymentRejected failed:', e)
+  }
+}
+
+// =============================================================================
+// ADMIN ALERTS — ping the business owner's inbox the moment something needs
+// their attention (new signup, new order, customer says they've paid).
+//
+// The destination address + per-alert toggles live in AppSetting (admin
+// Settings → Notifications) so the owner can change them without a redeploy.
+// Fallback chain: DB setting → ADMIN_ALERTS_EMAIL env → the default contact
+// email. Like every notification here: never throws, never blocks a request.
+// =============================================================================
+
+/** Resolve where admin alerts go + which types are enabled. */
+async function adminAlertConfig(): Promise<{
+  email: string
+  newSignup: boolean
+  newOrder: boolean
+  paymentPending: boolean
+}> {
+  const settings = await getAppSettings()
+  const fallback =
+    process.env.ADMIN_ALERTS_EMAIL || settings.contactEmail || 'kozygarmentcare@gmail.com'
+  return {
+    email: isValidEmail(settings.adminAlertsEmail)
+      ? normalizeEmail(settings.adminAlertsEmail)
+      : normalizeEmail(fallback),
+    newSignup: settings.adminAlertsNewSignup !== false,
+    newOrder: settings.adminAlertsNewOrder !== false,
+    paymentPending: settings.adminAlertsPaymentPending !== false,
+  }
+}
+
+/** Compact operational email wrapper for admin alerts (scannable, not marketing-pretty). */
+function adminEmail(opts: {
+  badge: string
+  heading: string
+  intro: string
+  rows: { label: string; value: string }[]
+  cta: { label: string; url: string }
+}): { subject: string; html: string } {
+  const { badge, heading, intro, rows, cta } = opts
+  return {
+    subject: `[Kozy Care] ${heading}`,
+    html: `
+    <!DOCTYPE html>
+    <html>
+    <body style="font-family: Arial, Helvetica, sans-serif; background: #F8F9FA; padding: 32px 0; margin: 0;">
+      <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
+        <div style="background: #0A192F; padding: 18px 32px;">
+          <table style="width: 100%; border-collapse: collapse;"><tr>
+            <td style="vertical-align: middle;">
+              <span style="color: #D4AF37; font-weight: 700; font-size: 18px; letter-spacing: 0.5px;">Kozy Care</span>
+              <span style="color: rgba(255,255,255,0.5); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-left: 10px;">Operations</span>
+            </td>
+            <td style="vertical-align: middle; text-align: right;">
+              <span style="background: #D4AF37; color: #0A192F; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 1px;">${badge}</span>
+            </td>
+          </tr></table>
+        </div>
+        <div style="padding: 28px 32px;">
+          <h2 style="color: #0A192F; font-size: 18px; margin: 0 0 10px 0;">${heading}</h2>
+          <p style="color: #6F88A8; font-size: 14px; line-height: 1.6; margin: 0 0 18px 0;">${intro}</p>
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px; background: #F8F9FA; border-radius: 8px;">
+            ${rows
+              .map(
+                (r) => `
+            <tr>
+              <td style="padding: 9px 14px; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #EDEFF2;">${r.label}</td>
+              <td style="padding: 9px 14px; color: #0A192F; font-weight: 600; border-bottom: 1px solid #EDEFF2;">${r.value}</td>
+            </tr>`
+              )
+              .join('')}
+          </table>
+          <div style="margin: 22px 0 4px 0; text-align: center;">
+            <a href="${cta.url}" style="display: inline-block; background: #0A192F; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px;">${cta.label}</a>
+          </div>
+          <p style="color: #98A8BD; font-size: 11px; margin: 18px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 14px; line-height: 1.5;">
+            You receive this because admin alerts are on — manage the alert email and toggles in
+            Admin → Settings → Notifications.
+          </p>
+        </div>
+      </div>
+    </body>
+    </html>`,
+  }
+}
+
+/** A new customer signed up (account created, pending email verification). */
+export async function notifyAdminNewCustomer(user: {
+  name: string
+  email: string
+  phone: string
+  role: string
+  company?: string | null
+}): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    if (!cfg.newSignup) return
+    const { subject, html } = adminEmail({
+      badge: 'New customer',
+      heading: `${user.name} just signed up`,
+      intro:
+        'A new account was created and is waiting for the customer to verify their email. They’ll show up in the CRM with a NEW badge for their first week.',
+      rows: [
+        { label: 'Name', value: user.name },
+        { label: 'Email', value: user.email },
+        { label: 'Phone', value: user.phone },
+        { label: 'Account type', value: user.role === 'B2B' ? `Corporate${user.company ? ` — ${user.company}` : ''}` : 'Personal' },
+      ],
+      cta: { label: 'Open the CRM', url: `${baseUrl()}/admin` },
+    })
+    await sendEmail({ to: cfg.email, subject, html })
+  } catch (e) {
+    console.error('notifyAdminNewCustomer failed:', e)
+  }
+}
+
+/** A new order was placed (authed customer or guest checkout). */
+export async function notifyAdminNewOrder(order: NotifiableOrder): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    if (!cfg.newOrder) return
+    let itemCount = '—'
+    try {
+      const parsed = JSON.parse((order as any).itemsManifest || '[]')
+      if (Array.isArray(parsed) && parsed.length > 0) itemCount = `${parsed.length} item${parsed.length === 1 ? '' : 's'}`
+    } catch {
+      /* KG orders have no manifest */
+    }
+    const { subject, html } = adminEmail({
+      badge: 'New order',
+      heading: `New order #${order.orderNumber}`,
+      intro:
+        order.type === 'KG'
+          ? 'A corporate/bulk booking came in — total is quoted after weighing at the station.'
+          : 'A new pickup booking came in. It will appear on your Orders board immediately.',
+      rows: [
+        { label: 'Customer', value: order.user.name },
+        { label: 'Phone', value: order.user.phone },
+        { label: 'Pickup', value: `${fmtDate(order.pickupDate)} · ${order.pickupTimeSlot}` },
+        { label: 'Address', value: order.pickupAddress },
+        { label: 'Basket', value: order.type === 'KG' ? 'Bulk (per-kg)' : itemCount },
+        { label: 'Total', value: order.totalPrice ? formatNaira(order.totalPrice) : 'To be weighed' },
+        {
+          label: 'Payment',
+          value: (order as any).payments?.some?.((p: any) => p.status === 'PENDING') || order.status === 'PAYMENT_PENDING_VERIFICATION'
+            ? 'Bank transfer — verify it now'
+            : 'Bank transfer / card',
+        },
+      ],
+      cta: { label: 'Open the Orders board', url: `${baseUrl()}/admin` },
+    })
+    await sendEmail({ to: cfg.email, subject, html })
+  } catch (e) {
+    console.error('notifyAdminNewOrder failed:', e)
+  }
+}
+
+/** A customer confirmed a bank transfer — needs admin verification NOW. */
+export async function notifyAdminTransferPending(order: NotifiableOrder): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    if (!cfg.paymentPending) return
+    const { subject, html } = adminEmail({
+      badge: 'Payment to verify',
+      heading: `Verify payment — order #${order.orderNumber}`,
+      intro:
+        'A customer just confirmed they’ve made the bank transfer. The customer is watching their payment status page — verifying it releases the pickup.',
+      rows: [
+        { label: 'Customer', value: `${order.user.name} (${order.user.email})` },
+        { label: 'Amount', value: formatNaira(order.totalPrice ?? 0) },
+        { label: 'Expected narration', value: `#${order.orderNumber}` },
+        { label: 'Pickup', value: `${fmtDate(order.pickupDate)} · ${order.pickupTimeSlot}` },
+        { label: 'Receipt', value: (order as any).payments?.[0]?.receiptUrl ? 'Screenshot attached in the queue' : 'Not attached — match on your bank statement' },
+      ],
+      cta: { label: 'Open the verification queue', url: `${baseUrl()}/admin` },
+    })
+    await sendEmail({ to: cfg.email, subject, html })
+  } catch (e) {
+    console.error('notifyAdminTransferPending failed:', e)
   }
 }

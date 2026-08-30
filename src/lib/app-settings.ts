@@ -26,6 +26,10 @@ export const APP_SETTING_KEYS = [
   'account_number',
   'contact_phone',
   'contact_email',
+  'admin_alerts_email',
+  'admin_alerts_new_signup',
+  'admin_alerts_new_order',
+  'admin_alerts_payment_pending',
   'delivery_fee',
   'handwash_surcharge_percent',
   'guarantee_min_garments',
@@ -57,6 +61,16 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
       return fallback
     }
   }
+  const bool = (key: AppSettingKey, fallback: boolean) => {
+    const raw = map.get(key)
+    if (raw === undefined) return fallback
+    try {
+      const parsed = JSON.parse(raw)
+      return typeof parsed === 'boolean' ? parsed : fallback
+    } catch {
+      return fallback
+    }
+  }
   const d = defaultAppSettings()
   return {
     bankName: str('bank_name', d.bankName),
@@ -64,6 +78,10 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     accountNumber: str('account_number', d.accountNumber),
     contactPhone: str('contact_phone', d.contactPhone),
     contactEmail: str('contact_email', d.contactEmail),
+    adminAlertsEmail: str('admin_alerts_email', d.adminAlertsEmail),
+    adminAlertsNewSignup: bool('admin_alerts_new_signup', d.adminAlertsNewSignup),
+    adminAlertsNewOrder: bool('admin_alerts_new_order', d.adminAlertsNewOrder),
+    adminAlertsPaymentPending: bool('admin_alerts_payment_pending', d.adminAlertsPaymentPending),
     deliveryFee: num('delivery_fee', d.deliveryFee),
     handwashSurchargePercent: num('handwash_surcharge_percent', d.handwashSurchargePercent),
     guaranteeMinGarments: num('guarantee_min_garments', d.guaranteeMinGarments),
@@ -96,6 +114,10 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
       account_number: JSON.stringify(d.accountNumber),
       contact_phone: JSON.stringify(d.contactPhone),
       contact_email: JSON.stringify(d.contactEmail),
+      admin_alerts_email: JSON.stringify(d.adminAlertsEmail),
+      admin_alerts_new_signup: JSON.stringify(d.adminAlertsNewSignup),
+      admin_alerts_new_order: JSON.stringify(d.adminAlertsNewOrder),
+      admin_alerts_payment_pending: JSON.stringify(d.adminAlertsPaymentPending),
       delivery_fee: JSON.stringify(d.deliveryFee),
       handwash_surcharge_percent: JSON.stringify(d.handwashSurchargePercent),
       guarantee_min_garments: JSON.stringify(d.guaranteeMinGarments),
@@ -138,6 +160,14 @@ export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<
   if (patch.accountNumber !== undefined) map.account_number = JSON.stringify(patch.accountNumber)
   if (patch.contactPhone !== undefined) map.contact_phone = JSON.stringify(patch.contactPhone)
   if (patch.contactEmail !== undefined) map.contact_email = JSON.stringify(patch.contactEmail)
+  if (patch.adminAlertsEmail !== undefined)
+    map.admin_alerts_email = JSON.stringify(patch.adminAlertsEmail.trim())
+  if (patch.adminAlertsNewSignup !== undefined)
+    map.admin_alerts_new_signup = JSON.stringify(patch.adminAlertsNewSignup)
+  if (patch.adminAlertsNewOrder !== undefined)
+    map.admin_alerts_new_order = JSON.stringify(patch.adminAlertsNewOrder)
+  if (patch.adminAlertsPaymentPending !== undefined)
+    map.admin_alerts_payment_pending = JSON.stringify(patch.adminAlertsPaymentPending)
   if (patch.deliveryFee !== undefined) map.delivery_fee = JSON.stringify(Math.round(patch.deliveryFee))
   if (patch.handwashSurchargePercent !== undefined)
     map.handwash_surcharge_percent = JSON.stringify(patch.handwashSurchargePercent)

@@ -7,6 +7,7 @@ import { db } from '@/lib/db'
 import crypto from 'crypto'
 import { sendEmail } from '@/lib/email'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
+import { isValidEmail, EMAIL_HELP } from '@/lib/email-validation'
 
 export async function POST(req: Request) {
   const ip = getClientIP(req)
@@ -20,7 +21,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 })
   }
 
-  const user = await db.user.findUnique({ where: { email: email.toLowerCase() } })
+  // Reject mistyped addresses up front (same strict shape check as signup —
+  // "name@gmail" would otherwise hide behind the vague success message).
+  if (!isValidEmail(email)) {
+    return NextResponse.json({ error: 'INVALID_EMAIL', message: EMAIL_HELP }, { status: 400 })
+  }
+
+  const user = await db.user.findUnique({ where: { email: email.trim().toLowerCase() } })
   if (!user) {
     // Don't reveal whether email exists
     return NextResponse.json({ ok: true, message: 'If an account exists, a reset link has been sent.' })
