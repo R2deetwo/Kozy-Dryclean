@@ -106,11 +106,30 @@ export async function PATCH(
       payment.order.status === 'REQUESTED' ||
       payment.order.status === 'PAYMENT_PENDING_VERIFICATION'
 
+    // ----- Stage-email dedup (phase 24) -----
+    // "Payment confirmed" is pipeline stage 1. If the customer has already
+    // been notified at/past that stage (e.g. the order progressed after a
+    // previous verification, or a reject → re-approve loop), do NOT email
+    // again — the client explicitly asked that no stage email ever repeats.
+    const alreadyNotifiedPaymentStage = payment.order.lastNotifiedStage >= 1
+
     if (canAdvance) {
       freshOrder = await db.order.update({
         where: { id: payment.orderId },
-        data: { status: 'PAYMENT_VERIFIED' },
+        data: {
+          status: 'PAYMENT_VERIFIED',
+          // Mark stage 1 notified in the same atomic write as the status.
+          ...(alreadyNotifiedPaymentStage ? {} : { lastNotifiedStage: 1 }),
+        },
         include: ORDER_INCLUDE,
+      })
+    } else if (!alreadyNotifiedPaymentStage) {
+      // Late transfer on an already-advanced order (no-regression guard
+      // above): never drag the order back, but still claim stage 1 so no
+      // future verify/re-approve cycle can email it twice.
+      await db.order.update({
+        where: { id: payment.orderId },
+        data: { lastNotifiedStage: 1 },
       })
     }
 
@@ -118,17 +137,19 @@ export async function PATCH(
     // ("you'll get an email the moment it's verified") — after the response,
     // because Brevo/Termii latency must not slow the admin action.
     // notifyOrderStatus never throws, so it can't break the update.
-    const orderForNotify = freshOrder!
-    after(async () => {
-      try {
-        await notifyOrderStatus(
-          { ...orderForNotify, totalPrice: orderForNotify.totalPrice ?? payment.amount },
-          'PAYMENT_VERIFIED'
-        )
-      } catch (e) {
-        console.error('Payment-verified notification failed:', e)
-      }
-    })
+    if (!alreadyNotifiedPaymentStage) {
+      const orderForNotify = freshOrder!
+      after(async () => {
+        try {
+          await notifyOrderStatus(
+            { ...orderForNotify, totalPrice: orderForNotify.totalPrice ?? payment.amount },
+            'PAYMENT_VERIFIED'
+          )
+        } catch (e) {
+          console.error('Payment-verified notification failed:', e)
+        }
+      })
+    }
   }
 
   // ----- Reject: tell the customer what to do next -----

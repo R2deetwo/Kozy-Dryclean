@@ -19,6 +19,7 @@ import { db } from '@/lib/db'
 import { getSession, requireSession } from '@/lib/auth'
 import { UpdateOrderSchema } from '@/lib/schemas'
 import { notifyOrderStatus, notifyInvoiceReady } from '@/lib/notifications'
+import { STAGE_RANK } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
 import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 
@@ -153,6 +154,15 @@ export async function PATCH(
   if (parsed.data.status !== undefined) {
     updateData.status = parsed.data.status
 
+    // ----- Stage-email dedup (phase 24, client request) -----
+    // The customer is emailed about a pipeline stage ONLY the first time the
+    // order moves STRICTLY FORWARD past it. Updating lastNotifiedStage in the
+    // SAME write as the status makes this race-free: dragging a card back and
+    // forward again can never re-send an earlier stage's email, and no email
+    // ever tells the customer their items went backwards.
+    const newRank = STAGE_RANK[parsed.data.status] ?? -1
+    if (newRank > order.lastNotifiedStage) updateData.lastNotifiedStage = newRank
+
     // Auto-set timestamp fields when status changes
     if (parsed.data.status === 'PICKED_UP' && !order.pickedUpAt) updateData.pickedUpAt = new Date()
     if (parsed.data.status === 'AT_STATION' && !order.atStationAt) updateData.atStationAt = new Date()
@@ -238,7 +248,19 @@ export async function PATCH(
     // Email + SMS the customer about the status change — after the response
     // so the admin's dropdown/drag feels instant (email providers take
     // seconds). notifyOrderStatus never throws, so it can't break the update.
-    if (parsed.data.status !== order.status) {
+    //
+    // STAGE-EMAIL DEDUP: only pipeline stages the customer has NOT been
+    // emailed about yet (strictly forward), plus non-pipeline statuses
+    // (PAYMENT_PENDING_VERIFICATION / CANCELLED — event-driven, not progress).
+    // A backwards or repeat move is logged in the timeline but SILENT — the
+    // customer must never receive an email implying their order regressed,
+    // nor a duplicate for a stage they were already told about.
+    const notifyRank = STAGE_RANK[parsed.data.status] ?? -1
+    const statusChanged = parsed.data.status !== order.status
+    const shouldEmailCustomer =
+      statusChanged && (notifyRank === -1 || notifyRank > order.lastNotifiedStage)
+
+    if (shouldEmailCustomer) {
       after(async () => {
         try {
           await notifyOrderStatus(updated, parsed.data.status!)

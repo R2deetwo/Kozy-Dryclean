@@ -93,6 +93,34 @@ export function SettingsView() {
 
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [testing, setTesting] = useState(false)
+  const [testResult, setTestResult] = useState<{
+    recipients: string[]
+    results: { to: string; ok: boolean; error?: string }[]
+  } | null>(null)
+
+  const sendTestEmail = async () => {
+    setTesting(true)
+    setTestResult(null)
+    try {
+      const res = await fetch('/api/admin/notifications/test', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Test send failed')
+      setTestResult(data)
+      toast({
+        title: 'Test alert sent',
+        description: 'Check each inbox (and the spam folder) — the result below shows what the email provider accepted.',
+      })
+    } catch (e: any) {
+      toast({
+        title: 'Test send failed',
+        description: e?.message || 'Could not reach the server.',
+        variant: 'destructive',
+      })
+    } finally {
+      setTesting(false)
+    }
+  }
 
   const handleSave = async () => {
     setSaving(true)
@@ -417,20 +445,68 @@ export function SettingsView() {
                 <>
                   <div>
                     <Label htmlFor="alerts-email" className="text-xs uppercase tracking-wide text-navy-300">
-                      <Mail className="mr-1 inline h-3 w-3" /> Send alerts to
+                      <Mail className="mr-1 inline h-3 w-3" /> Send alerts to (comma-separated)
                     </Label>
                     <Input
                       id="alerts-email"
-                      type="email"
+                      type="text"
                       value={app.adminAlertsEmail}
                       onChange={(e) => setApp({ adminAlertsEmail: e.target.value })}
-                      placeholder="kozygarmentcare@gmail.com"
+                      placeholder="kozygarmentcare@gmail.com,practiceprosystems@gmail.com"
                       className="mt-1.5 max-w-md"
                     />
                     <p className="mt-1.5 text-[11px] text-navy-300">
-                      Tip: a Gmail address you check on your phone works best — alerts arrive
-                      the second a customer acts.
+                      Every address here gets each alert — e.g.
+                      <span className="font-medium text-navy"> kozygarmentcare@gmail.com,practiceprosystems@gmail.com</span>.
+                      Addresses must be complete (name@gmail.com) or saving is rejected.
                     </p>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={testing}
+                        onClick={sendTestEmail}
+                      >
+                        {testing ? 'Sending…' : 'Send test email now'}
+                      </Button>
+                      <span className="text-[11px] text-navy-300">
+                        Sends a real email to every address above and shows exactly what the
+                        provider accepted — if a test lands in spam, click “Not spam” once and
+                        future alerts will arrive.
+                      </span>
+                    </div>
+                    {testResult && (
+                      <div className="mt-3 rounded-lg border bg-linen-50 p-3 text-xs">
+                        {testResult.results.length === 0 ? (
+                          <p className="text-red-700">
+                            No valid recipients configured — fix the addresses above and Save.
+                          </p>
+                        ) : (
+                          <ul className="space-y-1">
+                            {testResult.results.map((r) => (
+                              <li key={r.to} className="flex items-center gap-2">
+                                <span
+                                  className={
+                                    r.ok
+                                      ? 'font-semibold text-emerald-700'
+                                      : 'font-semibold text-red-700'
+                                  }
+                                >
+                                  {r.ok ? '✓' : '✕'}
+                                </span>
+                                <span className="font-medium text-navy">{r.to}</span>
+                                <span className="text-navy-300">
+                                  {r.ok
+                                    ? 'accepted by the email provider — check the inbox (and spam)'
+                                    : r.error || 'failed'}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-3">

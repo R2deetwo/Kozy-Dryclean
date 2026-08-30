@@ -18,6 +18,8 @@ import { sendEmail } from '@/lib/email'
 import { formatNaira } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
 import { isValidEmail, normalizeEmail } from '@/lib/email-validation'
+import { db } from '@/lib/db'
+import type { NotificationEventType, NotificationEmailStatus } from '@/lib/types'
 
 type NotifiableOrder = {
   id: string
@@ -404,20 +406,34 @@ export async function notifyPaymentRejected(order: NotifiableOrder): Promise<voi
 // email. Like every notification here: never throws, never blocks a request.
 // =============================================================================
 
-/** Resolve where admin alerts go + which types are enabled. */
+/** Resolve where admin alerts go + which types are enabled.
+ *
+ * The destination setting accepts a comma/semicolon-separated LIST of
+ * addresses (client request: alerts must reach BOTH kozygarmentcare@gmail.com
+ * and practiceprosystems@gmail.com). Fallback chain if none of the stored
+ * values parse: ADMIN_ALERTS_EMAIL env → contact email → the owners. */
+function parseAlertEmails(raw: string | null | undefined): string[] {
+  if (!raw) return []
+  const list = raw
+    .split(/[,;\n]/)
+    .map((s) => normalizeEmail(s.trim()))
+    .filter((s) => isValidEmail(s))
+  return [...new Set(list)]
+}
+
 async function adminAlertConfig(): Promise<{
-  email: string
+  emails: string[]
   newSignup: boolean
   newOrder: boolean
   paymentPending: boolean
 }> {
   const settings = await getAppSettings()
-  const fallback =
+  const emails = parseAlertEmails(settings.adminAlertsEmail)
+  const fallback = parseAlertEmails(
     process.env.ADMIN_ALERTS_EMAIL || settings.contactEmail || 'kozygarmentcare@gmail.com'
+  )
   return {
-    email: isValidEmail(settings.adminAlertsEmail)
-      ? normalizeEmail(settings.adminAlertsEmail)
-      : normalizeEmail(fallback),
+    emails: emails.length > 0 ? emails : fallback,
     newSignup: settings.adminAlertsNewSignup !== false,
     newOrder: settings.adminAlertsNewOrder !== false,
     paymentPending: settings.adminAlertsPaymentPending !== false,
@@ -479,6 +495,101 @@ function adminEmail(opts: {
   }
 }
 
+// ----- In-app operations feed + multi-recipient delivery -----
+//
+// Every admin alert is ALSO recorded as a NotificationEvent row the moment
+// it happens, together with the per-recipient email result. Why: alert
+// emails sent FROM a gmail.com address via Brevo can land in Gmail's spam
+// folder (no DMARC alignment) — the owner missed signups and payment
+// confirmations entirely. The in-app feed (Admin → Notifications) now
+// guarantees the owners SEE every event regardless of email fate, and the
+// recorded emailStatus shows whether the send itself succeeded.
+
+type RecipientResult = { to: string; ok: boolean; error?: string }
+
+async function deliverAdminAlert(opts: {
+  type: NotificationEventType
+  title: string
+  body: string
+  emails: string[]
+  email?: { subject: string; html: string }
+  enabled: boolean
+  data?: Record<string, unknown>
+  linkTab?: string
+}): Promise<void> {
+  const { type, title, body, emails, email, enabled, data, linkTab } = opts
+  let eventId: string | null = null
+
+  // 1) Record the event immediately — the feed must exist even if every
+  //    later step fails. Never throws upward.
+  try {
+    const event = await db.notificationEvent.create({
+      data: {
+        type,
+        title,
+        body,
+        data: data ? JSON.stringify(data) : undefined,
+        linkTab,
+        recipients: JSON.stringify(emails),
+        emailStatus: 'NONE',
+      },
+    })
+    eventId = event.id
+  } catch (e) {
+    console.error('NotificationEvent create failed:', e)
+  }
+
+  // 2) Send the email to EVERY configured recipient (toggle-gated), one
+  //    result per address.
+  const shouldSend = enabled && !!email
+  const results: RecipientResult[] = shouldSend
+    ? await Promise.all(
+        emails.map(async (to): Promise<RecipientResult> => {
+          try {
+            await sendEmail({ to, subject: email!.subject, html: email!.html })
+            return { to, ok: true }
+          } catch (e: unknown) {
+            const error = e instanceof Error ? e.message : String(e)
+            console.error(`Admin alert to ${to} failed:`, error)
+            return { to, ok: false, error }
+          }
+        })
+      )
+    : []
+
+  // 3) Persist the delivery outcome on the event row.
+  let status: NotificationEmailStatus
+  if (!enabled) status = 'DISABLED'
+  else if (emails.length === 0) status = 'FAILED'
+  else if (results.length === 0) status = 'DISABLED'
+  else if (results.every((r) => r.ok)) status = 'SENT'
+  else if (results.some((r) => r.ok)) status = 'PARTIAL'
+  else status = 'FAILED'
+
+  if (eventId) {
+    try {
+      await db.notificationEvent.update({
+        where: { id: eventId },
+        data: {
+          emailStatus: status,
+          emailDetail: JSON.stringify({
+            attempted: emails,
+            results,
+            note:
+              !enabled
+                ? 'This alert type is switched off in Settings → Notifications.'
+                : emails.length === 0
+                  ? 'No valid alert recipients configured in Settings → Notifications.'
+                  : undefined,
+          }),
+        },
+      })
+    } catch (e) {
+      console.error('NotificationEvent update failed:', e)
+    }
+  }
+}
+
 /** A new customer signed up (account created, pending email verification). */
 export async function notifyAdminNewCustomer(user: {
   name: string
@@ -489,7 +600,8 @@ export async function notifyAdminNewCustomer(user: {
 }): Promise<void> {
   try {
     const cfg = await adminAlertConfig()
-    if (!cfg.newSignup) return
+    const accountType =
+      user.role === 'B2B' ? `Corporate${user.company ? ` — ${user.company}` : ''}` : 'Personal'
     const { subject, html } = adminEmail({
       badge: 'New customer',
       heading: `${user.name} just signed up`,
@@ -499,11 +611,20 @@ export async function notifyAdminNewCustomer(user: {
         { label: 'Name', value: user.name },
         { label: 'Email', value: user.email },
         { label: 'Phone', value: user.phone },
-        { label: 'Account type', value: user.role === 'B2B' ? `Corporate${user.company ? ` — ${user.company}` : ''}` : 'Personal' },
+        { label: 'Account type', value: accountType },
       ],
       cta: { label: 'Open the CRM', url: `${baseUrl()}/admin` },
     })
-    await sendEmail({ to: cfg.email, subject, html })
+    await deliverAdminAlert({
+      type: 'NEW_SIGNUP',
+      title: `${user.name} just signed up`,
+      body: `${user.email} · ${user.phone} · ${accountType} account`,
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: cfg.newSignup,
+      data: { userName: user.name, userEmail: user.email, userPhone: user.phone, role: user.role },
+      linkTab: 'customers',
+    })
   } catch (e) {
     console.error('notifyAdminNewCustomer failed:', e)
   }
@@ -513,7 +634,6 @@ export async function notifyAdminNewCustomer(user: {
 export async function notifyAdminNewOrder(order: NotifiableOrder): Promise<void> {
   try {
     const cfg = await adminAlertConfig()
-    if (!cfg.newOrder) return
     let itemCount = '—'
     try {
       const parsed = JSON.parse((order as any).itemsManifest || '[]')
@@ -521,6 +641,9 @@ export async function notifyAdminNewOrder(order: NotifiableOrder): Promise<void>
     } catch {
       /* KG orders have no manifest */
     }
+    const isTransfer =
+      (order as any).payments?.some?.((p: any) => p.status === 'PENDING') ||
+      order.status === 'PAYMENT_PENDING_VERIFICATION'
     const { subject, html } = adminEmail({
       badge: 'New order',
       heading: `New order #${order.orderNumber}`,
@@ -537,14 +660,30 @@ export async function notifyAdminNewOrder(order: NotifiableOrder): Promise<void>
         { label: 'Total', value: order.totalPrice ? formatNaira(order.totalPrice) : 'To be weighed' },
         {
           label: 'Payment',
-          value: (order as any).payments?.some?.((p: any) => p.status === 'PENDING') || order.status === 'PAYMENT_PENDING_VERIFICATION'
-            ? 'Bank transfer — verify it now'
-            : 'Bank transfer / card',
+          value: isTransfer ? 'Bank transfer — verify it now' : 'Bank transfer / card',
         },
       ],
       cta: { label: 'Open the Orders board', url: `${baseUrl()}/admin` },
     })
-    await sendEmail({ to: cfg.email, subject, html })
+    await deliverAdminAlert({
+      type: 'NEW_ORDER',
+      title: `New order #${order.orderNumber}`,
+      body:
+        `${order.user.name} · ${order.type === 'KG' ? 'Bulk (per-kg)' : itemCount} · ` +
+        `${order.totalPrice ? formatNaira(order.totalPrice) : 'to be weighed'} · ` +
+        `pickup ${fmtDate(order.pickupDate)}`,
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: cfg.newOrder,
+      data: {
+        orderNumber: order.orderNumber,
+        orderId: order.id,
+        customer: order.user.name,
+        customerPhone: order.user.phone,
+        total: order.totalPrice ?? null,
+      },
+      linkTab: 'kanban',
+    })
   } catch (e) {
     console.error('notifyAdminNewOrder failed:', e)
   }
@@ -554,7 +693,6 @@ export async function notifyAdminNewOrder(order: NotifiableOrder): Promise<void>
 export async function notifyAdminTransferPending(order: NotifiableOrder): Promise<void> {
   try {
     const cfg = await adminAlertConfig()
-    if (!cfg.paymentPending) return
     const { subject, html } = adminEmail({
       badge: 'Payment to verify',
       heading: `Verify payment — order #${order.orderNumber}`,
@@ -569,7 +707,24 @@ export async function notifyAdminTransferPending(order: NotifiableOrder): Promis
       ],
       cta: { label: 'Open the verification queue', url: `${baseUrl()}/admin` },
     })
-    await sendEmail({ to: cfg.email, subject, html })
+    await deliverAdminAlert({
+      type: 'TRANSFER_PENDING',
+      title: `Customer says they’ve paid — #${order.orderNumber}`,
+      body:
+        `${order.user.name} confirmed a transfer of ${formatNaira(order.totalPrice ?? 0)}. ` +
+        'Verify it in the payment queue to release the pickup.',
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: cfg.paymentPending,
+      data: {
+        orderNumber: order.orderNumber,
+        orderId: order.id,
+        customer: order.user.name,
+        customerEmail: order.user.email,
+        amount: order.totalPrice ?? null,
+      },
+      linkTab: 'payments',
+    })
   } catch (e) {
     console.error('notifyAdminTransferPending failed:', e)
   }
@@ -642,7 +797,21 @@ export async function notifyAdminNewFeedback(feedback: {
       ],
       cta: { label: 'Open the Feedback inbox', url: `${baseUrl()}/admin` },
     })
-    await sendEmail({ to: cfg.email, subject, html })
+    await deliverAdminAlert({
+      type: 'FEEDBACK',
+      title: `New ${typeLabel.toLowerCase()} from ${feedback.name}`,
+      body: feedback.message.slice(0, 300),
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: true,
+      data: {
+        feedbackType: feedback.type,
+        from: feedback.name,
+        fromEmail: feedback.email,
+        reference: feedback.reference ?? null,
+      },
+      linkTab: 'feedback',
+    })
   } catch (e) {
     console.error('notifyAdminNewFeedback failed:', e)
   }
@@ -680,8 +849,93 @@ export async function notifyAdminRiderApplication(app: {
       ],
       cta: { label: 'Contact the rider', url: `tel:${app.phone.replace(/\s/g, '')}` },
     })
-    await sendEmail({ to: cfg.email, subject, html })
+    await deliverAdminAlert({
+      type: 'RIDER_APPLICATION',
+      title: `${app.fullName} applied to ride for Kozy`,
+      body: `${app.phone}${app.altPhone ? ` / ${app.altPhone}` : ''} · ${app.lga} · ${app.bikeModel} (${app.bikeYear})`,
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: true,
+      data: {
+        name: app.fullName,
+        phone: app.phone,
+        altPhone: app.altPhone ?? null,
+        email: app.email ?? null,
+        lga: app.lga,
+      },
+      linkTab: 'help',
+    })
   } catch (e) {
     console.error('notifyAdminRiderApplication failed:', e)
   }
+}
+
+/** Manual delivery check — the "Send test email" button in Settings →
+ * Notifications. Sends to every configured recipient and records the result
+ * so the owner can instantly see whether alerts reach each inbox (and, if
+ * not, whether the send failed or the email was accepted but filtered). */
+export async function notifyAdminTestEmails(): Promise<{
+  recipients: string[]
+  results: RecipientResult[]
+}> {
+  const cfg = await adminAlertConfig()
+  const { subject, html } = adminEmail({
+    badge: 'Test alert',
+    heading: 'This is a test alert — delivery check',
+    intro:
+      'You asked for a test from Settings → Notifications. If this landed in your inbox, admin alerts are reaching this address. If it landed in SPAM, open it and click "Not spam" (and add the sender to your contacts) — that trains your provider to deliver future signup, order and payment alerts.',
+    rows: [
+      { label: 'Recipients', value: cfg.emails.join(', ') || 'none configured' },
+      { label: 'Sent at', value: new Date().toLocaleString('en-NG') },
+    ],
+    cta: { label: 'Open the Notifications feed', url: `${baseUrl()}/admin` },
+  })
+
+  // Test sends always attempt delivery (they are explicitly requested), and
+  // the per-recipient outcome is returned to the Settings UI live.
+  let results: RecipientResult[] = []
+  try {
+    results = await Promise.all(
+      cfg.emails.map(async (to): Promise<RecipientResult> => {
+        try {
+          await sendEmail({ to, subject, html })
+          return { to, ok: true }
+        } catch (e: unknown) {
+          return { to, ok: false, error: e instanceof Error ? e.message : String(e) }
+        }
+      })
+    )
+  } catch (e) {
+    console.error('notifyAdminTestEmails failed:', e)
+  }
+
+  const status: NotificationEmailStatus =
+    results.length === 0
+      ? 'FAILED'
+      : results.every((r) => r.ok)
+        ? 'SENT'
+        : results.some((r) => r.ok)
+          ? 'PARTIAL'
+          : 'FAILED'
+
+  try {
+    await db.notificationEvent.create({
+      data: {
+        type: 'TEST',
+        title: 'Test alert sent from Settings',
+        body:
+          results.length === 0
+            ? 'No valid alert recipients are configured.'
+            : results.map((r) => `${r.to}: ${r.ok ? 'accepted by email provider' : 'FAILED — ' + (r.error ?? 'unknown error')}`).join(' · '),
+        recipients: JSON.stringify(cfg.emails),
+        emailStatus: status,
+        emailDetail: JSON.stringify({ attempted: cfg.emails, results }),
+        linkTab: 'settings',
+      },
+    })
+  } catch (e) {
+    console.error('Test NotificationEvent create failed:', e)
+  }
+
+  return { recipients: cfg.emails, results }
 }

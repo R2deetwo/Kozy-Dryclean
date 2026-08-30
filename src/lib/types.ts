@@ -488,9 +488,10 @@ export function defaultAppSettings(): KozyAppSettings {
     accountNumber: COMPANY_BANK.accountNumber,
     contactPhone: '+234 803 175 5230',
     contactEmail: 'kozygarmentcare@gmail.com',
-    // The owner's inbox (client-requested default) — changeable in admin
-    // Settings → Notifications without a redeploy.
-    adminAlertsEmail: 'kozygarmentcare@gmail.com',
+    // The owners' inboxes (client-requested) — the setting accepts a
+    // comma-separated LIST so alerts can reach every stakeholder. Changeable
+    // in admin Settings → Notifications without a redeploy.
+    adminAlertsEmail: 'kozygarmentcare@gmail.com,practiceprosystems@gmail.com',
     adminAlertsNewSignup: true,
     adminAlertsNewOrder: true,
     adminAlertsPaymentPending: true,
@@ -580,6 +581,52 @@ export const KANBAN_COLUMNS: OrderStatus[] = [
   'OUT_FOR_DELIVERY',
   'DELIVERED',
 ]
+
+// Linear rank of each pipeline stage (matches PIPELINE_STAGES order).
+// Used for stage-email dedup: a customer is emailed about a stage ONLY when
+// its rank is strictly higher than any stage they've already been emailed
+// about (Order.lastNotifiedStage). Non-pipeline statuses rank -1 — their
+// emails (payment-pending, cancelled) are event-driven, not progress, so
+// they are exempt from the monotonic rule.
+export const STAGE_RANK: Record<string, number> = {
+  REQUESTED: 0,
+  PAYMENT_VERIFIED: 1,
+  PICKED_UP: 2,
+  AT_STATION: 3,
+  PROCESSING: 4,
+  FINISHING: 5,
+  OUT_FOR_DELIVERY: 6,
+  DELIVERED: 7,
+  PAYMENT_PENDING_VERIFICATION: -1,
+  CANCELLED: -1,
+}
+
+// =====================================================
+// Notification events — the admins' in-app operations feed
+// =====================================================
+export type NotificationEventType =
+  | 'NEW_SIGNUP'
+  | 'NEW_ORDER'
+  | 'TRANSFER_PENDING'
+  | 'FEEDBACK'
+  | 'RIDER_APPLICATION'
+  | 'TEST'
+
+export type NotificationEmailStatus = 'NONE' | 'DISABLED' | 'SENT' | 'PARTIAL' | 'FAILED'
+
+export interface NotificationEvent {
+  id: string
+  type: NotificationEventType
+  title: string
+  body: string
+  data?: string
+  linkTab?: string
+  recipients?: string
+  emailStatus: NotificationEmailStatus
+  emailDetail?: string
+  readAt?: string
+  createdAt: string
+}
 
 export function formatNaira(amount: number): string {
   return '₦' + Math.round(amount).toLocaleString('en-NG')

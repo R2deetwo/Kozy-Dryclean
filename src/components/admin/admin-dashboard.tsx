@@ -15,8 +15,9 @@ import {
   Settings,
   LifeBuoy,
   LogOut,
+  Bell,
 } from 'lucide-react'
-import { useOrders, usePayments, useUsers } from '@/lib/hooks'
+import { useOrders, usePayments, useUsers, useNotificationEvents } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -28,10 +29,11 @@ import { SettingsView } from './settings-view'
 import { ReviewsView } from './reviews-view'
 import { FeedbackView } from './feedback-view'
 import { HelpView } from './help-view'
+import { NotificationsView } from './notifications-view'
 import { Logo } from '@/components/shell/logo'
 import { Star, MessageSquareHeart } from 'lucide-react'
 
-type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'reviews' | 'feedback' | 'settings' | 'help'
+type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'reviews' | 'feedback' | 'notifications' | 'settings' | 'help'
 
 export function AdminDashboard() {
   // Real signed-in identity (the old header hardcoded a fake
@@ -45,13 +47,23 @@ export function AdminDashboard() {
   // the whole collections — the hooks page through the cursor API for them.
   const { data: orders } = useOrders({ fetchAll: true })
   const { data: payments } = usePayments({ fetchAll: true })
+  // Operations feed (phase 24): unread signup/order/payment alerts — the
+  // sidebar badge mirrors the owner's email inbox, but guaranteed visible.
+  const { data: notifications } = useNotificationEvents()
   const [tab, setTab] = useState<Tab>('overview')
 
   const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
   const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
+  const unreadNotifications = notifications?.unread ?? 0
 
   const nav: { key: Tab; label: string; icon: any; badge?: number }[] = [
     { key: 'overview', label: 'Dashboard', icon: LayoutDashboard },
+    {
+      key: 'notifications',
+      label: 'Notifications',
+      icon: Bell,
+      badge: unreadNotifications,
+    },
     { key: 'kanban', label: 'Orders', icon: KanbanSquare, badge: activeOrders.length },
     {
       key: 'payments',
@@ -100,7 +112,7 @@ export function AdminDashboard() {
                     <Badge
                       className={cn(
                         'rounded-full px-1.5 py-0 text-[10px]',
-                        n.key === 'payments'
+                        n.key === 'payments' || n.key === 'notifications'
                           ? 'bg-gold-400 text-navy hover:bg-gold-400'
                           : 'bg-white/15 text-white hover:bg-white/15'
                       )}
@@ -178,6 +190,7 @@ export function AdminDashboard() {
         {/* Body */}
         <main className="flex-1 overflow-x-hidden">
           {tab === 'overview' && <Overview onGoto={setTab} />}
+          {tab === 'notifications' && <NotificationsView onGoto={(t) => setTab(t as Tab)} />}
           {tab === 'kanban' && <KanbanBoard />}
           {tab === 'payments' && <PaymentQueue />}
           {tab === 'customers' && <CustomersView />}

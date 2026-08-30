@@ -101,15 +101,26 @@ export async function PUT(req: NextRequest) {
   str('accountNumber', 30)
   str('contactPhone', 40)
   str('contactEmail', 120)
-  // Admin alert email — validated as an email shape so a typo can't silently
-  // swallow every future alert.
+  // Admin alert emails — accepts a comma/semicolon-separated LIST of valid
+  // addresses (client request: alerts reach both owners). Every entry must
+  // be a complete email so a typo can't silently swallow every future alert.
   {
     const v = p.adminAlertsEmail
     if (v !== undefined) {
-      if (typeof v !== 'string' || !isValidEmail(v)) {
-        errors.push('adminAlertsEmail must be a complete email address (e.g. name@gmail.com)')
+      if (typeof v !== 'string') {
+        errors.push('adminAlertsEmail must be a comma-separated list of email addresses')
       } else {
-        ;(out as Record<string, unknown>).adminAlertsEmail = v.trim().toLowerCase()
+        const parts = v
+          .split(/[,;\n]/)
+          .map((s) => s.trim().toLowerCase())
+          .filter(Boolean)
+        if (parts.length === 0 || parts.length > 6 || !parts.every((s) => isValidEmail(s))) {
+          errors.push(
+            'adminAlertsEmail must be 1–6 complete email addresses, comma-separated (e.g. kozygarmentcare@gmail.com,practiceprosystems@gmail.com)'
+          )
+        } else {
+          ;(out as Record<string, unknown>).adminAlertsEmail = parts.join(',')
+        }
       }
     }
   }

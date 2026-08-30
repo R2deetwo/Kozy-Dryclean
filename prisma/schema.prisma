@@ -102,6 +102,14 @@ model Order {
   finishingAt       DateTime?
   outForDeliveryAt  DateTime?
   deliveredAt       DateTime?
+  // ----- Stage-email dedup (phase 24, client request) -----
+  // Highest PIPELINE_STAGES index the customer has ALREADY been emailed
+  // about (the booking-confirmation email counts as stage 0 "Requested").
+  // A status email is sent ONLY when the new stage index is strictly
+  // greater than this value — so dragging a Kanban card backwards and
+  // forwards again can never re-send an earlier stage's email, and no
+  // customer ever receives an email implying their items went backwards.
+  lastNotifiedStage Int            @default(0)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
 
@@ -134,6 +142,39 @@ enum OrderStatus {
 enum OrderType {
   ITEM
   KG
+}
+
+// =====================================================
+// NOTIFICATION_EVENT — in-app operations feed for the admins
+// =====================================================
+// Every admin alert (new signup, new order, transfer pending, feedback,
+// rider application, test send) is recorded here at the same moment the
+// alert emails go out, WITH the per-recipient delivery result. This gives
+// the business owner an in-app record that survives spam-folder mishaps:
+// even if an email is junk-mailed, the event — and whether Brevo accepted
+// the send — is visible in Admin → Notifications.
+model NotificationEvent {
+  id          String    @id @default(cuid())
+  // NEW_SIGNUP | NEW_ORDER | TRANSFER_PENDING | FEEDBACK | RIDER_APPLICATION | TEST
+  type        String
+  title       String
+  body        String    @db.Text
+  // JSON payload for deep links / details (orderNumber, userEmail, ...)
+  data        String?   @db.Text
+  // Admin console link (e.g. "kanban", "payments")
+  linkTab     String?
+  // JSON array of alert recipients attempted
+  recipients  String?   @db.Text
+  // NONE | DISABLED | SENT | PARTIAL | FAILED — email delivery outcome
+  emailStatus String    @default("NONE")
+  // Per-recipient results + error detail, JSON
+  emailDetail String?   @db.Text
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([readAt])
+  @@index([type])
 }
 
 // =====================================================

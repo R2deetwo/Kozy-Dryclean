@@ -477,7 +477,7 @@ export function useServerPrices() {
 // reaches every visitor (the old localStorage copy was per-browser — that
 // was the client-reported bug). Falls back to the bundled code defaults
 // when the API is unreachable.
-import { defaultAppSettings, type KozyAppSettings } from '@/lib/types'
+import { defaultAppSettings, type KozyAppSettings, type NotificationEvent } from '@/lib/types'
 
 export function useAppSettings() {
   const { data } = useQuery({
@@ -492,4 +492,53 @@ export function useAppSettings() {
     retry: 1,
   })
   return data ?? defaultAppSettings()
+}
+
+// =============================================================================
+// Notification events — the admins' in-app operations feed (phase 24).
+// Written by the admin-alert pipeline alongside the alert emails; the feed
+// shows every signup / order / payment confirmation / feedback / rider
+// application, WITH the per-recipient email delivery outcome.
+// ==============================================================================
+export function useNotificationEvents(options?: {
+  refetchInterval?: number | false
+  enabled?: boolean
+}) {
+  return useQuery({
+    queryKey: ['admin-notifications'],
+    queryFn: async () => {
+      const res = await fetch('/api/admin/notifications?take=100')
+      if (!res.ok) throw new Error('Failed to fetch notifications')
+      const data = await res.json()
+      return data as {
+        events: NotificationEvent[]
+        unread: number
+      }
+    },
+    refetchInterval: options?.refetchInterval ?? 60_000,
+    enabled: options?.enabled ?? true,
+    staleTime: 20_000,
+    retry: 1,
+  })
+}
+
+export function useMarkNotificationsRead() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { ids?: string[]; all?: boolean }) => {
+      const res = await fetch('/api/admin/notifications', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input.all ? { action: 'readAll' } : { action: 'read', ids: input.ids }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to mark notifications read')
+      }
+      return res.json()
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-notifications'] })
+    },
+  })
 }
