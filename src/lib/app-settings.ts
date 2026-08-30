@@ -38,6 +38,8 @@ export const APP_SETTING_KEYS = [
   'hotel_guest_discount_percent',
   'hotel_guest_promo_code',
   'alterations_from_price',
+  'price_per_kg',
+  'minimum_kg',
 ] as const
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number]
@@ -90,6 +92,8 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     hotelGuestDiscountPercent: num('hotel_guest_discount_percent', d.hotelGuestDiscountPercent),
     hotelGuestPromoCode: str('hotel_guest_promo_code', d.hotelGuestPromoCode),
     alterationsFromPrice: num('alterations_from_price', d.alterationsFromPrice),
+    pricePerKg: num('price_per_kg', d.pricePerKg),
+    minimumKg: num('minimum_kg', d.minimumKg),
     // Not a DB setting — derived from the server env at the API layer. The
     // false here is a placeholder so this DB-mapped object satisfies the
     // type; callers that care use the /api/settings/app response, which
@@ -126,6 +130,8 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
       hotel_guest_discount_percent: JSON.stringify(d.hotelGuestDiscountPercent),
       hotel_guest_promo_code: JSON.stringify(d.hotelGuestPromoCode),
       alterations_from_price: JSON.stringify(d.alterationsFromPrice),
+      price_per_kg: JSON.stringify(d.pricePerKg),
+      minimum_kg: JSON.stringify(d.minimumKg),
     }
     const missing = (Object.keys(seed) as AppSettingKey[]).filter((k) => !existing.has(k))
     if (missing.length > 0) {
@@ -183,6 +189,10 @@ export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<
     map.hotel_guest_promo_code = JSON.stringify(patch.hotelGuestPromoCode.toUpperCase().trim())
   if (patch.alterationsFromPrice !== undefined)
     map.alterations_from_price = JSON.stringify(Math.round(patch.alterationsFromPrice))
+  if (patch.pricePerKg !== undefined)
+    map.price_per_kg = JSON.stringify(Math.round(patch.pricePerKg))
+  if (patch.minimumKg !== undefined)
+    map.minimum_kg = JSON.stringify(Math.round(patch.minimumKg))
 
   await Promise.all(
     (Object.keys(map) as AppSettingKey[]).map((key) =>

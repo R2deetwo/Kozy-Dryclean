@@ -111,15 +111,20 @@ function fmtDate(d: Date | string): string {
 }
 
 // ----- Branded email wrapper (navy/gold, consistent with verification email) -----
-function brandedEmail(opts: {
+// Async: the footer contact phone comes from AppSetting so the admin can
+// change the business line once in Settings and every future email follows
+// (previously every template hardcoded +234 803 175 5230 and silently
+// contradicted an edited setting).
+async function brandedEmail(opts: {
   heading: string
   intro: string
   order: NotifiableOrder
   extraRows?: { label: string; value: string }[]
   cta?: { label: string; url: string }
   footer?: string
-}): { subject: string; html: string } {
+}): Promise<{ subject: string; html: string }> {
   const { heading, intro, order, extraRows = [], cta, footer } = opts
+  const { contactPhone } = await getAppSettings()
   const rows: { label: string; value: string }[] = [
     { label: 'Order', value: `#${order.orderNumber}` },
     { label: 'Pickup', value: `${fmtDate(order.pickupDate)} · ${order.pickupTimeSlot}` },
@@ -168,8 +173,7 @@ function brandedEmail(opts: {
         }
         <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
           ${
-            footer ||
-            'Questions? Call us on +234 803 175 5230 or reply to this email.<br>Kozy Care — Uncompromising care. Exceptional convenience.'
+            footer || `Questions? Call us on ${contactPhone} or reply to this email.<br>Kozy Care — Uncompromising care. Exceptional convenience.`
           }
         </p>
       </div>
@@ -221,7 +225,7 @@ export async function notifyTransferPendingVerification(
 ): Promise<void> {
   try {
     const amount = order.totalPrice ?? 0
-    const { subject, html } = brandedEmail({
+    const { subject, html } = await brandedEmail({
       heading: 'We’re verifying your transfer',
       intro:
         'Thank you for booking with Kozy Care. Your order is in and our team is verifying your bank transfer right now — usually within minutes during business hours (Mon–Sat, 8am–6pm). You’ll get another email the moment it’s confirmed. Please don’t send the transfer again or re-book: if you completed it, we have it, and your rider is dispatched as soon as payment is verified.',
@@ -249,7 +253,7 @@ export async function notifyTransferPendingVerification(
 // ----- Booking confirmation (order created — authed or guest) -----
 export async function notifyOrderCreated(order: NotifiableOrder): Promise<void> {
   try {
-    const { subject, html } = brandedEmail({
+    const { subject, html } = await brandedEmail({
       heading: 'Your booking is confirmed',
       intro:
         'Thank you for choosing Kozy Care. Here are your pickup details — keep this email for your records.',
@@ -278,7 +282,7 @@ export async function notifyGuestAccountCreated(
 ): Promise<void> {
   try {
     const transferPending = opts?.transferPending === true
-    const { subject, html } = brandedEmail({
+    const { subject, html } = await brandedEmail({
       heading: transferPending ? 'We’re verifying your transfer' : 'Your booking is confirmed',
       intro: transferPending
         ? 'Thank you for booking with Kozy Care. Your order is in and our team is verifying your bank transfer right now — usually within minutes during business hours (Mon–Sat, 8am–6pm). You’ll get another email the moment it’s confirmed, so please don’t send the transfer again or re-book. We also created an account with this email so you can track this order and book again faster — just set a password with the button below.'
@@ -322,7 +326,7 @@ export async function notifyOrderStatus(
     if (!copy) return
 
     // Email — every status change
-    const { subject, html } = brandedEmail({
+    const { subject, html } = await brandedEmail({
       heading: copy.title,
       intro: copy.body,
       order,
@@ -349,7 +353,7 @@ export async function notifyOrderStatus(
 // ----- Payment verified via Paystack webhook -----
 export async function notifyPaymentVerified(order: NotifiableOrder): Promise<void> {
   try {
-    const { subject, html } = brandedEmail({
+    const { subject, html } = await brandedEmail({
       heading: 'Payment confirmed',
       intro:
         'Your online payment was received and confirmed automatically. Your pickup is now scheduled.',
@@ -368,10 +372,11 @@ export async function notifyPaymentVerified(order: NotifiableOrder): Promise<voi
 // if they were debited, we sort it out with a phone call).
 export async function notifyPaymentRejected(order: NotifiableOrder): Promise<void> {
   try {
-    const { subject, html } = brandedEmail({
+    const { contactPhone } = await getAppSettings()
+    const { subject, html } = await brandedEmail({
       heading: 'We couldn’t match your transfer',
       intro:
-        'Our team checked but couldn’t match a transfer to this order yet. Please check in your banking app that the transfer went through to the correct account. If you were debited, don’t pay again — call us on +234 803 175 5230 with your order number and we’ll sort it out the same day. If the transfer never left your account, simply send it with your order number as the narration and we’ll verify it right away.',
+        `Our team checked but couldn’t match a transfer to this order yet. Please check in your banking app that the transfer went through to the correct account. If you were debited, don’t pay again — call us on ${contactPhone} with your order number and we’ll sort it out the same day. If the transfer never left your account, simply send it with your order number as the narration and we’ll verify it right away.`,
       order,
       extraRows: [{ label: 'Payment', value: 'Bank transfer — not matched yet' }],
       cta: { label: 'Check payment status', url: `${baseUrl()}/payment/pending?order=${order.orderNumber}&email=${encodeURIComponent(order.user.email)}` },
@@ -382,7 +387,7 @@ export async function notifyPaymentRejected(order: NotifiableOrder): Promise<voi
 
     await sendSMS(
       order.user.phone,
-      `Kozy Care: We couldn't match a transfer for order #${order.orderNumber} yet. If you were debited, do NOT pay again — call +234 803 175 5230 and we'll sort it out.`
+      `Kozy Care: We couldn't match a transfer for order #${order.orderNumber} yet. If you were debited, do NOT pay again — call ${contactPhone} and we'll sort it out.`
     )
   } catch (e) {
     console.error('notifyPaymentRejected failed:', e)
@@ -567,5 +572,116 @@ export async function notifyAdminTransferPending(order: NotifiableOrder): Promis
     await sendEmail({ to: cfg.email, subject, html })
   } catch (e) {
     console.error('notifyAdminTransferPending failed:', e)
+  }
+}
+
+// ----- B2B invoice ready (admin recorded the weight) -----
+// Called when the admin saves a final weight on a per-kg order. The order
+// modal has always claimed "Weight recorded — invoice sent"; now the email
+// actually exists, priced with the SAME server-side price-per-kg the admin
+// edits in Settings (previously the API hardcoded ₦800/kg).
+export async function notifyInvoiceReady(
+  order: NotifiableOrder,
+  billableKg: number,
+  totalPrice: number
+): Promise<void> {
+  try {
+    const settings = await getAppSettings()
+    const { subject, html } = await brandedEmail({
+      heading: 'Your bulk invoice is ready',
+      intro:
+        `We weighed your items and your invoice is ready: ${billableKg}kg billable at ${formatNaira(settings.pricePerKg)}/kg. Kindly complete the bank transfer below with your order number as the narration — your pickup/delivery is released as soon as we verify it.`,
+      order,
+      extraRows: [
+        { label: 'Billable weight', value: `${billableKg}kg (minimum ${settings.minimumKg}kg)` },
+        { label: 'Rate', value: `${formatNaira(settings.pricePerKg)}/kg` },
+        { label: 'Amount due', value: formatNaira(totalPrice) },
+        { label: 'Pay to', value: `${settings.bankName} · ${settings.accountName} · ${settings.accountNumber}` },
+        { label: 'Narration', value: `#${order.orderNumber}` },
+      ],
+      cta: { label: 'Check payment status', url: `${baseUrl()}/payment/pending?order=${order.orderNumber}&email=${encodeURIComponent(order.user.email)}` },
+    })
+    await sendEmail({ to: order.user.email, subject, html })
+
+    await sendSMS(
+      order.user.phone,
+      `Kozy Care: Invoice for order #${order.orderNumber} — ${billableKg}kg, ${formatNaira(totalPrice)}. Transfer with #${order.orderNumber} as narration. Thank you!`
+    )
+  } catch (e) {
+    console.error('notifyInvoiceReady failed:', e)
+  }
+}
+
+/** A visitor submitted feedback (complaint / question / review) on /feedback. */
+export async function notifyAdminNewFeedback(feedback: {
+  type: string
+  name: string
+  email: string
+  phone?: string | null
+  reference?: string | null
+  rating?: number | null
+  message: string
+}): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    const typeLabel =
+      feedback.type === 'COMPLAINT' ? 'Complaint' : feedback.type === 'QUESTION' ? 'Question' : 'Feedback'
+    const { subject, html } = adminEmail({
+      badge: typeLabel,
+      heading: `New ${typeLabel.toLowerCase()} from ${feedback.name}`,
+      intro:
+        feedback.type === 'COMPLAINT'
+          ? 'A customer filed a complaint — it is waiting in your Feedback inbox. Complaints left unanswered are the fastest way to lose a Lagos customer, so this one pings you directly.'
+          : 'A visitor reached out through the feedback form. It is saved in your Feedback inbox.',
+      rows: [
+        { label: 'From', value: `${feedback.name} (${feedback.email})` },
+        ...(feedback.phone ? [{ label: 'Phone', value: feedback.phone }] : []),
+        ...(feedback.reference ? [{ label: 'Reference', value: feedback.reference }] : []),
+        ...(feedback.rating ? [{ label: 'Rating', value: `${feedback.rating}/5` }] : []),
+        { label: 'Message', value: feedback.message },
+      ],
+      cta: { label: 'Open the Feedback inbox', url: `${baseUrl()}/admin` },
+    })
+    await sendEmail({ to: cfg.email, subject, html })
+  } catch (e) {
+    console.error('notifyAdminNewFeedback failed:', e)
+  }
+}
+
+/** A rider applied to join the Kozy delivery team (/join-riders). */
+export async function notifyAdminRiderApplication(app: {
+  fullName: string
+  email?: string | null
+  phone: string
+  altPhone?: string | null
+  lga: string
+  bikeModel: string
+  bikeYear: string
+  licenseNumber: string
+  availability: string
+  experience?: string | null
+}): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    const { subject, html } = adminEmail({
+      badge: 'Rider application',
+      heading: `${app.fullName} applied to ride for Kozy`,
+      intro:
+        'A new rider application came in through the Join the Team page. Applications are stored in the database — reply to this alert to follow up with them directly.',
+      rows: [
+        { label: 'Name', value: app.fullName },
+        { label: 'Phone', value: app.phone + (app.altPhone ? ` / ${app.altPhone}` : '') },
+        ...(app.email ? [{ label: 'Email', value: app.email }] : []),
+        { label: 'Preferred area', value: app.lga },
+        { label: 'Bike', value: `${app.bikeModel} (${app.bikeYear})` },
+        { label: 'License no.', value: app.licenseNumber },
+        { label: 'Availability', value: app.availability },
+        ...(app.experience ? [{ label: 'Experience', value: app.experience }] : []),
+      ],
+      cta: { label: 'Contact the rider', url: `tel:${app.phone.replace(/\s/g, '')}` },
+    })
+    await sendEmail({ to: cfg.email, subject, html })
+  } catch (e) {
+    console.error('notifyAdminRiderApplication failed:', e)
   }
 }

@@ -200,7 +200,7 @@ In the Vercel project import screen (or later under **Project Settings → Envir
 | `TERMII_SENDER_ID` | `Kozy` | Pre-approve with Termii |
 | `TERMII_CHANNEL` | `generic` | Or `dnd` for Do-Not-Distast numbers |
 | `POSTMARK_API_KEY` | (from Postmark) | For transactional email |
-| `POSTMARK_SENDER_EMAIL` | `concierge@kozy.ng` | Must be a verified sender |
+| `POSTMARK_SENDER_EMAIL` | _(unused)_ | Postmark is not used — Brevo sends all email |
 
 ### 🟡 Required for file uploads (receipts, condition photos)
 
@@ -219,7 +219,7 @@ In the Vercel project import screen (or later under **Project Settings → Envir
 | `SENTRY_DSN` | (from Sentry) | Error monitoring |
 | `GOOGLE_MAPS_API_KEY` | (from Google Cloud Console) | For driver navigation |
 | `NEXT_PUBLIC_COMPANY_PHONE` | `+2348005693789` | Shown in UI |
-| `NEXT_PUBLIC_COMPANY_EMAIL` | `concierge@kozy.ng` | Shown in UI |
+| `NEXT_PUBLIC_COMPANY_EMAIL` | `kozygarmentcare@gmail.com` | Legacy fallback — live value comes from AppSetting (admin Settings → Contact) |
 
 ### Setting env vars in Vercel dashboard
 
@@ -326,7 +326,7 @@ After Vercel finishes building (usually 2-3 minutes):
 - [ ] Switch Paystack from test keys to live keys
 - [ ] Set up Paystack webhook at `https://kozy.ng/api/webhooks/paystack`
 - [ ] Submit Termii sender ID for approval ("Kozy")
-- [ ] Verify Postmark sender email (`concierge@kozy.ng`)
+- [ ] (Optional, brand consistency) Verify `kozygarmentcare@gmail.com` as a Brevo sender, then set `BREVO_SENDER_EMAIL` to it
 - [ ] Set up Sentry for error monitoring
 - [ ] Add privacy policy + terms of service pages (NDPR compliance)
 - [ ] Test the full flow: signup → book → pay → track → deliver

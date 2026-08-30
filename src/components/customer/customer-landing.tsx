@@ -34,7 +34,6 @@ import {
   LANDING_SHARED_GROUPS,
   itemsForGroup,
 } from '@/lib/pricing-groups'
-import { useStore } from '@/lib/store'
 import { useServerPrices, useAppSettings } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -64,15 +63,17 @@ interface Props {
 
 export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
   const [pricing, setPricing] = useState<'men' | 'women' | 'corporate'>('men')
-  const settings = useStore((s) => s.settings)
   // Server-managed commercial terms (offers, delivery fee, guarantee rules,
-  // alterations pricing) — admin edits reach every visitor instantly.
+  // alterations pricing, per-kg terms) — admin edits reach every visitor
+  // instantly. The localStorage store is no longer consulted for anything
+  // money-related (audit finding: customers used to see per-admin-browser
+  // per-kg prices).
   const appSettings = useAppSettings()
-  // Live prices from PriceCatalog (what the server charges) — the persisted
-  // store and bundle defaults are only fallbacks.
+  // Live prices from PriceCatalog (what the server charges) — the bundle
+  // defaults are only fallbacks.
   const serverPrices = useServerPrices()
   const priceOf = (id: string, fallback: number) =>
-    serverPrices?.[id] ?? settings.garmentPrices[id] ?? fallback
+    serverPrices?.[id] ?? fallback
   // Price cell for the pricing cards — quote-mode items (wedding dress,
   // couture) read "Quoted"; from-mode items (restoration) read "From ₦X".
   const priceCell = (g: GarmentCatalogItem) =>
@@ -297,7 +298,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 Per-item or per-kilogram.
               </h2>
               <p className="mt-2 max-w-xl text-navy-300">
-                Pay by bank transfer or Paystack. Corporate clients receive a dedicated
+                Pay by bank transfer{appSettings.paystackAvailable ? ' or card' : ''}. Corporate clients receive a dedicated
                 account manager and itemised monthly statements.
               </p>
             </div>
@@ -537,15 +538,15 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                         Per kilogram
                       </p>
                       <p className="mt-1 font-serif text-4xl font-bold text-gold-100">
-                        {formatNaira(settings.pricePerKg)}
+                        {formatNaira(appSettings.pricePerKg)}
                       </p>
                       <div className="mt-3 divider-gold" />
                       <p className="mt-3 text-xs text-navy-100">
                         Minimum charge{' '}
                         <span className="font-semibold text-white">
-                          {formatNaira(settings.pricePerKg * settings.minimumKg)}
+                          {formatNaira(appSettings.pricePerKg * appSettings.minimumKg)}
                         </span>{' '}
-                        ({settings.minimumKg}kg minimum billable weight)
+                        ({appSettings.minimumKg}kg minimum billable weight)
                       </p>
                     </CardContent>
                   </Card>

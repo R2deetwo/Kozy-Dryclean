@@ -119,7 +119,7 @@ export async function sendVerificationEmail(email: string, token: string) {
   const verifyUrl = `${process.env.NEXT_PUBLIC_APP_URL}/verify-email?token=${token}`
 
   await brevo.smtp.sendTransacEmail({
-    sender: { email: 'concierge@kozy.ng', name: 'Kozy' },
+    sender: { email: process.env.BREVO_SENDER_EMAIL, name: 'Kozy Care' }, // must be Brevo-verified
     to: [{ email }],
     subject: 'Verify your Kozy account',
     htmlContent: `
@@ -240,7 +240,7 @@ model VerificationToken {
 
 ```
 BREVO_API_KEY=xkeysib-...
-BREVO_SENDER_EMAIL=concierge@kozy.ng
+BREVO_SENDER_EMAIL=chigozieubahesq@gmail.com  # Brevo-verified; swap to kozygarmentcare@gmail.com once verified in Brevo
 BREVO_SENDER_NAME=Kozy
 ```
 

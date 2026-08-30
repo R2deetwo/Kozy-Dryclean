@@ -1,8 +1,21 @@
 // Seed the Supabase database with demo data
-// Run with: unset DATABASE_URL && bun run scripts/seed-supabase.ts
+// Run with: unset DATABASE_URL && ALLOW_DESTRUCTIVE_SEED=1 bun run scripts/seed-supabase.ts
 import { db } from '../src/lib/db'
 
 async function main() {
+  // ----- Destructive guard -----
+  // This script WIPES every user, order and payment in the target database.
+  // The explicit env flag prevents an accidental run against the production
+  // DATABASE_URL (which the sandbox exports globally) from destroying live
+  // business data (audit finding).
+  if (process.env.ALLOW_DESTRUCTIVE_SEED !== '1') {
+    console.error(
+      '⛔ This script DELETES all users, orders and payments first.\n' +
+        '   If you are absolutely sure, re-run with ALLOW_DESTRUCTIVE_SEED=1.'
+    )
+    process.exit(1)
+  }
+
   console.log('🌱 Seeding Supabase with demo data...\n')
 
   // Wipe existing data (in case rerun)
@@ -18,7 +31,7 @@ async function main() {
   const [admin, driver1, driver2, b2c1, b2c2, b2b1, b2b2] = await Promise.all([
     db.user.create({
       data: {
-        email: 'concierge@kozy.ng',
+        email: 'kozygarmentcare@gmail.com',
         name: 'Adaeze Okonkwo',
         phone: '+234 802 111 2233',
         role: 'ADMIN',

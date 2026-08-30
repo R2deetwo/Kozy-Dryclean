@@ -15,6 +15,7 @@ import { CheckCircle2, XCircle, Loader2, ArrowLeft } from 'lucide-react'
 import { Logo } from '@/components/shell/logo'
 import { Button } from '@/components/ui/button'
 import { formatNaira } from '@/lib/types'
+import { useAppSettings } from '@/lib/hooks'
 
 type VerifyState =
   | { kind: 'loading' }
@@ -27,6 +28,7 @@ export default function PaymentCallbackPage() {
   const [state, setState] = useState<VerifyState>({ kind: 'loading' })
   const attempts = useRef(0)
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const appSettings = useAppSettings()
 
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get('ref')
@@ -194,7 +196,8 @@ export default function PaymentCallbackPage() {
               </h1>
               <p className="mt-3 text-navy-300">
                 We couldn&apos;t check this payment. If you were charged, don&apos;t worry —
-                our team verifies payments automatically. Call us on +234 800 569 3789 if
+                our team verifies payments automatically. Call us on{' '}
+                <strong className="text-navy">{appSettings.contactPhone}</strong> if
                 you need help.
               </p>
               <Button

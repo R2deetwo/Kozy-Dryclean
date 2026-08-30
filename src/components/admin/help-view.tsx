@@ -35,11 +35,9 @@ import {
 } from 'lucide-react'
 import { useAppSettings } from '@/lib/hooks'
 import { formatNaira } from '@/lib/types'
-import { useStore } from '@/lib/store'
 
 export function HelpView() {
   const app = useAppSettings()
-  const settings = useStore((s) => s.settings)
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-8 sm:px-6">
@@ -233,8 +231,8 @@ export function HelpView() {
             {
               icon: Wallet,
               label: 'Corporate per-kilogram rate',
-              value: `${formatNaira(settings.pricePerKg)} / kg`,
-              note: `Weight-based pricing for hotels, estates and restaurants — minimum billable ${settings.minimumKg}kg.`,
+              value: `${formatNaira(app.pricePerKg)} / kg`,
+              note: `Weight-based pricing for hotels, estates and restaurants — minimum billable ${app.minimumKg}kg. Editable in Settings → Pricing; invoices are priced from the same numbers.`,
             },
           ].map((o) => (
             <div key={o.label} className="rounded-xl bg-white/5 p-4 ring-1 ring-gold-400/20">

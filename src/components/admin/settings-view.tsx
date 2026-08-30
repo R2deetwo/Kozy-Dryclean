@@ -23,8 +23,7 @@ import {
   Receipt,
 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useStore } from '@/lib/store'
-import { GARMENT_CATALOG, formatNaira, type KozySettings, type KozyAppSettings } from '@/lib/types'
+import { GARMENT_CATALOG, formatNaira, type KozyAppSettings } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -47,9 +46,6 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 export function SettingsView() {
-  const settings = useStore((s) => s.settings)
-  const updateSettings = useStore((s) => s.updateSettings)
-  const setGarmentPrice = useStore((s) => s.setGarmentPrice)
   const queryClient = useQueryClient()
 
   // ----- Server-managed app settings (Phase 14) -----
@@ -74,7 +70,27 @@ export function SettingsView() {
   const setApp = (patch: Partial<KozyAppSettings>) =>
     setAppDraft({ ...(app as KozyAppSettings), ...patch })
 
-  const [draft, setDraft] = useState<KozySettings>(settings)
+  // ----- Garment prices (server PriceCatalog) -----
+  // The baseline ("Was ₦X") comes from the SERVER catalog, not this
+  // browser's localStorage — two admins on two machines previously saw
+  // different baselines and could silently undo each other's changes
+  // (audit finding).
+  const { data: serverPrices } = useQuery({
+    queryKey: ['server-prices'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/prices')
+      if (!res.ok) throw new Error('Failed to load prices')
+      const data = await res.json()
+      return (data.garmentPrices ?? {}) as Record<string, number>
+    },
+    staleTime: 30 * 1000,
+  })
+  const [priceDraft, setPriceDraft] = useState<Record<string, number> | null>(null)
+  const priceFor = (garmentId: string, catalogPrice: number) =>
+    priceDraft?.[garmentId] ?? serverPrices?.[garmentId] ?? catalogPrice
+  const setPrice = (garmentId: string, value: number) =>
+    setPriceDraft({ ...(priceDraft ?? serverPrices ?? {}), [garmentId]: value })
+
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -112,20 +128,18 @@ export function SettingsView() {
       }
     }
 
-    // ----- 2. Legacy local settings (B2B per-kg pricing, guarantee note) -----
-    updateSettings({
-      pricePerKg: draft.pricePerKg,
-      minimumKg: draft.minimumKg,
-      guaranteeDiscountPercent: draft.guaranteeDiscountPercent,
-    })
-    // ----- 3. Garment prices -> PriceCatalog (server-side, live for all) -----
+    // ----- 2. Garment prices -> PriceCatalog (server-side, live for all) -----
+    // Diff against the SERVER catalog (not this browser's localStorage) and
+    // push only the changes — per-kg pricing now travels through the
+    // AppSetting path above with the rest of the server-backed settings.
     const changedPrices: Record<string, number> = {}
-    Object.entries(draft.garmentPrices).forEach(([id, price]) => {
-      if (settings.garmentPrices[id] !== price) {
-        setGarmentPrice(id, price)
-        changedPrices[id] = price
-      }
-    })
+    if (priceDraft && serverPrices) {
+      Object.entries(priceDraft).forEach(([id, price]) => {
+        if (serverPrices[id] !== price) {
+          changedPrices[id] = price
+        }
+      })
+    }
     // …and push them to the server (PriceCatalog) so they go live on the
     // storefront and match what customers are charged at checkout.
     if (Object.keys(changedPrices).length > 0) {
@@ -150,6 +164,7 @@ export function SettingsView() {
       }
     }
     setAppDraft(null)
+    setPriceDraft(null)
     setTimeout(() => {
       setSaving(false)
       setSaved(true)
@@ -450,7 +465,9 @@ export function SettingsView() {
           </Card>
         </TabsContent>
 
-        {/* PRICING TAB */}
+        {/* PRICING TAB — server-backed: per-kg terms now save to AppSetting
+            (the invoice the customer receives is priced from the same
+            numbers) and garment prices to the PriceCatalog. */}
         <TabsContent value="pricing" className="mt-4 space-y-4">
           {/* Bulk pricing */}
           <Card className="border-navy-100 shadow-navy">
@@ -460,44 +477,47 @@ export function SettingsView() {
               </CardTitle>
               <p className="text-xs text-navy-300">
                 Used for bulk/corporate orders. Final invoice = weight × price per kg
-                (minimum charge applies).
+                (minimum charge applies). Invoices are priced with these exact
+                numbers — edits are live for every admin and every customer.
               </p>
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
-              <div>
-                <Label htmlFor="price-per-kg" className="text-xs uppercase tracking-wide text-navy-300">
-                  Price per kg (₦)
-                </Label>
-                <Input
-                  id="price-per-kg"
-                  type="number"
-                  value={draft.pricePerKg}
-                  onChange={(e) =>
-                    setDraft({ ...draft, pricePerKg: parseInt(e.target.value) || 0 })
-                  }
-                  className="mt-1.5"
-                />
-                <p className="mt-1 text-xs text-navy-300">
-                  Current: {formatNaira(draft.pricePerKg)}/kg
-                </p>
-              </div>
-              <div>
-                <Label htmlFor="minimum-kg" className="text-xs uppercase tracking-wide text-navy-300">
-                  Minimum chargeable weight (kg)
-                </Label>
-                <Input
-                  id="minimum-kg"
-                  type="number"
-                  value={draft.minimumKg}
-                  onChange={(e) =>
-                    setDraft({ ...draft, minimumKg: parseInt(e.target.value) || 0 })
-                  }
-                  className="mt-1.5"
-                />
-                <p className="mt-1 text-xs text-navy-300">
-                  Minimum charge: {formatNaira(draft.pricePerKg * draft.minimumKg)}
-                </p>
-              </div>
+              {!app ? (
+                <p className="py-4 text-sm text-navy-300">Loading bulk pricing…</p>
+              ) : (
+                <>
+                  <div>
+                    <Label htmlFor="price-per-kg" className="text-xs uppercase tracking-wide text-navy-300">
+                      Price per kg (₦)
+                    </Label>
+                    <Input
+                      id="price-per-kg"
+                      type="number"
+                      value={app.pricePerKg}
+                      onChange={(e) => setApp({ pricePerKg: Number(e.target.value) || 0 })}
+                      className="mt-1.5"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Current: {formatNaira(app.pricePerKg)}/kg
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="minimum-kg" className="text-xs uppercase tracking-wide text-navy-300">
+                      Minimum chargeable weight (kg)
+                    </Label>
+                    <Input
+                      id="minimum-kg"
+                      type="number"
+                      value={app.minimumKg}
+                      onChange={(e) => setApp({ minimumKg: Number(e.target.value) || 0 })}
+                      className="mt-1.5"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Minimum charge: {formatNaira(app.pricePerKg * app.minimumKg)}
+                    </p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
 
@@ -521,8 +541,8 @@ export function SettingsView() {
                     </h4>
                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                       {GARMENT_CATALOG.filter((g) => g.category === cat).map((g) => {
-                        const currentPrice = settings.garmentPrices[g.id] ?? g.price
-                        const draftPrice = draft.garmentPrices[g.id] ?? currentPrice
+                        const currentPrice = serverPrices?.[g.id] ?? g.price
+                        const draftPrice = priceFor(g.id, g.price)
                         const changed = draftPrice !== currentPrice
                         return (
                           <div
@@ -547,13 +567,7 @@ export function SettingsView() {
                                 type="number"
                                 value={draftPrice}
                                 onChange={(e) =>
-                                  setDraft({
-                                    ...draft,
-                                    garmentPrices: {
-                                      ...draft.garmentPrices,
-                                      [g.id]: parseInt(e.target.value) || 0,
-                                    },
-                                  })
+                                  setPrice(g.id, parseInt(e.target.value) || 0)
                                 }
                                 className="h-7 w-20 px-2 py-1 text-xs"
                               />
@@ -780,22 +794,15 @@ export function SettingsView() {
                     type="number"
                     min="0"
                     max="100"
-                    value={draft.guaranteeDiscountPercent}
-                    onChange={(e) =>
-                      setDraft({
-                        ...draft,
-                        guaranteeDiscountPercent: parseInt(e.target.value) || 0,
-                      })
-                    }
+                    value={5}
+                    disabled
                     className="w-32"
                   />
                   <span className="text-sm font-medium text-navy">%</span>
                   <span className="ml-3 text-xs text-navy-300">
-                    Customers save{' '}
-                    <strong className="text-navy">
-                      {draft.guaranteeDiscountPercent}% off
-                    </strong>{' '}
-                    their order when they upload condition photos
+                    Customers save <strong className="text-navy">5% off</strong> their
+                    order when they upload condition photos. This rate is fixed in the
+                    checkout engine — ask your developer to change it.
                   </span>
                 </div>
               </div>

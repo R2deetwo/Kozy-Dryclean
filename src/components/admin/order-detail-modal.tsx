@@ -19,7 +19,7 @@ import {
   AlertCircle,
   RotateCcw,
 } from 'lucide-react'
-import { useOrders, useUpdateOrder, usePayments, useVerifyPayment, useUsers } from '@/lib/hooks'
+import { useOrders, useUpdateOrder, usePayments, useVerifyPayment, useUsers, useAppSettings } from '@/lib/hooks'
 import { formatNaira, formatDateTime, formatDate, type OrderStatus } from '@/lib/types'
 import { OrderPipeline, OrderTimeline } from '@/components/shared/order-pipeline'
 import { Button } from '@/components/ui/button'
@@ -70,6 +70,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
   const driver = order.driver
   const payments = order.payments ?? []
   const media = order.media ?? []
+  const appSettings = useAppSettings()
 
   // Mutations via React Query
   const updateOrderMutation = useUpdateOrder()
@@ -240,7 +241,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                 {order.finalWeight != null ? (
                   <>
                     <p className="text-[#0A192F]">Final weight: <strong>{order.finalWeight}kg</strong></p>
-                    <p className="text-[#6F88A8]">@ ₦800/kg · Minimum 10kg charge applies.</p>
+                    <p className="text-[#6F88A8]">@ {formatNaira(appSettings.pricePerKg)}/kg · Minimum {appSettings.minimumKg}kg charge applies.</p>
                   </>
                 ) : (
                   <p className="text-amber-700">Awaiting weighing at the station.</p>
@@ -370,7 +371,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                 )}
               </div>
             )}
-            {order.totalPrice !== undefined && onViewInvoice && (
+            {order.totalPrice != null && onViewInvoice && (
               <div className="mt-3 flex items-center justify-between border-t pt-3">
                 <Button variant="outline" size="sm" onClick={() => onViewInvoice(order)} className="rounded-full border-[#E2E5E9] text-[#0A192F]"><Receipt className="mr-1 h-3.5 w-3.5" /> View invoice</Button>
                 <span className="text-sm text-[#6F88A8]">Total: <strong className="text-[#0A192F]">{formatNaira(order.totalPrice)}</strong></span>

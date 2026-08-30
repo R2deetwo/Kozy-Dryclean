@@ -119,7 +119,7 @@ export function FinanceView() {
         <StatCard
           title="Collected revenue"
           value={formatNaira(stats.totalRevenue)}
-          delta="+12% vs last week"
+          delta={`${stats.verified.length} verified payment${stats.verified.length === 1 ? '' : 's'}`}
           icon={Wallet}
           tone="emerald"
         />
@@ -150,7 +150,12 @@ export function FinanceView() {
       <div className="mt-4 grid gap-3 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader>
-            <CardTitle className="text-sm">Revenue (last 7 days)</CardTitle>
+            <CardTitle className="text-sm">Booked order value (last 7 days)</CardTitle>
+            <p className="text-[11px] font-normal text-navy-300">
+              Value of orders placed per day (green) and the still-in-flight portion
+              (amber). Money actually collected lives in the “Collected revenue” tiles —
+              verified payments, not bookings.
+            </p>
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={240}>
@@ -182,7 +187,7 @@ export function FinanceView() {
                   stroke="#10b981"
                   fill="url(#rev)"
                   strokeWidth={2}
-                  name="Collected"
+                  name="Booked"
                 />
                 <Area
                   type="monotone"

@@ -61,12 +61,12 @@ ENV_VARS = [
     # App config (REQUIRED)
     ("NEXT_PUBLIC_APP_URL", "https://kozycare.ng", "plain", ["production", "preview", "development"]),
     ("NEXT_PUBLIC_COMPANY_PHONE", "+2348005693789", "plain", ["production", "preview", "development"]),
-    ("NEXT_PUBLIC_COMPANY_EMAIL", "concierge@kozy.ng", "plain", ["production", "preview", "development"]),
+    ("NEXT_PUBLIC_COMPANY_EMAIL", "kozygarmentcare@gmail.com", "plain", ["production", "preview", "development"]),
 
     # Optional (placeholders for now)
     ("TERMII_SENDER_ID", "Kozy", "plain", ["production", "preview", "development"]),
     ("TERMII_CHANNEL", "generic", "plain", ["production", "preview", "development"]),
-    ("POSTMARK_SENDER_EMAIL", "concierge@kozy.ng", "plain", ["production", "preview", "development"]),
+    # POSTMARK is not used (Brevo is the email provider) — row removed
 ]
 
 # Validate that every required secret env var is actually set

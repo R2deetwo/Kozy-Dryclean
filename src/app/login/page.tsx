@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, Suspense } from 'react'
-import { signIn } from 'next-auth/react'
+import { useState, Suspense, useEffect } from 'react'
+import { signIn, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle, Send } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -29,6 +29,20 @@ function LoginForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const callbackUrl = safePath(searchParams.get('callbackUrl'))
+  const { data: session, status } = useSession()
+
+  // Already signed in? Straight to where they should be — landing on the
+  // login form again (the old behaviour) makes customers think the sign-in
+  // failed (audit finding). Role-aware so this never fights the submit
+  // handler's own redirect (ADMIN → /admin, DRIVER → /driver).
+  useEffect(() => {
+    if (status === 'authenticated') {
+      const role = (session?.user as any)?.role
+      if (role === 'ADMIN') router.replace('/admin')
+      else if (role === 'DRIVER') router.replace('/driver')
+      else router.replace(callbackUrl || '/portal')
+    }
+  }, [status, session, router, callbackUrl])
 
   const [email, setEmail] = useState(searchParams.get('email') || '')
   const [password, setPassword] = useState('')
@@ -180,6 +194,20 @@ function LoginForm() {
                 <a href="/forgot-password" className="text-xs text-[#6F88A8] hover:text-[#0A192F]">
                   Forgot password?
                 </a>
+              </div>
+
+              {/* Guest-checkout rescue: guest orders create an account with a
+                  random password, so the fastest path to "track my order" is
+                  SET a password, not guess one (audit finding). */}
+              <div className="rounded-lg bg-linen-100 p-3 text-center text-xs text-navy-300">
+                Booked as a guest?{' '}
+                <Link
+                  href={`/forgot-password${email ? `?email=${encodeURIComponent(email)}` : ''}`}
+                  className="font-semibold text-navy hover:underline"
+                >
+                  Set a password
+                </Link>{' '}
+                to track your orders — no sign-up needed.
               </div>
             </form>
 

@@ -355,12 +355,12 @@ export function PaymentQueue() {
                 <p className="mt-1 text-xs text-navy-300">
                   Receipt amount: <strong>{formatNaira(selected.amount)}</strong>
                 </p>
-                {order.totalPrice !== undefined && order.totalPrice === selected.amount && (
+                {order.totalPrice != null && order.totalPrice === selected.amount && (
                   <div className="mt-2 flex items-center gap-1 text-xs text-navy-300">
                     <CheckCircle2 className="h-3 w-3" /> Amount matches order total
                   </div>
                 )}
-                {order.totalPrice !== undefined && order.totalPrice !== selected.amount && (
+                {order.totalPrice != null && order.totalPrice !== selected.amount && (
                   <div className="mt-2 flex items-center gap-1 text-xs text-rose-700">
                     <AlertCircle className="h-3 w-3" /> Amount mismatch! Expected{' '}
                     {formatNaira(order.totalPrice ?? 0)}

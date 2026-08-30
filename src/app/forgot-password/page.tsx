@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { Suspense, useState } from 'react'
 import { ArrowLeft, Mail, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -8,9 +8,23 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
 import { Logo } from '@/components/shell/logo'
 import Link from 'next/link'
+import { useSearchParams } from 'next/navigation'
 
 export default function ForgotPasswordPage() {
-  const [email, setEmail] = useState('')
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-linen"><div className="text-sm text-navy-300">Loading...</div></div>}>
+      <ForgotPasswordForm />
+    </Suspense>
+  )
+}
+
+function ForgotPasswordForm() {
+  // Guest-checkout emails link here with ?email=… ("Set my password") —
+  // pre-filling it removes a retyping step at the exact moment a brand-new
+  // customer is most likely to give up (audit finding: the param was
+  // silently ignored).
+  const prefill = useSearchParams().get('email') || ''
+  const [email, setEmail] = useState(prefill)
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
 

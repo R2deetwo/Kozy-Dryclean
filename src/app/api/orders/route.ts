@@ -149,7 +149,6 @@ export async function POST(req: Request) {
   const session = await getSession()
 
   // ----- Guest checkout rate limit: 5 orders/hour per IP -----
-  // (authed users are identified by their session — no extra limit needed)
   if (!session) {
     const ip = getClientIP(req)
     const limit = await rateLimit(`guest-order:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
@@ -157,6 +156,19 @@ export async function POST(req: Request) {
       return NextResponse.json(
         { error: 'Too many bookings from this device. Please try again later or sign in.' },
         { status: 429, headers: { 'Retry-After': String(Math.ceil((limit.resetAt - Date.now()) / 1000)) } }
+      )
+    }
+  } else {
+    // ----- Authed rate limit: 10 orders/hour per user -----
+    // Session identity is NOT a trust boundary against a compromised or
+    // angry account: every order fires customer + owner alert emails, so an
+    // unbounded loop would email-bomb the owner's inbox and burn the Brevo
+    // quota (audit finding).
+    const limit = await rateLimit(`user-order:${session.user?.id}`, { max: 10, windowMs: 60 * 60 * 1000 })
+    if (!limit.success) {
+      return NextResponse.json(
+        { error: 'Too many bookings in a short time. Please try again later or call us — we are happy to help.' },
+        { status: 429 }
       )
     }
   }
@@ -170,7 +182,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const { type, items, serviceSpeed, modeOfWash, promoCode, alterationNotes, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod, transferReceipt } = parsed.data
+  const { type, items, serviceSpeed, modeOfWash, promoCode, alterationNotes, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod, transferReceipt, conditionPhotos } = parsed.data
 
   // ----- Alterations note (Phase 17, client directive) -----
   // Riders never measure at the door: the customer DESCRIBES the work at
@@ -599,6 +611,20 @@ export async function POST(req: Request) {
                 // receipt instead of the old mock.
                 ...(transferReceipt ? { receiptUrl: transferReceipt } : {}),
               },
+            },
+          }
+        : {}),
+      // Condition photos → GarmentMedia rows: the Return-as-Received
+      // Guarantee's evidence trail. They used to be collected in the wizard
+      // but never left the customer's browser, so damage claims had no
+      // pre-pickup proof (audit finding).
+      ...(conditionPhotos && conditionPhotos.length > 0
+        ? {
+            media: {
+              create: conditionPhotos.map((url, i) => ({
+                imageUrl: url,
+                notes: `Condition photo ${i + 1} (pre-pickup)`,
+              })),
             },
           }
         : {}),

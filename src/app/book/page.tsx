@@ -23,7 +23,7 @@ import { Logo } from '@/components/shell/logo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { formatNaira, type Order } from '@/lib/types'
-import { useStore } from '@/lib/store'
+import { useAppSettings } from '@/lib/hooks'
 
 /** Reads the ?service= deep-link param and starts the wizard on that tab. */
 function BookingWizardFromUrl(props: {
@@ -46,7 +46,9 @@ function BookingWizardFromUrl(props: {
 export default function BookPage() {
   const [placedOrder, setPlacedOrder] = useState<Order | null>(null)
   const [guestCreated, setGuestCreated] = useState(false)
-  const settings = useStore((s) => s.settings)
+  // Server-side settings — the old localStorage read could show a
+  // placeholder bank account on the payment-success screen (audit).
+  const settings = useAppSettings()
 
   // ===== Post-booking success screen =====
   if (placedOrder) {

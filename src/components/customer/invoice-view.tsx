@@ -8,11 +8,12 @@ import {
   Shield,
   Sparkles,
 } from 'lucide-react'
-import { useStore, useUserById } from '@/lib/store'
+import { useAppSettings } from '@/lib/hooks'
 import {
   formatNaira,
   formatDateTime,
   formatDate,
+  GUARANTEE_DISCOUNT,
   type Order,
   type OrderItem,
 } from '@/lib/types'
@@ -42,12 +43,15 @@ interface Props {
 }
 
 export function InvoiceView({ order, onBack }: Props) {
-  // Customer + payment records come from the API order object (server
-  // includes them) — NOT the Zustand store, whose `payments`/`users` arrays
-  // are demo seed data that would never match a real order.
-  const fallbackUser = useUserById(order.userId)
-  const customer = order.user ?? fallbackUser
-  const settings = useStore((s) => s.settings) // UI/config state — allowed
+  // EVERYTHING money-related comes from the server (AppSetting via
+  // /api/settings/app): bank details, contact line and per-kg pricing.
+  // This is the document a customer transfers against — it used to read the
+  // admin's localStorage (placeholder GTB account + a non-existent
+  // concierge email), which could send real money to a fake account number
+  // (audit finding). The customer record comes from the API order object;
+  // the old zustand fallback could print a demo persona as "Bill to".
+  const settings = useAppSettings()
+  const customer = order.user
   const payments = useMemo(
     () => (order.payments ?? []).filter((p) => p.orderId === order.id),
     [order.payments, order.id]
@@ -70,7 +74,7 @@ export function InvoiceView({ order, onBack }: Props) {
       : (order.finalWeight ?? 0) * settings.pricePerKg
   const guaranteeDiscount =
     order.guaranteeActive && order.type === 'ITEM'
-      ? subtotal * (settings.guaranteeDiscountPercent / 100)
+      ? subtotal * GUARANTEE_DISCOUNT
       : 0
   const total = order.totalPrice ?? 0
 
@@ -95,10 +99,7 @@ export function InvoiceView({ order, onBack }: Props) {
                   </div>
                   <p className="text-lg font-bold">Kozy Care</p>
                 </div>
-                <p className="mt-1 text-xs text-gold-100 break-words">
-                  {settings.atelierAddress}
-                </p>
-                <p className="text-xs text-gold-100">
+                <p className="mt-1 text-xs text-gold-100">
                   {settings.contactPhone} · {settings.contactEmail}
                 </p>
               </div>
@@ -176,7 +177,7 @@ export function InvoiceView({ order, onBack }: Props) {
                 {order.guaranteeActive && guaranteeDiscount > 0 && (
                   <tr>
                     <td className="py-2 text-navy-300" colSpan={3}>
-                      Return-as-Received discount ({settings.guaranteeDiscountPercent}%)
+                      Return-as-Received discount ({Math.round(GUARANTEE_DISCOUNT * 100)}%)
                     </td>
                     <td className="py-2 text-right font-medium text-navy-300">
                       −{formatNaira(guaranteeDiscount)}
@@ -215,7 +216,7 @@ export function InvoiceView({ order, onBack }: Props) {
               )}
               {order.guaranteeActive && guaranteeDiscount > 0 && (
                 <div className="flex items-center justify-between gap-2 px-3 py-1 text-xs text-navy-300">
-                  <span>Discount ({settings.guaranteeDiscountPercent}%)</span>
+                  <span>Discount ({Math.round(GUARANTEE_DISCOUNT * 100)}%)</span>
                   <span>−{formatNaira(guaranteeDiscount)}</span>
                 </div>
               )}
@@ -286,7 +287,13 @@ export function InvoiceView({ order, onBack }: Props) {
               <Button variant="outline" size="sm" onClick={() => window.print()} className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white">
                 <Printer className="mr-2 h-3.5 w-3.5" /> Print
               </Button>
-              <Button size="sm" className="rounded-full bg-gold-gradient text-navy hover:opacity-90">
+              {/* window.print() lets the customer save the invoice as PDF via
+                  the browser dialog — the button was previously dead. */}
+              <Button
+                size="sm"
+                onClick={() => window.print()}
+                className="rounded-full bg-gold-gradient text-navy hover:opacity-90"
+              >
                 <Download className="mr-2 h-3.5 w-3.5" /> Download PDF
               </Button>
             </div>

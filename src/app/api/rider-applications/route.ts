@@ -3,10 +3,11 @@
 // GET  /api/rider-applications — admin-only, list all applications
 // =============================================================================
 
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { requireRole } from '@/lib/auth'
+import { notifyAdminRiderApplication } from '@/lib/notifications'
 
 export async function POST(req: Request) {
   const ip = getClientIP(req)
@@ -29,6 +30,17 @@ export async function POST(req: Request) {
       availability: availability || 'full-time',
       experience: experience || null,
       consent: !!consent,
+    }
+  })
+
+  // Alert the owner — applications previously landed silently in the DB
+  // with no admin view or notification ever mentioning them (audit
+  // finding). Never blocks the response.
+  after(async () => {
+    try {
+      await notifyAdminRiderApplication(application)
+    } catch (e) {
+      console.error('Rider-application admin alert failed:', e)
     }
   })
 

@@ -86,11 +86,18 @@ function VerifyEmailContent() {
               </div>
               <h1 className="font-serif text-xl font-semibold text-navy mb-2">Verification failed</h1>
               <p className="text-sm text-navy-300 mb-6">{message}</p>
-              <Link href="/signup">
-                <Button variant="outline" className="w-full border-navy-200 text-navy hover:bg-navy hover:text-white">
-                  Back to signup
-                </Button>
-              </Link>
+              <div className="space-y-2">
+                <Link href="/login">
+                  <Button variant="outline" className="w-full border-navy-200 text-navy hover:bg-navy hover:text-white">
+                    Back to login
+                  </Button>
+                </Link>
+                <Link href="/signup">
+                  <Button variant="ghost" className="w-full text-navy-300">
+                    Back to signup
+                  </Button>
+                </Link>
+              </div>
             </>
           )}
         </CardContent>

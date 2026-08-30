@@ -18,7 +18,8 @@ import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession, requireSession } from '@/lib/auth'
 import { UpdateOrderSchema } from '@/lib/schemas'
-import { notifyOrderStatus } from '@/lib/notifications'
+import { notifyOrderStatus, notifyInvoiceReady } from '@/lib/notifications'
+import { getAppSettings } from '@/lib/app-settings'
 import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 
 // ----- GET /api/orders/[id] -----
@@ -166,11 +167,13 @@ export async function PATCH(
   if (parsed.data.driverId !== undefined) updateData.driverId = parsed.data.driverId
   if (parsed.data.finalWeight !== undefined) {
     updateData.finalWeight = parsed.data.finalWeight
-    // Auto-calculate totalPrice for KG orders when weight is set
-    const pricePerKg = 800 // will be dynamic from settings in future
-    const minimumKg = 10
-    const billableKg = Math.max(parsed.data.finalWeight ?? 0, minimumKg)
-    updateData.totalPrice = billableKg * pricePerKg
+    // Auto-calculate totalPrice for KG orders when weight is set — priced
+    // with the server-side per-kg settings the admin edits in Settings →
+    // Pricing (previously hardcoded ₦800/10kg here, so admin price edits
+    // never reached the invoice the customer received).
+    const settings = await getAppSettings()
+    const billableKg = Math.max(parsed.data.finalWeight ?? 0, settings.minimumKg)
+    updateData.totalPrice = billableKg * settings.pricePerKg
   }
   if (parsed.data.totalPrice !== undefined) updateData.totalPrice = parsed.data.totalPrice
 
@@ -244,6 +247,29 @@ export async function PATCH(
         }
       })
     }
+  }
+
+  // ----- Bulk invoice email (admin recorded the weight) -----
+  // The order modal has always toasted "Weight recorded — invoice sent";
+  // now the email/SMS genuinely goes out, priced with the live per-kg
+  // settings. Only fires the FIRST time a weight is recorded on a KG order
+  // (re-weighing updates the total silently unless it is also the first).
+  if (
+    parsed.data.finalWeight !== undefined &&
+    order.type === 'KG' &&
+    order.finalWeight === null &&
+    updated.totalPrice
+  ) {
+    const settings = await getAppSettings()
+    const billableKg = Math.max(parsed.data.finalWeight ?? 0, settings.minimumKg)
+    const invoiceTotal = updated.totalPrice ?? billableKg * settings.pricePerKg
+    after(async () => {
+      try {
+        await notifyInvoiceReady(updated, billableKg, invoiceTotal)
+      } catch (e) {
+        console.error('Invoice-ready notification failed:', e)
+      }
+    })
   }
 
   return NextResponse.json({ order: updated })

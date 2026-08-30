@@ -46,7 +46,7 @@ function nextOrderNumber(): string {
 const SEED_USERS: User[] = [
   {
     id: 'u-admin',
-    email: 'concierge@kozy.ng',
+    email: 'kozygarmentcare@gmail.com',
     name: 'Adaeze Okonkwo',
     phone: '+234 802 111 2233',
     role: 'ADMIN',
@@ -55,7 +55,7 @@ const SEED_USERS: User[] = [
   },
   {
     id: 'u-driver-1',
-    email: 'tunde@kozy.ng',
+    email: 'tunde.balogun@example.com',
     name: 'Tunde Balogun',
     phone: '+234 803 222 4455',
     role: 'DRIVER',
@@ -64,7 +64,7 @@ const SEED_USERS: User[] = [
   },
   {
     id: 'u-driver-2',
-    email: 'bisi@kozy.ng',
+    email: 'bisi.adebayo@example.com',
     name: 'Bisi Adebayo',
     phone: '+234 805 333 6677',
     role: 'DRIVER',
@@ -315,8 +315,8 @@ const DEFAULT_SETTINGS: KozySettings = {
   bankName: COMPANY_BANK.bankName,
   accountName: COMPANY_BANK.accountName,
   accountNumber: COMPANY_BANK.accountNumber,
-  contactPhone: '+234 800 569 3789',
-  contactEmail: 'concierge@kozy.ng',
+  contactPhone: '+234 803 175 5230',
+  contactEmail: 'kozygarmentcare@gmail.com',
   atelierAddress: 'Kozy Atelier, 12 Gerard Rd, Ikoyi, Lagos',
   pricePerKg: B2B_PRICING.pricePerKg,
   minimumKg: B2B_PRICING.minimumKg,

@@ -18,10 +18,12 @@
 //     - DRIVER: 403 (drivers cannot create payments)
 // =============================================================================
 
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession, requireSession } from '@/lib/auth'
 import { CreatePaymentSchema } from '@/lib/schemas'
+import { rateLimit } from '@/lib/rate-limit'
+import { notifyAdminTransferPending } from '@/lib/notifications'
 
 // ----- GET /api/payments -----
 export async function GET(req: Request) {
@@ -78,6 +80,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // ----- Rate limit: 10 payment submissions per hour per user -----
+  // An anxious customer (or a compromised account) otherwise floods the
+  // admin verification queue with duplicate PENDING records.
+  const limit = await rateLimit(`payments-post:${session.user?.id}`, {
+    max: 10,
+    windowMs: 60 * 60 * 1000,
+  })
+  if (!limit.success) {
+    return NextResponse.json(
+      { error: 'Too many payment submissions. Please wait a while or call us — we may already be verifying your transfer.' },
+      { status: 429 }
+    )
+  }
+
   const body = await req.json()
   const parsed = CreatePaymentSchema.safeParse(body)
   if (!parsed.success) {
@@ -100,6 +116,18 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // ----- Duplicate guard -----
+  // If this order already has a PENDING payment awaiting verification,
+  // return THAT record instead of creating another — every re-submission
+  // used to add a fresh row to the admin queue (audit finding).
+  const existingPending = await db.payment.findFirst({
+    where: { orderId, status: 'PENDING' },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (existingPending) {
+    return NextResponse.json({ payment: existingPending, duplicate: true }, { status: 201 })
+  }
+
   const payment = await db.payment.create({
     data: {
       orderId,
@@ -115,6 +143,28 @@ export async function POST(req: Request) {
     await db.order.update({
       where: { id: orderId },
       data: { status: 'PAYMENT_PENDING_VERIFICATION' },
+    })
+  }
+
+  // Alert the owner — this POST path (e.g. customer re-confirming from the
+  // portal) previously created the verification request silently, while
+  // the equivalent orders-POST path sent the "Verify payment" email.
+  if (method === 'BANK_TRANSFER') {
+    after(async () => {
+      try {
+        const fresh = await db.order.findUnique({
+          where: { id: orderId },
+          include: {
+            user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+            driver: { select: { id: true, name: true, phone: true } },
+            payments: true,
+            media: true,
+          },
+        })
+        if (fresh) await notifyAdminTransferPending(fresh as any)
+      } catch (e) {
+        console.error('Transfer-pending admin alert failed:', e)
+      }
     })
   }
 

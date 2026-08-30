@@ -90,6 +90,20 @@ export const CreateOrderSchema = z.object({
     .startsWith('data:image/', 'Receipt must be an image')
     .max(1_500_000, 'Receipt image is too large (max ~1.1MB)')
     .optional(),
+  // Condition photos (Return-as-Received Guarantee evidence). The client
+  // downscales each to a compact JPEG data URL; the server stores one
+  // GarmentMedia row per photo so the pre-pickup condition is on file for
+  // damage claims. Without this field the photos used to silently die in
+  // the customer's browser (audit finding).
+  conditionPhotos: z
+    .array(
+      z
+        .string()
+        .startsWith('data:image/', 'Condition photos must be images')
+        .max(900_000, 'A condition photo is too large')
+    )
+    .max(6, 'At most 6 condition photos')
+    .optional(),
 })
 
 export const UpdateOrderSchema = z.object({

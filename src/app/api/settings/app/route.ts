@@ -23,13 +23,26 @@ import type { KozyAppSettings } from '@/lib/types'
 export const dynamic = 'force-dynamic'
 
 export async function GET() {
+  const session = await getSession()
   const settings = await getAppSettings()
   // paystackAvailable is derived from the server env on every read — it is
   // never persisted, so adding PAYSTACK_SECRET_KEY to the environment
   // re-enables card checkout for everyone without any DB change.
-  return NextResponse.json({
-    settings: { ...settings, paystackAvailable: Boolean(process.env.PAYSTACK_SECRET_KEY) },
-  })
+  const payload: KozyAppSettings = {
+    ...settings,
+    paystackAvailable: Boolean(process.env.PAYSTACK_SECRET_KEY),
+  }
+  // The admin-alert config (destination inbox + toggles) is the business
+  // owner's private setting — the storefront never renders it, so it is
+  // stripped for everyone except signed-in admins (prevents harvesting the
+  // owner's inbox address from the public payload).
+  if (!session || session.user?.role !== 'ADMIN') {
+    delete (payload as Partial<KozyAppSettings>).adminAlertsEmail
+    delete (payload as Partial<KozyAppSettings>).adminAlertsNewSignup
+    delete (payload as Partial<KozyAppSettings>).adminAlertsNewOrder
+    delete (payload as Partial<KozyAppSettings>).adminAlertsPaymentPending
+  }
+  return NextResponse.json({ settings: payload })
 }
 
 export async function PUT(req: NextRequest) {
@@ -121,6 +134,8 @@ export async function PUT(req: NextRequest) {
   pct('hotelGuestDiscountPercent', 0, 50)
   str('hotelGuestPromoCode', 24)
   pct('alterationsFromPrice', 0, 100000)
+  pct('pricePerKg', 0, 1000000)
+  pct('minimumKg', 0, 1000)
 
   if (errors.length > 0) {
     return NextResponse.json({ error: errors.join('; ') }, { status: 400 })

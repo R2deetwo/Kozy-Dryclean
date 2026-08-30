@@ -464,6 +464,13 @@ export interface KozyAppSettings {
   // Alterations — "Exclusive to Kozy Care"; pricing confirmed with the
   // tailor, so the site says "quoted after assessment" until set (> 0).
   alterationsFromPrice: number
+  // Corporate / bulk (per-kg) pricing — charged when the admin records an
+  // order's final weight. Server-managed so the invoice the customer
+  // receives is computed from the SAME number the admin edited in Settings
+  // (previously the API hardcoded ₦800/kg while the admin UI edits only
+  // reached this browser's localStorage).
+  pricePerKg: number
+  minimumKg: number
   // Card payments (Paystack) — NOT stored in the DB: derived server-side
   // from the presence of PAYSTACK_SECRET_KEY on each /api/settings/app
   // read. When false, checkout greys the card option out and transfer is
@@ -497,18 +504,25 @@ export function defaultAppSettings(): KozyAppSettings {
     // 0 = pricing not confirmed with the tailor yet → the storefront shows
     // "quoted after assessment" instead of a from-price.
     alterationsFromPrice: 0,
+    // Bulk pricing defaults mirror the live AppSetting values.
+    pricePerKg: B2B_PRICING.pricePerKg,
+    minimumKg: B2B_PRICING.minimumKg,
     // Pessimistic client default — the server response overrides it with
     // the real env-derived value. Greyed out beats a broken card checkout.
     paystackAvailable: false,
   }
 }
 
-// Bank account details for manual transfers (demo)
+// Bank account details for manual transfers.
+// Defaults mirror the LIVE AppSetting values (set by the client in admin
+// Settings) so a fresh environment never seeds a placeholder account that
+// customers could transfer real money to. The AppSetting table is the
+// source of truth at runtime — this constant only seeds/fallbacks.
 export const COMPANY_BANK = {
-  bankName: 'Guaranty Trust Bank (GTB)',
-  accountName: 'Kozy Premium Dry Cleaning Ltd',
-  accountNumber: '0123456789',
-  routingNumber: '058152069',
+  bankName: 'Noel Bank',
+  accountName: 'Kozy Cleaning Services Ltd',
+  accountNumber: '8123456789',
+  routingNumber: '',
 }
 
 // =====================================================
@@ -551,8 +565,12 @@ export const PIPELINE_STAGES: PipelineStage[] = [
   { key: 'DELIVERED', label: 'Delivered', short: '8', description: 'Order complete' },
 ]
 
-// Kanban columns for admin board (subset of pipeline that is operationally relevant)
+// Kanban columns for admin board. REQUESTED is included so orders that
+// were booked without a payment record yet (e.g. card payments, if
+// Paystack is ever re-enabled, or admin-created orders) are still visible
+// and can be advanced — previously they were unreachable from the board.
 export const KANBAN_COLUMNS: OrderStatus[] = [
+  'REQUESTED',
   'PAYMENT_PENDING_VERIFICATION',
   'PAYMENT_VERIFIED',
   'PICKED_UP',
@@ -620,9 +638,9 @@ export function buildNotification(
     case 'BOOKING_PLACED':
       return `Hi ${user.name.split(' ')[0]}, your pickup (#${order.orderNumber}) is booked for ${formatDate(order.pickupDate)}.`
     case 'PICKED_UP':
-      return `Goods Received! Items collected by ${driver?.name ?? 'our rider'}. Track: ${extra?.url ?? '/track/' + order.orderNumber}`
+      return `Goods Received! Items collected by ${driver?.name ?? 'our rider'}. Track: ${extra?.url ?? '/portal'}`
     case 'B2B_INVOICE_READY':
-      return `Order #${order.orderNumber} weighed ${extra?.weight}kg. Total: ₦${extra?.amount?.toLocaleString('en-NG')}. Pay here: ${extra?.url ?? '/pay/' + order.orderNumber}`
+      return `Order #${order.orderNumber} weighed ${extra?.weight}kg. Total: ₦${extra?.amount?.toLocaleString('en-NG')}. Pay here: ${extra?.url ?? '/portal'}`
     case 'PROCESSING':
       return `Your garments are now being washed and treated. Order #${order.orderNumber}.`
     case 'FINISHING':

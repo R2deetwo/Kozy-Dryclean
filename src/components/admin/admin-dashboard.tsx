@@ -1,19 +1,17 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { signOut } from 'next-auth/react'
+import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard,
   KanbanSquare,
   CreditCard,
   Users as UsersIcon,
   Wallet,
-  Bell,
   Search,
   Activity,
   TrendingUp,
   Truck,
-  Sparkles,
   Settings,
   LifeBuoy,
   LogOut,
@@ -22,12 +20,10 @@ import { useOrders, usePayments, useUsers } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
 import { KanbanBoard } from './kanban-board'
 import { PaymentQueue } from './payment-queue'
 import { CustomersView } from './customers-view'
 import { FinanceView } from './finance-view'
-import { NotificationsPanel } from './notifications-panel'
 import { SettingsView } from './settings-view'
 import { ReviewsView } from './reviews-view'
 import { FeedbackView } from './feedback-view'
@@ -35,22 +31,24 @@ import { HelpView } from './help-view'
 import { Logo } from '@/components/shell/logo'
 import { Star, MessageSquareHeart } from 'lucide-react'
 
-type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'reviews' | 'feedback' | 'notifications' | 'settings' | 'help'
+type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'reviews' | 'feedback' | 'settings' | 'help'
 
 export function AdminDashboard() {
-  const admin = { name: 'Admin', email: 'admin@kozy.ng' }
+  // Real signed-in identity (the old header hardcoded a fake
+  // "admin@kozy.ng" account that doesn't exist — audit finding).
+  const { data: session } = useSession()
+  const admin = {
+    name: session?.user?.name || 'Admin',
+    email: session?.user?.email || '',
+  }
   // fetchAll: sidebar badges (active orders, pending payments) are counts over
   // the whole collections — the hooks page through the cursor API for them.
   const { data: orders } = useOrders({ fetchAll: true })
   const { data: payments } = usePayments({ fetchAll: true })
-  const notifications: any[] = []
   const [tab, setTab] = useState<Tab>('overview')
 
   const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
   const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
-  const todayRevenue = (orders ?? [])
-    .filter((o) => o.totalPrice !== undefined)
-    .reduce((sum, o) => sum + (o.totalPrice ?? 0), 0)
 
   const nav: { key: Tab; label: string; icon: any; badge?: number }[] = [
     { key: 'overview', label: 'Dashboard', icon: LayoutDashboard },
@@ -65,7 +63,6 @@ export function AdminDashboard() {
     { key: 'finance', label: 'Finances', icon: Wallet },
     { key: 'reviews', label: 'Reviews', icon: Star },
     { key: 'feedback', label: 'Feedback', icon: MessageSquareHeart },
-    { key: 'notifications', label: 'Notifications', icon: Bell, badge: notifications.length },
     { key: 'settings', label: 'Settings', icon: Settings },
     { key: 'help', label: 'Help', icon: LifeBuoy },
   ]
@@ -80,7 +77,7 @@ export function AdminDashboard() {
               <Logo size="sm" subtitle="Atelier Console" variant="dark" />
             </div>
             <p className="font-serif font-semibold text-white">{admin.name}</p>
-            <p className="text-xs text-navy-300">{admin.email}</p>
+            <p className="truncate text-xs text-navy-300">{admin.email}</p>
           </div>
           <nav className="flex-1 space-y-0.5 p-2">
             {nav.map((n) => {
@@ -159,38 +156,21 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        {/* Top bar (desktop) */}
+        {/* Top bar (desktop) — signed-in identity only. The decorative
+            search input and the notifications bell were removed: neither
+            was wired to anything real (audit finding). */}
         <header className="hidden items-center justify-between border-b bg-white px-6 py-3 lg:flex">
-          <div className="relative max-w-md flex-1">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-navy-300" />
-            <Input
-              placeholder="Search orders, customers, IDs…"
-              className="pl-9"
-            />
+          <div className="flex items-center gap-2 text-sm text-navy-300">
+            <Search className="h-4 w-4" />
+            <span>Use the tabs below to move between operations</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setTab('notifications')}
-              className="relative"
-            >
-              <Bell className="h-4 w-4" />
-              {notifications.length > 0 && (
-                <span className="absolute right-1 top-1 flex h-2 w-2">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-75" />
-                  <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
-                </span>
-              )}
-            </Button>
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-semibold text-gold-400">
-                {admin.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
-              </div>
-              <div className="leading-tight">
-                <p className="text-xs font-medium text-navy">{admin.name}</p>
-                <p className="text-[10px] text-navy-300">Super Admin</p>
-              </div>
+          <div className="flex items-center gap-2">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-semibold text-gold-400">
+              {admin.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
+            </div>
+            <div className="leading-tight">
+              <p className="text-xs font-medium text-navy">{admin.name}</p>
+              <p className="text-[10px] text-navy-300">Administrator</p>
             </div>
           </div>
         </header>
@@ -204,7 +184,6 @@ export function AdminDashboard() {
           {tab === 'finance' && <FinanceView />}
           {tab === 'reviews' && <ReviewsView />}
           {tab === 'feedback' && <FeedbackView />}
-          {tab === 'notifications' && <NotificationsPanel />}
           {tab === 'settings' && <SettingsView />}
           {tab === 'help' && <HelpView />}
         </main>
@@ -223,16 +202,21 @@ function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
     () => (allUsers ?? []).filter((u) => u.role === 'B2C' || u.role === 'B2B'),
     [allUsers]
   )
-  const notifications: any[] = []
 
   const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
   const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
-  const revenue = (orders ?? [])
-    .filter((o) => o.totalPrice !== undefined && o.status === 'DELIVERED')
-    .reduce((s, o) => s + (o.totalPrice ?? 0), 0)
-  const expectedRevenue = (orders ?? [])
-    .filter((o) => o.totalPrice !== undefined)
-    .reduce((s, o) => s + (o.totalPrice ?? 0), 0)
+  // Collected revenue = VERIFIED payments (money actually in the bank);
+  // pipeline = value of orders still in flight. The old tile summed
+  // DELIVERED orders' totals — close, but not what "verified" means.
+  const collectedRevenue = (payments ?? [])
+    .filter((p) => p.status === 'VERIFIED')
+    .reduce((s, p) => s + (p.amount ?? 0), 0)
+  const pipelineValue = activeOrders.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
+  const startOfToday = new Date()
+  startOfToday.setHours(0, 0, 0, 0)
+  const newToday = (orders ?? []).filter(
+    (o) => new Date(o.createdAt) >= startOfToday
+  ).length
 
   return (
     <div className="p-4 sm:p-6">
@@ -250,7 +234,7 @@ function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
         <KpiCard
           label="Active orders"
           value={activeOrders.length}
-          delta="+3 today"
+          delta={newToday > 0 ? `${newToday} new today` : 'No new orders today'}
           icon={Activity}
           tone="emerald"
         />
@@ -263,9 +247,9 @@ function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
           onClick={() => onGoto('payments')}
         />
         <KpiCard
-          label="Revenue (verified)"
-          value={`₦${revenue.toLocaleString('en-NG')}`}
-          delta={`₦${expectedRevenue.toLocaleString('en-NG')} pipeline`}
+          label="Revenue (verified payments)"
+          value={`₦${collectedRevenue.toLocaleString('en-NG')}`}
+          delta={`₦${pipelineValue.toLocaleString('en-NG')} in pipeline`}
           icon={TrendingUp}
           tone="emerald"
           onClick={() => onGoto('finance')}
@@ -297,18 +281,18 @@ function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
           onClick={() => onGoto('kanban')}
         />
         <QuickActionCard
-          title="Notifications log"
-          desc={`${notifications.length} notifications dispatched across SMS, email & in-app`}
-          cta="View log"
-          icon={Bell}
-          onClick={() => onGoto('notifications')}
+          title="Feedback inbox"
+          desc="Complaints, questions and reviews from the feedback form — you get an email the moment one arrives"
+          cta="Open inbox"
+          icon={MessageSquareHeart}
+          onClick={() => onGoto('feedback')}
         />
       </div>
 
       {/* Recent activity */}
       <div className="mt-6 grid gap-3 md:grid-cols-2">
         <RecentOrdersCard />
-        <RecentNotificationsCard />
+        <RecentCustomersCard onGoto={onGoto} />
       </div>
     </div>
   )
@@ -434,32 +418,50 @@ function RecentOrdersCard() {
   )
 }
 
-function RecentNotificationsCard() {
-  const allNotifications: any[] = []
-  const notifications = useMemo(() => allNotifications.slice(0, 5), [allNotifications])
+/** Newest signups — replaces the old "Recent notifications" card, which was
+ *  permanently empty (no server notification log exists). Real CRM signal:
+ *  who just joined, with the unverified flag the team may need to chase. */
+function RecentCustomersCard({ onGoto }: { onGoto: (t: Tab) => void }) {
+  const { data: allUsers } = useUsers({ fetchAll: true })
+  const recent = useMemo(
+    () =>
+      (allUsers ?? [])
+        .filter((u) => u.role === 'B2C' || u.role === 'B2B')
+        .slice()
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+        .slice(0, 5),
+    [allUsers]
+  )
   return (
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-navy">Recent notifications</h3>
-        <Sparkles className="h-4 w-4 text-gold-400" />
+        <h3 className="text-sm font-semibold text-navy">Newest customers</h3>
+        <button
+          onClick={() => onGoto('customers')}
+          className="text-xs font-medium text-navy-300 hover:underline"
+        >
+          Open CRM →
+        </button>
       </div>
       <ul className="space-y-2 text-sm">
-        {notifications.map((n) => (
-          <li key={n.id} className="border-b last:border-0">
-            <div className="flex items-center justify-between py-1.5">
-              <Badge variant="outline" className="rounded-full text-[10px]">
-                {n.channel}
-              </Badge>
-              <span className="text-[10px] text-navy-300">
-                {new Date(n.sentAt).toLocaleString('en-NG', {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  day: '2-digit',
-                  month: 'short',
-                })}
-              </span>
+        {recent.map((u) => (
+          <li
+            key={u.id}
+            className="flex items-center justify-between gap-2 border-b last:border-0"
+          >
+            <div className="min-w-0 py-1.5">
+              <p className="truncate text-xs font-semibold text-navy">{u.name}</p>
+              <p className="truncate text-xs text-navy-300">{u.email}</p>
             </div>
-            <p className="py-1 text-xs text-navy-300">{n.body}</p>
+            <Badge
+              variant="outline"
+              className={cn(
+                'rounded-full text-[10px]',
+                !(u as any).emailVerified ? 'border-amber-200 text-amber-700' : 'text-emerald-700'
+              )}
+            >
+              {!(u as any).emailVerified ? 'unverified' : u.role === 'B2B' ? 'corporate' : 'personal'}
+            </Badge>
           </li>
         ))}
       </ul>

@@ -13,7 +13,7 @@
 2. **Deploys are NOT automatic.** Pushing to GitHub does nothing to production. See §4.
 3. All secrets live in Vercel env settings. Never commit them. Push protection is on.
 4. Three integrations are built but dormant pending API keys: Paystack (card payment),
-   Termii (SMS), and the verified Brevo sender (concierge@kozy.ng).
+   Termii (SMS), and the verified Brevo sender (chigozieubahesq@gmail.com — switch to kozygarmentcare@gmail.com once it is verified in Brevo).
 5. The full chronological build history with verification evidence is in `worklog.md`.
 6. Known technical debt is listed honestly in §8 — nothing customer-facing is broken.
 
@@ -107,7 +107,7 @@ be careful with test writes.
 | `NEXT_PUBLIC_APP_URL` | set | https://kozycare.ng |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | set | rate limiting |
 | `BREVO_API_KEY` | set | transactional email |
-| `BREVO_VERIFIED_SENDER_EMAIL` | **missing** | set to concierge@kozy.ng after Brevo sender verification |
+| `BREVO_VERIFIED_SENDER_EMAIL` | _(unused)_ | legacy override — set `BREVO_SENDER_EMAIL` to kozygarmentcare@gmail.com after verifying it in Brevo |
 | `PAYSTACK_SECRET_KEY` (+ webhook secret) | **missing** | activates card payment + webhook verification |
 | `TERMII_API_KEY` | **missing** | activates SMS |
 

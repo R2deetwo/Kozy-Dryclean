@@ -40,6 +40,14 @@ export async function POST(req: Request) {
   const body = await req.json()
   const { email, password, name, phone, role } = body
 
+  // ----- Role clamp (SECURITY) -----
+  // Public signup may only create CUSTOMER accounts. ADMIN and DRIVER
+  // accounts are provisioned exclusively through the break-glass admin
+  // route — a request body that asks for anything else is silently clamped
+  // to a personal customer account. Without this, anyone could self-mint
+  // an ADMIN account by posting role: "ADMIN".
+  const safeRole = role === 'B2B' ? 'B2B' : 'B2C'
+
   // ----- Validate -----
   if (!email || !password || !name || !phone) {
     return NextResponse.json(
@@ -85,7 +93,7 @@ export async function POST(req: Request) {
       email: normalized,
       name,
       phone,
-      role: role || 'B2C',
+      role: safeRole,
       passwordHash,
       emailVerified: null,
       signupDiscountUsed: false, // eligible for signup discount

@@ -12,13 +12,16 @@ interface SendEmailParams {
 
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY
-  // Sender must be a Brevo-VERIFIED email or Brevo silently rejects the send.
-  // concierge@kozy.ng is NOT verified in Brevo yet, so we use the verified
-  // personal address until it is. Once verified in the Brevo dashboard:
-  //   1. Set BREVO_VERIFIED_SENDER_EMAIL=concierge@kozy.ng on Vercel
-  //   2. Remove this fallback
+  // The sender MUST be an email verified in the Brevo dashboard (Brevo
+  // silently rejects everything else). Today that is the developer's
+  // verified personal address. To send from the business inbox instead:
+  // verify kozygarmentcare@gmail.com in Brevo (Senders & IP → Senders →
+  // Add a sender) and set BREVO_SENDER_EMAIL to it on Vercel — no code
+  // change needed.
   const senderEmail =
-    process.env.BREVO_VERIFIED_SENDER_EMAIL || 'chigozieubahesq@gmail.com'
+    process.env.BREVO_SENDER_EMAIL ||
+    process.env.BREVO_VERIFIED_SENDER_EMAIL ||
+    'chigozieubahesq@gmail.com'
   const senderName = process.env.BREVO_SENDER_NAME || 'Kozy Care'
 
   if (!apiKey) {

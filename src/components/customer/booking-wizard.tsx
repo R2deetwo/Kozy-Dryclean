@@ -145,6 +145,9 @@ function defaultPickupDate() {
 }
 
 export function BookingWizard({ onComplete, onCancel, allowGuest = false, initialCatalogTab }: Props) {
+  // Guarantee % from the client-side default (matches the server constant);
+  // per-kg pricing comes from appSettings (server) below. The store is no
+  // longer consulted for money values (audit finding).
   const settings = useStore((s) => s.settings)
   const { data: session, status: sessionStatus } = useSession()
   const sessionUser = session?.user
@@ -549,13 +552,25 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
 
   const onPhotos = (files: FileList | null) => {
     if (!files) return
-    Array.from(files).slice(0, 6 - photos.length).forEach((file) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        setPhotos((prev) => [...prev, { url: reader.result as string, name: file.name }])
-      }
-      reader.readAsDataURL(file)
-    })
+    // Condition photos are downscaled to compact JPEGs (same pipeline as
+    // transfer receipts) — they ride along with the order request and are
+    // stored server-side as the guarantee's evidence trail. The old handler
+    // kept the FULL-SIZE originals in component state and never sent them
+    // anywhere (audit finding).
+    Array.from(files)
+      .slice(0, 6 - photos.length)
+      .forEach((file) => {
+        if (!file.type.startsWith('image/')) return
+        downscaleImage(file)
+          .then((url) => setPhotos((prev) => [...prev, { url, name: file.name }]))
+          .catch(() =>
+            toast({
+              title: 'Photo not added',
+              description: 'That image could not be read — try another one.',
+              variant: 'destructive',
+            })
+          )
+      })
   }
 
   /** Downscale an image file to a compact JPEG data URL (max edge 1200px,
@@ -834,6 +849,18 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
           ...(type === 'ITEM' && paymentMethod === 'BANK_TRANSFER' && receiptData
             ? { transferReceipt: receiptData }
             : {}),
+          // Condition photos ride along with the order — the server stores
+          // one GarmentMedia row each (the guarantee's evidence trail).
+          // Size filter: a photo stashed in sessionStorage BEFORE this
+          // deploy could be a full-size original; dropping it beats failing
+          // the whole booking on the server's size cap.
+          ...(type === 'ITEM' && photos.length > 0
+            ? {
+                conditionPhotos: photos
+                  .map((p) => p.url)
+                  .filter((u) => u.length <= 900_000),
+              }
+            : {}),
         }),
       })
 
@@ -954,7 +981,12 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
             onClick={onCancel}
             className="mb-3 inline-flex items-center gap-1 text-xs text-navy-300 hover:text-navy"
           >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to home
+            {/* Contextual label: inside the portal this returns to the
+                dashboard, on the public site to the landing page. */}
+            <ArrowLeft className="h-3.5 w-3.5" />
+            {typeof window !== 'undefined' && window.location.pathname.startsWith('/portal')
+              ? 'Back to dashboard'
+              : 'Back to home'}
           </button>
           <div className="flex items-center justify-between gap-2">
             {STEPS.map((s, i) => {
@@ -1092,13 +1124,13 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                       <p className="font-semibold text-navy">Corporate Bulk Pickup</p>
                     </div>
                     <p className="mt-2 text-sm text-navy-300">
-                      Your order will be priced at <strong>{formatNaira(settings.pricePerKg)}/kg</strong>{' '}
-                      with a {settings.minimumKg}kg minimum charge. Our rider will collect your
+                      Your order will be priced at <strong>{formatNaira(appSettings.pricePerKg)}/kg</strong>{' '}
+                      with a {appSettings.minimumKg}kg minimum charge. Our rider will collect your
                       items, weigh them at the station, and we&apos;ll send you the final invoice
                       with payment instructions.
                     </p>
                     <p className="mt-3 text-xs text-navy-300">
-                      Estimated minimum charge: <strong>{formatNaira(settings.pricePerKg * settings.minimumKg)}</strong>
+                      Estimated minimum charge: <strong>{formatNaira(appSettings.pricePerKg * appSettings.minimumKg)}</strong>
                     </p>
                   </CardContent>
                 </Card>
@@ -1451,9 +1483,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                           />
                           <button
                             onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
-                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"
+                            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                            aria-label={`Remove condition photo ${i + 1}`}
                           >
-                            <X className="h-3 w-3" />
+                            <X className="h-4 w-4" />
                           </button>
                         </div>
                       ))}
@@ -1891,8 +1924,8 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                     <div className="mt-3 space-y-2 text-sm">
                       <p className="text-navy-300">
                         Bulk pickup requested. Final price depends on weight measured at our
-                        station. Minimum charge: <strong>{formatNaira(settings.pricePerKg * settings.minimumKg)}</strong>{' '}
-                        ({settings.minimumKg}kg @ {formatNaira(settings.pricePerKg)}/kg).
+                        station. Minimum charge: <strong>{formatNaira(appSettings.pricePerKg * appSettings.minimumKg)}</strong>{' '}
+                        ({appSettings.minimumKg}kg @ {formatNaira(appSettings.pricePerKg)}/kg).
                       </p>
                       <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-amber-200">
                         <span>Total</span>

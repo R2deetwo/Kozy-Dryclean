@@ -11,11 +11,13 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { moderateText } from '@/lib/content-filter'
+import { notifyAdminNewFeedback } from '@/lib/notifications'
 
 export const dynamic = 'force-dynamic'
 
@@ -81,6 +83,16 @@ export async function POST(req: NextRequest) {
 
   try {
     const feedback = await db.feedback.create({ data: parsed.data })
+    // Ping the owner's inbox immediately — a complaint that sits unread in
+    // the admin console until someone happens to open the tab is exactly
+    // how customers get lost (audit finding). Never blocks the response.
+    after(async () => {
+      try {
+        await notifyAdminNewFeedback(feedback)
+      } catch (e) {
+        console.error('Feedback admin alert failed:', e)
+      }
+    })
     return NextResponse.json({ feedback: { id: feedback.id } }, { status: 201 })
   } catch {
     return NextResponse.json({ error: 'Could not save your feedback. Please try again.' }, { status: 500 })
