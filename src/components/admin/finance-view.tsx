@@ -26,7 +26,7 @@ import {
   Cell,
   Legend,
 } from 'recharts'
-import { useOrders, usePayments } from '@/lib/hooks'
+import { useOrders, usePayments, ADMIN_POLL } from '@/lib/hooks'
 import { formatNaira, formatDateTime, type Order } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -34,8 +34,16 @@ import { Badge } from '@/components/ui/badge'
 export function FinanceView() {
   // fetchAll: finance totals/revenue charts must see every order/payment —
   // the hooks page through the cursor API (bounded by MAX_PAGES).
-  const { data: orders } = useOrders({ fetchAll: true })
-  const { data: payments } = usePayments({ fetchAll: true })
+  const { data: orders } = useOrders({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
+  const { data: payments } = usePayments({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
 
   const stats = useMemo(() => {
     const verified = (payments ?? []).filter((p: any) => p.status === 'VERIFIED')

@@ -70,3 +70,8 @@ upload/
 package-lock.json
 .vercel
 .env.dbpush
+
+# Recovered session DB credential stashes (never commit)
+scripts/.dburl
+scripts/.directurl
+scripts/.pgenv

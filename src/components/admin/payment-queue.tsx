@@ -15,12 +15,23 @@ import {
   Inbox,
   Shield,
   Receipt,
+  Trash2,
 } from 'lucide-react'
-import { usePayments, useVerifyPayment, useOrders } from '@/lib/hooks'
+import { usePayments, useVerifyPayment, useDeletePayment, useOrders, ADMIN_POLL } from '@/lib/hooks'
 import { formatNaira, formatDateTime, formatDate } from '@/lib/types'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
@@ -28,12 +39,22 @@ export function PaymentQueue() {
   // fetchAll: the queue must see every PENDING receipt (a pending payment
   // beyond page 1 would otherwise be invisible), and the orders lookup map
   // needs the full set to resolve any receipt's order.
-  const { data: paymentsData, isLoading } = usePayments({ fetchAll: true })
+  // Live mode (phase 25): the queue polls every few seconds and refetches on
+  // tab focus — a customer clicking "I have made the payment" appears here
+  // without anyone pressing refresh.
+  const { data: paymentsData, isLoading } = usePayments({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.fast,
+    refetchOnWindowFocus: true,
+  })
   const verifyMutation = useVerifyPayment()
+  const deleteMutation = useDeletePayment()
   // Pending = receipts waiting for a decision. Rejected = transfers we
   // couldn't match — they STAY listed (with an Approve button) because the
-  // money can land minutes or hours later (client-reported scenario).
+  // money can land minutes or hours later (client-reported scenario), until
+  // the admin removes them from the list entirely (phase 25).
   const [tab, setTab] = useState<'PENDING' | 'REJECTED'>('PENDING')
+  const [confirmRemove, setConfirmRemove] = useState<any | null>(null)
   const pending = (paymentsData ?? []).filter(
     (p) => p.status === 'PENDING' && p.method === 'BANK_TRANSFER'
   )
@@ -41,7 +62,11 @@ export function PaymentQueue() {
     (p) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER'
   )
   const payments = tab === 'PENDING' ? pending : rejected
-  const orders = useOrders({ fetchAll: true }).data ?? []
+  const orders = useOrders({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  }).data ?? []
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
   const [zoom, setZoom] = useState(1)
 
@@ -92,6 +117,25 @@ export function PaymentQueue() {
     )
   }
 
+  const handleRemove = (p: any) => {
+    deleteMutation.mutate(p.id, {
+      onSuccess: (data) => {
+        setConfirmRemove(null)
+        toast({
+          title: 'Removed from the queue',
+          description: data.order
+            ? 'Claim deleted. The order is back in Requested — the customer can re-confirm payment anytime.'
+            : 'Claim deleted. Verified payment history and the order itself are untouched.',
+        })
+        advanceSelection(p)
+      },
+      onError: (e: any) => {
+        setConfirmRemove(null)
+        toast({ title: 'Could not remove', description: e?.message, variant: 'destructive' })
+      },
+    })
+  }
+
   if (payments.length === 0) {
     return (
       <div className="p-4 sm:p-6">
@@ -122,8 +166,9 @@ export function PaymentQueue() {
               </div>
               <p className="font-medium text-navy">No rejected transfers</p>
               <p className="max-w-sm text-sm text-navy-300">
-                Rejected transfers stay listed here until they&apos;re approved or the order is
-                resolved — banks sometimes deliver money minutes or hours after a rejection.
+                Rejected transfers stay listed here while their money can still land late —
+                approve them anytime, or remove them from the list for good. Orders themselves
+                are only cleared by delivery or cancellation.
               </p>
             </CardContent>
           </Card>
@@ -138,13 +183,16 @@ export function PaymentQueue() {
       <div className="border-b bg-white px-4 py-3 sm:px-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <h1 className="text-lg font-bold tracking-tight text-navy">
-              Payment Verification Queue
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-bold tracking-tight text-navy">
+                Payment Verification Queue
+              </h1>
+              <LiveBadge />
+            </div>
             <p className="text-xs text-navy-300">
               Match the transfer against your bank statement (and the customer&apos;s
               receipt when attached), then verify or reject — the customer is
-              emailed automatically either way.
+              emailed automatically either way. New confirmations appear here live.
             </p>
           </div>
           <QueueTabs pending={pending.length} rejected={rejected.length} tab={tab} onChange={setTab} />
@@ -156,7 +204,9 @@ export function PaymentQueue() {
         <aside className="overflow-y-auto border-r bg-linen-100">
           <div className="border-b px-3 py-2">
             <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
-              {tab === 'PENDING' ? 'Receipts to review' : 'Rejected transfers (re-approvable)'}
+              {tab === 'PENDING'
+                ? 'Receipts to review'
+                : 'Rejected transfers — approve late money, or remove'}
             </p>
           </div>
           <ul>
@@ -311,14 +361,26 @@ export function PaymentQueue() {
                     </Button>
                   </>
                 ) : (
-                  <Button
-                    onClick={() => handleVerify(selected)}
-                    disabled={verifyMutation.isPending}
-                    className="flex-1 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-60"
-                  >
-                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                    {verifyMutation.isPending ? 'Approving…' : 'Approve payment now'}
-                  </Button>
+                  <>
+                    <Button
+                      onClick={() => handleVerify(selected)}
+                      disabled={verifyMutation.isPending}
+                      className="flex-1 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-60"
+                    >
+                      <CheckCircle2 className="mr-2 h-4 w-4" />
+                      {verifyMutation.isPending ? 'Approving…' : 'Approve payment now'}
+                    </Button>
+                    <Button
+                      onClick={() => setConfirmRemove(selected)}
+                      disabled={deleteMutation.isPending}
+                      variant="outline"
+                      title="Remove this rejected claim from the list entirely"
+                      className="border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+                    >
+                      <Trash2 className="mr-2 h-4 w-4" />
+                      {deleteMutation.isPending ? 'Removing…' : 'Remove'}
+                    </Button>
+                  </>
                 )}
               </div>
             </div>
@@ -442,7 +504,58 @@ export function PaymentQueue() {
           ) : null}
         </aside>
       </div>
+
+      {/* Remove-confirmation — destructive bookkeeping action, so it never
+       *  fires off a single mis-tap. */}
+      <AlertDialog open={!!confirmRemove} onOpenChange={(o) => !o && setConfirmRemove(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this rejected transfer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The claim for{' '}
+              <strong>{confirmRemove ? formatNaira(confirmRemove.amount) : ''}</strong> on order{' '}
+              <span className="font-mono">
+                #{confirmRemove ? (orders.find((o: any) => o.id === confirmRemove.orderId)?.orderNumber ?? '—') : ''}
+              </span>{' '}
+              will be deleted from the Rejected list for good. The customer is not emailed — they
+              already received the rejection instructions. If the order is still awaiting payment,
+              it returns to the Requested column so the customer can re-confirm. Verified payments
+              and the order itself are never touched.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmRemove && handleRemove(confirmRemove)}
+              className="bg-rose-600 text-white hover:bg-rose-700"
+            >
+              Remove from list
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+  )
+}
+
+/** Live badge — signals that this surface auto-refreshes (phase 25). The
+ *  pulsing dot reads as "connected"; polling pauses while the tab is hidden
+ *  and refetches instantly when it regains focus. */
+export function LiveBadge({ className }: { className?: string }) {
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-200',
+        className
+      )}
+      title="Auto-updating — changes appear without refreshing. Pauses while this tab is in the background."
+    >
+      <span className="relative flex h-1.5 w-1.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      </span>
+      Live
+    </span>
   )
 }
 

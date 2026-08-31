@@ -66,7 +66,10 @@ export function FeedbackView() {
       const data = await res.json()
       return data.items as FeedbackItem[]
     },
-    refetchInterval: 30 * 1000,
+    // Live mode (phase 25): feedback lands here within seconds — matches the
+    // alert email the owner receives at the same moment.
+    refetchInterval: 15 * 1000,
+    refetchOnWindowFocus: true,
   })
 
   const update = useMutation({

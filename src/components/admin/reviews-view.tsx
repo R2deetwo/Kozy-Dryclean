@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, Check, X, Eye, EyeOff, MessageSquare, MapPin, User, Inbox, Loader2 } from 'lucide-react'
-import { useAdminReviews, useModerateReview, type ApiReview } from '@/lib/hooks'
+import { useAdminReviews, useModerateReview, ADMIN_POLL, type ApiReview } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -12,7 +12,7 @@ import { formatDateTime } from '@/lib/types'
 type FilterKey = 'all' | 'pending' | 'approved' | 'hidden' | 'low'
 
 export function ReviewsView() {
-  const { data: reviews, isLoading } = useAdminReviews()
+  const { data: reviews, isLoading } = useAdminReviews({ refetchInterval: ADMIN_POLL.slow })
   const moderate = useModerateReview()
 
   const [filter, setFilter] = useState<FilterKey>('pending')

@@ -14,6 +14,24 @@ import {
   type InfiniteData,
 } from '@tanstack/react-query'
 
+// -----------------------------------------------------------------------------
+// ADMIN LIVE MODE (phase 25) — the admin console auto-refreshes instead of
+// waiting for a manual refresh. These intervals drive TanStack Query polling
+// across the admin views; queries share cache keys, so one poll serves every
+// mounted view. TanStack pauses interval refetches while the tab is hidden
+// (refetchIntervalInBackground defaults to false) and refetchOnWindowFocus
+// is enabled per-hook below, so switching back to the tab is always instant.
+// -----------------------------------------------------------------------------
+export const ADMIN_POLL = {
+  /** Actively-watched surfaces: kanban board, payment queue. */
+  fast: 8_000,
+  /** Aggregates & secondary lists: dashboard badges, finance, orders maps. */
+  medium: 15_000,
+  /** Slow-moving data: CRM users list. */
+  slow: 30_000,
+} as const
+
+
 // ----- Types (match API responses) -----
 export interface ApiOrder {
   id: string
@@ -106,6 +124,7 @@ function usePaginatedList<T>(
     enabled?: boolean
     refetchInterval?: number | false
     staleTime?: number
+    refetchOnWindowFocus?: boolean
   }
 ) {
   const fetchAll = options?.fetchAll ?? false
@@ -127,6 +146,7 @@ function usePaginatedList<T>(
     staleTime: options?.staleTime ?? 10 * 1000,
     enabled: options?.enabled ?? true,
     refetchInterval: options?.refetchInterval ?? false,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
   })
 
   // Auto-advance: fetchAll mode pages through everything; in paged mode we
@@ -161,8 +181,10 @@ function usePaginatedList<T>(
 export function useOrders(options?: {
   /** Set false to pause polling (e.g. driver outside the geofence) */
   enabled?: boolean
-  /** Live-refresh interval in ms (e.g. 15000 for the driver app) */
+  /** Live-refresh interval in ms (e.g. 8000 for the admin console) */
   refetchInterval?: number | false
+  /** Refetch as soon as the tab regains focus (admin live mode) */
+  refetchOnWindowFocus?: boolean
   /** Auto-load every page (aggregates/lookups) instead of incremental */
   fetchAll?: boolean
 }) {
@@ -229,7 +251,13 @@ export function useUpdateOrder() {
 }
 
 // ----- Payments -----
-export function usePayments(options?: { fetchAll?: boolean }) {
+export function usePayments(options?: {
+  fetchAll?: boolean
+  enabled?: boolean
+  /** Live-refresh interval in ms (e.g. 8000 for the payment queue) */
+  refetchInterval?: number | false
+  refetchOnWindowFocus?: boolean
+}) {
   return usePaginatedList<ApiPayment>('payments', '/api/payments', options)
 }
 
@@ -254,6 +282,25 @@ export function useCreatePayment() {
       qc.invalidateQueries({ queryKey: ['orders'] })
     },
   })
+}
+
+/** Patch a fresh order object straight into every cached orders list so the
+ *  Kanban card, its indicators and any open detail modal update in the same
+ *  tick as the admin action — the invalidation that follows reconciles
+ *  against the server. Shared by payment verify/reject AND payment removal. */
+function patchOrderIntoCache(qc: ReturnType<typeof useQueryClient>, order: ApiOrder) {
+  for (const key of ['paged', 'all']) {
+    qc.setQueryData<InfiniteData<Page<ApiOrder>>>(['orders', key], (existing) => {
+      if (!existing) return existing
+      return {
+        ...existing,
+        pages: existing.pages.map((page) => ({
+          ...page,
+          items: page.items.map((o) => (o.id === order.id ? order : o)),
+        })),
+      }
+    })
+  }
 }
 
 export function useVerifyPayment() {
@@ -285,20 +332,31 @@ export function useVerifyPayment() {
       // Kanban card, its indicators and any open detail modal update in the
       // same tick as the click — the invalidation below then reconciles
       // against the server.
-      if (data.order) {
-        for (const key of ['paged', 'all']) {
-          qc.setQueryData<InfiniteData<Page<ApiOrder>>>(['orders', key], (existing) => {
-            if (!existing) return existing
-            return {
-              ...existing,
-              pages: existing.pages.map((page) => ({
-                ...page,
-                items: page.items.map((o) => (o.id === data.order!.id ? data.order! : o)),
-              })),
-            }
-          })
-        }
+      if (data.order) patchOrderIntoCache(qc, data.order)
+      qc.invalidateQueries({ queryKey: ['payments'] })
+      qc.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+// ----- Payment removal (phase 25) -----
+// Removes a REJECTED (or still-PENDING) bank-transfer claim from the
+// verification queue entirely. The API also returns the fresh order (it may
+// have reverted to REQUESTED when its last open claim was removed) so the
+// board updates in the same tick.
+export function useDeletePayment() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/payments/${id}`, { method: 'DELETE' })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to remove payment')
       }
+      return (await res.json()) as { ok: true; order?: ApiOrder }
+    },
+    onSuccess: (data) => {
+      if (data.order) patchOrderIntoCache(qc, data.order)
       qc.invalidateQueries({ queryKey: ['payments'] })
       qc.invalidateQueries({ queryKey: ['orders'] })
     },
@@ -306,7 +364,11 @@ export function useVerifyPayment() {
 }
 
 // ----- Users (admin-only) -----
-export function useUsers(options?: { fetchAll?: boolean }) {
+export function useUsers(options?: {
+  fetchAll?: boolean
+  refetchInterval?: number | false
+  refetchOnWindowFocus?: boolean
+}) {
   return usePaginatedList<ApiUser>('users', '/api/users', {
     staleTime: 30 * 1000,
     ...options,
@@ -411,7 +473,7 @@ export function usePublicTestimonials() {
 }
 
 // All reviews for the admin moderation view (ADMIN only).
-export function useAdminReviews() {
+export function useAdminReviews(options?: { refetchInterval?: number | false }) {
   return useQuery({
     queryKey: ['reviews', 'admin'],
     queryFn: async () => {
@@ -421,6 +483,7 @@ export function useAdminReviews() {
       return data.reviews as ApiReview[]
     },
     staleTime: 10 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
   })
 }
 
@@ -503,6 +566,7 @@ export function useAppSettings() {
 export function useNotificationEvents(options?: {
   refetchInterval?: number | false
   enabled?: boolean
+  refetchOnWindowFocus?: boolean
 }) {
   return useQuery({
     queryKey: ['admin-notifications'],
@@ -519,6 +583,7 @@ export function useNotificationEvents(options?: {
     enabled: options?.enabled ?? true,
     staleTime: 20_000,
     retry: 1,
+    refetchOnWindowFocus: options?.refetchOnWindowFocus ?? false,
   })
 }
 

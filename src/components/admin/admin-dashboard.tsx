@@ -17,7 +17,7 @@ import {
   LogOut,
   Bell,
 } from 'lucide-react'
-import { useOrders, usePayments, useUsers, useNotificationEvents } from '@/lib/hooks'
+import { useOrders, usePayments, useUsers, useNotificationEvents, ADMIN_POLL } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -45,11 +45,26 @@ export function AdminDashboard() {
   }
   // fetchAll: sidebar badges (active orders, pending payments) are counts over
   // the whole collections — the hooks page through the cursor API for them.
-  const { data: orders } = useOrders({ fetchAll: true })
-  const { data: payments } = usePayments({ fetchAll: true })
+  // LIVE MODE (phase 25): the dashboard polls itself — badges, KPIs and every
+  // view sharing these cache keys stay current without a manual refresh.
+  // Polling pauses while the tab is in the background and refetches the
+  // instant it regains focus.
+  const { data: orders } = useOrders({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
+  const { data: payments } = usePayments({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
   // Operations feed (phase 24): unread signup/order/payment alerts — the
   // sidebar badge mirrors the owner's email inbox, but guaranteed visible.
-  const { data: notifications } = useNotificationEvents()
+  const { data: notifications } = useNotificationEvents({
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
   const [tab, setTab] = useState<Tab>('overview')
 
   const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
@@ -124,6 +139,17 @@ export function AdminDashboard() {
               )
             })}
           </nav>
+          {/* Live indicator — makes the auto-refresh visible instead of
+           *  something the admin has to trust. */}
+          <div className="border-t border-navy-500 px-4 py-3">
+            <div className="flex items-center gap-2 text-[11px] text-navy-300">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span>Live — lists update automatically. No refresh needed.</span>
+            </div>
+          </div>
           <div className="border-t border-navy-500 p-3">
             <Button
               variant="ghost"
@@ -208,9 +234,22 @@ export function AdminDashboard() {
 function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
   // fetchAll: overview aggregates (revenue, active orders, customer counts)
   // must see every record — shared cache with the sidebar badges above.
-  const { data: orders } = useOrders({ fetchAll: true })
-  const { data: payments } = usePayments({ fetchAll: true })
-  const { data: allUsers } = useUsers({ fetchAll: true })
+  // Live mode: same polling as the sidebar so KPIs tick over on their own.
+  const { data: orders } = useOrders({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
+  const { data: payments } = usePayments({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
+  const { data: allUsers } = useUsers({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.slow,
+    refetchOnWindowFocus: true,
+  })
   const customers = useMemo(
     () => (allUsers ?? []).filter((u) => u.role === 'B2C' || u.role === 'B2B'),
     [allUsers]
@@ -397,9 +436,13 @@ function RecentOrdersCard() {
   // Only the 5 newest orders are shown, but this shares the ['orders','all']
   // cache with the Overview aggregates — no extra requests, and the user
   // lookup map below needs the full users set anyway.
-  const { data: allOrders } = useOrders({ fetchAll: true })
+  const { data: allOrders } = useOrders({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
   const orders = useMemo(() => (allOrders ?? []).slice(0, 5), [allOrders])
-  const { data: users } = useUsers({ fetchAll: true })
+  const { data: users } = useUsers({ fetchAll: true, refetchInterval: ADMIN_POLL.slow })
   return (
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -435,7 +478,11 @@ function RecentOrdersCard() {
  *  permanently empty (no server notification log exists). Real CRM signal:
  *  who just joined, with the unverified flag the team may need to chase. */
 function RecentCustomersCard({ onGoto }: { onGoto: (t: Tab) => void }) {
-  const { data: allUsers } = useUsers({ fetchAll: true })
+  const { data: allUsers } = useUsers({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.slow,
+    refetchOnWindowFocus: true,
+  })
   const recent = useMemo(
     () =>
       (allUsers ?? [])

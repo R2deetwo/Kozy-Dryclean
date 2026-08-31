@@ -18,8 +18,18 @@ import {
   XCircle,
   AlertCircle,
   RotateCcw,
+  Trash2,
+  Ban,
 } from 'lucide-react'
-import { useOrders, useUpdateOrder, usePayments, useVerifyPayment, useUsers, useAppSettings } from '@/lib/hooks'
+import {
+  useOrders,
+  useUpdateOrder,
+  usePayments,
+  useVerifyPayment,
+  useDeletePayment,
+  useUsers,
+  useAppSettings,
+} from '@/lib/hooks'
 import { formatNaira, formatDateTime, formatDate, type OrderStatus } from '@/lib/types'
 import { OrderPipeline, OrderTimeline } from '@/components/shared/order-pipeline'
 import { Button } from '@/components/ui/button'
@@ -31,6 +41,16 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Separator } from '@/components/ui/separator'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -75,6 +95,9 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
   // Mutations via React Query
   const updateOrderMutation = useUpdateOrder()
   const verifyPaymentMutation = useVerifyPayment()
+  const deletePaymentMutation = useDeletePayment()
+  const [confirmRemovePayment, setConfirmRemovePayment] = useState<any | null>(null)
+  const [confirmCancelOrder, setConfirmCancelOrder] = useState(false)
 
   // Users list for driver assignment — fetchAll so the dropdown contains
   // EVERY driver, not just the newest 25 users.
@@ -160,6 +183,47 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
     )
   }
 
+  const handleRemovePayment = (paymentId: string) => {
+    deletePaymentMutation.mutate(paymentId, {
+      onSuccess: (data) => {
+        setConfirmRemovePayment(null)
+        toast({
+          title: 'Removed from the queue',
+          description: data.order
+            ? 'Claim deleted. The order is back in Requested — the customer can re-confirm payment anytime.'
+            : 'Claim deleted. Verified payment history and the order itself are untouched.',
+        })
+      },
+      onError: (e: any) => {
+        setConfirmRemovePayment(null)
+        toast({ title: 'Could not remove', description: e?.message, variant: 'destructive' })
+      },
+    })
+  }
+
+  // Cancelling removes the order from the Kanban board (CANCELLED orders are
+  // not pipeline columns) and emails the customer — the manual counterpart to
+  // an order leaving the board organically via DELIVERED.
+  const handleCancelOrder = () => {
+    updateOrderMutation.mutate(
+      { id: order.id, status: 'CANCELLED' },
+      {
+        onSuccess: () => {
+          setConfirmCancelOrder(false)
+          toast({
+            title: 'Order cancelled',
+            description: 'The customer has been emailed and the order has left the board.',
+            variant: 'destructive',
+          })
+        },
+        onError: (e: any) => {
+          setConfirmCancelOrder(false)
+          toast({ title: 'Could not cancel order', description: e?.message, variant: 'destructive' })
+        },
+      }
+    )
+  }
+
   const pendingPayment = payments.find((p: any) => p.status === 'PENDING')
   const rejectedBankTransfer = payments.find(
     (p: any) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER'
@@ -220,6 +284,20 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+              {/* The explicit way an order LEAVES the board (other than being
+               * delivered): cancelling emails the customer and drops the
+               * tile off every pipeline column. */}
+              {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setConfirmCancelOrder(true)}
+                  className="ml-auto h-8 border-rose-200 text-rose-600 hover:bg-rose-50"
+                  title="Cancel this order — it leaves the Kanban board and the customer is emailed"
+                >
+                  <Ban className="mr-1 h-3.5 w-3.5" /> Cancel order
+                </Button>
+              )}
             </div>
           </section>
 
@@ -348,7 +426,8 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                 {/* Late-landing money: a rejected transfer can still be
                     approved — banks sometimes deliver minutes or hours after
                     the check. One click, same email + pipeline rules as a
-                    fresh verify. */}
+                    fresh verify. Or remove the claim from the queue for good
+                    when it will never land (phase 25). */}
                 {rejectedBankTransfer && (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3">
                     <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-800">
@@ -359,14 +438,27 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                       arrived, approve it — the customer is emailed and the order moves on, exactly
                       like a fresh verification.
                     </p>
-                    <Button
-                      size="sm"
-                      onClick={() => handleVerify(rejectedBankTransfer.id)}
-                      disabled={busy}
-                      className="mt-2 bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-60"
-                    >
-                      <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> {busy ? 'Approving…' : 'Approve payment now'}
-                    </Button>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleVerify(rejectedBankTransfer.id)}
+                        disabled={busy}
+                        className="bg-emerald-700 text-white hover:bg-emerald-800 disabled:opacity-60"
+                      >
+                        <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> {busy ? 'Approving…' : 'Approve payment now'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setConfirmRemovePayment(rejectedBankTransfer)}
+                        disabled={deletePaymentMutation.isPending}
+                        className="border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+                        title="Delete this rejected claim from the verification queue"
+                      >
+                        <Trash2 className="mr-1 h-3.5 w-3.5" />
+                        {deletePaymentMutation.isPending ? 'Removing…' : 'Remove from queue'}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
@@ -413,6 +505,57 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Confirm removing a rejected payment claim from the queue */}
+      <AlertDialog open={!!confirmRemovePayment} onOpenChange={(o) => !o && setConfirmRemovePayment(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove this rejected transfer?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The claim for{' '}
+              <strong>{confirmRemovePayment ? formatNaira(confirmRemovePayment.amount) : ''}</strong>{' '}
+              will be deleted from the verification queue for good. The customer is not emailed —
+              they already received the rejection instructions. If this order is still awaiting
+              payment, it returns to Requested so the customer can re-confirm.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep it</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => confirmRemovePayment && handleRemovePayment(confirmRemovePayment.id)}
+              className="bg-rose-600 text-white hover:bg-rose-700"
+            >
+              Remove from queue
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Confirm cancelling the order */}
+      <AlertDialog open={confirmCancelOrder} onOpenChange={setConfirmCancelOrder}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancel order #{order.orderNumber}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              The order will leave the Kanban board immediately and {customer?.name ?? 'the customer'}{' '}
+              will be emailed that the order is cancelled. This does not delete any records — the
+              order stays searchable in lists with a Cancelled status, and any verified payments
+              remain in your finances. This cannot be undone from the board (an admin can still
+              set the status back from the dropdown if needed).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Don&apos;t cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleCancelOrder}
+              disabled={updateOrderMutation.isPending}
+              className="bg-rose-600 text-white hover:bg-rose-700"
+            >
+              {updateOrderMutation.isPending ? 'Cancelling…' : 'Cancel this order'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   )
 }

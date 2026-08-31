@@ -18,7 +18,7 @@ import {
   MailCheck,
   MailX,
 } from 'lucide-react'
-import { useUsers, useOrders, useDeleteUser } from '@/lib/hooks'
+import { useUsers, useOrders, useDeleteUser, ADMIN_POLL } from '@/lib/hooks'
 import { useMemo } from 'react'
 import { formatNaira, formatDate } from '@/lib/types'
 import { Input } from '@/components/ui/input'
@@ -55,8 +55,17 @@ function isNewCustomer(createdAt: string | Date): boolean {
 export function CustomersView() {
   // Users are the primary list here → incremental paging with a "Load more"
   // control (orders joined per-row need the full set → fetchAll).
-  const { data: users, hasMore, loadMore, isFetchingMore } = useUsers()
-  const { data: orders } = useOrders({ fetchAll: true })
+  // Live mode (phase 25): the CRM list polls itself — new signups appear
+  // without a refresh.
+  const { data: users, hasMore, loadMore, isFetchingMore } = useUsers({
+    refetchInterval: ADMIN_POLL.slow,
+    refetchOnWindowFocus: true,
+  })
+  const { data: orders } = useOrders({
+    fetchAll: true,
+    refetchInterval: ADMIN_POLL.medium,
+    refetchOnWindowFocus: true,
+  })
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'RETAIL' | 'CORPORATE' | 'DRIVER'>('all')
   const [selected, setSelected] = useState<any | undefined>(undefined)

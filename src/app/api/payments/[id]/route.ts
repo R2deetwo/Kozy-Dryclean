@@ -41,12 +41,32 @@ const ORDER_INCLUDE = {
   media: true,
 } as const
 
+/** Call requireRole and convert its thrown Response into a real response
+ * (some Next 16 builds surface thrown Response objects as 500s — returning
+ * it explicitly guarantees clients see the proper 401/403). Same pattern as
+ * the notifications route (phase 24). */
+async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
+  try {
+    return await requireRole('ADMIN')
+  } catch (e) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    throw e
+  }
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   // requireRole throws a 401 if no session, 403 if wrong role
-  const session = await requireRole('ADMIN')
+  const guard = await requireAdmin()
+  if (guard instanceof NextResponse) return guard
+  const session = guard
 
   const { id } = await params
 
@@ -170,4 +190,98 @@ export async function PATCH(
   }
 
   return NextResponse.json({ payment: updated, order: freshOrder })
+}
+
+// =============================================================================
+// DELETE /api/payments/[id] — remove a payment claim from the queue entirely
+// =============================================================================
+// Client request: after rejecting a transfer, the admin could still re-approve
+// it — but had NO way to clear it off the Rejected list. Rejected claims used
+// to pile up forever (queue hygiene), with no organic way for them to leave.
+//
+// Rules:
+//   - ADMIN only.
+//   - Only BANK_TRANSFER claims in REJECTED or PENDING status can be removed.
+//     VERIFIED payments are financial records — they can never be deleted
+//     (revenue reporting / audit trail would silently change).
+//   - Order side-effect: if the order is still sitting in
+//     PAYMENT_PENDING_VERIFICATION and this was its last open claim, the
+//     order returns to REQUESTED — the kanban tile moves back to the
+//     Requested column and the customer can submit a fresh confirmation.
+//     If the order already progressed (PAYMENT_VERIFIED or beyond), removing
+//     a stale rejected claim changes nothing about the order.
+//   - The customer is NOT emailed on removal: a rejection already emailed
+//     them with next steps; discarding the record is admin bookkeeping, not
+//     a customer-facing event.
+//   - lastNotifiedStage is deliberately untouched: reverting an order to
+//     REQUESTED (rank 0) never re-sends the booking email, and a future
+//     re-verification still cannot re-send "Payment confirmed".
+// =============================================================================
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const guard = await requireAdmin()
+  if (guard instanceof NextResponse) return guard
+  const session = guard
+
+  const { id } = await params
+
+  const payment = await db.payment.findUnique({
+    where: { id },
+    include: { order: true },
+  })
+  if (!payment) {
+    return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+  }
+
+  if (payment.status === 'VERIFIED') {
+    return NextResponse.json(
+      {
+        error:
+          'Verified payments are financial records and cannot be removed. Reject it first if this was a mistake, or cancel the order instead.',
+      },
+      { status: 409 }
+    )
+  }
+  if (payment.method !== 'BANK_TRANSFER') {
+    return NextResponse.json(
+      { error: 'Only bank-transfer claims can be removed from the queue.' },
+      { status: 400 }
+    )
+  }
+
+  // Delete the claim, then reconcile the order's awaiting-payment state.
+  await db.payment.delete({ where: { id } })
+
+  let freshOrder = await db.order.findUnique({
+    where: { id: payment.orderId },
+    include: ORDER_INCLUDE,
+  })
+
+  if (freshOrder && freshOrder.status === 'PAYMENT_PENDING_VERIFICATION') {
+    const stillOpen = await db.payment.findFirst({
+      where: { orderId: payment.orderId, status: 'PENDING' },
+      select: { id: true },
+    })
+    if (!stillOpen) {
+      // No claim left to verify — back to Requested so the customer can
+      // re-confirm and the board shows the truthful pipeline stage.
+      freshOrder = await db.order.update({
+        where: { id: payment.orderId },
+        data: { status: 'REQUESTED' },
+        include: ORDER_INCLUDE,
+      })
+      await db.statusEvent.create({
+        data: {
+          orderId: payment.orderId,
+          status: 'REQUESTED',
+          actorId: session.user?.id ?? null,
+          note: 'Payment claim removed from the verification queue',
+        },
+      })
+    }
+  }
+
+  return NextResponse.json({ ok: true, order: freshOrder })
 }

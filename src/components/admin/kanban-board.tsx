@@ -29,7 +29,7 @@ import {
   KanbanSquare,
   ChevronRight,
 } from 'lucide-react'
-import { useOrders, useUpdateOrder } from '@/lib/hooks'
+import { useOrders, useUpdateOrder, ADMIN_POLL } from '@/lib/hooks'
 import { useMemo } from 'react'
 import {
   KANBAN_COLUMNS,
@@ -42,6 +42,7 @@ import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { OrderDetailModal } from './order-detail-modal'
+import { LiveBadge } from './payment-queue'
 
 const COLUMN_META: Record<OrderStatus, { label: string; icon: any; tone: string }> = {
   REQUESTED: { label: 'Requested', icon: ShoppingCart, tone: 'slate' },
@@ -57,7 +58,15 @@ const COLUMN_META: Record<OrderStatus, { label: string; icon: any; tone: string 
 }
 
 export function KanbanBoard() {
-  const { data: ordersData, isLoading, hasMore, loadMore, isFetchingMore } = useOrders()
+  // Live mode (phase 25): the board polls every few seconds (paused while
+  // the tab is hidden) and refetches the moment the tab regains focus —
+  // new bookings, payment verifications and status changes made anywhere
+  // (portal, another admin, a rider) appear on the board without a manual
+  // refresh. Mutations still patch the cache instantly for the actor.
+  const { data: ordersData, isLoading, hasMore, loadMore, isFetchingMore } = useOrders({
+    refetchInterval: ADMIN_POLL.fast,
+    refetchOnWindowFocus: true,
+  })
   const updateOrderMutation = useUpdateOrder()
   const [activeId, setActiveId] = useState<string | null>(null)
   // Store only the ID — the LIVE order object is derived from the React
@@ -102,13 +111,16 @@ export function KanbanBoard() {
       <div className="border-b bg-white px-4 py-3 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="font-serif text-lg font-semibold tracking-tight text-navy">
-              Orders
-            </h1>
+            <div className="flex items-center gap-2">
+              <h1 className="font-serif text-lg font-semibold tracking-tight text-navy">
+                Orders
+              </h1>
+              <LiveBadge />
+            </div>
             <p className="text-xs text-navy-300">
               {view === 'kanban'
-                ? 'Drag order cards between columns to update their pipeline stage.'
-                : 'Sortable list of all orders. Click any row to view details.'}
+                ? 'Drag order cards between columns to update their pipeline stage — the board updates itself live.'
+                : 'Sortable list of all orders. Click any row to view details — the list updates itself live.'}
             </p>
           </div>
           <div className="flex items-center gap-3">

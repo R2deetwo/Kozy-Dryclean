@@ -34,7 +34,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { formatDateTime, type NotificationEvent as NotificationEventType } from '@/lib/types'
-import { useNotificationEvents, useMarkNotificationsRead } from '@/lib/hooks'
+import { useNotificationEvents, useMarkNotificationsRead, ADMIN_POLL } from '@/lib/hooks'
 
 type Event = NotificationEventType & { linkTab?: string }
 
@@ -121,7 +121,12 @@ function recipientsOf(e: Event): string[] {
 }
 
 export function NotificationsView({ onGoto }: { onGoto?: (tab: string) => void }) {
-  const { data, isLoading } = useNotificationEvents()
+  // Live mode (phase 25): the operations feed polls faster than the sidebar
+  // badge so new signups / payment confirmations appear here within seconds.
+  const { data, isLoading } = useNotificationEvents({
+    refetchInterval: ADMIN_POLL.fast,
+    refetchOnWindowFocus: true,
+  })
   const markRead = useMarkNotificationsRead()
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
 
