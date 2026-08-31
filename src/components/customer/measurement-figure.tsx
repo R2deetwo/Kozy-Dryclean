@@ -1,8 +1,8 @@
 'use client'
 
 // =============================================================================
-// MeasurementFigure — an interactive tailoring croquis (line-art figure) with
-// highlightable measurement lines, in Kozy brand style.
+// MeasurementFigure — an interactive tailoring croquis with highlightable
+// measurement tapes, in Kozy brand style.
 // =============================================================================
 // Client directive (Phase 18): "a full guide and tutorial... cleverly,
 // interactively done that sort of allows men and women to be able to measure
@@ -10,37 +10,50 @@
 // from where to where you measure a particular part."
 //
 // Interaction model: the parent owns `activeId` (hover/click from the
-// measurement list). Each measurement renders as a technical dashed line
-// with end ticks; the active one animates in gold. Clicking a line selects
-// the measurement too — the diagram and the list stay in sync.
+// measurement list). Clicking a tape selects the measurement too — the
+// diagram and the list stay in sync.
 //
-// v2/v3 anatomy (Phase 26): the figures are rebuilt from anatomical landmark
-// rings instead of hand-written blocky paths. Left halves are authored in
-// head-unit canons and mirrored for exact symmetry; Catmull-Rom smoothing
-// turns the rings into organic curves. Duplicated landmarks create crisp
-// corners at the knee/elbow/ankle, so limbs taper like real anatomy
-// (thigh → knee pinch → calf bulge → narrow ankle) instead of "sausage
-// tubes". The crotch is a soft rounded U, the trapezius slopes smoothly
-// from the neck, and the child follows a true ~5.5-head canon.
-//   men      ~8.0 heads — shoulders ≈ 2.1 head-widths, V-taper torso
-//   women    ~8.3 heads (fashion elongation) — hips ≥ shoulders, gentle
-//             hourglass, long leg line
-//   children ~5.5 heads — big round head, short limbs, round belly with no
-//             waist pinch, elbows at the natural waistline
+// v3 rendering (Phase 27, client directive: "the mannequins still look like
+// stick figures... much better guides to be emulated out there"): the figures
+// are now drawn like a tailor's mannequin, following the conventions of
+// professional bespoke measurement guides —
+//   • the body is a FILLED silhouette in warm linen/sand tones with a
+//     per-part light gradient (lit centre, shaded edges) so limbs read as
+//     volumes, not stick outlines; subtle clavicle / centre-front / bust /
+//     knee detail strokes give human cues;
+//   • circumference measurements (neck, chest, waist, hips...) draw as a
+//     real tape: a solid gold front arc plus a dashed "hidden" back line
+//     slightly above it — the classic drafting convention for "this wraps
+//     AROUND the body" — with a double-headed arrow showing the span;
+//   • point-to-point measurements (shoulder, sleeve, inseam, length...) draw
+//     with arrowheads at both ends and gold dots on the anatomical landmarks;
+//   • labels are numbered to match the numbered measurement cards.
+//
+// Anatomy (Phase 26): landmark-ring figures, Catmull-Rom smoothed, exact
+// mirror symmetry. men ~8.0 heads, women ~8.3 heads, children ~5.6 heads
+// rendered at 70% scale on the same ground line.
 // =============================================================================
 
+import { useId } from 'react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { MEASUREMENTS, type MeasurementCategory } from '@/lib/measurements'
 
+export type Pt = [number, number]
+
 export interface FigureMeasureLine {
   id: string
-  /** polyline points (x, y) in the 320x640 viewBox */
-  points: [number, number][]
+  /**
+   * 'circ'  — circumference: the tape wraps the body (solid front arc +
+   *            dashed back line + double arrow across the span).
+   * 'linear' — point-to-point: straight/dog-leg path with arrowheads and
+   *            landmark dots at both ends.
+   */
+  kind: 'circ' | 'linear'
+  /** for 'circ': [leftEdge, rightEdge] at the tape height; for 'linear': the path */
+  points: Pt[]
   label: { x: number; y: number; anchor: 'start' | 'middle' | 'end' }
 }
-
-type Pt = [number, number]
 
 // ---------------------------------------------------------------------------
 // Geometry helpers — Catmull-Rom → cubic bezier
@@ -144,7 +157,7 @@ const MALE_FIGURE = (() => {
   ]
   return {
     head: smoothClosed(ringFromLeftHalf(headLeft)),
-    neck: 'M 152 87 L 150 110 M 168 87 L 170 110',
+    neck: 'M 152 87 L 168 87 L 170 110 L 150 110 Z',
     body: smoothClosed(ringFromLeftHalf(torsoLeft)),
     armL: smoothClosed(armLeft),
     armR: smoothClosed(mirrorPts(armLeft)),
@@ -206,7 +219,7 @@ const FEMALE_FIGURE = (() => {
   ]
   return {
     head: smoothClosed(ringFromLeftHalf(headLeft)),
-    neck: 'M 153 88 L 150 110 M 167 88 L 170 110',
+    neck: 'M 153 88 L 167 88 L 170 110 L 150 110 Z',
     body: smoothClosed(ringFromLeftHalf(torsoLeft)),
     armL: smoothClosed(armLeft),
     armR: smoothClosed(mirrorPts(armLeft)),
@@ -251,11 +264,11 @@ const CHILD_FIGURE = (() => {
   const torsoLeft: Pt[] = [
     [148, 145],                                            // neck base
     [137, 148], [127, 154], [121, 162],                    // sloped narrow shoulders (±39)
-    [125, 170], [125, 182],                                // deltoid → armpit
-    [129, 196],                                            // chest (±31)
-    [126, 212], [124, 228],                                // straight sides (no waist)
+    [125, 170], [123, 182],                                // deltoid → armpit
+    [125, 196],                                            // chest (±35)
+    [122, 212], [120, 228],                                // straight sides (no waist)
     [114, 244], [112, 262], [115, 278],                    // ROUND belly (±48)
-    [118, 294],                                            // hip (±42)
+    [115, 294],                                            // hip (±45)
     [119, 314], [114, 342], [113, 378], [116, 412],        // chunky outer thigh (±47)
     [119, 448],                                            // knee (smooth — no adult corner)
     [117, 470], [116, 495],                                // cylindrical lower leg
@@ -289,14 +302,12 @@ const CHILD_FIGURE = (() => {
     [142, 589], [148, 582], [149, 577],
     [145, 573], [139, 571],
   ]
-  const seg = (a: Pt, b: Pt): string => {
-    const p = scPt(a[0], a[1])
-    const q = scPt(b[0], b[1])
-    return `M ${p[0]} ${p[1]} L ${q[0]} ${q[1]}`
-  }
+  const neck = scPts([[147, 125], [173, 125], [175, 143], [145, 143]])
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`)
+    .join(' ') + ' Z'
   return {
     head: smoothClosed(ringFromLeftHalf(scPts(headLeft))),
-    neck: seg([147, 125], [145, 143]) + ' ' + seg([173, 125], [175, 143]),
+    neck,
     body: smoothClosed(ringFromLeftHalf(scPts(torsoLeft))),
     armL: smoothClosed(scPts(armLeft)),
     armR: smoothClosed(mirrorPts(scPts(armLeft))),
@@ -308,43 +319,43 @@ const CHILD_FIGURE = (() => {
 // Child measurement lines — authored full-size, scaled to the child's 70%
 // render (labels keep their font size, only positions scale)
 const CHILD_LINES: FigureMeasureLine[] = [
-  { id: 'height', points: scPts([[70, 28], [70, 600]]), label: scLabel(70, 18, 'middle') },
-  { id: 'chest', points: scPts([[102, 196], [218, 196]]), label: scLabel(238, 194, 'start') },
-  { id: 'waist', points: scPts([[104, 250], [216, 250]]), label: scLabel(236, 248, 'start') },
-  { id: 'hips', points: scPts([[98, 294], [222, 294]]), label: scLabel(236, 292, 'start') },
-  { id: 'sleeve', points: scPts([[122, 164], [97, 222], [103, 266]]), label: scLabel(128, 150, 'end') },
-  { id: 'inseam', points: scPts([[152, 366], [144, 578]]), label: scLabel(160, 616, 'middle') },
+  { id: 'height', kind: 'linear', points: scPts([[70, 28], [70, 600]]), label: scLabel(70, 18, 'middle') },
+  { id: 'chest', kind: 'circ', points: scPts([[102, 196], [218, 196]]), label: scLabel(238, 194, 'start') },
+  { id: 'waist', kind: 'circ', points: scPts([[104, 250], [216, 250]]), label: scLabel(236, 248, 'start') },
+  { id: 'hips', kind: 'circ', points: scPts([[98, 294], [222, 294]]), label: scLabel(236, 292, 'start') },
+  { id: 'sleeve', kind: 'linear', points: scPts([[122, 164], [97, 222], [103, 266]]), label: scLabel(128, 150, 'end') },
+  { id: 'inseam', kind: 'linear', points: scPts([[152, 366], [144, 578]]), label: scLabel(160, 616, 'middle') },
 ]
 
-const FIGURES: Record<MeasurementCategory, typeof MALE_FIGURE> = {
+export const FIGURES: Record<MeasurementCategory, typeof MALE_FIGURE> = {
   men: MALE_FIGURE,
   women: FEMALE_FIGURE,
   children: CHILD_FIGURE,
 }
 
-// measurement lines per profile — retuned to sit exactly on the landmarks
+// measurement tapes per profile — retuned to sit exactly on the landmarks
 // above (chest at the fullest line, waist at the natural waist, seat at the
 // hip fullest, sleeve along shoulder→elbow→wrist). Labels live in the clear
 // negative space either side of the arms/legs.
-const LINES: Record<MeasurementCategory, FigureMeasureLine[]> = {
+export const LINES: Record<MeasurementCategory, FigureMeasureLine[]> = {
   men: [
-    { id: 'neck', points: [[132, 100], [188, 100]], label: { x: 124, y: 104, anchor: 'end' } },
-    { id: 'chest', points: [[94, 160], [226, 160]], label: { x: 82, y: 158, anchor: 'end' } },
-    { id: 'waist', points: [[100, 208], [220, 208]], label: { x: 82, y: 208, anchor: 'end' } },
-    { id: 'seat', points: [[100, 272], [220, 272]], label: { x: 86, y: 270, anchor: 'end' } },
-    { id: 'shoulder', points: [[102, 120], [218, 120]], label: { x: 226, y: 112, anchor: 'start' } },
-    { id: 'sleeve', points: [[106, 120], [88, 212], [91, 296]], label: { x: 84, y: 244, anchor: 'end' } },
-    { id: 'inseam', points: [[152, 328], [148, 572]], label: { x: 118, y: 470, anchor: 'end' } },
-    { id: 'shirt', points: [[160, 96], [160, 328]], label: { x: 170, y: 190, anchor: 'start' } },
+    { id: 'neck', kind: 'circ', points: [[132, 100], [188, 100]], label: { x: 124, y: 104, anchor: 'end' } },
+    { id: 'chest', kind: 'circ', points: [[94, 160], [226, 160]], label: { x: 84, y: 158, anchor: 'end' } },
+    { id: 'waist', kind: 'circ', points: [[100, 208], [220, 208]], label: { x: 88, y: 208, anchor: 'end' } },
+    { id: 'seat', kind: 'circ', points: [[100, 272], [220, 272]], label: { x: 86, y: 270, anchor: 'end' } },
+    { id: 'shoulder', kind: 'linear', points: [[102, 120], [218, 120]], label: { x: 226, y: 112, anchor: 'start' } },
+    { id: 'sleeve', kind: 'linear', points: [[106, 120], [88, 212], [91, 296]], label: { x: 88, y: 244, anchor: 'end' } },
+    { id: 'inseam', kind: 'linear', points: [[152, 328], [148, 572]], label: { x: 118, y: 470, anchor: 'end' } },
+    { id: 'shirt', kind: 'linear', points: [[160, 96], [160, 328]], label: { x: 168, y: 184, anchor: 'start' } },
   ],
   women: [
-    { id: 'bust', points: [[96, 160], [224, 160]], label: { x: 90, y: 148, anchor: 'end' } },
-    { id: 'underbust', points: [[102, 184], [218, 184]], label: { x: 90, y: 196, anchor: 'end' } },
-    { id: 'waist', points: [[116, 210], [204, 210]], label: { x: 228, y: 226, anchor: 'start' } },
-    { id: 'hips', points: [[98, 270], [222, 270]], label: { x: 230, y: 262, anchor: 'start' } },
-    { id: 'shoulder', points: [[106, 120], [214, 120]], label: { x: 222, y: 110, anchor: 'start' } },
-    { id: 'sleeve', points: [[114, 120], [96, 206], [101, 296]], label: { x: 70, y: 232, anchor: 'end' } },
-    { id: 'length', points: [[160, 96], [160, 560]], label: { x: 204, y: 552, anchor: 'start' } },
+    { id: 'bust', kind: 'circ', points: [[96, 160], [224, 160]], label: { x: 92, y: 148, anchor: 'end' } },
+    { id: 'underbust', kind: 'circ', points: [[102, 184], [218, 184]], label: { x: 92, y: 196, anchor: 'end' } },
+    { id: 'waist', kind: 'circ', points: [[116, 210], [204, 210]], label: { x: 228, y: 226, anchor: 'start' } },
+    { id: 'hips', kind: 'circ', points: [[98, 270], [222, 270]], label: { x: 230, y: 262, anchor: 'start' } },
+    { id: 'shoulder', kind: 'linear', points: [[106, 120], [214, 120]], label: { x: 222, y: 110, anchor: 'start' } },
+    { id: 'sleeve', kind: 'linear', points: [[114, 120], [96, 206], [101, 296]], label: { x: 88, y: 232, anchor: 'end' } },
+    { id: 'length', kind: 'linear', points: [[160, 96], [160, 560]], label: { x: 204, y: 552, anchor: 'start' } },
   ],
   children: CHILD_LINES,
 }
@@ -352,35 +363,121 @@ const LINES: Record<MeasurementCategory, FigureMeasureLine[]> = {
 // display names for figure-only lines not present in the measurement list;
 // every other label is pulled from MEASUREMENTS so the diagram and the
 // measurement cards always use identical terminology
-const LINE_LABELS: Record<string, string> = {
+export const LINE_LABELS: Record<string, string> = {
   shirt: 'Shirt length',
 }
 
+// subtle anatomy detail strokes — the "this is a body, not a stick" cues
+const DETAIL_SOLID: Record<MeasurementCategory, string[]> = {
+  men: [
+    'M 150 117 Q 137 114 123 121',      // clavicle, left
+    'M 170 117 Q 183 114 197 121',      // clavicle, right
+    'M 121 433 Q 127 438 124 445',      // knee crease, left
+    'M 199 433 Q 193 438 196 445',      // knee crease, right
+  ],
+  women: [
+    'M 151 118 Q 139 115 127 121',      // clavicle, left
+    'M 169 118 Q 181 115 193 121',      // clavicle, right
+    'M 138 153 Q 147 167 155 155',      // bust hint, left
+    'M 182 153 Q 173 167 165 155',      // bust hint, right
+    'M 121 443 Q 127 448 124 455',      // knee crease, left
+    'M 199 443 Q 193 448 196 455',      // knee crease, right
+  ],
+  children: [],
+}
+
+const DETAIL_DASHED: Record<MeasurementCategory, string[]> = {
+  men: ['M 160 124 L 160 322'],          // centre front
+  women: ['M 160 126 L 160 330'],        // centre front
+  children: [],
+}
+
 // ---------------------------------------------------------------------------
-// helpers
+// Tape geometry helpers
 // ---------------------------------------------------------------------------
+
+/** Front (solid) and back (dashed "hidden") arcs for a circumference tape. */
+export function tapeArcs(line: FigureMeasureLine, backOffset?: number): { front: string; back: string } {
+  const [L, Rr] = line.points
+  const y = L[1]
+  const width = Rr[0] - L[0]
+  const bulge = Math.min(9, Math.max(3, width * 0.05))
+  const cx = (L[0] + Rr[0]) / 2
+  const off = backOffset ?? (width < 80 ? 4.5 : 6.5)
+  const front = `M ${r(L[0])} ${r(y)} Q ${r(cx)} ${r(y + bulge)} ${r(Rr[0])} ${r(y)}`
+  const back = `M ${r(L[0] + 2)} ${r(y - off)} Q ${r(cx)} ${r(y - off - bulge * 0.6)} ${r(Rr[0] - 2)} ${r(y - off)}`
+  return { front, back }
+}
+
+function norm(ax: number, ay: number, bx: number, by: number): Pt {
+  const dx = ax - bx
+  const dy = ay - by
+  const m = Math.hypot(dx, dy) || 1
+  return [dx / m, dy / m]
+}
+
+/** Filled arrowhead polygon with its tip at (tx,ty) pointing along (dx,dy). */
+export function arrowhead(tipX: number, tipY: number, dx: number, dy: number, size = 7, halfW = 3.4): string {
+  const bx = tipX - dx * size
+  const by = tipY - dy * size
+  const px = -dy
+  const py = dx
+  return `M ${r(tipX)} ${r(tipY)} L ${r(bx + px * halfW)} ${r(by + py * halfW)} L ${r(bx - px * halfW)} ${r(by - py * halfW)} Z`
+}
 
 function pathFromPoints(points: Pt[]): string {
   return points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ')
 }
 
-function tick(
-  point: Pt,
-  towards: Pt,
-  len = 9,
-): { x1: number; y1: number; x2: number; y2: number } {
-  const dx = towards[0] - point[0]
-  const dy = towards[1] - point[1]
-  const mag = Math.hypot(dx, dy) || 1
-  // perpendicular unit vector
-  const px = -dy / mag
-  const py = dx / mag
-  return {
-    x1: point[0] + px * len / 2,
-    y1: point[1] + py * len / 2,
-    x2: point[0] - px * len / 2,
-    y2: point[1] - py * len / 2,
-  }
+// ---------------------------------------------------------------------------
+// FigureBodyGroup — the shaded mannequin body, reusable in close-up crops
+// ---------------------------------------------------------------------------
+
+/**
+ * The filled, shaded figure (no measurement lines). Reused by the main
+ * interactive diagram AND by the per-measurement close-up diagrams, so every
+ * view shows the very same mannequin.
+ */
+export function FigureBodyGroup({ profile }: { profile: MeasurementCategory }) {
+  const fig = FIGURES[profile]
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '')
+  const fill = `url(#kozy-body-${uid})`
+  const stroke = '#9FB1C7'
+
+  return (
+    <g>
+      <defs>
+        {/* per-part cylinder shading: lit centre, shaded edges */}
+        <linearGradient id={`kozy-body-${uid}`} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stopColor="#CBB894" />
+          <stop offset="0.18" stopColor="#E7DABF" />
+          <stop offset="0.5" stopColor="#FAF4E6" />
+          <stop offset="0.82" stopColor="#E7DABF" />
+          <stop offset="1" stopColor="#CBB894" />
+        </linearGradient>
+      </defs>
+
+      {/* torso + legs, arms, feet, neck, head — all gradient-filled */}
+      <path d={fig.body} fill={fill} strokeWidth={2} strokeLinejoin="round" stroke={stroke} />
+      <path d={fig.armL} fill={fill} strokeWidth={2} strokeLinejoin="round" stroke={stroke} />
+      <path d={fig.armR} fill={fill} strokeWidth={2} strokeLinejoin="round" stroke={stroke} />
+      <path d={fig.feet} fill={fill} strokeWidth={2} strokeLinejoin="round" stroke={stroke} />
+      <path d={fig.neck} fill={fill} strokeWidth={2} strokeLinejoin="round" stroke={stroke} />
+      <path d={fig.head} fill={fill} strokeWidth={2} strokeLinejoin="round" stroke={stroke} />
+
+      {/* subtle anatomy cues */}
+      <g fill="none" stroke="#B7C4D6" strokeWidth={1} strokeLinecap="round" opacity={0.7}>
+        {DETAIL_SOLID[profile].map((d) => (
+          <path key={d} d={d} />
+        ))}
+      </g>
+      <g fill="none" stroke="#B7C4D6" strokeWidth={1} strokeLinecap="round" opacity={0.45}>
+        {DETAIL_DASHED[profile].map((d) => (
+          <path key={d} d={d} strokeDasharray="3 5" />
+        ))}
+      </g>
+    </g>
+  )
 }
 
 // ---------------------------------------------------------------------------
@@ -397,6 +494,7 @@ interface MeasurementFigureProps {
 export function MeasurementFigure({ profile, activeId, onSelect, className }: MeasurementFigureProps) {
   const fig = FIGURES[profile]
   const lines = LINES[profile]
+  const measures = MEASUREMENTS[profile]
 
   return (
     <svg
@@ -406,124 +504,160 @@ export function MeasurementFigure({ profile, activeId, onSelect, className }: Me
       aria-label={`${profile} measurement diagram`}
     >
       {/* --- ground shadow (draws the figure into space) --- */}
-      <ellipse
-        cx={fig.shadow.cx}
-        cy={fig.shadow.cy}
-        rx={fig.shadow.rx}
-        ry={fig.shadow.ry}
-        fill="#E9EEF6"
-      />
+      <ellipse cx={fig.shadow.cx} cy={fig.shadow.cy} rx={fig.shadow.rx} ry={fig.shadow.ry} fill="#E9EEF6" />
 
-      {/* --- figure (anatomical croquis) --- */}
-      <path
-        d={fig.body}
-        className="fill-white"
-        strokeWidth={2}
-        strokeLinejoin="round"
-        style={{ stroke: '#9FB1C7' }}
-      />
-      <path
-        d={fig.armL}
-        className="fill-white"
-        strokeWidth={2}
-        strokeLinejoin="round"
-        style={{ stroke: '#9FB1C7' }}
-      />
-      <path
-        d={fig.armR}
-        className="fill-white"
-        strokeWidth={2}
-        strokeLinejoin="round"
-        style={{ stroke: '#9FB1C7' }}
-      />
-      <path d={fig.feet} className="fill-white" strokeWidth={2} strokeLinejoin="round" style={{ stroke: '#9FB1C7' }} />
-      <path d={fig.neck} fill="none" style={{ stroke: '#9FB1C7' }} strokeWidth={2} strokeLinecap="round" />
-      <path
-        d={fig.head}
-        className="fill-white"
-        strokeWidth={2}
-        strokeLinejoin="round"
-        style={{ stroke: '#9FB1C7' }}
-      />
+      {/* --- the mannequin --- */}
+      <FigureBodyGroup profile={profile} />
 
-      {/* --- measurement lines --- */}
+      {/* --- measurement tapes --- */}
       {lines.map((line) => {
         const active = line.id === activeId
+        const numbered = measures.findIndex((m) => m.id === line.id)
+        const labelText =
+          LINE_LABELS[line.id] ?? measures.find((m) => m.id === line.id)?.label ?? line.id
+        const labelWithNum = numbered >= 0 ? `${numbered + 1} · ${labelText}` : labelText
+        const tape = active ? '#D4AF37' : '#C8D2DF'
+        const tapeBack = active ? '#E3BE4F' : '#C8D2DF'
+        const clickable = numbered >= 0
+
+        // circumference tapes: solid front arc + dashed back line + span arrows
+        if (line.kind === 'circ') {
+          const { front, back } = tapeArcs(line)
+          const [L, Rr] = line.points
+          const y = L[1]
+          return (
+            <g
+              key={line.id}
+              className={clickable ? 'cursor-pointer' : undefined}
+              onClick={clickable ? () => onSelect(line.id) : undefined}
+            >
+              {/* fat invisible hit area */}
+              <path d={front} fill="none" stroke="transparent" strokeWidth={20} pointerEvents="stroke" />
+
+              {/* hidden back half of the tape — the "wraps around" convention */}
+              <path
+                d={back}
+                fill="none"
+                strokeDasharray="4 3"
+                strokeLinecap="round"
+                strokeWidth={active ? 1.6 : 1.1}
+                style={{ stroke: tapeBack, transition: 'stroke 200ms' }}
+              />
+
+              {/* front half of the tape */}
+              <path
+                d={front}
+                fill="none"
+                strokeLinecap="round"
+                strokeWidth={active ? 2.6 : 1.5}
+                style={{ stroke: tape, transition: 'stroke 200ms, stroke-width 200ms' }}
+              />
+
+              {/* double-headed span arrows */}
+              {[arrowhead(L[0] + 0.5, y, -1, 0), arrowhead(Rr[0] - 0.5, y, 1, 0)].map((d, i) => (
+                <path
+                  key={i}
+                  d={d}
+                  style={{ fill: tape, transition: 'fill 200ms' }}
+                />
+              ))}
+
+              {active && (
+                <motion.path
+                  d={front}
+                  fill="none"
+                  stroke="#D4AF37"
+                  strokeWidth={2.6}
+                  strokeLinecap="round"
+                  initial={{ pathLength: 0, opacity: 0.9 }}
+                  animate={{ pathLength: 1, opacity: 1 }}
+                  transition={{ duration: 0.5, ease: 'easeOut' }}
+                />
+              )}
+
+              <text
+                x={line.label.x}
+                y={line.label.y}
+                textAnchor={line.label.anchor}
+                className={cn(
+                  'font-sans',
+                  active ? 'fill-navy-500 text-[12px] font-bold' : 'fill-navy-300 text-[10.5px] font-medium',
+                )}
+                style={{ transition: 'fill 200ms' }}
+              >
+                {labelWithNum}
+              </text>
+            </g>
+          )
+        }
+
+        // point-to-point tapes: path + landmark dots + end arrows
         const d = pathFromPoints(line.points)
         const first = line.points[0]
         const last = line.points[line.points.length - 1]
-        const t1 = tick(first, line.points[1] ?? last)
-        const t2 = tick(last, line.points[line.points.length - 2] ?? first)
-        const labelText =
-          LINE_LABELS[line.id] ??
-          MEASUREMENTS[profile].find((m) => m.id === line.id)?.label ??
-          line.id.charAt(0).toUpperCase() + line.id.slice(1)
-
+        const dirStart = norm(first[0], first[1], line.points[1][0], line.points[1][1])
+        const dirEnd = norm(
+          last[0],
+          last[1],
+          line.points[line.points.length - 2][0],
+          line.points[line.points.length - 2][1],
+        )
         return (
-          <g key={line.id} className="cursor-pointer" onClick={() => onSelect(line.id)}>
+          <g
+            key={line.id}
+            className={clickable ? 'cursor-pointer' : undefined}
+            onClick={clickable ? () => onSelect(line.id) : undefined}
+          >
             {/* fat invisible hit area */}
-            <path d={d} fill="none" stroke="transparent" strokeWidth={18} pointerEvents="stroke" />
+            <path d={d} fill="none" stroke="transparent" strokeWidth={20} pointerEvents="stroke" />
 
-            {/* base line */}
+            {/* the tape */}
             <path
               d={d}
               fill="none"
               strokeLinecap="round"
-              strokeWidth={active ? 2.5 : 1.5}
-              strokeDasharray={active ? undefined : '5 4'}
-              style={{
-                stroke: active ? '#B8962B' : '#C8D2DF',
-                transition: 'stroke 200ms, stroke-width 200ms',
-              }}
+              strokeLinejoin="round"
+              strokeWidth={active ? 2.6 : 1.5}
+              style={{ stroke: tape, transition: 'stroke 200ms, stroke-width 200ms' }}
             />
 
-            {/* end ticks */}
-            {[t1, t2].map((t, i) => (
-              <line
-                key={i}
-                x1={t.x1}
-                y1={t.y1}
-                x2={t.x2}
-                y2={t.y2}
-                strokeLinecap="round"
-                strokeWidth={active ? 2.5 : 1.5}
-                style={{
-                  stroke: active ? '#B8962B' : '#C8D2DF',
-                  transition: 'stroke 200ms',
-                }}
-              />
+            {/* end arrows along the path direction */}
+            {[arrowhead(first[0], first[1], dirStart[0], dirStart[1]),
+              arrowhead(last[0], last[1], dirEnd[0], dirEnd[1])].map((ah, i) => (
+              <path key={i} d={ah} style={{ fill: tape, transition: 'fill 200ms' }} />
             ))}
 
-            {/* end dots when active */}
-            {active && (
-              <>
-                {[first, last].map((p, i) => (
-                  <motion.circle
-                    key={i}
-                    cx={p[0]}
-                    cy={p[1]}
-                    r={4.5}
-                    fill="#D4AF37"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: i * 0.12, type: 'spring', stiffness: 300, damping: 15 }}
-                  />
-                ))}
-                {/* animated draw-in */}
-                <motion.path
-                  d={d}
-                  fill="none"
-                  stroke="#D4AF37"
-                  strokeWidth={2.5}
-                  strokeLinecap="round"
-                  initial={{ pathLength: 0, opacity: 0.9 }}
-                  animate={{ pathLength: 1, opacity: 1 }}
-                  transition={{ duration: 0.55, ease: 'easeOut' }}
+            {/* landmark dots */}
+            {[first, last].map((p, i) =>
+              active ? (
+                <motion.circle
+                  key={i}
+                  cx={p[0]}
+                  cy={p[1]}
+                  r={4.5}
+                  fill="#D4AF37"
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{ scale: 1, opacity: 1 }}
+                  transition={{ delay: i * 0.12, type: 'spring', stiffness: 300, damping: 15 }}
                 />
-              </>
+              ) : (
+                <circle key={i} cx={p[0]} cy={p[1]} r={2.4} fill="#C8D2DF" />
+              ),
             )}
 
-            {/* label */}
+            {active && (
+              <motion.path
+                d={d}
+                fill="none"
+                stroke="#D4AF37"
+                strokeWidth={2.6}
+                strokeLinecap="round"
+                initial={{ pathLength: 0, opacity: 0.9 }}
+                animate={{ pathLength: 1, opacity: 1 }}
+                transition={{ duration: 0.55, ease: 'easeOut' }}
+              />
+            )}
+
             <text
               x={line.label.x}
               y={line.label.y}
@@ -534,7 +668,7 @@ export function MeasurementFigure({ profile, activeId, onSelect, className }: Me
               )}
               style={{ transition: 'fill 200ms' }}
             >
-              {labelText}
+              {labelWithNum}
             </text>
           </g>
         )

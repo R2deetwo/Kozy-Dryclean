@@ -52,6 +52,7 @@ import {
   type SavedMeasurements,
 } from '@/lib/measurements'
 import { MeasurementFigure } from '@/components/customer/measurement-figure'
+import { MeasurementDiagram } from '@/components/customer/measurement-diagram'
 
 type Unit = 'cm' | 'in'
 
@@ -285,7 +286,7 @@ export function MeasurementsGuide() {
                 </div>
                 <p className="mt-2 text-center text-[11px] leading-snug text-navy-300">
                   {activeDef
-                    ? `The gold line shows where the tape sits for your ${activeDef.label.toLowerCase()} measurement.`
+                    ? `The gold tape shows where the tape wraps for your ${activeDef.label.toLowerCase()} measurement.`
                     : 'Select a measurement to see where the tape goes.'}
                 </p>
               </CardContent>
@@ -296,19 +297,27 @@ export function MeasurementsGuide() {
           <div>
             {/* quick selector chips */}
             <div className="flex flex-wrap gap-1.5">
-              {defs.map((d) => (
+              {defs.map((d, i) => (
                 <button
                   key={d.id}
                   onMouseEnter={() => setActiveId(d.id)}
                   onFocus={() => setActiveId(d.id)}
                   onClick={() => setActiveId(d.id)}
                   className={cn(
-                    'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+                    'flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition',
                     activeDef?.id === d.id
                       ? 'border-gold-400 bg-gold-400/15 text-navy'
                       : 'border-navy-100 bg-white text-navy-300 hover:border-gold-300 hover:text-navy',
                   )}
                 >
+                  <span
+                    className={cn(
+                      'flex h-4.5 w-4.5 items-center justify-center rounded-full text-[10px] font-bold',
+                      activeDef?.id === d.id ? 'bg-gold-400 text-navy-600' : 'bg-navy-50 text-navy-300',
+                    )}
+                  >
+                    {i + 1}
+                  </span>
                   {d.label}
                 </button>
               ))}
@@ -327,7 +336,10 @@ export function MeasurementsGuide() {
                   <Card className="mt-4 border-navy-100 shadow-navy">
                     <CardContent className="p-6 sm:p-8">
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
-                        <h2 className="font-serif text-2xl font-semibold text-navy">
+                        <h2 className="flex items-center gap-3 font-serif text-2xl font-semibold text-navy">
+                          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gold-400 font-sans text-sm font-bold text-navy-600">
+                            {defs.findIndex((d) => d.id === activeDef.id) + 1}
+                          </span>
                           {activeDef.label}
                         </h2>
                         <span className="rounded-full bg-navy-50 px-2.5 py-1 text-[11px] font-semibold text-navy-300">
@@ -337,6 +349,12 @@ export function MeasurementsGuide() {
                       <p className="mt-2 text-[15px] font-medium leading-relaxed text-navy">
                         {activeDef.tagline}
                       </p>
+
+                      {/* close-up diagram — the same mannequin, zoomed to
+                          exactly where this measurement is taken */}
+                      <div className="mt-5 overflow-hidden rounded-xl border border-navy-100 bg-linen-100 px-4 py-2">
+                        <MeasurementDiagram profile={profile} id={activeDef.id} />
+                      </div>
 
                       <div className="mt-5 grid gap-5 sm:grid-cols-2">
                         <div>
@@ -388,7 +406,7 @@ export function MeasurementsGuide() {
                   All {CATEGORY_META[profile].label.toLowerCase()} measurements
                 </p>
                 <ul className="mt-3 divide-y divide-navy-50">
-                  {defs.map((d) => (
+                  {defs.map((d, i) => (
                     <li key={d.id}>
                       <button
                         onClick={() => setActiveId(d.id)}
@@ -397,10 +415,14 @@ export function MeasurementsGuide() {
                         <span className="flex items-center gap-3">
                           <span
                             className={cn(
-                              'h-1.5 w-1.5 rounded-full transition',
-                              activeDef?.id === d.id ? 'bg-gold-400' : 'bg-navy-100 group-hover:bg-gold-300',
+                              'flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition',
+                              activeDef?.id === d.id
+                                ? 'bg-gold-400 text-navy-600'
+                                : 'bg-navy-50 text-navy-300 group-hover:bg-gold-300 group-hover:text-navy-600',
                             )}
-                          />
+                          >
+                            {i + 1}
+                          </span>
                           <span className="text-sm font-semibold text-navy">{d.label}</span>
                         </span>
                         <span className="hidden max-w-[60%] truncate text-[13px] text-navy-300 sm:block">
