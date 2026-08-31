@@ -13,11 +13,25 @@
 // measurement list). Each measurement renders as a technical dashed line
 // with end ticks; the active one animates in gold. Clicking a line selects
 // the measurement too — the diagram and the list stay in sync.
+//
+// v2/v3 anatomy (Phase 26): the figures are rebuilt from anatomical landmark
+// rings instead of hand-written blocky paths. Left halves are authored in
+// head-unit canons and mirrored for exact symmetry; Catmull-Rom smoothing
+// turns the rings into organic curves. Duplicated landmarks create crisp
+// corners at the knee/elbow/ankle, so limbs taper like real anatomy
+// (thigh → knee pinch → calf bulge → narrow ankle) instead of "sausage
+// tubes". The crotch is a soft rounded U, the trapezius slopes smoothly
+// from the neck, and the child follows a true ~5.5-head canon.
+//   men      ~8.0 heads — shoulders ≈ 2.1 head-widths, V-taper torso
+//   women    ~8.3 heads (fashion elongation) — hips ≥ shoulders, gentle
+//             hourglass, long leg line
+//   children ~5.5 heads — big round head, short limbs, round belly with no
+//             waist pinch, elbows at the natural waistline
 // =============================================================================
 
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import type { MeasurementCategory } from '@/lib/measurements'
+import { MEASUREMENTS, type MeasurementCategory } from '@/lib/measurements'
 
 export interface FigureMeasureLine {
   id: string
@@ -29,164 +43,278 @@ export interface FigureMeasureLine {
 type Pt = [number, number]
 
 // ---------------------------------------------------------------------------
-// Figure geometry — technical-flat croquis, 320x640 viewBox
+// Geometry helpers — Catmull-Rom → cubic bezier
 // ---------------------------------------------------------------------------
 
-const MALE_FIGURE = {
-  head: { cx: 160, cy: 50, rx: 23, ry: 29 },
-  neck: 'M 150 77 L 149 95 M 170 77 L 171 95',
-  body:
-    'M 116 106 ' +
-    'C 106 112 100 130 102 152 ' +
-    'C 103 176 108 196 112 214 ' +
-    'C 114 236 112 258 110 278 ' +
-    'C 108 296 112 310 122 318 ' +
-    'L 128 330 ' +
-    'C 126 390 124 450 126 510 ' +
-    'C 127 540 128 556 128 566 ' +
-    'L 152 566 ' +
-    'C 152 500 152 440 152 400 ' +
-    'L 152 336 ' +
-    'L 168 336 ' +
-    'C 168 440 168 500 168 566 ' +
-    'L 192 566 ' +
-    'C 192 540 194 510 194 480 ' +
-    'C 196 420 194 390 192 330 ' +
-    'L 198 318 ' +
-    'C 208 310 212 296 210 278 ' +
-    'C 208 258 206 236 208 214 ' +
-    'C 212 196 217 176 218 152 ' +
-    'C 220 130 214 112 204 106 ' +
-    'C 190 100 170 98 160 98 ' +
-    'C 150 98 130 100 116 106 Z',
-  armL:
-    'M 117 110 ' +
-    'C 105 118 99 142 95 172 ' +
-    'C 91 202 89 232 87 260 ' +
-    'C 86 277 85 292 83 304 ' +
-    'L 95 308 ' +
-    'C 97 290 99 272 101 254 ' +
-    'C 105 222 109 192 113 168 ' +
-    'C 116 148 119 130 123 118 Z',
-  armR:
-    'M 203 110 ' +
-    'C 215 118 221 142 225 172 ' +
-    'C 229 202 231 232 233 260 ' +
-    'C 234 277 235 292 237 304 ' +
-    'L 225 308 ' +
-    'C 223 290 221 272 219 254 ' +
-    'C 215 222 211 192 207 168 ' +
-    'C 204 148 201 130 197 118 Z',
-  feet:
-    'M 128 566 C 122 570 112 571 106 572 L 106 577 C 118 578 128 575 130 570 Z ' +
-    'M 192 566 C 198 570 208 571 214 572 L 214 577 C 202 578 192 575 190 570 Z',
+const CX = 160 // figure centerline in the 320-wide viewBox
+
+function r(n: number): number {
+  return Math.round(n * 10) / 10
 }
 
-const FEMALE_FIGURE = {
-  head: { cx: 160, cy: 50, rx: 21, ry: 28 },
-  neck: 'M 151 76 L 150 95 M 169 76 L 170 95',
-  body:
-    'M 122 106 ' +
-    'C 112 112 107 128 108 148 ' +
-    'C 109 164 110 176 112 188 ' +      // bust side
-    'C 114 204 118 226 124 244 ' +      // waist taper
-    'C 128 258 130 268 128 280 ' +
-    'C 124 296 116 302 114 312 ' +      // hip flare
-    'C 112 322 118 330 126 336 ' +
-    'L 131 344 ' +
-    'C 129 400 127 452 129 508 ' +
-    'C 130 538 131 554 131 564 ' +
-    'L 153 564 ' +
-    'C 153 498 153 438 153 398 ' +
-    'L 153 348 ' +
-    'L 167 348 ' +
-    'C 167 438 167 498 167 564 ' +
-    'L 189 564 ' +
-    'C 189 554 190 538 191 508 ' +
-    'C 193 452 191 400 189 344 ' +
-    'L 194 336 ' +
-    'C 202 330 208 322 206 312 ' +
-    'C 204 302 196 296 192 280 ' +
-    'C 190 268 192 258 196 244 ' +
-    'C 202 226 206 204 208 188 ' +
-    'C 210 176 211 164 212 148 ' +
-    'C 213 128 208 112 198 106 ' +
-    'C 185 100 170 98 160 98 ' +
-    'C 150 98 135 100 122 106 Z',
-  armL:
-    'M 123 110 ' +
-    'C 112 118 107 140 104 168 ' +
-    'C 101 196 99 226 97 252 ' +
-    'C 96 268 95 282 93 294 ' +
-    'L 104 298 ' +
-    'C 106 281 108 264 110 247 ' +
-    'C 113 217 117 189 121 166 ' +
-    'C 124 147 126 130 129 118 Z',
-  armR:
-    'M 197 110 ' +
-    'C 208 118 213 140 216 168 ' +
-    'C 219 196 221 226 223 252 ' +
-    'C 224 268 225 282 227 294 ' +
-    'L 216 298 ' +
-    'C 214 281 212 264 210 247 ' +
-    'C 207 217 203 189 199 166 ' +
-    'C 196 147 194 130 191 118 Z',
-  feet:
-    'M 131 564 C 125 568 116 569 110 570 L 110 575 C 121 576 131 573 133 568 Z ' +
-    'M 189 564 C 195 568 204 569 210 570 L 210 575 C 199 576 189 573 187 568 Z',
+/** Smooth closed path through all points (wraps last→first). */
+function smoothClosed(pts: Pt[]): string {
+  const n = pts.length
+  let d = `M ${r(pts[0][0])} ${r(pts[0][1])}`
+  for (let i = 0; i < n; i++) {
+    const p0 = pts[(i - 1 + n) % n]
+    const p1 = pts[i]
+    const p2 = pts[(i + 1) % n]
+    const p3 = pts[(i + 2) % n]
+    const c1x = p1[0] + (p2[0] - p0[0]) / 6
+    const c1y = p1[1] + (p2[1] - p0[1]) / 6
+    const c2x = p2[0] - (p3[0] - p1[0]) / 6
+    const c2y = p2[1] - (p3[1] - p1[1]) / 6
+    d += ` C ${r(c1x)} ${r(c1y)}, ${r(c2x)} ${r(c2y)}, ${r(p2[0])} ${r(p2[1])}`
+  }
+  return d + ' Z'
 }
 
-const CHILD_FIGURE = {
-  head: { cx: 160, cy: 62, rx: 27, ry: 32 },
-  neck: 'M 150 92 L 149 108 M 170 92 L 171 108',
-  body:
-    'M 128 118 ' +
-    'C 118 124 113 140 114 160 ' +
-    'C 115 178 118 198 122 220 ' +
-    'C 124 238 124 254 122 270 ' +
-    'C 120 288 116 300 118 312 ' +
-    'C 120 324 126 330 132 336 ' +
-    'L 136 346 ' +
-    'C 134 402 132 452 134 500 ' +
-    'C 135 528 136 546 136 558 ' +
-    'L 154 558 ' +
-    'C 154 500 154 448 154 406 ' +
-    'L 154 352 ' +
-    'L 166 352 ' +
-    'C 166 448 166 500 166 558 ' +
-    'L 184 558 ' +
-    'C 184 546 185 528 186 500 ' +
-    'C 188 452 186 402 184 346 ' +
-    'L 188 336 ' +
-    'C 194 330 200 324 202 312 ' +
-    'C 204 300 200 288 198 270 ' +
-    'C 196 254 196 238 198 220 ' +
-    'C 202 198 205 178 206 160 ' +
-    'C 207 140 202 124 192 118 ' +
-    'C 181 112 170 110 160 110 ' +
-    'C 150 110 139 112 128 118 Z',
-  armL:
-    'M 129 122 ' +
-    'C 119 129 114 150 111 176 ' +
-    'C 108 200 106 224 104 246 ' +
-    'C 103 260 102 272 100 282 ' +
-    'L 111 286 ' +
-    'C 113 271 115 256 117 241 ' +
-    'C 120 215 124 191 128 172 ' +
-    'C 131 155 133 139 136 128 Z',
-  armR:
-    'M 191 122 ' +
-    'C 201 129 206 150 209 176 ' +
-    'C 212 200 214 224 216 246 ' +
-    'C 217 260 218 272 220 282 ' +
-    'L 209 286 ' +
-    'C 207 271 205 256 203 241 ' +
-    'C 200 215 196 191 192 172 ' +
-    'C 189 155 187 139 184 128 Z',
-  feet:
-    'M 136 558 C 130 562 122 563 116 564 L 116 569 C 126 570 136 567 138 562 Z ' +
-    'M 184 558 C 190 562 198 563 204 564 L 204 569 C 194 570 184 567 182 562 Z',
+/** Mirror points across the figure centerline (right = 320 - left). */
+function mirrorPts(pts: Pt[]): Pt[] {
+  return pts.map(([x, y]) => [2 * CX - x, y] as Pt)
 }
+
+/**
+ * Build a full symmetric ring from an authored LEFT half. The half must run
+ * from a centerline point (e.g. neck base) around to the NEXT centerline
+ * point (e.g. crotch or chin); the mirrored half is appended in reverse.
+ */
+function ringFromLeftHalf(left: Pt[]): Pt[] {
+  const mirrored = mirrorPts(left).reverse()
+  return [...left, ...mirrored.slice(1, -1)]
+}
+
+// ---------------------------------------------------------------------------
+// Figure geometry — anatomically-proportioned croquis, 320x640 viewBox
+// ---------------------------------------------------------------------------
+
+const MALE_FIGURE = (() => {
+  // head: 50w x 70h, egg skull tapering to a real chin (~8 heads total)
+  const headLeft: Pt[] = [
+    [160, 22], [146, 25], [138, 32], [136, 46], [136, 58],
+    [139, 71], [145, 83], [152, 90], [160, 92],
+  ]
+  // torso + both legs, one closed silhouette (inner leg lines included).
+  // Smooth trapezius into the shoulder; V-taper chest → waist; thigh →
+  // knee pinch → calf bulge → narrow ankle; soft rounded crotch.
+  const torsoLeft: Pt[] = [
+    [150, 112],                                            // neck base
+    [142, 114], [131, 117], [119, 121],                    // trapezius slope
+    [108, 126],                                            // shoulder point
+    [105, 134], [108, 148],                                // deltoid → armpit
+    [107, 158], [106, 172], [108, 186],                    // chest, ribs
+    [111, 196], [112, 208],                                // natural waist
+    [114, 228], [114, 244],                                // iliac
+    [113, 258], [112, 272],                                // seat (fullest)
+    [114, 290], [117, 312], [118, 328],                    // outer thigh
+    [119, 368], [121, 405],                                // thigh taper
+    [126, 430], [126, 430],                                // knee (corner)
+    [124, 448], [123, 466],                                // below knee
+    [121, 490], [123, 516], [126, 542],                    // calf bulge
+    [129, 568], [129, 568],                                // ankle (corner)
+    [138, 576], [147, 568], [147, 568],                    // leg end (foot covers)
+    [149, 538], [150, 508], [149, 478],                    // inner calf
+    [148, 452], [148, 436], [148, 436],                    // inner knee (corner)
+    [149, 404], [151, 366], [152, 332],                    // inner thigh
+    [156, 327], [160, 324],                                // soft crotch U
+  ]
+  // arm hanging in relaxed A-pose: deltoid → bicep → elbow (waist level) →
+  // tapering forearm → wrist → simple hand wedge
+  const armLeft: Pt[] = [
+    [106, 120],                                            // deltoid top
+    [97, 128], [89, 144], [86, 163],                       // bicep outer
+    [86, 183], [88, 210], [88, 210],                       // elbow (corner)
+    [90, 234], [91, 264], [91, 292],                       // forearm outer
+    [93, 306],                                             // wrist
+    [96, 318], [100, 328], [101, 335],                     // hand outer
+    [98, 340],                                             // fingertip
+    [95, 334], [96, 322], [98, 308],                       // hand inner
+    [100, 278], [102, 246], [103, 214], [103, 214],        // inner elbow (corner)
+    [103, 190], [104, 166], [105, 148],                    // inner bicep → armpit
+    [104, 132],
+  ]
+  // foot in slight outward stance: heel, arch, instep dip, toe
+  const footLeft: Pt[] = [
+    [127, 565], [120, 569], [114, 573], [111, 579],
+    [111, 583], [114, 585],
+    [120, 586], [128, 584], [135, 580],
+    [140, 578], [145, 574], [147, 568],
+    [148, 566], [145, 562], [139, 561], [133, 562], [129, 564],
+  ]
+  return {
+    head: smoothClosed(ringFromLeftHalf(headLeft)),
+    neck: 'M 152 87 L 150 110 M 168 87 L 170 110',
+    body: smoothClosed(ringFromLeftHalf(torsoLeft)),
+    armL: smoothClosed(armLeft),
+    armR: smoothClosed(mirrorPts(armLeft)),
+    feet: smoothClosed(footLeft) + ' ' + smoothClosed(mirrorPts(footLeft)),
+    shadow: { cx: CX, cy: 596, rx: 52, ry: 7 },
+  }
+})()
+
+const FEMALE_FIGURE = (() => {
+  // head: 44w x 68h, narrower jaw
+  const headLeft: Pt[] = [
+    [160, 24], [148, 27], [139, 34], [137, 46], [137, 58],
+    [140, 71], [146, 83], [153, 90], [160, 92],
+  ]
+  // hourglass with a GENTLE waist (shoulders ±44, bust ±42, waist ±27,
+  // hips ±47 — hips slightly wider than shoulders, no corset pinch)
+  const torsoLeft: Pt[] = [
+    [150, 112],                                            // neck base
+    [142, 114], [132, 117], [122, 121],                    // trapezius slope
+    [116, 126],                                            // shoulder point
+    [114, 134], [118, 148],                                // deltoid → armpit
+    [118, 158],                                            // bust side (fullest)
+    [121, 170], [124, 184],                                // underbust
+    [130, 196], [133, 208],                                // waist (soft pinch)
+    [131, 222], [126, 236],                                // high hip
+    [119, 250], [114, 262], [113, 270],                    // hip (fullest)
+    [115, 288], [117, 306], [118, 322],                    // outer thigh
+    [118, 360], [120, 395],                                // thigh taper
+    [126, 440], [126, 440],                                // knee (corner)
+    [124, 460], [123, 484],                                // below knee
+    [123, 508], [125, 534], [127, 558],                    // calf bulge
+    [129, 570], [129, 570],                                // ankle (corner)
+    [138, 577], [147, 570], [147, 570],                    // leg end
+    [149, 542], [150, 512], [149, 484],                    // inner calf
+    [148, 462], [148, 446], [148, 446],                    // inner knee (corner)
+    [149, 412], [151, 374], [152, 340],                    // inner thigh
+    [156, 334], [160, 332],                                // soft crotch U
+  ]
+  // slimmer arm with a graceful outward line; wrist at hip level
+  const armLeft: Pt[] = [
+    [114, 121],                                            // deltoid top
+    [104, 128], [97, 143], [95, 162],                      // bicep outer
+    [95, 182], [97, 206], [97, 206],                       // elbow (corner)
+    [99, 228], [101, 258], [101, 286],                     // forearm outer
+    [103, 300],                                            // wrist
+    [106, 311], [109, 320], [109, 328],                    // hand outer
+    [106, 332],                                            // fingertip
+    [103, 327], [104, 316], [105, 305],                    // hand inner
+    [106, 276], [107, 244], [108, 212], [108, 212],        // inner elbow (corner)
+    [108, 190], [109, 168], [110, 150],                    // inner bicep → armpit
+    [109, 136],
+  ]
+  const footLeft: Pt[] = [
+    [130, 567], [124, 571], [118, 575], [115, 581],
+    [115, 585], [118, 587],
+    [124, 588], [131, 586], [137, 582],
+    [142, 580], [146, 576], [148, 570],
+    [149, 568], [146, 564], [140, 563], [134, 564], [131, 566],
+  ]
+  return {
+    head: smoothClosed(ringFromLeftHalf(headLeft)),
+    neck: 'M 153 88 L 150 110 M 167 88 L 170 110',
+    body: smoothClosed(ringFromLeftHalf(torsoLeft)),
+    armL: smoothClosed(armLeft),
+    armR: smoothClosed(mirrorPts(armLeft)),
+    feet: smoothClosed(footLeft) + ' ' + smoothClosed(mirrorPts(footLeft)),
+    shadow: { cx: CX, cy: 594, rx: 48, ry: 6.5 },
+  }
+})()
+
+// The child is authored full-size in its own ~5.5-head canon, then rendered
+// at 70% on the SAME ground line — a child IS smaller than the adults, and
+// the size difference is the strongest "this is a child" cue of all.
+const CHILD_S = 0.7
+const CHILD_GROUND = 600
+
+function scPt(x: number, y: number): Pt {
+  return [
+    Math.round((CX + (x - CX) * CHILD_S) * 10) / 10,
+    Math.round((CHILD_GROUND + (y - CHILD_GROUND) * CHILD_S) * 10) / 10,
+  ]
+}
+
+function scPts(pts: Pt[]): Pt[] {
+  return pts.map(([x, y]) => scPt(x, y))
+}
+
+function scLabel(x: number, y: number, anchor: 'start' | 'middle' | 'end') {
+  const p = scPt(x, y)
+  return { x: p[0], y: p[1], anchor }
+}
+
+const CHILD_FIGURE = (() => {
+  // child canon: ~5.6 heads — big ROUND head (100w x 101h) clearly wider
+  // than the shoulders, soft jaw; chunky toddler proportions, arms held
+  // close to the body, cylindrical legs without adult calf musculature
+  const headLeft: Pt[] = [
+    [160, 28], [144, 31], [124, 41], [112, 57], [110, 76],
+    [113, 94], [123, 108], [136, 119], [149, 126], [160, 129],
+  ]
+  // short torso with a PROMINENT round belly (±48 vs chest ±31), no waist
+  // pinch, narrow sloped shoulders, chunky cylindrical legs, crotch at
+  // ~57% of height with a DEEP soft U (survives the 70% render scale)
+  const torsoLeft: Pt[] = [
+    [148, 145],                                            // neck base
+    [137, 148], [127, 154], [121, 162],                    // sloped narrow shoulders (±39)
+    [125, 170], [125, 182],                                // deltoid → armpit
+    [129, 196],                                            // chest (±31)
+    [126, 212], [124, 228],                                // straight sides (no waist)
+    [114, 244], [112, 262], [115, 278],                    // ROUND belly (±48)
+    [118, 294],                                            // hip (±42)
+    [119, 314], [114, 342], [113, 378], [116, 412],        // chunky outer thigh (±47)
+    [119, 448],                                            // knee (smooth — no adult corner)
+    [117, 470], [116, 495],                                // cylindrical lower leg
+    [118, 520], [122, 548],                                // gentle taper
+    [125, 572], [125, 572],                                // ankle (corner)
+    [135, 584], [143, 578], [143, 578],                    // leg end
+    [144, 548], [146, 524], [147, 500],                    // inner lower leg (smooth)
+    [147, 476], [147, 450],                                // inner knee (smooth)
+    [148, 412], [150, 382],                                // inner thigh
+    [152, 354], [156, 356], [160, 362],                    // DEEP soft crotch U
+  ]
+  // short chubby arm held close to the body; elbow just above the natural
+  // waist (y≈222), fingertips at upper thigh (y≈296)
+  const armLeft: Pt[] = [
+    [122, 164],                                            // deltoid top
+    [108, 170], [99, 186], [97, 204],                      // chunky bicep outer
+    [97, 222], [97, 222],                                  // elbow (corner)
+    [99, 240], [101, 256],                                 // forearm outer
+    [103, 266],                                            // wrist
+    [107, 274], [109, 282], [110, 290],                    // hand outer
+    [106, 296],                                            // fingertip
+    [103, 289], [104, 279], [104, 271],                    // hand inner
+    [105, 266],                                            // inner wrist
+    [107, 248], [108, 230],                                // inner forearm
+    [109, 222], [109, 222],                                // inner elbow (corner)
+    [112, 202], [115, 186], [117, 172],                    // inner bicep
+  ]
+  const footLeft: Pt[] = [
+    [131, 572], [121, 578], [113, 588], [115, 595],
+    [123, 597], [133, 594],
+    [142, 589], [148, 582], [149, 577],
+    [145, 573], [139, 571],
+  ]
+  const seg = (a: Pt, b: Pt): string => {
+    const p = scPt(a[0], a[1])
+    const q = scPt(b[0], b[1])
+    return `M ${p[0]} ${p[1]} L ${q[0]} ${q[1]}`
+  }
+  return {
+    head: smoothClosed(ringFromLeftHalf(scPts(headLeft))),
+    neck: seg([147, 125], [145, 143]) + ' ' + seg([173, 125], [175, 143]),
+    body: smoothClosed(ringFromLeftHalf(scPts(torsoLeft))),
+    armL: smoothClosed(scPts(armLeft)),
+    armR: smoothClosed(mirrorPts(scPts(armLeft))),
+    feet: smoothClosed(scPts(footLeft)) + ' ' + smoothClosed(mirrorPts(scPts(footLeft))),
+    shadow: { cx: CX, cy: 604, rx: 33, ry: 5 },
+  }
+})()
+
+// Child measurement lines — authored full-size, scaled to the child's 70%
+// render (labels keep their font size, only positions scale)
+const CHILD_LINES: FigureMeasureLine[] = [
+  { id: 'height', points: scPts([[70, 28], [70, 600]]), label: scLabel(70, 18, 'middle') },
+  { id: 'chest', points: scPts([[102, 196], [218, 196]]), label: scLabel(238, 194, 'start') },
+  { id: 'waist', points: scPts([[104, 250], [216, 250]]), label: scLabel(236, 248, 'start') },
+  { id: 'hips', points: scPts([[98, 294], [222, 294]]), label: scLabel(236, 292, 'start') },
+  { id: 'sleeve', points: scPts([[122, 164], [97, 222], [103, 266]]), label: scLabel(128, 150, 'end') },
+  { id: 'inseam', points: scPts([[152, 366], [144, 578]]), label: scLabel(160, 616, 'middle') },
+]
 
 const FIGURES: Record<MeasurementCategory, typeof MALE_FIGURE> = {
   men: MALE_FIGURE,
@@ -194,41 +322,38 @@ const FIGURES: Record<MeasurementCategory, typeof MALE_FIGURE> = {
   children: CHILD_FIGURE,
 }
 
-// measurement lines per profile — coordinates tuned to sit on the figure
+// measurement lines per profile — retuned to sit exactly on the landmarks
+// above (chest at the fullest line, waist at the natural waist, seat at the
+// hip fullest, sleeve along shoulder→elbow→wrist). Labels live in the clear
+// negative space either side of the arms/legs.
 const LINES: Record<MeasurementCategory, FigureMeasureLine[]> = {
   men: [
-    { id: 'neck', points: [[131, 86], [189, 86]], label: { x: 196, y: 84, anchor: 'start' } },
-    { id: 'chest', points: [[94, 158], [226, 158]], label: { x: 88, y: 156, anchor: 'end' } },
-    { id: 'waist', points: [[106, 246], [214, 246]], label: { x: 100, y: 244, anchor: 'end' } },
-    { id: 'seat', points: [[100, 296], [220, 296]], label: { x: 226, y: 294, anchor: 'start' } },
-    { id: 'shoulder', points: [[108, 104], [212, 104]], label: { x: 160, y: 92, anchor: 'middle' } },
-    { id: 'sleeve', points: [[112, 108], [88, 252], [84, 306]], label: { x: 66, y: 210, anchor: 'end' } },
-    { id: 'inseam', points: [[154, 340], [155, 560]], label: { x: 148, y: 470, anchor: 'end' } },
-    { id: 'shirt', points: [[160, 96], [160, 330]], label: { x: 168, y: 214, anchor: 'start' } },
+    { id: 'neck', points: [[132, 100], [188, 100]], label: { x: 124, y: 104, anchor: 'end' } },
+    { id: 'chest', points: [[94, 160], [226, 160]], label: { x: 82, y: 158, anchor: 'end' } },
+    { id: 'waist', points: [[100, 208], [220, 208]], label: { x: 82, y: 208, anchor: 'end' } },
+    { id: 'seat', points: [[100, 272], [220, 272]], label: { x: 86, y: 270, anchor: 'end' } },
+    { id: 'shoulder', points: [[102, 120], [218, 120]], label: { x: 226, y: 112, anchor: 'start' } },
+    { id: 'sleeve', points: [[106, 120], [88, 212], [91, 296]], label: { x: 84, y: 244, anchor: 'end' } },
+    { id: 'inseam', points: [[152, 328], [148, 572]], label: { x: 118, y: 470, anchor: 'end' } },
+    { id: 'shirt', points: [[160, 96], [160, 328]], label: { x: 170, y: 190, anchor: 'start' } },
   ],
   women: [
-    { id: 'bust', points: [[98, 168], [222, 168]], label: { x: 92, y: 166, anchor: 'end' } },
-    { id: 'underbust', points: [[104, 196], [216, 196]], label: { x: 234, y: 194, anchor: 'start' } },
-    { id: 'waist', points: [[118, 252], [202, 252]], label: { x: 112, y: 250, anchor: 'end' } },
-    { id: 'hips', points: [[102, 304], [218, 304]], label: { x: 234, y: 302, anchor: 'start' } },
-    { id: 'shoulder', points: [[116, 104], [204, 104]], label: { x: 160, y: 92, anchor: 'middle' } },
-    { id: 'sleeve', points: [[122, 108], [97, 252], [92, 300]], label: { x: 74, y: 210, anchor: 'end' } },
-    { id: 'length', points: [[160, 96], [160, 560]], label: { x: 168, y: 420, anchor: 'start' } },
+    { id: 'bust', points: [[96, 160], [224, 160]], label: { x: 90, y: 148, anchor: 'end' } },
+    { id: 'underbust', points: [[102, 184], [218, 184]], label: { x: 90, y: 196, anchor: 'end' } },
+    { id: 'waist', points: [[116, 210], [204, 210]], label: { x: 228, y: 226, anchor: 'start' } },
+    { id: 'hips', points: [[98, 270], [222, 270]], label: { x: 230, y: 262, anchor: 'start' } },
+    { id: 'shoulder', points: [[106, 120], [214, 120]], label: { x: 222, y: 110, anchor: 'start' } },
+    { id: 'sleeve', points: [[114, 120], [96, 206], [101, 296]], label: { x: 70, y: 232, anchor: 'end' } },
+    { id: 'length', points: [[160, 96], [160, 560]], label: { x: 204, y: 552, anchor: 'start' } },
   ],
-  children: [
-    { id: 'height', points: [[74, 32], [74, 570]], label: { x: 74, y: 22, anchor: 'middle' } },
-    { id: 'chest', points: [[104, 168], [216, 168]], label: { x: 226, y: 166, anchor: 'start' } },
-    { id: 'waist', points: [[110, 258], [210, 258]], label: { x: 104, y: 256, anchor: 'end' } },
-    { id: 'hips', points: [[106, 316], [214, 316]], label: { x: 226, y: 314, anchor: 'start' } },
-    { id: 'sleeve', points: [[128, 122], [103, 246], [99, 286]], label: { x: 80, y: 205, anchor: 'end' } },
-    { id: 'inseam', points: [[156, 352], [157, 556]], label: { x: 148, y: 470, anchor: 'end' } },
-  ],
+  children: CHILD_LINES,
 }
 
-// extra label text per profile (ids not in the data model need a display name)
+// display names for figure-only lines not present in the measurement list;
+// every other label is pulled from MEASUREMENTS so the diagram and the
+// measurement cards always use identical terminology
 const LINE_LABELS: Record<string, string> = {
   shirt: 'Shirt length',
-  length: 'Dress length',
 }
 
 // ---------------------------------------------------------------------------
@@ -280,18 +405,23 @@ export function MeasurementFigure({ profile, activeId, onSelect, className }: Me
       role="img"
       aria-label={`${profile} measurement diagram`}
     >
-      {/* --- figure (technical-flat croquis) --- */}
+      {/* --- ground shadow (draws the figure into space) --- */}
       <ellipse
-        cx={fig.head.cx}
-        cy={fig.head.cy}
-        rx={fig.head.rx}
-        ry={fig.head.ry}
+        cx={fig.shadow.cx}
+        cy={fig.shadow.cy}
+        rx={fig.shadow.rx}
+        ry={fig.shadow.ry}
+        fill="#E9EEF6"
+      />
+
+      {/* --- figure (anatomical croquis) --- */}
+      <path
+        d={fig.body}
         className="fill-white"
         strokeWidth={2}
         strokeLinejoin="round"
         style={{ stroke: '#9FB1C7' }}
       />
-      <path d={fig.neck} fill="none" style={{ stroke: '#9FB1C7' }} strokeWidth={2} strokeLinecap="round" />
       <path
         d={fig.armL}
         className="fill-white"
@@ -306,14 +436,15 @@ export function MeasurementFigure({ profile, activeId, onSelect, className }: Me
         strokeLinejoin="round"
         style={{ stroke: '#9FB1C7' }}
       />
+      <path d={fig.feet} className="fill-white" strokeWidth={2} strokeLinejoin="round" style={{ stroke: '#9FB1C7' }} />
+      <path d={fig.neck} fill="none" style={{ stroke: '#9FB1C7' }} strokeWidth={2} strokeLinecap="round" />
       <path
-        d={fig.body}
+        d={fig.head}
         className="fill-white"
         strokeWidth={2}
         strokeLinejoin="round"
         style={{ stroke: '#9FB1C7' }}
       />
-      <path d={fig.feet} className="fill-white" strokeWidth={2} strokeLinejoin="round" style={{ stroke: '#9FB1C7' }} />
 
       {/* --- measurement lines --- */}
       {lines.map((line) => {
@@ -323,7 +454,10 @@ export function MeasurementFigure({ profile, activeId, onSelect, className }: Me
         const last = line.points[line.points.length - 1]
         const t1 = tick(first, line.points[1] ?? last)
         const t2 = tick(last, line.points[line.points.length - 2] ?? first)
-        const labelText = LINE_LABELS[line.id] ?? line.id.charAt(0).toUpperCase() + line.id.slice(1)
+        const labelText =
+          LINE_LABELS[line.id] ??
+          MEASUREMENTS[profile].find((m) => m.id === line.id)?.label ??
+          line.id.charAt(0).toUpperCase() + line.id.slice(1)
 
         return (
           <g key={line.id} className="cursor-pointer" onClick={() => onSelect(line.id)}>
