@@ -1,0 +1,21 @@
+# Keep the Vercel CLI upload to the actual app source — everything else here
+# is sandbox working state, docs, screenshots, and session artifacts that has
+# no business in a deployment (and some of it must never leave the machine).
+upload/
+download/
+work/
+tool-results/
+scripts/
+tests/
+skills/
+examples/
+mini-services/
+db/
+node_modules/
+.next/
+.vercel/
+*.md
+!README.md
+dev.log
+worklog.md
+tsconfig.tsbuildinfo

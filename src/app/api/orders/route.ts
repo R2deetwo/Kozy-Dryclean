@@ -46,6 +46,14 @@ import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 import { getServiceSpeed, allowsExpress24, GARMENT_CATALOG, GUARANTEE_DISCOUNT } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
 
+// Positive-integer env override with a safe default (phase-29): lets the
+// owner retune the booking rate limits from Vercel's dashboard without a
+// code change. Blank, non-numeric, or <= 0 values all fall back.
+function envInt(name: string, fallback: number): number {
+  const parsed = Number.parseInt(process.env[name] ?? '', 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback
+}
+
 // ----- GET /api/orders -----
 export async function GET(req: Request) {
   const session = await getSession()
@@ -148,26 +156,54 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const session = await getSession()
 
-  // ----- Guest checkout rate limit: 5 orders/hour per IP -----
+  // ----- Booking rate limits (phase-29: raised + env-tunable) -----
+  // CGNAT reality: Nigerian mobile carriers (MTN, Airtel, Glo, 9mobile)
+  // put thousands of subscribers behind ONE shared public IP, so a tight
+  // per-IP guest cap blocks REAL customers, not just bots — exactly what
+  // happened to the owner testing on a phone ("booking failed — too many
+  // bookings from this device"). Defaults are now 20/hour (guest, per IP)
+  // and 30/hour (authed, per user), overridable without a redeploy via
+  // RATE_LIMIT_GUEST_BOOKINGS_PER_HOUR / RATE_LIMIT_USER_BOOKINGS_PER_HOUR.
+  // Abuse is still structurally capped: every order costs a duplicate-guard
+  // check + several emails, and the alert pipeline's stage-dedup keeps the
+  // owner's inbox from re-sending on back-and-forth status moves.
+  const minutesLeft = (resetAt: number) =>
+    Math.max(1, Math.ceil((resetAt - Date.now()) / 60_000))
   if (!session) {
     const ip = getClientIP(req)
-    const limit = await rateLimit(`guest-order:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
+    const limit = await rateLimit(`guest-order:${ip}`, {
+      max: envInt('RATE_LIMIT_GUEST_BOOKINGS_PER_HOUR', 20),
+      windowMs: 60 * 60 * 1000,
+    })
     if (!limit.success) {
       return NextResponse.json(
-        { error: 'Too many bookings from this device. Please try again later or sign in.' },
+        {
+          error: 'RATE_LIMITED',
+          message: `You have placed several bookings from this device in the last hour. Please try again in about ${minutesLeft(limit.resetAt)} minutes, or sign in to book straight away — nothing was booked and nothing was charged.`,
+        },
         { status: 429, headers: { 'Retry-After': String(Math.ceil((limit.resetAt - Date.now()) / 1000)) } }
       )
     }
-  } else {
-    // ----- Authed rate limit: 10 orders/hour per user -----
+  } else if (session.user?.role !== 'ADMIN') {
+    // ----- Authed rate limit: 30 orders/hour per user -----
+    // ADMIN (the owner) is exempt: they stage-test bookings constantly while
+    // running the business, and being locked out of their own site is worse
+    // than the marginal abuse surface (a compromised admin can email-bomb
+    // regardless of an order cap — that is an account-security problem).
     // Session identity is NOT a trust boundary against a compromised or
     // angry account: every order fires customer + owner alert emails, so an
     // unbounded loop would email-bomb the owner's inbox and burn the Brevo
     // quota (audit finding).
-    const limit = await rateLimit(`user-order:${session.user?.id}`, { max: 10, windowMs: 60 * 60 * 1000 })
+    const limit = await rateLimit(`user-order:${session.user?.id}`, {
+      max: envInt('RATE_LIMIT_USER_BOOKINGS_PER_HOUR', 30),
+      windowMs: 60 * 60 * 1000,
+    })
     if (!limit.success) {
       return NextResponse.json(
-        { error: 'Too many bookings in a short time. Please try again later or call us — we are happy to help.' },
+        {
+          error: 'RATE_LIMITED',
+          message: `That is a lot of bookings in one hour — please try again in about ${minutesLeft(limit.resetAt)} minutes, or call us and we will be happy to place the order for you. Nothing was booked and nothing was charged.`,
+        },
         { status: 429 }
       )
     }

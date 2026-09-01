@@ -75,3 +75,6 @@ package-lock.json
 scripts/.dburl
 scripts/.directurl
 scripts/.pgenv
+
+# vercel CLI local linking
+.vercel/

@@ -917,6 +917,28 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
           setLoading(false)
           return
         }
+        // 429 — booking rate limit (phase-29: the caps were raised 4x/3x and
+        // made env-tunable, but a genuinely runaway device must still land
+        // HERE — readable, on-screen, with the two real ways out — instead
+        // of a generic "Booking failed" that reads like a dead button).
+        // Works against both the new (error: RATE_LIMITED + message) and the
+        // legacy (error: plain text) server shapes via res.status.
+        if (res.status === 429) {
+          const retryAfter = Number(res.headers.get('Retry-After')) || 0
+          const waitMinutes = retryAfter > 0 ? Math.max(1, Math.ceil(retryAfter / 60)) : 15
+          toast({
+            title: 'Please hold on a moment',
+            description: `Several bookings were just placed from this device. Try again in about ${waitMinutes} minute${waitMinutes === 1 ? '' : 's'}${isGuest ? ' — or sign in to book straight away' : ''}.`,
+            variant: 'destructive',
+          })
+          setSubmitError({
+            title: 'Booking paused for a few minutes',
+            message: `${err.message || 'You have placed several bookings from this device in the last hour.'} Nothing was booked and nothing was charged.${isGuest ? ' Tap below to sign in and book straight away — it takes seconds.' : ' Tap the button again once the pause clears; a retry can never double-book you.'}`,
+            ...(isGuest ? { showSignIn: true } : {}),
+          })
+          setLoading(false)
+          return
+        }
         // Friendly copy for the Phase-14 server validations — never raw JSON.
         if (err.error === 'MODE_OF_WASH_REQUIRED' || err.error === 'GUARANTEE_NOT_ELIGIBLE' || err.error === 'ALTERATION_NOTES_REQUIRED') {
           toast({
