@@ -25,8 +25,10 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
+  AlertCircle,
   ArrowLeft,
   ArrowRight,
+  LogIn,
   Camera,
   Check,
   CheckCircle2,
@@ -216,6 +218,19 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const [guestEmail, setGuestEmail] = useState('')
   const [guestPhone, setGuestPhone] = useState('')
   const [accountExists, setAccountExists] = useState(false)
+  /** Persistent, on-screen explanation of the LAST FAILED submit. Toasts
+   *  expire after ~5s at the top of the screen and the account-exists
+   *  notice lives in the step-3 form — a phone customer who just tapped
+   *  the confirm button at the bottom of a long page could see NOTHING
+   *  change (the exact recurring "I've made the transfer does nothing"
+   *  complaint). This banner renders directly above the confirm button on
+   *  EVERY step and stays until dismissed or retried, so a failed submit
+   *  can never again be indistinguishable from a dead button. */
+  const [submitError, setSubmitError] = useState<{
+    title: string
+    message: string
+    showSignIn?: boolean
+  } | null>(null)
   const guestEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guestEmail.trim())
   const guestPhoneValid = guestPhone.trim().length >= 7
   const guestValid =
@@ -815,11 +830,20 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     }
     setLoading(true)
     setAccountExists(false)
+    setSubmitError(null)
+    // A slow mobile network must never leave the customer staring at a
+    // "Placing order…" button forever: after 45s we surface a retry
+    // message. Retrying is SAFE — the server's duplicate-submission guard
+    // treats an identical basket within 15 minutes as ONE order and
+    // returns the original, so a re-tap can never double-book.
+    const submitController = new AbortController()
+    const submitTimeout = setTimeout(() => submitController.abort(), 45_000)
     try {
       // Create order via API (guests pass their contact details; the payment
       // record for BANK_TRANSFER is created server-side in the same request)
       const res = await fetch('/api/orders', {
         method: 'POST',
+        signal: submitController.signal,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           type,
@@ -868,6 +892,28 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
         const err = await res.json().catch(() => ({}))
         if (err.error === 'ACCOUNT_EXISTS') {
           setAccountExists(true)
+          // ROOT-CAUSE FIX for the recurring mobile "I've made the transfer
+          // does nothing" report: a returning customer (or the owner
+          // testing signed-out with their own email) submits the booking as
+          // a guest with an email that already has a password. The old code
+          // only flipped a notice that renders on STEP 3 — the customer was
+          // looking at STEP 4, so the button appeared completely dead: no
+          // navigation, no toast, no order, and therefore no verification
+          // email for anyone. Now: toast + persistent banner with a one-tap
+          // sign-in + jump to the contact step where the inline notice sits
+          // directly under the email field.
+          toast({
+            title: 'You already have an account',
+            description:
+              'An account exists for this email — sign in to book. Your order was NOT placed yet, and no money has moved.',
+            variant: 'destructive',
+          })
+          setSubmitError({
+            title: 'Your order was not placed yet',
+            message: `An account already exists for ${guestEmail.trim()}. Tap below to sign in — it takes seconds, your details are saved, and nothing was charged.`,
+            showSignIn: true,
+          })
+          setStep(3)
           setLoading(false)
           return
         }
@@ -877,6 +923,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
             title: 'Almost there',
             description: err.message || 'Please review your order details.',
             variant: 'destructive',
+          })
+          setSubmitError({
+            title: 'Almost there — one detail is missing',
+            message: err.message || 'Please review your order details.',
           })
           setLoading(false)
           setStep(1)
@@ -962,12 +1012,24 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
 
       setTimeout(() => onComplete(order, { guestAccountCreated: !!data.guestAccountCreated }), 300)
     } catch (e: any) {
+      const aborted = e?.name === 'AbortError'
       toast({
-        title: 'Booking failed',
-        description: e.message || 'Something went wrong. Please try again.',
+        title: aborted ? 'Connection timed out' : 'Booking failed',
+        description: aborted
+          ? 'Your network dropped the request. Tap the button again — you can never be double-booked.'
+          : e.message || 'Something went wrong. Please try again.',
         variant: 'destructive',
       })
+      setSubmitError({
+        title: aborted ? 'Connection timed out' : 'We could not place your order',
+        message: aborted
+          ? 'Your network dropped the request after 45 seconds. Tap the confirm button again — identical orders within 15 minutes are treated as ONE order, so a retry can never double-book you. If it keeps failing, call us and we will place the order for you.'
+          : e.message ||
+            'Something went wrong. Please try again — or call us and we will place the order for you.',
+      })
       setLoading(false)
+    } finally {
+      clearTimeout(submitTimeout)
     }
   }
 
@@ -2198,6 +2260,48 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                   )}
                 </div>
               )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ===== Persistent submit-failure banner ===== */}
+        {/* The guarantee that a failed confirm can never look like a dead
+            button: it sits directly above the confirm/continue button on
+            every step, it is announced to screen readers (role=alert), and
+            it stays until the customer retries or dismisses it. */}
+        <AnimatePresence>
+          {submitError && (
+            <motion.div
+              key={submitError.title}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              role="alert"
+              className="mt-6 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4"
+            >
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-red-900">{submitError.title}</p>
+                <p className="mt-1 text-sm leading-relaxed text-red-700">
+                  {submitError.message}
+                </p>
+                {submitError.showSignIn && (
+                  <a
+                    href={`/login?email=${encodeURIComponent(guestEmail.trim())}`}
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-navy-800 px-4 py-2 text-xs font-semibold text-white hover:bg-navy-700"
+                  >
+                    <LogIn className="h-3.5 w-3.5" /> Sign in and book
+                  </a>
+                )}
+              </div>
+              <button
+                type="button"
+                aria-label="Dismiss message"
+                onClick={() => setSubmitError(null)}
+                className="shrink-0 rounded-full p-1 text-red-400 hover:bg-red-100 hover:text-red-600"
+              >
+                <X className="h-4 w-4" />
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
