@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the verification of the checkout screen:\n\n**1) Offer Code Status**\n*   **Yes.** The field shows **HOTEL15** entered, with a green success message below stating: *\"HOTEL15 recognised – 15% off your first order (+ the 5% photo discount if you upload pictures).\"*\n\n**2) Line Items & Amounts**\nThe specific line items (e.g., \"2 Shirts\", \"Handwash Surcharge\") are **not visible** in this screenshot; they appear to be located in the section above the current viewport (which is cut off). The only monetary value shown for the items is the final **Amount: ₦1,275**.\n\n**3) Total Consistency Check**\n*   **Calculation:** Based on your prompt's parameters:\n    *   Base: 2 shirts @ 500 = **1,000**\n    *   Handwash (+50%): 500\n    *   Subtotal: **1,500**\n    *   Discount (-15%): -225\n    *   **Expected Total: 1,275**\n*   **Verdict:** **Yes, it is consistent.** The displayed amount of **₦1,275** matches the calculated total for 2 shirts with a 50% surcharge and a 15% discount.\n\n**4) Bank Transfer Details**\n*   **Yes.** The section explicitly lists:\n    *   **Bank:** Guaranty Trust Bank (GTB)\n    *   **Account Name:** Kozy Premium Dry Cleaning Ltd\n    *   **Account Number:** 0123456789\n    *   **Amount:** ₦1,275\n\n**5) Visual / Layout Problems**\n*   **Minor Issue:** There is a large empty white space at the very top of the screen. This suggests the order summary (the list of items being purchased) might be scrolled out of view or the layout has excessive top padding, which could confuse users looking to verify their item count before paying.\n*   **Overall:** The rest of the layout (payment selection, transfer details, and action buttons) is clean and well-structured.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788009819,
+  "id": "20260829212332c4593196a64d4069",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829212332c4593196a64d4069",
+  "usage": {
+    "completion_tokens": 458,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1771,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2229
+  }
+}

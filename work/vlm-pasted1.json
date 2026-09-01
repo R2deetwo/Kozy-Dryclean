@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here are the descriptions for each image:\n\n**Image 1:** Screenshot of a web page (dry cleaning booking site). No woman/model present. Nothing being held. No Christmas presents or gift boxes.\n\n**Image 2:** Screenshot of a website footer/contact section for \"Kozy Care\" dry cleaning service. No woman/model present. Nothing being held. No Christmas presents or gift boxes.\n\n**Image 3:** Screenshot of a web page showing a \"Select service\" interface with garment options and pricing. No woman/model present. Nothing being held. No Christmas presents or gift boxes.\n\n**Image 4:** Screenshot of a web page similar to Image 3, showing the same \"Select service\" interface with additional garment options visible at the bottom. No woman/model present. Nothing being held. No Christmas presents or gift boxes.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788007910,
+  "id": "20260829205147d197eaa96e514f4b",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829205147d197eaa96e514f4b",
+  "usage": {
+    "completion_tokens": 171,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 4418,
+    "prompt_tokens_details": {
+      "cached_tokens": 3
+    },
+    "total_tokens": 4589
+  }
+}

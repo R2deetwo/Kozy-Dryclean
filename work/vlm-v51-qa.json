@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here is the precise QA report for the three marketing pieces:\n\n### **Image 1: Services Flyer (Front)**\n1.  **Exact Text of Offer Line:** `HOTELS & CORPORATE: 15% OFF + 5% WITH CODE HOTEL15`\n2.  **Fit Check:** **YES**, this line fits on a single line without wrapping, clipping, or overflowing its gold band. It is centered and has adequate padding.\n3.  **Layout Damage:** **NONE**. The layout is clean with no overlapping text or clipped elements.\n\n---\n\n### **Image 2: Offer Flyer (With Model)**\n1.  **Exact Text of Offer Line:** `your first order + 5% with pictures — use code HOTEL15 at checkout`\n    *(Note: This is the specific line containing \"HOTEL15\" inside the outlined box)*\n2.  **Fit Check:** **NO**. This line does **not** fit on one line; it wraps to a second line (\"at checkout\").\n3.  **Layout Damage:** **MINOR WRAPPING**. The text overflows the single-line intent of the band, though it remains legible and within the container's vertical bounds. No other elements are clipped or overlapping.\n\n---\n\n### **Image 3: A3 Poster**\n1.  **Exact Text of Offer Line:** `HOTELS & CORPORATE CLIENTS: 15% OFF + 5% WITH CODE HOTEL15`\n2.  **Fit Check:** **YES**, this line fits perfectly on a single line without wrapping or clipping.\n3.  **Layout Damage:** **NONE**. All elements are well-spaced and fully visible.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788013438,
+  "id": "202608292223501117114116d440fe",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608292223501117114116d440fe",
+  "usage": {
+    "completion_tokens": 351,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 9641,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 9992
+  }
+}

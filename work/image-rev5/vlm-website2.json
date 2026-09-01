@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) **Yes**, there is a small stray gold speck or mark visible to the right of the lower-right leg of the \"K\" (roughly at the 3 o'clock or 4 o'clock position relative to the letter).\n2) **Verdict: ISSUES** (due to the stray gold artifact).",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788029382,
+  "id": "20260830024941df315d628ce848ab",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830024941df315d628ce848ab",
+  "usage": {
+    "completion_tokens": 67,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 210,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 277
+  }
+}

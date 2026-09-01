@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**QA Report: Kozy Brand Guidelines (A4 Spec Sheet)**\n\n### 1. Layout & Fit Check\n*   **Verdict:** **PASS.**\n*   **Analysis:** The content fits comfortably within the A4 aspect ratio. The vertical rhythm is well-managed from the header down to the typography section. There is sufficient whitespace, and nothing appears cut off at the bottom edge of the visible canvas.\n\n### 2. Logo Lockups (Section 01)\n*   **Verdict:** **PASS.**\n*   **Analysis:**\n    *   **Primary Stacked:** The \"K\" icon sits cleanly above the wordmark. The hierarchy is clear.\n    *   **Horizontal:** The lockup is balanced. The \"PREMIUM DRY CLEANING\" tagline is correctly sized and positioned.\n    *   **Monogram:** Renders perfectly against the Navy background with the Gold \"K\". The contrast is high and premium-looking.\n\n### 3. Colour Swatches (Section 03)\n*   **Verdict:** **PASS.**\n*   **Analysis:**\n    *   **Legibility:** Text is highly legible against the white card backgrounds.\n    *   **Data Integrity:** HEX, RGB, and CMYK/Print values are present and formatted correctly for a professional spec sheet. The usage notes (e.g., \"max ~10% area\" for Gold) show high-level brand governance.\n\n### 4. Typography (Section 04)\n*   **Verdict:** **PASS.**\n*   **Analysis:** The distinction between the Display Serif (Playfair) and the Roman Caps (Marcellus) is clear. The tracking and weight recommendations (+300) are specific and actionable.\n\n### 5. Specific Query: Clearspace Guide\n*   **Confirmation:** **Yes**, the dashed gold guide wraps the monogram \"K\" beautifully. It creates a perfect square padding that visually reinforces the \"minimum margin\" rule described in the text. It does not clip the serifs of the \"K\".\n\n---\n\n### Overall Score: **9.5 / 10**\n\n**Critique:**\nThis is an exceptionally polished, \"agency-quality\" brand guideline sheet. The aesthetic perfectly matches the \"Premium Lagos Dry-Cleaner\" brief—utilizing a sophisticated palette of Navy, Gold, and Cream. The use of a Didone serif font adds the necessary luxury feel.\n\n**Exact Fixes / Minor Tweaks (To reach 10/10):**\n1.  **Section 05 Missing:** The prompt mentions a \"05 do/don't rules\" section, but the image cuts off after the Typography section (or it is below the fold). Ensure this section is included on the page or a second page, as Do's/Don'ts are critical for logo usage rules (e.g., \"Don't stretch the logo,\" \"Don't put the monogram on a busy background\").\n2.  **Footer:** A simple footer with \"Page 1 of 2\" or version control (e.g., `v1.0 - Internal Use`) would finalize the document structure.\n\n**Summary:** Ready for client presentation. Just append the Do/Don't section!",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1787789793,
+  "id": "20260827081621a3720d9c657d471b",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260827081621a3720d9c657d471b",
+  "usage": {
+    "completion_tokens": 654,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 4624,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 5278
+  }
+}

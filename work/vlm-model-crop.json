@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the description for cropping:\n\n1.  **Bounding Box (Estimated):**\n    *   **Left:** 18%\n    *   **Top:** 9%\n    *   **Right:** 80%\n    *   **Bottom:** 100%\n    *(Note: This box captures her head, hands, the garment bag, and the visible portion of her dress down to the bottom edge of the image.)*\n\n2.  **Is she inside a distinct frame?**\n    **Yes.** She is contained within a prominent, thin **gold arched frame**. The frame has straight vertical sides that curve into a semi-circle at the top.\n\n3.  **Background directly around her:**\n    The background immediately surrounding her inside the arch is a solid, deep **navy blue**. Outside of the gold arch, the background is a darker navy with subtle, abstract geometric shapes or gradients.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788010003,
+  "id": "2026082921264004aae8eb9ef44247",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082921264004aae8eb9ef44247",
+  "usage": {
+    "completion_tokens": 193,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1382,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1575
+  }
+}

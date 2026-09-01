@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) Yes, there is a tiny stray gold mark to the right of the K's lower leg. 2) The bag looks clean and professional. Verdict: The design is polished, but that small stray speck should be removed for perfection.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788029354,
+  "id": "202608300249134494522a896541bf",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608300249134494522a896541bf",
+  "usage": {
+    "completion_tokens": 52,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 466,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 518
+  }
+}

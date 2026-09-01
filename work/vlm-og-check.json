@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "K\nUncompromising care.\nExceptional convenience.\nPremium Drycleaning & Laundry · Pickup & Delivery Across Lagos\nBook your pickup · kozycare.ng",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788014526,
+  "id": "20260829224205db336a00c0a44d6b",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829224205db336a00c0a44d6b",
+  "usage": {
+    "completion_tokens": 35,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1080,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1115
+  }
+}

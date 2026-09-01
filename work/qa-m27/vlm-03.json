@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "### Image 1: Shoulder Width\n1. **Close-up Render:** Correctly shows the back view of the shoulders with a clear gold tape line connecting the two shoulder points.\n2. **Annotation Chips:** The \"Bony ledge to bony ledge\" chip is readable and well-positioned.\n3. **Visual Bugs:** **Yes.** The bottom annotation chip (likely \"Measure across BACK\") is partially clipped by the bottom edge of the card container.\n\n### Image 2: Sleeve Length\n1. **Close-up Render:** Correctly shows a zoomed arm with a gold tape line running from the shoulder to the wrist.\n2. **Annotation Chips:** All three chips (\"From the shoulder bone\", \"Slightly bent elbow\", and \"down to the wrist bone\") are readable, clearly spaced, and not overlapping.\n3. **Visual Bugs:** None observed. The layout is clean and all elements are fully visible within their container.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788187236,
+  "id": "20260831224018b743c8b2df6b40c6",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260831224018b743c8b2df6b40c6",
+  "usage": {
+    "completion_tokens": 191,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3457,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3648
+  }
+}

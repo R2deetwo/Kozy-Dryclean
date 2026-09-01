@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  @page { size: 794px 1123px; margin: 0; }
+  :root {
+    /* cascade palette (palette.cascade — gold family) */
+    --c-bg: #f1f1f0;
+    --c-accent: #93761f;
+    --c-text: #272623;
+    --c-muted: #7f7d75;
+    --c-mid: #52492e;
+    --c-surface: #e9e8e4;
+  }
+  html, body {
+    margin: 0; padding: 0;
+    width: 794px; height: 1123px;
+    background: var(--c-bg);
+    font-family: 'Inter', Arial, sans-serif;
+    color: var(--c-text);
+  }
+  @media screen {
+    html { height: auto; display: flex; justify-content: center; min-height: 100vh; background: var(--c-bg); }
+    body { transform-origin: top center; scale: min(1, calc(100vw / 794), calc(100vh / 1123)); margin: 0 auto; box-shadow: 0 0 60px rgba(0,0,0,0.15); }
+  }
+  .cover { position: relative; width: 794px; height: 1123px; border: none; outline: none; box-shadow: none; }
+
+  /* Layer 1 — background grid (clipped) */
+  .layer1 {
+    position: absolute; inset: 0; overflow: hidden; z-index: 1;
+    background-image:
+      linear-gradient(to right, rgba(82, 73, 46, 0.05) 0.5px, transparent 0.5px),
+      linear-gradient(to bottom, rgba(82, 73, 46, 0.05) 0.5px, transparent 0.5px);
+    background-size: 66px 66px;
+  }
+
+  /* Layer 2 — structure: ultra-thick left anchor line */
+  .layer2 { position: absolute; inset: 0; z-index: 2; }
+  .anchor-line {
+    position: absolute;
+    left: 95px; top: 112px; bottom: 112px;
+    width: 8px; background: var(--c-accent);
+  }
+
+  /* Layer 3 — content */
+  .layer3 { position: absolute; inset: 0; z-index: 3; }
+  .kicker {
+    position: absolute; left: 148px; top: 168px;
+    font-size: 15px; font-weight: 400; letter-spacing: 4px;
+    text-transform: uppercase; color: var(--c-accent); opacity: 0.85;
+  }
+  .title {
+    position: absolute; left: 146px; top: 300px;
+    font-family: 'Playfair Display', Georgia, serif;
+    font-weight: 900; font-size: 88px; line-height: 1.08;
+    color: var(--c-text); max-width: 560px;
+  }
+  .summary {
+    position: absolute; left: 148px; top: 562px;
+    font-size: 17px; font-weight: 300; line-height: 1.65;
+    color: var(--c-text); opacity: 0.85; max-width: 470px;
+  }
+  .meta {
+    position: absolute; left: 148px; top: 842px;
+    font-size: 19px; font-weight: 400; line-height: 1.6;
+    color: var(--c-text);
+  }
+  .meta .sub { font-size: 15px; color: var(--c-muted); }
+  .footer {
+    position: absolute; left: 148px; right: 76px; top: 1010px;
+    display: flex; justify-content: space-between;
+    font-size: 14px; font-weight: 400; letter-spacing: 3px;
+    text-transform: uppercase; color: var(--c-muted); opacity: 0.75;
+  }
+</style>
+</head>
+<body>
+<div class="cover">
+  <div class="layer1"></div>
+  <div class="layer2"><div class="anchor-line"></div></div>
+  <div class="layer3">
+    <div class="kicker">Project Handover &amp; Operations Guide</div>
+    <div class="title">Kozy<br>Care</div>
+    <div class="summary">
+      The complete handover for the Kozy Care platform and brand: what you own,
+      how to run the business day-to-day, and the technical guide for whoever
+      develops it next. Live booking site, admin console, driver app, print kit
+      and business cards included.
+    </div>
+    <div class="meta">
+      Prepared for the Kozy Care team<br>
+      <span class="sub">Lagos, Nigeria · August 2026</span>
+    </div>
+    <div class="footer">
+      <span>kozycare.ng</span>
+      <span>Version 1.0</span>
+    </div>
+  </div>
+</div>
+</body>
+</html>

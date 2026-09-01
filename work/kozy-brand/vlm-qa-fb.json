@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the QA check of the offer flyer:\n\n**1) Logo Lockup Description**\nThe logo consists of a large, stylized serif letter **\"K\"** in gold. To its right is the wordmark **\"KOZY CARE\"** in white, uppercase sans-serif letters. Below the wordmark is the sub-brand text **\"PREMIUM DRYCLEANING & LAUNDRY\"** in smaller, gold, uppercase sans-serif letters with wide tracking (letter-spacing).\n\n**2) Value-Prop Chips (Exact Quote)**\n*   **FREE PICKUP & DELIVERY\\***\n*   **EXPRESS FROM 24 HOURS**\n*   **EXPERT GARMENT CARE**\n\n**3) Asterisked Fine Print (Exact Quote)**\n\"*Free pickup and delivery for first order only. Express service from 24 hours – regular service is 3–5 days.\"\n\n**4) Contact Block Addresses**\nThere are **2** physical addresses listed:\n1.  **No 20, Westsyde Drive, Ogombo, Lagos**\n2.  **Paradise 3 Estate, Road 5/3, Chevron, Lagos**\n*(Note: There is also an email address: kozygarmentcare@gmail.com)*\n\n**5) Layout Problems / Clipping**\n**No**, there do not appear to be any text clipping, overflow, or layout problems. All text elements, including the large \"15% OFF\" headline and the addresses at the bottom right, appear fully contained within the canvas boundaries with adequate padding. The layout looks clean and intentional.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1787847696,
+  "id": "202608280021327062f288f0c44443",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608280021327062f288f0c44443",
+  "usage": {
+    "completion_tokens": 332,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2332,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2664
+  }
+}

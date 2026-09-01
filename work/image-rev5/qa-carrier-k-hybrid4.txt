@@ -1,0 +1,7 @@
+GLYPH_FIDELITY (0-10): 9/10 — The monogram matches the reference's stem, serifs, and proportions perfectly. It includes the long sweeping top-right curve and the small dot ornament at the lower-left.
+DOT_PRESENT: yes
+FLOURISH_PRESENT: yes
+PRINT_REALISM (0-10): 8/10 — The gold pigment looks integrated into the fabric's texture with visible weave patterns and soft edges, though it has a slight metallic sheen that is consistent with high-quality printing.
+GLOW: no
+SCENE_INTACT: yes — The two people, their hands, faces, and the background are all natural-looking and free of visual artifacts or distortions.
+VERDICT: SHIP — The brand mark is applied accurately to the garment bag with high fidelity and realistic texture integration.

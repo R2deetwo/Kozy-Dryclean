@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here is the quality check for each section:\n\n**Image 1 (Guarantee Section)**\n*   **Eligible Order Box:** Yes, there is a clearly defined box titled **\"What counts as an eligible order?\"**\n*   **Thresholds:** It specifies two clear thresholds: **\"at least 2 garments\"** or a **\"₦2,500+ total\"**.\n*   **Layout Quality:** The layout is clean with no overlapping text or broken elements. The hierarchy between the main promise, the eligibility rules, and the terms of service is logical and easy to read.\n\n**Image 2 (Alterations Section)**\n*   **Badge:** Yes, there is a prominent yellow badge labeled **\"Exclusive to Kozy Care\"** next to the section header.\n*   **Professionalism:** The design looks highly professional. It features high-quality photography of a tailoring workspace, a clean list of services with custom icons, and a polished \"In-house tailor\" floating label. The typography is consistent and modern.\n\n**Image 3 (Reviews/Complaints Form)**\n*   **Type Selector:** Yes, the form includes three distinct toggle buttons at the top: **\"Leave a review,\" \"Make a complaint,\"** and **\"Ask a question.\"**\n*   **Star Rating:** Yes, there is an interactive-looking **5-star rating selector** under the \"HOW WOULD YOU RATE US?\" label.\n*   **Fields:** The form contains standard fields including Name, Email, Phone (Optional), Order/Hotel ID (Optional), and a large text area for the review content.\n*   **Layout Problems:** There are **no layout issues**. The spacing is generous, text does not overlap, and all input fields are properly aligned within the card container.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788009665,
+  "id": "202608292120578758b53584764f28",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608292120578758b53584764f28",
+  "usage": {
+    "completion_tokens": 369,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5110,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 5479
+  }
+}

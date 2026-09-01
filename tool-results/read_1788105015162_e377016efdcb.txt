@@ -1,0 +1,1131 @@
+     1→'use client'
+     2→
+     3→import { useState } from 'react'
+     4→import Link from 'next/link'
+     5→import { motion } from 'framer-motion'
+     6→import {
+     7→  Clock,
+     8→  MapPin,
+     9→  Shield,
+    10→  Truck,
+    11→  CreditCard,
+    12→  Leaf,
+    13→  ArrowRight,
+    14→  CheckCircle2,
+    15→  Star,
+    16→  Phone,
+    17→  Mail,
+    18→  Building2,
+    19→  ShoppingBag,
+    20→  Sparkles,
+    21→  Zap,
+    22→  Scissors,
+    23→  BedDouble,
+    24→  Droplets,
+    25→  Ruler,
+    26→} from 'lucide-react'
+    27→import {
+    28→  formatNaira,
+    29→  type GarmentCatalogItem,
+    30→} from '@/lib/types'
+    31→import {
+    32→  MEN_CATALOG_GROUPS,
+    33→  WOMEN_CATALOG_GROUPS,
+    34→  LANDING_SHARED_GROUPS,
+    35→  itemsForGroup,
+    36→} from '@/lib/pricing-groups'
+    37→import { useStore } from '@/lib/store'
+    38→import { useServerPrices, useAppSettings } from '@/lib/hooks'
+    39→import { cn } from '@/lib/utils'
+    40→import { Button } from '@/components/ui/button'
+    41→import { Badge } from '@/components/ui/badge'
+    42→import { Card, CardContent } from '@/components/ui/card'
+    43→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    44→import { TestimonialsCarousel } from '@/components/customer/testimonials-carousel'
+    45→import { HowItWorksSection } from '@/components/customer/how-it-works'
+    46→
+    47→interface Props {
+    48→  onBook: () => void
+    49→  onPortal: () => void
+    50→  /** Deep-link straight into the wizard's Shoes tab (shoe-care section CTA).
+    51→   *  Falls back to onBook when not provided. */
+    52→  onBookShoes?: () => void
+    53→}
+    54→
+    55→// ---------------------------------------------------------------------------
+    56→// PRICING TABS — Men / Women / Corporate (men first, per owner directive)
+    57→// ---------------------------------------------------------------------------
+    58→// Fashion-retail convention is "Men" / "Women" (not "male/female"), matching
+    59→// the catalog's category names. Gendered traditional wear is split by item so
+    60→// Agbada sits under Men and Iro & Buba under Women; household, shoes and
+    61→// extras are shared and shown under both retail tabs. The group definitions
+    62→// live in src/lib/pricing-groups.ts and are shared with the booking wizard,
+    63→// so the two surfaces can never drift apart.
+    64→
+    65→export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
+    66→  const [pricing, setPricing] = useState<'men' | 'women' | 'corporate'>('men')
+    67→  const settings = useStore((s) => s.settings)
+    68→  // Server-managed commercial terms (offers, delivery fee, guarantee rules,
+    69→  // alterations pricing) — admin edits reach every visitor instantly.
+    70→  const appSettings = useAppSettings()
+    71→  // Live prices from PriceCatalog (what the server charges) — the persisted
+    72→  // store and bundle defaults are only fallbacks.
+    73→  const serverPrices = useServerPrices()
+    74→  const priceOf = (id: string, fallback: number) =>
+    75→    serverPrices?.[id] ?? settings.garmentPrices[id] ?? fallback
+    76→  // Price cell for the pricing cards — quote-mode items (wedding dress,
+    77→  // couture) read "Quoted"; from-mode items (restoration) read "From ₦X".
+    78→  const priceCell = (g: GarmentCatalogItem) =>
+    79→    g.pricingMode === 'quote' ? (
+    80→      <span className="font-semibold text-gold-600">Quoted</span>
+    81→    ) : g.pricingMode === 'from' ? (
+    82→      <span className="font-semibold text-navy">From {formatNaira(priceOf(g.id, g.price))}</span>
+    83→    ) : (
+    84→      <span className="font-semibold text-navy">{formatNaira(priceOf(g.id, g.price))}</span>
+    85→    )
+    86→
+    87→  return (
+    88→    <div className="bg-linen">
+    89→      {/* ============================================================
+    90→          HERO — Midnight navy backdrop with champagne gold accents
+    91→      ============================================================ */}
+    92→      <section className="relative overflow-hidden bg-navy-gradient">
+    93→        <div className="pointer-events-none absolute inset-0">
+    94→          <div className="absolute -left-32 top-12 h-72 w-72 rounded-full bg-gold-400/10 blur-3xl" />
+    95→          <div className="absolute right-0 top-40 h-80 w-80 rounded-full bg-gold-400/10 blur-3xl" />
+    96→          {/* Subtle gold grid */}
+    97→          <div
+    98→            className="absolute inset-0 opacity-[0.04]"
+    99→            style={{
+   100→              backgroundImage:
+   101→                'linear-gradient(to right, #D4AF37 1px, transparent 1px), linear-gradient(to bottom, #D4AF37 1px, transparent 1px)',
+   102→              backgroundSize: '48px 48px',
+   103→            }}
+   104→          />
+   105→        </div>
+   106→
+   107→        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:py-24">
+   108→          <motion.div
+   109→            initial={{ opacity: 0, y: 16 }}
+   110→            animate={{ opacity: 1, y: 0 }}
+   111→            transition={{ duration: 0.5 }}
+   112→            className="text-white"
+   113→          >
+   114→            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30 backdrop-blur">
+   115→              <Sparkles className="h-3 w-3 text-gold-400" />
+   116→              Kozy drycleaning &amp; laundry · Serving Ikoyi to Lekki
+   117→            </div>
+   118→
+   119→            <h1 className="font-serif text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl lg:text-6xl">
+   120→              Uncompromising care.
+   121→              <br />
+   122→              <span className="text-gold-gradient">Exceptional convenience.</span>
+   123→            </h1>
+   124→
+   125→            <p className="mt-5 max-w-xl text-base leading-relaxed text-navy-100/90 sm:text-lg">
+   126→              Kozy is Lagos&apos; premium atelier for everything from designer personal wear
+   127→              to corporate linen programs. We collect, treat, and return — with the
+   128→              discretion your wardrobe deserves.
+   129→            </p>
+   130→
+   131→            <div className="mt-8 flex flex-wrap gap-3">
+   132→              <Button
+   133→                size="lg"
+   134→                onClick={onBook}
+   135→                className="h-12 rounded-full bg-gold-gradient px-6 text-base font-semibold text-navy shadow-gold hover:opacity-90"
+   136→              >
+   137→                <ShoppingBag className="mr-2 h-5 w-5" />
+   138→                Book Pickup Now
+   139→              </Button>
+   140→              <Button
+   141→                size="lg"
+   142→                variant="outline"
+   143→                onClick={onPortal}
+   144→                className="h-12 rounded-full border-white/30 bg-white/5 px-6 text-base font-medium text-white backdrop-blur hover:bg-white/10 hover:text-white"
+   145→              >
+   146→                Track My Orders
+   147→                <ArrowRight className="ml-2 h-4 w-4" />
+   148→              </Button>
+   149→            </div>
+   150→
+   151→            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs text-navy-100/80">
+   152→              <span className="flex items-center gap-1.5">
+   153→                <Shield className="h-3.5 w-3.5 text-gold-400" /> Return-as-Received Guarantee
+   154→              </span>
+   155→              <span className="flex items-center gap-1.5">
+   156→                <Clock className="h-3.5 w-3.5 text-gold-400" /> Express turnaround from 24 hours
+   157→              </span>
+   158→              <span className="flex items-center gap-1.5">
+   159→                <Truck className="h-3.5 w-3.5 text-gold-400" /> Complimentary island-wide pickup*
+   160→              </span>
+   161→            </div>
+   162→          </motion.div>
+   163→
+   164→          {/* Hero image card */}
+   165→          <motion.div
+   166→            initial={{ opacity: 0, y: 24 }}
+   167→            animate={{ opacity: 1, y: 0 }}
+   168→            transition={{ duration: 0.5, delay: 0.15 }}
+   169→            className="relative"
+   170→          >
+   171→            <div className="relative overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl shadow-navy-900/40">
+   172→              <img
+   173→                src="/brand/images/hero-pressed-shirts.png"
+   174→                alt="Pristine freshly pressed white shirts on premium wooden hangers"
+   175→                className="h-[480px] w-full object-cover sm:h-[560px]"
+   176→              />
+   177→              <div className="absolute inset-0 bg-gradient-to-t from-navy-900/60 via-transparent to-transparent" />
+   178→              <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
+   179→                <div className="rounded-xl bg-navy/80 px-4 py-3 backdrop-blur ring-1 ring-gold-400/30">
+   180→                  <p className="font-serif text-sm font-semibold text-gold-100">
+   181→                    Atelier-grade finishing
+   182→                  </p>
+   183→                  <p className="text-[11px] text-navy-100">
+   184→                    Pressed, packaged, and ready for delivery
+   185→                  </p>
+   186→                </div>
+   187→                <Link
+   188→                  href="/signup"
+   189→                  aria-label="Kozy Care — create your account"
+   190→                  className="rounded-full bg-gold-400 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
+   191→                >
+   192→                  Kozy Care
+   193→                </Link>
+   194→              </div>
+   195→            </div>
+   196→
+   197→            {/* Floating quote card */}
+   198→            <div className="absolute -bottom-4 -left-4 hidden max-w-[200px] rounded-xl bg-white px-3 py-2 shadow-lg ring-1 ring-gold-200 sm:block">
+   199→              <div className="flex items-center gap-1">
+   200→                {[0, 1, 2, 3, 4].map((i) => (
+   201→                  <Star key={i} className="h-3 w-3 fill-gold-400 text-gold-400" />
+   202→                ))}
+   203→              </div>
+   204→              <p className="mt-1 text-[10px] leading-snug text-navy-300">
+   205→                &ldquo;My suits have never looked better.&rdquo;
+   206→              </p>
+   207→              <p className="text-[10px] font-medium text-navy">— Adebola, Ikoyi</p>
+   208→            </div>
+   209→          </motion.div>
+   210→        </div>
+   211→      </section>
+   212→
+   213→      {/* ============================================================
+   214→          TRUST BAR
+   215→      ============================================================ */}
+   216→      <section className="border-b border-navy-100 bg-white">
+   217→        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-around gap-4 px-4 py-5 sm:px-6">
+   218→          {[
+   219→            { icon: Building2, label: 'Corporate Partners', value: '24 Hotels & Estates' },
+   220→            { icon: Shield, label: 'Items Returned', value: '12,400+ Pieces' },
+   221→            { icon: Clock, label: 'Avg Turnaround', value: '46 hours' },
+   222→            { icon: Star, label: 'Customer Rating', value: '4.9 / 5.0' },
+   223→          ].map((s) => {
+   224→            const Icon = s.icon
+   225→            return (
+   226→              <div key={s.label} className="flex items-center gap-2.5">
+   227→                <Icon className="h-5 w-5 text-gold-400" />
+   228→                <div className="leading-tight">
+   229→                  <p className="text-sm font-semibold text-navy">{s.value}</p>
+   230→                  <p className="text-[10px] uppercase tracking-wider text-navy-300">
+   231→                    {s.label}
+   232→                  </p>
+   233→                </div>
+   234→              </div>
+   235→            )
+   236→          })}
+   237→        </div>
+   238→      </section>
+   239→
+   240→      {/* ============================================================
+   241→          OFFERS — first-order, hotel/corporate & picture discounts
+   242→          (Phase 14: one clear strip so the site and flyers tell the
+   243→          same story — 10% first order, HOTEL15 for hotels & corporate
+   244→          clients, 5% for uploading pictures with each order)
+   245→      ============================================================ */}
+   246→      <section className="border-b border-gold-200 bg-linen-50">
+   247→        <div className="mx-auto grid max-w-7xl gap-3 px-4 py-6 sm:px-6 md:grid-cols-3">
+   248→          <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
+   249→            <Sparkles className="h-6 w-6 shrink-0 text-gold-500" />
+   250→            <div>
+   251→              <p className="text-sm font-bold text-navy">
+   252→                {appSettings.firstOrderDiscountPercent}% off your first order
+   253→              </p>
+   254→              <p className="text-xs text-navy-300">For every new customer — applied automatically at checkout.</p>
+   255→            </div>
+   256→          </div>
+   257→          <div className="flex items-center gap-3 rounded-xl bg-navy p-4 text-white shadow-sm ring-1 ring-gold-400/30">
+   258→            <Building2 className="h-6 w-6 shrink-0 text-gold-400" />
+   259→            <div>
+   260→              <p className="text-sm font-bold text-gold-100">
+   261→                Hotels &amp; corporate clients: {appSettings.hotelGuestDiscountPercent}% off + 5%
+   262→              </p>
+   263→              <p className="text-xs text-navy-100/80">
+   264→                Use code <span className="font-mono font-bold text-gold-300">{appSettings.hotelGuestPromoCode}</span> at
+   265→                checkout for your first order — plus the 5% picture discount.
+   266→              </p>
+   267→            </div>
+   268→          </div>
+   269→          <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
+   270→            <Shield className="h-6 w-6 shrink-0 text-gold-500" />
+   271→            <div>
+   272→              <p className="text-sm font-bold text-navy">5% off every order with pictures</p>
+   273→              <p className="text-xs text-navy-300">
+   274→                Upload condition photos at booking — it activates the Return-as-Received Guarantee.
+   275→              </p>
+   276→            </div>
+   277→          </div>
+   278→        </div>
+   279→      </section>
+   280→
+   281→      {/* ============================================================
+   282→          HOW IT WORKS (animated cards — same art, motion added)
+   283→      ============================================================ */}
+   284→      <HowItWorksSection />
+   285→
+   286→      {/* ============================================================
+   287→          PRICING & SERVICES
+   288→      ============================================================ */}
+   289→      <section id="pricing" className="bg-white py-20 scroll-mt-20">
+   290→        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+   291→          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
+   292→            <div>
+   293→              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   294→                Transparent pricing
+   295→              </p>
+   296→              <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+   297→                Per-item or per-kilogram.
+   298→              </h2>
+   299→              <p className="mt-2 max-w-xl text-navy-300">
+   300→                Pay by bank transfer or Paystack. Corporate clients receive a dedicated
+   301→                account manager and itemised monthly statements.
+   302→              </p>
+   303→            </div>
+   304→            <Tabs
+   305→              value={pricing}
+   306→              onValueChange={(v) => setPricing(v as 'men' | 'women' | 'corporate')}
+   307→            >
+   308→              <TabsList className="bg-linen-200">
+   309→                <TabsTrigger
+   310→                  value="men"
+   311→                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
+   312→                >
+   313→                  Men
+   314→                </TabsTrigger>
+   315→                <TabsTrigger
+   316→                  value="women"
+   317→                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
+   318→                >
+   319→                  Women
+   320→                </TabsTrigger>
+   321→                <TabsTrigger
+   322→                  value="corporate"
+   323→                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
+   324→                >
+   325→                  <Building2 className="mr-1 h-3 w-3" /> Corporate
+   326→                </TabsTrigger>
+   327→              </TabsList>
+   328→            </Tabs>
+   329→          </div>
+   330→
+   331→          <Tabs value={pricing} onValueChange={(v) => setPricing(v as 'men' | 'women' | 'corporate')}>
+   332→            {(['men', 'women'] as const).map((tab) => (
+   333→              <TabsContent key={tab} value={tab} className="mt-8">
+   334→                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+   335→                  {(tab === 'men' ? MEN_CATALOG_GROUPS : WOMEN_CATALOG_GROUPS).map((group) => (
+   336→                    <Card key={group.title} className="border-navy-100 shadow-navy">
+   337→                      <CardContent className="p-5">
+   338→                        <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
+   339→                          {group.title}
+   340→                        </h3>
+   341→                        <ul className="space-y-2">
+   342→                          {itemsForGroup(group).map((g) => (
+   343→                            <li
+   344→                              key={g.id}
+   345→                              className="flex items-center justify-between text-sm"
+   346→                            >
+   347→                              <span className="flex items-center gap-2.5 text-navy/80">
+   348→                                <img
+   349→                                  src={g.icon}
+   350→                                  alt=""
+   351→                                  className="h-5 w-5 text-navy"
+   352→                                  style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
+   353→                                />
+   354→                                {g.name}
+   355→                              </span>
+   356→                              {priceCell(g)}
+   357→                            </li>
+   358→                          ))}
+   359→                        </ul>
+   360→                      </CardContent>
+   361→                    </Card>
+   362→                  ))}
+   363→                </div>
+   364→
+   365→                {/* Shared categories — home, shoes and extras serve everyone */}
+   366→                <div className="mt-8">
+   367→                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
+   368→                    For the home &amp; everything else
+   369→                  </p>
+   370→                  <div className="grid gap-4 md:grid-cols-3">
+   371→                    {LANDING_SHARED_GROUPS.map((group) => (
+   372→                      <Card key={group.title} className="border-navy-100 shadow-navy">
+   373→                        <CardContent className="p-5">
+   374→                          <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
+   375→                            {group.title}
+   376→                          </h3>
+   377→                          <ul className="space-y-2">
+   378→                            {itemsForGroup(group).map((g) => (
+   379→                              <li
+   380→                                key={g.id}
+   381→                                className="flex items-center justify-between text-sm"
+   382→                              >
+   383→                                <span className="flex items-center gap-2.5 text-navy/80">
+   384→                                  <img
+   385→                                    src={g.icon}
+   386→                                    alt=""
+   387→                                    className="h-5 w-5 text-navy"
+   388→                                    style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
+   389→                                  />
+   390→                                  {g.name}
+   391→                                </span>
+   392→                                {priceCell(g)}
+   393→                              </li>
+   394→                            ))}
+   395→                          </ul>
+   396→                        </CardContent>
+   397→                      </Card>
+   398→                    ))}
+   399→                  </div>
+   400→                </div>
+   401→
+   402→                {/* OTHER — wedding dress, couture & bespoke (owner directive):
+   403→                    there was no category for these, so a full-width banner lets
+   404→                    customers know a quote is available. Data comes from the same
+   405→                    OTHER_COUTURE_GROUP the wizard uses — content can't drift. */}
+   406→                <div className="mt-6 overflow-hidden rounded-2xl border border-gold-200 bg-linen-50 shadow-navy">
+   407→                  <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
+   408→                    <div className="flex items-start gap-4">
+   409→                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-100">
+   410→                        <Sparkles className="h-5 w-5 text-gold-600" />
+   411→                      </div>
+   412→                      <div>
+   413→                        <p className="font-serif text-lg font-semibold text-navy">
+   414→                          Something not on the menu?
+   415→                        </p>
+   416→                        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-300">
+   417→                          Wedding dresses, couture and bespoke pieces are{' '}
+   418→                          <span className="font-medium text-navy">quoted, not priced</span> —
+   419→                          beading, fabric and detail change the work. Book a pickup, we
+   420→                          assess your piece free of charge, and send a quote for your
+   421→                          approval before any work begins.
+   422→                        </p>
+   423→                      </div>
+   424→                    </div>
+   425→                    <Button
+   426→                      onClick={onBook}
+   427→                      variant="outline"
+   428→                      className="shrink-0 rounded-full border-gold-300 bg-white text-navy hover:bg-gold-50"
+   429→                    >
+   430→                      Get a quote <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+   431→                    </Button>
+   432→                  </div>
+   433→                </div>
+   434→
+   435→                {/* Express upsell */}
+   436→                <div className="mt-6 flex flex-col items-start justify-between gap-3 rounded-xl bg-navy p-4 text-white ring-1 ring-gold-400/25 sm:flex-row sm:items-center">
+   437→                  <div className="flex items-start gap-3">
+   438→                    <Zap className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
+   439→                    <div>
+   440→                      <p className="text-sm font-semibold">
+   441→                        In a hurry? Express turnaround at checkout.
+   442→                      </p>
+   443→                      <p className="mt-0.5 text-xs text-navy-100/70">
+   444→                        Standard care returns in 3–5 days. Express 48 (+50%) or Express 24
+   445→                        (+100%) jumps the cleaning queue — ideal for last-minute events.
+   446→                      </p>
+   447→                    </div>
+   448→                  </div>
+   449→                  <Button
+   450→                    onClick={onBook}
+   451→                    className="shrink-0 rounded-full bg-gold-gradient px-4 text-navy hover:opacity-90"
+   452→                  >
+   453→                    Book express <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+   454→                  </Button>
+   455→                </div>
+   456→
+   457→                {/* Mode of wash pricing — visibility requested by the
+   458→                    client (handwash is the LABOUR premium: every piece is
+   459→                    washed and finished by hand, so it costs MORE than
+   460→                    machine wash, not less). Percent comes live from
+   461→                    AppSetting so admin tuning reflects here instantly. */}
+   462→                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
+   463→                  <div className="flex items-start gap-3">
+   464→                    <Droplets className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+   465→                    <div>
+   466→                      <p className="text-sm font-semibold text-navy">
+   467→                        Machine or handwash — you choose at checkout.
+   468→                      </p>
+   469→                      <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
+   470→                        Every price above is standard machine wash. Handwash adds{' '}
+   471→                        <span className="font-semibold text-navy">
+   472→                          +{appSettings.handwashSurchargePercent}%
+   473→                        </span>{' '}
+   474→                        to your cleaning subtotal — each piece is washed and finished
+   475→                        by hand, which takes more time and expert care, so it carries
+   476→                        a premium.
+   477→                      </p>
+   478→                    </div>
+   479→                  </div>
+   480→                  <Badge className="shrink-0 bg-gold-100 text-gold-800 hover:bg-gold-100">
+   481→                    Handwash +{appSettings.handwashSurchargePercent}%
+   482→                  </Badge>
+   483→                </div>
+   484→
+   485→                {/* Pickup & delivery pricing — transparency requested by the
+   486→                    client ("I see first delivery is free but I don't see
+   487→                    pricing for deliveries afterwards"). First delivery is
+   488→                    free; every delivery after that is a flat island-wide rate
+   489→                    that admin can tune in Settings. */}
+   490→                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
+   491→                  <div className="flex items-start gap-3">
+   492→                    <Truck className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+   493→                    <div>
+   494→                      <p className="text-sm font-semibold text-navy">
+   495→                        Pickup &amp; delivery — first one&apos;s on us.
+   496→                      </p>
+   497→                      <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
+   498→                        Your first pickup and delivery is <span className="font-semibold text-navy">FREE</span>.
+   499→                        After that, every delivery is a flat{' '}
+   500→                        <span className="font-semibold text-navy">{formatNaira(appSettings.deliveryFee)}</span>{' '}
+   501→                        island-wide (Ikoyi to Lekki) — no distance surprises, added at checkout.
+   502→                        Express orders keep the same rate.
+   503→                      </p>
+   504→                    </div>
+   505→                  </div>
+   506→                  <Badge className="shrink-0 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+   507→                    First delivery FREE
+   508→                  </Badge>
+   509→                </div>
+   510→              </TabsContent>
+   511→            ))}
+   512→
+   513→            <TabsContent value="corporate" className="mt-8">
+   514→              <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
+   515→                <Card className="overflow-hidden border-navy-100 shadow-navy">
+   516→                  <img
+   517→                    src="/brand/images/b2b-linens.png"
+   518→                    alt="Neatly folded stacks of pristine white hotel linens tied with gold ribbon"
+   519→                    className="h-64 w-full object-cover"
+   520→                  />
+   521→                  <CardContent className="p-6">
+   522→                    <h3 className="font-serif text-xl font-semibold text-navy">
+   523→                      Weight-based corporate program
+   524→                    </h3>
+   525→                    <p className="mt-2 text-sm text-navy-300">
+   526→                      Hotels, estates, gyms, and restaurants rely on Kozy for predictable,
+   527→                      per-kilogram pricing. We weigh at the station, send you a digital
+   528→                      invoice, and route the next delivery.
+   529→                    </p>
+   530→                  </CardContent>
+   531→                </Card>
+   532→
+   533→                <div className="space-y-4">
+   534→                  <Card className="border-navy bg-navy-gradient text-white shadow-navy">
+   535→                    <CardContent className="p-6">
+   536→                      <p className="text-xs uppercase tracking-wider text-gold-200">
+   537→                        Per kilogram
+   538→                      </p>
+   539→                      <p className="mt-1 font-serif text-4xl font-bold text-gold-100">
+   540→                        {formatNaira(settings.pricePerKg)}
+   541→                      </p>
+   542→                      <div className="mt-3 divider-gold" />
+   543→                      <p className="mt-3 text-xs text-navy-100">
+   544→                        Minimum charge{' '}
+   545→                        <span className="font-semibold text-white">
+   546→                          {formatNaira(settings.pricePerKg * settings.minimumKg)}
+   547→                        </span>{' '}
+   548→                        ({settings.minimumKg}kg minimum billable weight)
+   549→                      </p>
+   550→                    </CardContent>
+   551→                  </Card>
+   552→
+   553→                  <Card className="border-navy-100 shadow-navy">
+   554→                    <CardContent className="p-5">
+   555→                      <ul className="space-y-3 text-sm">
+   556→                        {[
+   557→                          'Dedicated account manager & priority routing',
+   558→                          'Itemised monthly statements for finance teams',
+   559→                          'Item-level tagging for chain-of-custody tracking',
+   560→                          'Net-15 invoice terms for verified partners',
+   561→                        ].map((t) => (
+   562→                          <li key={t} className="flex items-start gap-2">
+   563→                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
+   564→                            <span className="text-navy-300">{t}</span>
+   565→                          </li>
+   566→                        ))}
+   567→                      </ul>
+   568→                      <Button
+   569→                        onClick={onBook}
+   570→                        className="mt-5 w-full rounded-full bg-gold-gradient text-navy hover:opacity-90"
+   571→                      >
+   572→                        Request bulk pickup <ArrowRight className="ml-2 h-4 w-4" />
+   573→                      </Button>
+   574→                    </CardContent>
+   575→                  </Card>
+   576→                </div>
+   577→              </div>
+   578→
+   579→              {/* HOTEL & CORPORATE OFFER — Phase 14. Client directive via PM:
+   580→                  hotels (corporate clients) are already high-value customers
+   581→                  who bring volume, so they earn the better first-order deal:
+   582→                  15% + the 5% picture discount. Wording deliberately targets
+   583→                  the hotel as the business client, not individual guests.
+   584→                  The code is redeemed at checkout in the booking wizard. */}
+   585→              <div className="mt-6 overflow-hidden rounded-2xl bg-navy-gradient p-6 text-white ring-1 ring-gold-400/30">
+   586→                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+   587→                  <div className="flex items-start gap-4">
+   588→                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-400 text-navy">
+   589→                      <Building2 className="h-5 w-5" />
+   590→                    </div>
+   591→                    <div>
+   592→                      <p className="font-serif text-lg font-semibold">
+   593→                        Hotels &amp; corporate clients — your first order is{' '}
+   594→                        <span className="text-gold-300">{appSettings.hotelGuestDiscountPercent}% off.</span>
+   595→                      </p>
+   596→                      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-100/85">
+   597→                        Our hotel and corporate partners earn the better deal — you already trust Kozy with your
+   598→                        volumes. Use code{' '}
+   599→                        <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono font-bold text-gold-300 ring-1 ring-gold-400/40">
+   600→                          {appSettings.hotelGuestPromoCode}
+   601→                        </span>{' '}
+   602→                        at checkout for {appSettings.hotelGuestDiscountPercent}% off your first order,{' '}
+   603→                        <span className="font-semibold text-white">plus</span> the 5% picture discount
+   604→                        when you upload photos with the order — that&apos;s up to{' '}
+   605→                        {appSettings.hotelGuestDiscountPercent + 5}% back on your first clean.
+   606→                      </p>
+   607→                    </div>
+   608→                  </div>
+   609→                  <Button
+   610→                    onClick={onBook}
+   611→                    className="shrink-0 rounded-full bg-gold-gradient px-5 text-navy hover:opacity-90"
+   612→                  >
+   613→                    Claim your offer <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+   614→                  </Button>
+   615→                </div>
+   616→              </div>
+   617→            </TabsContent>
+   618→          </Tabs>
+   619→        </div>
+   620→      </section>
+   621→
+   622→      {/* ============================================================
+   623→          TESTIMONIALS — rotating customer reviews (order-verified,
+   624→          4.5★ and above only). The feedback form lives on its own page
+   625→          (/feedback — linked from this section) so browsing stays
+   626→          uninterrupted (Phase 17, client directive).
+   627→      ============================================================ */}
+   628→      <TestimonialsCarousel />
+   629→
+   630→      {/* ============================================================
+   631→          GUARANTEE — Kozy Care Promise
+   632→      ============================================================ */}
+   633→      <section id="guarantee" className="bg-linen py-20 scroll-mt-20">
+   634→        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+   635→          <Card className="overflow-hidden border-navy-100 shadow-navy">
+   636→            <CardContent className="grid gap-0 p-0 md:grid-cols-[1fr_1.4fr]">
+   637→              <div className="bg-navy-gradient p-8 text-white">
+   638→                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold-400 text-navy">
+   639→                  <Shield className="h-6 w-6" />
+   640→                </div>
+   641→                <h3 className="mt-4 font-serif text-2xl font-semibold">
+   642→                  Return-as-Received Guarantee
+   643→                </h3>
+   644→                <p className="mt-2 text-sm text-navy-100">
+   645→                  The Kozy Care Promise — capture, document, return. Your garments come
+   646→                  back in the exact condition recorded at pickup, or we make it right.
+   647→                </p>
+   648→                <Badge className="mt-4 w-fit bg-gold-400 text-navy hover:bg-gold-400">
+   649→                  Activates 5% discount on eligible orders
+   650→                </Badge>
+   651→              </div>
+   652→
+   653→              <div className="p-8">
+   654→                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   655→                  How the guarantee works
+   656→                </p>
+   657→                <p className="mt-3 text-sm leading-relaxed text-navy-300">
+   658→                  During the retail booking flow, you&apos;ll see an optional photo uploader.
+   659→                  Use it to capture the current condition of your garments. Orders with
+   660→                  uploaded photos are automatically tagged &quot;Guarantee Activated&quot;
+   661→                  and receive a 5% discount on the total.
+   662→                </p>
+   663→
+   664→                {/* ELIGIBLE ORDERS — plain-language definition (client
+   665→                    directive: "what is considered eligible orders… a certain
+   666→                    number garments or amount of total order"). The thresholds
+   667→                    are admin-tunable and served from the DB. */}
+   668→                <div className="mt-4 rounded-lg border border-navy-100 bg-linen-50 p-4">
+   669→                  <p className="font-serif text-sm font-semibold text-navy">
+   670→                    What counts as an eligible order?
+   671→                  </p>
+   672→                  <p className="mt-1.5 text-xs leading-relaxed text-navy-300">
+   673→                    Any retail order with{' '}
+   674→                    <span className="font-semibold text-navy">
+   675→                      at least {appSettings.guaranteeMinGarments} garments
+   676→                    </span>{' '}
+   677→                    <span className="font-semibold text-navy">or</span> a{' '}
+   678→                    <span className="font-semibold text-navy">
+   679→                      {formatNaira(appSettings.guaranteeMinOrderValue)}+ total
+   680→                    </span>{' '}
+   681→                    — whichever comes first — with condition photos uploaded at booking and
+   682→                    the guarantee terms acknowledged. Orders below both thresholds can still
+   683→                    be booked and cleaned; they simply don&apos;t carry the damage-cover
+   684→                    guarantee. In short: two shirts or one suit and you&apos;re covered.
+   685→                  </p>
+   686→                </div>
+   687→
+   688→                <div className="mt-4 rounded-lg border border-gold-200 bg-gold-50 p-4 text-xs leading-relaxed text-navy-300">
+   689→                  <p className="font-serif text-sm font-semibold text-navy">
+   690→                    Terms of Service
+   691→                  </p>
+   692→                  <p className="mt-1">
+   693→                    Return-as-Received Guarantee: By utilizing our Condition Capture
+   694→                    feature, we guarantee your garments will be returned clean and in
+   695→                    the exact structural condition documented at pickup. Covers physical
+   696→                    damage in our care; does not cover pre-existing wear or inherent
+   697→                    fabric degradation. Claims must be made within 24 hours of delivery.
+   698→                  </p>
+   699→                </div>
+   700→
+   701→                <p className="mt-4 text-xs text-navy-300">
+   702→                  <span className="font-semibold text-navy">Corporate note:</span> For
+   703→                  corporate bulk orders, condition capture is hidden by default to
+   704→                  streamline booking. It can be enabled per-order on request.
+   705→                </p>
+   706→              </div>
+   707→            </CardContent>
+   708→          </Card>
+   709→        </div>
+   710→      </section>
+   711→
+   712→      {/* ============================================================
+   713→          LIFESTYLE / ATELIER
+   714→      ============================================================ */}
+   715→      <section className="bg-navy-gradient py-20 text-white">
+   716→        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
+   717→          <motion.div
+   718→            initial={{ opacity: 0, y: 16 }}
+   719→            whileInView={{ opacity: 1, y: 0 }}
+   720→            viewport={{ once: true }}
+   721→          >
+   722→            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   723→              Inside the atelier
+   724→            </p>
+   725→            <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+   726→              A workspace engineered for fabric care.
+   727→            </h2>
+   728→            <p className="mt-4 max-w-xl text-navy-100">
+   729→              Every Kozy atelier features commercial-grade equipment, dedicated zones for
+   730→              silks, wools, and traditional fabrics, and a finishing station staffed by
+   731→              trained pressers. Nothing leaves the floor untagged.
+   732→            </p>
+   733→
+   734→            <ul className="mt-6 space-y-3 text-sm">
+   735→              {[
+   736→                'Per-fabric detergent protocols (silk, wool, ankara, agbada)',
+   737→                'Stain bar with pre-treatment consultation',
+   738→                'Steam-only finishing for delicate structures',
+   739→                'Sealed garment bags for return delivery',
+   740→              ].map((t) => (
+   741→                <li key={t} className="flex items-start gap-3">
+   742→                  <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
+   743→                  <span className="text-navy-100">{t}</span>
+   744→                </li>
+   745→              ))}
+   746→            </ul>
+   747→
+   748→            <Button
+   749→              onClick={onBook}
+   750→              className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+   751→            >
+   752→              Book your first pickup <ArrowRight className="ml-2 h-4 w-4" />
+   753→            </Button>
+   754→          </motion.div>
+   755→
+   756→          <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
+   757→            <img
+   758→              src="/brand/images/atelier-craftsman.png"
+   759→              alt="Kozy master presser finishing a premium garment at the steam station"
+   760→              className="h-full w-full object-cover"
+   761→            />
+   762→          </div>
+   763→        </div>
+   764→      </section>
+   765→
+   766→      {/* ============================================================
+   767→          SHOE CLEANING & RESTORATION — new service section
+   768→      ============================================================ */}
+   769→      <section id="shoe-care" className="bg-navy py-20 text-white">
+   770→        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+   771→          <div className="grid gap-10 lg:grid-cols-2 items-center">
+   772→            <motion.div
+   773→              initial={{ opacity: 0, x: -16 }}
+   774→              whileInView={{ opacity: 1, x: 0 }}
+   775→              viewport={{ once: true }}
+   776→            >
+   777→              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   778→                Beyond Laundry
+   779→              </p>
+   780→              <h2 className="font-serif text-3xl font-semibold tracking-tight text-white sm:text-4xl">
+   781→                Sneaker &amp; Trainer Restoration
+   782→              </h2>
+   783→              <p className="mt-4 max-w-xl text-white">
+   784→                Got beat-up Jordans? Muddy Sambas? Yellowed Air Force soles? Our sneaker
+   785→                restoration specialists bring your favourite kicks back to box-fresh condition.
+   786→                From deep cleans to sole whitening to full restorations — we treat your
+   787→                sneakers like collectibles.
+   788→              </p>
+   789→              <ul className="mt-6 space-y-3 text-sm">
+   790→                {[
+   791→                  'Deep clean & stain removal for sneakers, trainers, and canvas shoes',
+   792→                  'Sole whitening & midsole restoration (yellowing reversal)',
+   793→                  'Suede & nubuck revival for premium sneakers',
+   794→                  'Insole & lace replacement options',
+   795→                  'Repainting & colour restoration for scuffed uppers',
+   796→                  'Protective coating to keep them fresh longer',
+   797→                  'Free assessment — we confirm your pair can be saved before you commit',
+   798→                ].map((t) => (
+   799→                  <li key={t} className="flex items-start gap-3">
+   800→                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
+   801→                    <span className="text-white">{t}</span>
+   802→                  </li>
+   803→                ))}
+   804→              </ul>
+   805→              {/* Restoration consultation (owner directive): assessment-first,
+   806→                  exactly like a wedding-dress wash — a pair that is beyond
+   807→                  restoration should be declined BEFORE the trip, not after. */}
+   808→              <p className="mt-6 rounded-xl border border-gold-400/30 bg-white/5 p-4 text-sm leading-relaxed text-white/90">
+   809→                <span className="font-semibold text-gold-300">Restorations from ₦5,000</span> —
+   810→                priced by the extent of work after a free assessment. Every restoration
+   811→                starts with a consultation: our specialist inspects the pair, tells you
+   812→                honestly whether it can be saved, and sends the final quote for your
+   813→                approval before any work begins. If it&apos;s beyond restoration, we say so
+   814→                upfront — no charge, no wasted collection.
+   815→              </p>
+   816→              <Button
+   817→                onClick={onBookShoes ?? onBook}
+   818→                className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+   819→              >
+   820→                Book shoe care <ArrowRight className="ml-2 h-4 w-4" />
+   821→              </Button>
+   822→            </motion.div>
+   823→            <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
+   824→              <img src="/brand/images/shoe-care.png" alt="Restored luxury shoes" className="h-full w-full object-cover" />
+   825→            </div>
+   826→          </div>
+   827→        </div>
+   828→      </section>
+   829→
+   830→      {/* ============================================================
+   831→          ALTERATIONS — Exclusive to Kozy Care (Phase 14, client directive)
+   832→          In-house tailoring: hems, tapering, zips, waist adjustments.
+   833→          Pricing is confirmed with the tailor and published the moment it is
+   834→          set — until then every piece is measured and quoted for approval
+   835→          before any work begins (assessment-first, like wedding dresses).
+   836→      ============================================================ */}
+   837→      <section id="alterations" className="bg-linen py-20 scroll-mt-20">
+   838→        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+   839→          <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:items-center">
+   840→            <motion.div
+   841→              initial={{ opacity: 0, x: -16 }}
+   842→              whileInView={{ opacity: 1, x: 0 }}
+   843→              viewport={{ once: true }}
+   844→            >
+   845→              <div className="flex flex-wrap items-center gap-2">
+   846→                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   847→                  Alterations &amp; Repairs
+   848→                </p>
+   849→                <Badge className="bg-gold-400 text-navy hover:bg-gold-400">
+   850→                  Exclusive to Kozy Care
+   851→                </Badge>
+   852→              </div>
+   853→              <h2 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+   854→                Cleaned, pressed — and made to fit.
+   855→              </h2>
+   856→              <p className="mt-4 max-w-xl leading-relaxed text-navy-300">
+   857→                Our in-house tailor works alongside the cleaning team, so alterations ride
+   858→                the same pickup and delivery as your laundry. No separate trips, no
+   859→                tailoring shop queues — hand your pieces to your Kozy rider and collect
+   860→                them fitting the way they should. Available exclusively to Kozy Care
+   861→                customers; you won&apos;t find this service anywhere else on the island.
+   862→              </p>
+   863→              <ul className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
+   864→                {[
+   865→                  'Trousers & jeans — hems, tapering, waist adjustments',
+   866→                  'Shirts & dresses — take-in, sleeve shortening, re-hemming',
+   867→                  'Zips, buttons & linings replaced with matching materials',
+   868→                  'Traditional wear — agbada, kaftan and iro & buba adjustments',
+   869→                  'Blazers & suits — sleeve and body alterations by a suit tailor',
+   870→                  'You describe, she assesses — you approve the quote before we sew',
+   871→                ].map((t) => (
+   872→                  <li key={t} className="flex items-start gap-3">
+   873→                    <Scissors className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+   874→                    <span className="text-navy-300">{t}</span>
+   875→                  </li>
+   876→                ))}
+   877→              </ul>
+   878→              <p className="mt-6 rounded-xl border border-gold-200 bg-gold-50 p-4 text-sm leading-relaxed text-navy-300">
+   879→                <span className="font-semibold text-navy">
+   880→                  {appSettings.alterationsFromPrice > 0
+   881→                    ? `Alterations from ${formatNaira(appSettings.alterationsFromPrice)}`
+   882→                    : 'Simple, honest pricing — quoted before we sew'}
+   883→                </span>{' '}
+   884→                — tell us what needs changing when you book: "waist too loose", "sleeves
+   885→                too long", "zip needs replacing". No one measures you at the door —
+   886→                our seamstress assesses every piece at the studio, calls you to confirm
+   887→                the details, then sends your quote. Nothing is sewn until you approve
+   888→                it.
+   889→              </p>
+   890→              <div className="mt-7 flex flex-wrap items-center gap-3">
+   891→                <Button
+   892→                  onClick={onBook}
+   893→                  className="rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+   894→                >
+   895→                  Book pickup with alterations <ArrowRight className="ml-2 h-4 w-4" />
+   896→                </Button>
+   897→                {/* Free measurement tutorial (Phase 18, client directive:
+   898→                    "besides 'book pickup with alterations', we could also have
+   899→                    'How do I take measurements?'... it should take them to a
+   900→                    separate page... in one of our brand colors, probably the
+   901→                    royal blue"). Royal-blue pill in the brand navy family. */}
+   902→                <Button
+   903→                  asChild
+   904→                  className="rounded-full border border-navy-600 bg-navy-500 px-6 text-white hover:bg-navy-600"
+   905→                >
+   906→                  <Link href="/measurements">
+   907→                    <Ruler className="mr-2 h-4 w-4" /> How do I take measurements?
+   908→                  </Link>
+   909→                </Button>
+   910→              </div>
+   911→            </motion.div>
+   912→
+   913→            {/* Visual column — a seamstress at her workstation keeps this
+   914→                section about the craft of alterations (client directive:
+   915→                "have a seamstress working at her workstation in terms of
+   916→                alterations and repairs — be professional about it"). Style
+   917→                matches the marketing materials: photoreal, navy/gold. */}
+   918→            <div className="relative">
+   919→              <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
+   920→                <img
+   921→                  src="/brand/images/seamstress.png"
+   922→                  alt="Young Kozy in-house seamstress sewing at her machine in a bright white-walled studio"
+   923→                  className="h-full w-full object-cover"
+   924→                />
+   925→              </div>
+   926→              <div className="absolute -bottom-4 -right-4 hidden rounded-xl bg-white p-4 shadow-lg ring-1 ring-gold-200 sm:block">
+   927→                <div className="flex items-center gap-2">
+   928→                  <Scissors className="h-5 w-5 text-gold-500" />
+   929→                  <div>
+   930→                    <p className="text-xs font-bold text-navy">In-house tailor</p>
+   931→                    <p className="text-[10px] text-navy-300">Same rider, same delivery</p>
+   932→                  </div>
+   933→                </div>
+   934→              </div>
+   935→            </div>
+   936→          </div>
+   937→        </div>
+   938→      </section>
+   939→
+   940→      {/* ============================================================
+   941→          FEMALE LIFESTYLE — representing all customers
+   942→      ============================================================ */}
+   943→      <section className="bg-linen py-20">
+   944→        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+   945→          <div className="grid gap-10 lg:grid-cols-2 items-center">
+   946→            <div className="overflow-hidden rounded-2xl ring-1 ring-navy-100 shadow-2xl order-2 lg:order-1">
+   947→              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy suit carrier garment bag with the gold Kozy K monogram to a smiling customer on her veranda" className="h-full w-full object-cover" />
+   948→            </div>
+   949→            <motion.div
+   950→              initial={{ opacity: 0, x: 16 }}
+   951→              whileInView={{ opacity: 1, x: 0 }}
+   952→              viewport={{ once: true }}
+   953→              className="order-1 lg:order-2"
+   954→            >
+   955→              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   956→                Trusted by thousands
+   957→              </p>
+   958→              <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+   959→                Care for everything you wear.
+   960→              </h2>
+   961→              <p className="mt-4 max-w-xl text-navy-300">
+   962→                From your favourite Ankara gown to that designer blazer you save for special
+   963→                occasions — we treat every garment with the same level of attention. Every
+   964→                order returns within 3–5 days, or as fast as 24 hours with Express.
+   965→              </p>
+   966→              <div className="mt-6 grid gap-4 sm:grid-cols-3">
+   967→                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
+   968→                  <p className="font-serif text-2xl font-bold text-navy">24h</p>
+   969→                  <p className="text-xs text-navy-300">Express turnaround from</p>
+   970→                </div>
+   971→                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
+   972→                  <p className="font-serif text-2xl font-bold text-navy">₦500+</p>
+   973→                  <p className="text-xs text-navy-300">Per item, starting at</p>
+   974→                </div>
+   975→                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
+   976→                  <p className="font-serif text-2xl font-bold text-navy">{appSettings.firstOrderDiscountPercent}%</p>
+   977→                  <p className="text-xs text-navy-300">Off first order</p>
+   978→                </div>
+   979→              </div>
+   980→              <Button
+   981→                onClick={onBook}
+   982→                className="mt-6 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+   983→              >
+   984→                Book your pickup <ArrowRight className="ml-2 h-4 w-4" />
+   985→              </Button>
+   986→            </motion.div>
+   987→          </div>
+   988→        </div>
+   989→      </section>
+   990→
+   991→      {/* ============================================================
+   992→          FOOTER
+   993→      ============================================================ */}
+   994→      <footer className="bg-navy text-navy-100">
+   995→        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
+   996→          <div className="grid gap-8 md:grid-cols-3">
+   997→            <div>
+   998→              <div className="flex items-center gap-2.5">
+   999→                {/* v4 Kozy K mark — same asset as the header (gold K with
+  1000→                    tapered hanger-wire flourish, transparent background). */}
+  1001→                <img
+  1002→                  src="/brand/kozy-mark.svg"
+  1003→                  alt="Kozy Care mark"
+  1004→                  width={36}
+  1005→                  height={36}
+  1006→                  className="shrink-0"
+  1007→                  style={{ width: 36, height: 36 }}
+  1008→                />
+  1009→                <div className="leading-none">
+  1010→                  <p className="font-serif text-lg font-bold text-white">Kozy Care</p>
+  1011→                  <p className="text-[8px] uppercase tracking-[0.15em] text-gold-300 font-medium mt-0.5">DRYCLEANING &amp; LAUNDRY</p>
+  1012→                </div>
+  1013→              </div>
+  1014→              <p className="mt-3 text-sm leading-relaxed text-navy-100/70">
+  1015→                Kozy drycleaning &amp; laundry care for individuals and corporate
+  1016→                partners across Lagos Island.
+  1017→              </p>
+  1018→              <p className="mt-3 font-serif text-sm italic text-gold-200">
+  1019→                Uncompromising care. Exceptional convenience.
+  1020→              </p>
+  1021→            </div>
+  1022→
+  1023→            <div>
+  1024→              <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">
+  1025→                Contact Us
+  1026→              </p>
+  1027→              <ul className="mt-3 space-y-2 text-sm">
+  1028→                <li className="flex items-center gap-2 transition">
+  1029→                  <Phone className="h-4 w-4 text-gold-400 shrink-0" />
+  1030→                  <a href="tel:+2348031755230" className="text-navy-100/70 hover:text-gold-300 transition">+234 803 175 5230</a>
+  1031→                </li>
+  1032→                <li className="flex items-center gap-2 transition">
+  1033→                  <Mail className="h-4 w-4 text-gold-400 shrink-0" />
+  1034→                  <a href="mailto:kozygarmentcare@gmail.com" className="text-navy-100/70 hover:text-gold-300 transition">kozygarmentcare@gmail.com</a>
+  1035→                </li>
+  1036→                <li className="flex items-start gap-2 transition">
+  1037→                  <MapPin className="h-4 w-4 text-gold-400 shrink-0 mt-0.5" />
+  1038→                  <span className="text-navy-100/70">No 20. Westsyde Drive, Ogombo, Lagos State</span>
+  1039→                </li>
+  1040→                <li className="flex items-start gap-2 transition">
+  1041→                  <MapPin className="h-4 w-4 text-gold-400 shrink-0 mt-0.5" />
+  1042→                  <span className="text-navy-100/70">Paradise 3 Estate, Road 5/3, Chevron, Lagos State</span>
+  1043→                </li>
+  1044→              </ul>
+  1045→            </div>
+  1046→
+  1047→            <div>
+  1048→              <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">
+  1049→                Quick links
+  1050→              </p>
+  1051→              <ul className="mt-3 space-y-2 text-sm">
+  1052→                <li>
+  1053→                  <button onClick={onBook} className="cursor-pointer text-navy-100/70 hover:text-gold-300 transition">
+  1054→                    Book a pickup
+  1055→                  </button>
+  1056→                </li>
+  1057→                <li>
+  1058→                  <button onClick={onPortal} className="cursor-pointer text-navy-100/70 hover:text-gold-300 transition">
+  1059→                    Track an order
+  1060→                  </button>
+  1061→                </li>
+  1062→                <li>
+  1063→                  <a href="#pricing" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+  1064→                    Pricing &amp; services
+  1065→                  </a>
+  1066→                </li>
+  1067→                <li>
+  1068→                  <a href="#guarantee" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+  1069→                    Return-as-Received Guarantee
+  1070→                  </a>
+  1071→                </li>
+  1072→                <li>
+  1073→                  <a href="#shoe-care" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+  1074→                    Shoe Cleaning &amp; Restoration
+  1075→                  </a>
+  1076→                </li>
+  1077→                <li>
+  1078→                  <a href="#alterations" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+  1079→                    Alterations — Exclusive to Kozy
+  1080→                  </a>
+  1081→                </li>
+  1082→                <li>
+  1083→                  <a href="/feedback" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+  1084→                    Leave a review / feedback
+  1085→                  </a>
+  1086→                </li>
+  1087→                <li>
+  1088→                  <a href="#pricing" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
+  1089→                    Corporate programs
+  1090→                  </a>
+  1091→                </li>
+  1092→              </ul>
+  1093→            </div>
+  1094→          </div>
+  1095→
+  1096→          {/* Driver recruitment banner */}
+  1097→          <div className="mt-8 rounded-xl bg-gradient-to-r from-navy-600 to-navy-700 p-4 ring-1 ring-gold-400/20">
+  1098→            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
+  1099→              <div className="flex items-center gap-3">
+  1100→                <span className="text-2xl">🚚</span>
+  1101→                <div>
+  1102→                  <p className="text-sm font-semibold text-white">Join our rider team</p>
+  1103→                  <p className="text-xs text-navy-100/60">Flexible contract work across Lagos. Earn while you move.</p>
+  1104→                </div>
+  1105→              </div>
+  1106→              <a href="/join-riders" className="shrink-0 rounded-full bg-gold-gradient px-4 py-2 text-xs font-bold text-navy hover:opacity-90 transition">
+  1107→                Apply now →
+  1108→              </a>
+  1109→            </div>
+  1110→          </div>
+  1111→
+  1112→          <p className="mt-6 text-[10px] leading-relaxed text-navy-100/40">
+  1113→            *Free pickup and delivery for first order only.
+  1114→          </p>
+  1115→
+  1116→          <div className="mt-2 flex flex-col items-center justify-between gap-3 border-t border-navy-500 pt-6 text-xs sm:flex-row">
+  1117→            <p className="text-navy-100/40">© 2026 Kozy Care. All rights reserved.</p>
+  1118→            <div className="flex flex-wrap gap-4">
+  1119→              <a href="/terms" className="text-navy-100/40 hover:text-gold-300 transition">Terms of Service</a>
+  1120→              <a href="/privacy" className="text-navy-100/40 hover:text-gold-300 transition">Privacy Policy</a>
+  1121→              <a href="/refunds" className="text-navy-100/40 hover:text-gold-300 transition">Refunds</a>
+  1122→              <a href="/cookies" className="text-navy-100/40 hover:text-gold-300 transition">Cookies</a>
+  1123→            </div>
+  1124→            <p>Built for Lagos, with care.</p>
+  1125→          </div>
+  1126→        </div>
+  1127→      </footer>
+  1128→    </div>
+  1129→  )
+  1130→}
+  1131→

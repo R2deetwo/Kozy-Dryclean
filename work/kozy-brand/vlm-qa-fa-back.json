@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here are the precise answers to your QA check:\n\n1)  **Sneakers Prices:**\n    *   **Sneakers (White):** ₦1,500\n    *   **Sneakers (Coloured):** ₦1,000\n\n2)  **Three Step Labels:**\n    *   01 BOOK A PICKUP\n    *   02 WE COLLECT & CLEAN\n    *   03 WE DELIVER\n\n3)  **Address Block Count & Quote:**\n    There are **2** physical addresses listed in the bottom-right block:\n    *   \"No 20, Westsyde Drive, Ogombo, Lagos\"\n    *   \"Paradise 3 Estate, Road 5/3, Chevron, Lagos\"\n    *(Note: The block also contains an email address and a phone number).*\n\n4)  **WASH & FOLD Note:**\n    \"WASH & FOLD FROM ₦800/KG • SNEAKER RESTORATION FROM ₦5,000 • FULL MENU AT KOZYCARE.NG\"\n\n5)  **Layout Issues:**\n    Yes, there is a minor layout issue. The phone number at the very end of the address block (**+234 803 175 5230**) appears to be slightly misaligned or overflowing to the right compared to the text above it, sitting closer to the edge of the dark background than the rest of the justified text block.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1787847682,
+  "id": "20260828002118aa74920ce73d4ca6",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260828002118aa74920ce73d4ca6",
+  "usage": {
+    "completion_tokens": 312,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2343,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2655
+  }
+}

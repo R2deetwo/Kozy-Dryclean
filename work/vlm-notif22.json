@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Rating: 9/10**\n\n*   **Layout & Branding:** Excellent. The navy sidebar and gold accents (active tab, buttons, toggle backgrounds) create a clean, professional, and cohesive look. The typography is clear and well-hierarchized.\n*   **Readability:** The email input field is prominent, and the three alert toggles are presented in distinct, well-spaced cards with clear titles and descriptive subtext. The icons add helpful visual context.\n*   **Visual Defects:** None observed. Alignment is precise (labels, inputs, and checkboxes are perfectly aligned), there is no text cut-off or overlap, and the spacing between elements is consistent and comfortable.\n\n**Verdict:** A high-quality, polished UI that effectively communicates the settings.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788099036,
+  "id": "20260830221034731794e7e9564b5f",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830221034731794e7e9564b5f",
+  "usage": {
+    "completion_tokens": 158,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1486,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1644
+  }
+}

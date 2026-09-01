@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot provided:\n\n1.  **Yes**, there is a **\"Mode of Wash *\"** required selector featuring two cards:\n    *   **Machine Wash**: Labeled with \"Standard professional care — no extra charge.\"\n    *   **Handwash**: Labeled with a **\"+50%\"** badge and the description \"Gentle per-garment hand care for delicate fabrics.\"\n\n2.  **Selection Status:** The **Handwash** option is currently selected, indicated by its distinct golden/yellow border and highlighted background.\n\n3.  **Professionalism:** Yes, it looks highly professional. It features a clean, minimalist UI with clear typography, logical grouping of services (Extras vs. Bespoke), and intuitive visual cues (like the gold border for selection) that guide the user effectively through the booking process.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788010772,
+  "id": "20260829213930999c3394b0c44c50",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829213930999c3394b0c44c50",
+  "usage": {
+    "completion_tokens": 169,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1728,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1897
+  }
+}

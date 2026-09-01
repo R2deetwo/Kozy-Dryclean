@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1 (Shirts Hero):** Photorealistic photo featuring crisp whites and warm wood tones, conveying a sophisticated, premium quality feel.\n**Image 2 (Hotel Linens):** Photorealistic photo dominated by pristine white and luxurious gold against a deep navy background, evoking an ultra-premium, high-end aesthetic.\n**Image 3 (Shoe Care):** Photorealistic photo with a cool palette of greys, whites, and navy blue, projecting a sleek, modern, and premium vibe.\n**Image 4 (Atelier Interior):** Photorealistic photo showcasing deep navy, marble white, and gold accents, establishing a lavish, exclusive, and premium atmosphere.\n\n**Overall Style:** The site is dominated by a **high-fidelity photorealistic photography style** that consistently reinforces a luxury brand identity.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788012283,
+  "id": "20260829220438e956b790e5904984",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829220438e956b790e5904984",
+  "usage": {
+    "completion_tokens": 170,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5478,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 5648
+  }
+}

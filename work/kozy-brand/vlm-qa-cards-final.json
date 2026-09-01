@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1 (Navy Front)**\n(a) Safety margins OK? Yes\n(b) Any artifacts, stray lines, clipping? No\n(c) Gold text legible? Yes, excellent contrast on navy.\n(d) Verdict: SHIP\n\n**Image 2 (Navy Back)**\n(a) Safety margins OK? Yes\n(b) Any artifacts, stray lines, clipping? No\n(c) Gold text legible? Yes, clear and readable.\n(d) Verdict: SHIP\n\n**Image 3 (White Front)**\n(a) Safety margins OK? Yes\n(b) Any artifacts, stray lines, clipping? No\n(c) Gold text legible? Yes, good visibility on white.\n(d) Verdict: SHIP\n\n**Image 4 (White Back)**\n(a) Safety margins OK? Yes\n(b) Any artifacts, stray lines, clipping? No\n(c) Gold text legible? Yes, distinct against white background.\n(d) Verdict: SHIP",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1787848073,
+  "id": "20260828002751d4f19f433e454740",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260828002751d4f19f433e454740",
+  "usage": {
+    "completion_tokens": 205,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3552,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3757
+  }
+}

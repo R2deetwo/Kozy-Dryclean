@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1 (Chest):**\n1. **Close-up render:** Correct. The mannequin torso is fully visible, the gold tape arc is clear, and both annotation chips (\"level across the back\" and \"Under the arms, fullest part\") are readable, well-spaced, and not clipped by the card edges.\n2. **Collisions/Clipping:** None detected. All text and UI elements have sufficient padding.\n3. **Left diagram tape:** Yes, the gold tape clearly wraps horizontally around the chest area of the mannequin.\n\n**Image 2 (Natural waist):**\n1. **Close-up render:** Correct. The mannequin torso is visible, the gold tape arc is present, and the annotation chips (\"Narrowest part of your torso\" and \"NOT where trousers sit\") are readable and properly positioned without overlapping or being cut off.\n2. **Collisions/Clipping:** None detected. The layout is clean with no element overlap.\n3. **Left diagram tape:** Yes, the gold tape clearly wraps horizontally around the waist area of the mannequin.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788187213,
+  "id": "20260831224009d7199dfc45654f95",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260831224009d7199dfc45654f95",
+  "usage": {
+    "completion_tokens": 226,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3460,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3686
+  }
+}

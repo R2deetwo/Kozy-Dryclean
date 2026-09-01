@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1 (Dress / skirt length)**\n1. **Close-up:** Renders correctly. The vertical gold tape and hem tick are clear, the figure is well-proportioned, and the overall look is professional.\n2. **Chips/Notes:** All text is readable. The \"straight down the front\" label and \"From the hollow of the neck\" tooltip are properly positioned with no overlap or edge clipping.\n3. **Visual Bugs:** None observed; layout is clean.\n\n**Image 2 (Height)**\n1. **Close-up:** Renders correctly. The child figure, wall line, and head-level pencil mark are distinct and easy to understand. Professional appearance.\n2. **Chips/Notes:** All text is legible. The \"Mark the top of the head\" and \"No shoes, heels to the wall\" labels are clearly placed without overlapping or being cut off.\n3. **Visual Bugs:** None observed; layout is clean.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788187303,
+  "id": "2026083122414081decd41b5444a1e",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026083122414081decd41b5444a1e",
+  "usage": {
+    "completion_tokens": 197,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3462,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3659
+  }
+}

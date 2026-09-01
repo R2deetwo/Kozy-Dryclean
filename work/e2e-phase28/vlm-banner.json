@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1:**\n*   **Error Banner:** Yes, the text is fully readable and not clipped.\n*   **Button:** The \"Sign in and book\" button renders correctly.\n*   **Layout:** No layout problems; spacing and alignment look correct.\n\n**Image 2:**\n*   **Error Banner:** Yes, the text is fully readable and not clipped.\n*   **Button:** There is no \"Sign in and book\" button in this image (it shows \"I've Made the Transfer\" instead).\n*   **Layout:** No layout problems.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788255552,
+  "id": "202609011739081a38c581688c48d5",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609011739081a38c581688c48d5",
+  "usage": {
+    "completion_tokens": 117,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5181,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 5298
+  }
+}

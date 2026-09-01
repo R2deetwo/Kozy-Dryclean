@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on a strict art director QA for the luxury laundry brand website:\n\n**(a) Logo Visibility:** **Yes.** The gold 'KOZY CARE' logo is fully visible, centered, and highly legible against the navy background. It has a premium, embossed metallic finish.\n\n**(b) Hands:**\n*   **Right Hand (viewer's left):** Five distinct, well-formed fingers are visible holding the bottom edge of the bag. The thumb is natural and correctly positioned.\n*   **Left Hand (viewer's right):** Four fingers and a natural-looking thumb are visible gripping the side/bottom of the bag. The anatomy is correct and photorealistic.\n\n**(c) Face Quality:** **Excellent.** High-resolution skin texture, natural lighting on the cheekbones, and a genuine, warm expression. No AI artifacts or \"uncanny valley\" distortions.\n\n**(d) Ratings:**\n*   **Photorealism:** **9/10** (The depth of field and fabric textures are top-tier).\n*   **Premium Feel:** **9/10** (The color palette, gold accents, and luxury hotel setting perfectly align with high-end branding).\n\n**(e) Final Verdict:** **SHIP**\n*Reason:* Flawless brand representation with perfect logo legibility and zero anatomical errors in the primary subject.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788012699,
+  "id": "20260829221136cd0628099b7d4e36",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829221136cd0628099b7d4e36",
+  "usage": {
+    "completion_tokens": 271,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1387,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1658
+  }
+}

@@ -1,0 +1,656 @@
+     1→// Type system for Kozy Care — Premium Drycleaning & Laundry Services
+     2→// Mirrors the Prisma schema but as plain TS types for client-side state.
+     3→
+     4→export type Role = 'ADMIN' | 'DRIVER' | 'B2C' | 'B2B'
+     5→
+     6→export type OrderStatus =
+     7→  | 'REQUESTED'
+     8→  | 'PAYMENT_PENDING_VERIFICATION'
+     9→  | 'PAYMENT_VERIFIED'
+    10→  | 'PICKED_UP'
+    11→  | 'AT_STATION'
+    12→  | 'PROCESSING'
+    13→  | 'FINISHING'
+    14→  | 'OUT_FOR_DELIVERY'
+    15→  | 'DELIVERED'
+    16→  | 'CANCELLED'
+    17→
+    18→export type OrderType = 'ITEM' | 'KG'
+    19→
+    20→// Mode of wash — customer-selected on the order form (retail orders).
+    21→// Handwash is labour-intensive per-garment care and carries a surcharge
+    22→// (percentage of the item subtotal, admin-tunable in AppSetting).
+    23→export type ModeOfWash = 'MACHINE' | 'HANDWASH'
+    24→
+    25→export type PaymentMethod = 'BANK_TRANSFER' | 'PAYSTACK'
+    26→export type PaymentStatus = 'PENDING' | 'VERIFIED' | 'REJECTED'
+    27→
+    28→export interface User {
+    29→  id: string
+    30→  email: string
+    31→  name: string
+    32→  phone: string
+    33→  address?: string
+    34→  role: Role
+    35→  // Company name for corporate clients
+    36→  company?: string
+    37→  createdAt: string
+    38→}
+    39→
+    40→export interface GarmentMedia {
+    41→  id: string
+    42→  orderId: string
+    43→  imageUrl: string // data URL or remote URL
+    44→  notes?: string
+    45→  createdAt: string
+    46→}
+    47→
+    48→export interface Payment {
+    49→  id: string
+    50→  orderId: string
+    51→  amount: number
+    52→  method: PaymentMethod
+    53→  status: PaymentStatus
+    54→  receiptUrl?: string
+    55→  paystackRef?: string
+    56→  verifiedAt?: string
+    57→  verifiedById?: string
+    58→  createdAt: string
+    59→  updatedAt: string
+    60→}
+    61→
+    62→export interface StatusEvent {
+    63→  id: string
+    64→  orderId: string
+    65→  status: OrderStatus
+    66→  note?: string
+    67→  actorId?: string
+    68→  createdAt: string
+    69→}
+    70→
+    71→export interface OrderItem {
+    72→  id: string
+    73→  name: string
+    74→  quantity: number
+    75→  unitPrice: number // naira
+    76→}
+    77→
+    78→export interface Order {
+    79→  id: string
+    80→  orderNumber: string // human-readable like KZ-1024
+    81→  userId: string
+    82→  driverId?: string
+    83→  status: OrderStatus
+    84→  type: OrderType
+    85→  finalWeight?: number // kg, for B2B
+    86→  totalPrice?: number
+    87→  guaranteeActive: boolean
+    88→  // Mode of wash chosen at booking (retail orders): MACHINE | HANDWASH
+    89→  modeOfWash?: string
+    90→  // Offer code redeemed at checkout (e.g. HOTEL15), if any
+    91→  promoCode?: string
+    92→  // Delivery fee charged: 0 when the free-first-delivery applied
+    93→  deliveryFee?: number
+    94→  items: OrderItem[] // for B2C
+    95→  pickupAddress: string
+    96→  pickupDate: string
+    97→  pickupTimeSlot: string
+    98→  deliveryAddress?: string
+    99→  deliveryDate?: string
+   100→  pickedUpAt?: string
+   101→  atStationAt?: string
+   102→  processingAt?: string
+   103→  finishingAt?: string
+   104→  outForDeliveryAt?: string
+   105→  deliveredAt?: string
+   106→  createdAt: string
+   107→  updatedAt: string
+   108→  // ----- Relations (present when the API includes them; the admin modal,
+   109→  // Kanban cards and payment queue all rely on these nested objects) -----
+   110→  itemsManifest?: string // JSON string — items[] above is the parsed form
+   111→  alterationNotes?: string
+   112→  user?: {
+   113→    id?: string
+   114→    name: string
+   115→    email: string
+   116→    phone: string
+   117→    role?: string
+   118→    address?: string
+   119→  }
+   120→  driver?: { id: string; name: string; phone: string } | null
+   121→  payments?: Array<{
+   122→    id: string
+   123→    orderId: string
+   124→    amount: number
+   125→    method: string
+   126→    status: string
+   127→    receiptUrl?: string | null
+   128→    verifiedAt?: string | null
+   129→    createdAt: string
+   130→    updatedAt: string
+   131→  }>
+   132→  media?: Array<{ id: string; imageUrl: string; notes?: string | null }>
+   133→}
+   134→
+   135→// =====================================================
+   136→// REVIEW — customer feedback on completed orders
+   137→// =====================================================
+   138→export interface Review {
+   139→  id: string
+   140→  orderId: string
+   141→  userId: string
+   142→  driverId?: string
+   143→  // 1-5 stars, allows halves (4.5, 5.0, etc.)
+   144→  rating: number
+   145→  comment: string
+   146→  // Public display name (defaults to user.name, admin can edit)
+   147→  displayName?: string
+   148→  // Location shown next to testimonial (e.g., "Lekki Phase 1")
+   149→  displayLocation?: string
+   150→  // Moderation: only approved reviews with rating >= 4.5 show publicly
+   151→  isApproved: boolean
+   152→  approvedAt?: string
+   153→  approvedById?: string
+   154→  // Soft-hide: even if approved, admin can hide without deleting
+   155→  isHidden: boolean
+   156→  createdAt: string
+   157→  updatedAt: string
+   158→}
+   159→
+   160→// Public-facing testimonial (subset of Review shown on landing page carousel)
+   161→export interface Testimonial {
+   162→  id: string
+   163→  // Name + location to display publicly
+   164→  displayName: string
+   165→  displayLocation?: string
+   166→  rating: number
+   167→  comment: string
+   168→  // Masked order reference for order-verified reviews, e.g. "KZ-••3846".
+   169→  // Absent on starter marketing testimonials.
+   170→  orderNumberMasked?: string
+   171→  // ISO date — used to show "2 weeks ago" etc.
+   172→  createdAt: string
+   173→}
+   174→
+   175→// =====================================================
+   176→// Catalog — B2C per-item pricing (in naira)
+   177→// =====================================================
+   178→export interface GarmentCatalogItem {
+   179→  id: string
+   180→  name: string
+   181→  price: number
+   182→  icon: string // path to Kozy SVG service icon
+   183→  category:
+   184→    | 'Shirts'
+   185→    | 'Trousers'
+   186→    | 'Suits'
+   187→    | 'Traditional'
+   188→    | "Women's Wear"
+   189→    | 'Outerwear'
+   190→    | 'Household'
+   191→    | 'Extras'
+   192→    | 'Shoes'
+   193→    | 'Other'
+   194→    | 'Alterations'
+   195→  // Optional one-line description shown under the item name in the booking
+   196→  // wizard — used where a bare name would be ambiguous (e.g. Lace / Aso-Ebi
+   197→  // Gown vs the general Dress vs the existing Ankara Gown).
+   198→  description?: string
+   199→  // Pricing display mode for items without a flat per-unit price:
+   200→  //  • 'from'  — price is a FLOOR ("Restoration from ₦5,000"). The item is
+   201→  //              charged at this base and the final amount is confirmed after
+   202→  //              assessment, before any work begins (admin can adjust).
+   203→  //  • 'quote' — NO fixed price (wedding dress, couture). The item is booked,
+   204→  //              assessed free of charge, then quoted for customer approval.
+   205→  //              It contributes ₦0 to the order total until the quote is set.
+   206→  pricingMode?: 'from' | 'quote'
+   207→}
+   208→
+   209→export const GARMENT_CATALOG: GarmentCatalogItem[] = [
+   210→  { id: 'shirt', name: 'Shirt', price: 500, icon: '/icons/services/shirt.svg', category: 'Shirts' },
+   211→  { id: 'longsleeve', name: 'Long-Sleeve Shirt', price: 600, icon: '/icons/services/longsleeve.svg', category: 'Shirts' },
+   212→  { id: 'trouser', name: 'Trousers', price: 700, icon: '/icons/services/trouser.svg', category: 'Trousers' },
+   213→  { id: 'jeans', name: 'Jeans', price: 800, icon: '/icons/services/jeans.svg', category: 'Trousers' },
+   214→  { id: 'suit-2pc', name: 'Suit (2-Piece)', price: 4500, icon: '/icons/services/suit.svg', category: 'Suits' },
+   215→  { id: 'suit-3pc', name: 'Suit (3-Piece)', price: 5500, icon: '/icons/services/suit-3pc.svg', category: 'Suits' },
+   216→  { id: 'blazer', name: 'Blazer', price: 2500, icon: '/icons/services/blazer.svg', category: 'Suits' },
+   217→  // ── Outerwear (Phase 14 — client menu additions) ─────────
+   218→  // Going rates researched Aug 2026: Lagos lists price leather jackets at
+   219→  // ₦4,000 (specialist leather care); jean jackets sit between jeans (₦800)
+   220→  // and blazers; sweatshirt/cardigan knitwear sits between long-sleeve
+   221→  // shirts and blouses. All three are unisex → shared Outerwear group.
+   222→  {
+   223→    id: 'leather-jacket',
+   224→    name: 'Leather Jacket',
+   225→    price: 4000,
+   226→    icon: '/icons/services/leather-jacket.svg',
+   227→    category: 'Outerwear',
+   228→    description:
+   229→      'Specialist leather care — cleaned, conditioned and re-nourished to prevent cracking.',
+   230→  },
+   231→  { id: 'jean-jacket', name: 'Jean Jacket', price: 1200, icon: '/icons/services/jean-jacket.svg', category: 'Outerwear' },
+   232→  {
+   233→    id: 'sweatshirt-cardigan',
+   234→    name: 'Sweatshirt / Cardigan',
+   235→    price: 1000,
+   236→    icon: '/icons/services/sweatshirt.svg',
+   237→    category: 'Outerwear',
+   238→    description: 'Knitwear washed flat and dried to shape — no stretching, no bobbling.',
+   239→  },
+   240→  { id: 'agbada', name: 'Agbada', price: 3500, icon: '/icons/services/agbada.svg', category: 'Traditional' },
+   241→  { id: 'iro-buba', name: 'Iro & Buba', price: 2000, icon: '/icons/services/iro-buba.svg', category: 'Traditional' },
+   242→  { id: 'kaftan', name: 'Kaftan', price: 1500, icon: '/icons/services/kaftan.svg', category: 'Traditional' },
+   243→  { id: 'ankara-gown', name: 'Ankara Gown', price: 1800, icon: '/icons/services/ankara-gown.svg', category: 'Traditional' },
+   244→  // ── Women's Wear (Phase 10) ─────────────────────────────
+   245→  // Lace / Aso-Ebi Gown is the flagship item: priced well above the Ankara
+   246→  // Gown for the delicate hand-wash handling premium event fabrics need.
+   247→  { id: 'blouse', name: 'Blouse', price: 1800, icon: '/icons/services/blouse.svg', category: "Women's Wear" },
+   248→  { id: 'skirt', name: 'Skirt', price: 1800, icon: '/icons/services/skirt.svg', category: "Women's Wear" },
+   249→  { id: 'womens-dress', name: 'Dress', price: 2500, icon: '/icons/services/womens-dress.svg', category: "Women's Wear" },
+   250→  {
+   251→    id: 'lace-gown',
+   252→    name: 'Lace / Aso-Ebi Gown',
+   253→    price: 5000,
+   254→    icon: '/icons/services/lace-gown.svg',
+   255→    category: "Women's Wear",
+   256→    description:
+   257→      'Delicate lace & aso-ebi event wear, hand-washed with extra care — not for everyday ankara or cotton dresses.',
+   258→  },
+   259→  { id: 'jumpsuit', name: 'Jumpsuit', price: 2200, icon: '/icons/services/jumpsuit.svg', category: "Women's Wear" },
+   260→  { id: 'gele', name: 'Gele (Headwrap)', price: 1500, icon: '/icons/services/gele.svg', category: "Women's Wear" },
+   261→  { id: 'bedsheet', name: 'Bedsheet', price: 1200, icon: '/icons/services/bedsheet.svg', category: 'Household' },
+   262→  { id: 'duvet', name: 'Duvet', price: 2500, icon: '/icons/services/duvet.svg', category: 'Household' },
+   263→  { id: 'curtain', name: 'Curtain (per panel)', price: 1800, icon: '/icons/services/curtain.svg', category: 'Household' },
+   264→  { id: 'native-cap', name: 'Native Cap', price: 200, icon: '/icons/services/native-cap.svg', category: 'Extras' },
+   265→  { id: 'tie', name: 'Tie', price: 300, icon: '/icons/services/tie.svg', category: 'Extras' },
+   266→  { id: 'towel', name: 'Towel', price: 400, icon: '/icons/services/towel.svg', category: 'Household' },
+   267→  { id: 'singlet', name: 'Singlet', price: 300, icon: '/icons/services/singlet.svg', category: 'Shirts' },
+   268→  { id: 'mens-underwear', name: 'Men\u2019s Underwear', price: 250, icon: '/icons/services/underwear.svg', category: 'Extras' },
+   269→  { id: 'womens-underwear', name: 'Women\u2019s Underwear', price: 500, icon: '/icons/services/womens-underwear.svg', category: 'Extras' },
+   270→  { id: 'socks', name: 'Socks (per pair)', price: 200, icon: '/icons/services/socks.svg', category: 'Extras' },
+   271→  { id: 'hats', name: 'Hat', price: 500, icon: '/icons/services/hats.svg', category: 'Extras' },
+   272→  // White sneakers carry the premium (owner directive): every scuff, stain
+   273→  // and yellowing shows on white, so they take the most careful cleaning.
+   274→  // White ₦1,500 / coloured ₦1,000.
+   275→  { id: 'sneakers-white', name: 'Sneakers (White)', price: 1500, icon: '/icons/services/sneakers-white.svg', category: 'Shoes' },
+   276→  { id: 'sneakers-coloured', name: 'Sneakers (Coloured)', price: 1000, icon: '/icons/services/sneakers-coloured.svg', category: 'Shoes' },
+   277→  { id: 'leather-shoes', name: 'Leather Shoes', price: 1000, icon: '/icons/services/leather-shoes.svg', category: 'Shoes' },
+   278→  { id: 'suede-shoes', name: 'Suede Shoes', price: 2000, icon: '/icons/services/suede-shoes.svg', category: 'Shoes' },
+   279→  // ── Restoration & quoted work (Phase 13) ─────────────────
+   280→  // Restoration is assessment-first: ₦5,000 is a floor, not a flat rate —
+   281→  // the specialist inspects the pair and confirms the final quote (extent of
+   282→  // sole whitening, repaint area, repairs) before any work begins. A pair
+   283→  // that is beyond restoration is turned down at the free assessment, not
+   284→  // discovered after pickup (owner directive — no wasted trips).
+   285→  {
+   286→    id: 'sneaker-restoration',
+   287→    name: 'Sneaker Restoration',
+   288→    price: 5000,
+   289→    icon: '/icons/services/sneaker-restoration.svg',
+   290→    category: 'Shoes',
+   291→    pricingMode: 'from',
+   292→    description:
+   293→      'From ₦5,000 — sole whitening, repaints, repairs. Free assessment first; we quote before any work begins.',
+   294→  },
+   295→  // Wedding dresses & couture are never flat-priced: beading, train length
+   296→  // and fabric all change the work. The customer books the pickup, we assess
+   297→  // free of charge, and send a quote for approval before touching the piece.
+   298→  // price: 0 keeps it out of the subtotal; displays read "By quote".
+   299→  {
+   300→    id: 'other-couture',
+   301→    name: 'Other — Wedding Dress & Couture',
+   302→    price: 0,
+   303→    icon: '/icons/services/other-couture.svg',
+   304→    category: 'Other',
+   305→    pricingMode: 'quote',
+   306→    description:
+   307→      'Wedding dresses, couture & bespoke pieces. Quoted after a free assessment — you approve before we start.',
+   308→  },
+   309→  // ── Alterations (Phase 17 — client directive) ────────────
+   310→  // One bookable quote item per garment. The CUSTOMER describes the issue at
+   311→  // booking (wizard collects a guided note — riders never measure at the
+   312→  // door); the in-house seamstress assesses each piece at the studio, calls
+   313→  // to confirm detail if needed, and sends the quote for approval before
+   314→  // anything is sewn. price: 0 + pricingMode 'quote' keeps it out of the
+   315→  // subtotal until the quote is set.
+   316→  {
+   317→    id: 'alteration',
+   318→    name: 'Alteration / Repair (per garment)',
+   319→    price: 0,
+   320→    icon: '/icons/services/alteration.svg',
+   321→    category: 'Alterations',
+   322→    pricingMode: 'quote',
+   323→    description:
+   324→      'Hems, waist, sleeves, zips, buttons, traditional wear — describe the work when booking; the seamstress quotes before she sews.',
+   325→  },
+   326→]
+   327→
+   328→// =====================================================
+   329→// SERVICE SPEED — turnaround tiers for retail (ITEM) orders
+   330→// =====================================================
+   331→// Market research (2026): express dry cleaning typically runs
+   332→//   • next-day / 48h express: +25–50% over standard rates
+   333→//   • same-day / 24h express: +50–100% over standard rates
+   334→// Kozy's client survey puts the Lagos standard at 3–5 days, so speed is
+   335→// sold as a premium rather than given away free. Surcharges sit in the
+   336→// upper half of the industry band because Kozy is a premium brand that
+   337→// also fronts pickup + delivery logistics on every express order.
+   338→export type ServiceSpeed = 'STANDARD' | 'EXPRESS_48' | 'EXPRESS_24'
+   339→
+   340→export interface ServiceSpeedOption {
+   341→  id: ServiceSpeed
+   342→  label: string
+   343→  /** Customer-facing turnaround promise */
+   344→  window: string
+   345→  /** Surcharge as a fraction of the item subtotal (0 / 0.5 / 1.0) */
+   346→  surcharge: number
+   347→  description: string
+   348→  /** Master switch — flip to false to pull a tier off the market instantly */
+   349→  enabled: boolean
+   350→}
+   351→
+   352→export const SERVICE_SPEEDS: ServiceSpeedOption[] = [
+   353→  {
+   354→    id: 'STANDARD',
+   355→    label: 'Standard',
+   356→    window: '3–5 days',
+   357→    surcharge: 0,
+   358→    description: 'Careful cleaning, pressing and packaging. Our usual thorough window.',
+   359→    enabled: true,
+   360→  },
+   361→  {
+   362→    id: 'EXPRESS_48',
+   363→    label: 'Express 48',
+   364→    window: '48 hours',
+   365→    surcharge: 0.5,
+   366→    description: 'Your items jump the queue — cleaned, pressed and back within 2 days of pickup.',
+   367→    enabled: true,
+   368→  },
+   369→  {
+   370→    id: 'EXPRESS_24',
+   371→    label: 'Express 24',
+   372→    window: '24 hours',
+   373→    surcharge: 1.0,
+   374→    description: 'Next-day return from pickup. Not available for bulky home items (duvets, curtains).',
+   375→    enabled: true,
+   376→  },
+   377→]
+   378→
+   379→export function getServiceSpeed(id: string | null | undefined): ServiceSpeedOption {
+   380→  return SERVICE_SPEEDS.find((s) => s.id === id) ?? SERVICE_SPEEDS[0]
+   381→}
+   382→
+   383→/** True when an order with these garment ids may use the 24-hour tier.
+   384→ *  Bulky household items (duvets, curtains, bedsheets) physically cannot be
+   385→ *  washed, dried and finished in 24 hours — the promise would be dishonest. */
+   386→export function allowsExpress24(itemIds: string[]): boolean {
+   387→  return !itemIds.some((id) => GARMENT_CATALOG.find((g) => g.id === id)?.category === 'Household')
+   388→}
+   389→
+   390→// =====================================================
+   391→// B2B pricing — per-KG tiered structure
+   392→// =====================================================
+   393→export const B2B_PRICING = {
+   394→  pricePerKg: 800, // naira per kg
+   395→  minimumKg: 10, // minimum billable weight
+   396→  minimumCharge: 8000, // 10kg * 800
+   397→}
+   398→
+   399→// B2C condition-capture incentive
+   400→export const GUARANTEE_DISCOUNT = 0.05 // 5% off when photos uploaded
+   401→
+   402→// =====================================================
+   403→// PHASE 14 — server-managed commercial settings (AppSetting table)
+   404→// =====================================================
+   405→// These defaults ship in code; the admin can override every one of them in
+   406→// Settings (they live in the DB so an edit reaches ALL visitors instantly —
+   407→// the previous localStorage copy was per-browser and never propagated).
+   408→
+   409→/** Flat delivery fee for every delivery AFTER the free first one.
+   410→ *  Research (Aug 2026): Lagos dispatch platforms default to ₦800/order and
+   411→ *  island routes (Ikoyi→Lekki) typically run ₦1,000–₦2,500 — ₦1,500 sits
+   412→ *  mid-market for a premium brand that fronts the logistics. */
+   413→export const DEFAULT_DELIVERY_FEE = 1500
+   414→
+   415→/** Handwash surcharge as a share of the item subtotal. Lagos delicate-care
+   416→ *  lists (e.g. "Caftan (Delicate) ₦2,500" vs ₦1,500–2,000 regular) price
+   417→ *  hand-finished pieces ~25–60% above standard — 50% is the mid-band and
+   418→ *  simple to communicate. Admin-tunable. */
+   419→export const DEFAULT_HANDWASH_SURCHARGE_PERCENT = 50
+   420→
+   421→/** First-order discount for every new customer (10% — client directive
+   422→ *  Aug 2026: "make it 10% off first order because you already give 5% for
+   423→ *  uploading pic"). The picture-upload guarantee discount (5%) is separate
+   424→ *  and stacks with it. */
+   425→export const FIRST_ORDER_DISCOUNT_PERCENT = 10
+   426→
+   427→/** Hotel & corporate first-order offer: 15% + the 5% picture discount.
+   428→ *  Hotels (corporate clients) are already high-value customers who bring
+   429→ *  volume, so they earn the better deal. Redeemed with the offer code
+   430→ *  HOTEL15 at checkout. */
+   431→export const HOTEL_GUEST_DISCOUNT_PERCENT = 15
+   432→export const HOTEL_GUEST_PROMO_CODE = 'HOTEL15'
+   433→
+   434→/** Guarantee eligibility (client directive: "be more transparent on what's
+   435→ *  considered eligible — a certain number of garments or amount of total
+   436→ *  order"). An order qualifies when EITHER threshold is met. Admin-tunable. */
+   437→export const DEFAULT_GUARANTEE_MIN_GARMENTS = 2
+   438→export const DEFAULT_GUARANTEE_MIN_ORDER_VALUE = 2500
+   439→
+   440→/** The typed shape returned by GET /api/settings/app. */
+   441→export interface KozyAppSettings {
+   442→  // Bank account shown at checkout (bank transfer)
+   443→  bankName: string
+   444→  accountName: string
+   445→  accountNumber: string
+   446→  // Contact
+   447→  contactPhone: string
+   448→  contactEmail: string
+   449→  // Admin alert emails — where the business owner gets pinged when a new
+   450→  // customer signs up, a new order arrives, or a customer says they've paid
+   451→  // (bank-transfer verification requests). All three types can be toggled.
+   452→  adminAlertsEmail: string
+   453→  adminAlertsNewSignup: boolean
+   454→  adminAlertsNewOrder: boolean
+   455→  adminAlertsPaymentPending: boolean
+   456→  // Commercial terms
+   457→  deliveryFee: number
+   458→  handwashSurchargePercent: number
+   459→  guaranteeMinGarments: number
+   460→  guaranteeMinOrderValue: number
+   461→  firstOrderDiscountPercent: number
+   462→  hotelGuestDiscountPercent: number
+   463→  hotelGuestPromoCode: string
+   464→  // Alterations — "Exclusive to Kozy Care"; pricing confirmed with the
+   465→  // tailor, so the site says "quoted after assessment" until set (> 0).
+   466→  alterationsFromPrice: number
+   467→  // Corporate / bulk (per-kg) pricing — charged when the admin records an
+   468→  // order's final weight. Server-managed so the invoice the customer
+   469→  // receives is computed from the SAME number the admin edited in Settings
+   470→  // (previously the API hardcoded ₦800/kg while the admin UI edits only
+   471→  // reached this browser's localStorage).
+   472→  pricePerKg: number
+   473→  minimumKg: number
+   474→  // Card payments (Paystack) — NOT stored in the DB: derived server-side
+   475→  // from the presence of PAYSTACK_SECRET_KEY on each /api/settings/app
+   476→  // read. When false, checkout greys the card option out and transfer is
+   477→  // the only payment path.
+   478→  paystackAvailable: boolean
+   479→}
+   480→
+   481→/** Code defaults for every app setting — CLIENT-SAFE (no server imports).
+   482→ *  Used as the fallback whenever /api/settings/app is unreachable, and
+   483→ *  self-seeded into the AppSetting table on first server read. */
+   484→export function defaultAppSettings(): KozyAppSettings {
+   485→  return {
+   486→    bankName: COMPANY_BANK.bankName,
+   487→    accountName: COMPANY_BANK.accountName,
+   488→    accountNumber: COMPANY_BANK.accountNumber,
+   489→    contactPhone: '+234 803 175 5230',
+   490→    contactEmail: 'kozygarmentcare@gmail.com',
+   491→    // The owner's inbox (client-requested default) — changeable in admin
+   492→    // Settings → Notifications without a redeploy.
+   493→    adminAlertsEmail: 'kozygarmentcare@gmail.com',
+   494→    adminAlertsNewSignup: true,
+   495→    adminAlertsNewOrder: true,
+   496→    adminAlertsPaymentPending: true,
+   497→    deliveryFee: DEFAULT_DELIVERY_FEE,
+   498→    handwashSurchargePercent: DEFAULT_HANDWASH_SURCHARGE_PERCENT,
+   499→    guaranteeMinGarments: DEFAULT_GUARANTEE_MIN_GARMENTS,
+   500→    guaranteeMinOrderValue: DEFAULT_GUARANTEE_MIN_ORDER_VALUE,
+   501→    firstOrderDiscountPercent: FIRST_ORDER_DISCOUNT_PERCENT,
+   502→    hotelGuestDiscountPercent: HOTEL_GUEST_DISCOUNT_PERCENT,
+   503→    hotelGuestPromoCode: HOTEL_GUEST_PROMO_CODE,
+   504→    // 0 = pricing not confirmed with the tailor yet → the storefront shows
+   505→    // "quoted after assessment" instead of a from-price.
+   506→    alterationsFromPrice: 0,
+   507→    // Bulk pricing defaults mirror the live AppSetting values.
+   508→    pricePerKg: B2B_PRICING.pricePerKg,
+   509→    minimumKg: B2B_PRICING.minimumKg,
+   510→    // Pessimistic client default — the server response overrides it with
+   511→    // the real env-derived value. Greyed out beats a broken card checkout.
+   512→    paystackAvailable: false,
+   513→  }
+   514→}
+   515→
+   516→// Bank account details for manual transfers.
+   517→// Defaults mirror the LIVE AppSetting values (set by the client in admin
+   518→// Settings) so a fresh environment never seeds a placeholder account that
+   519→// customers could transfer real money to. The AppSetting table is the
+   520→// source of truth at runtime — this constant only seeds/fallbacks.
+   521→export const COMPANY_BANK = {
+   522→  bankName: 'Noel Bank',
+   523→  accountName: 'Kozy Cleaning Services Ltd',
+   524→  accountNumber: '8123456789',
+   525→  routingNumber: '',
+   526→}
+   527→
+   528→// =====================================================
+   529→// ADMIN SETTINGS — bank account, pricing, etc. (managed by admin)
+   530→// =====================================================
+   531→export interface KozySettings {
+   532→  // Bank account details shown to customers during checkout
+   533→  bankName: string
+   534→  accountName: string
+   535→  accountNumber: string
+   536→  // Contact info shown across the app
+   537→  contactPhone: string
+   538→  contactEmail: string
+   539→  atelierAddress: string
+   540→  // B2B pricing
+   541→  pricePerKg: number
+   542→  minimumKg: number
+   543→  // Guarantee
+   544→  guaranteeDiscountPercent: number // e.g. 5 for 5%
+   545→  // Garment prices (keyed by garment id from GARMENT_CATALOG)
+   546→  garmentPrices: Record<string, number>
+   547→}
+   548→
+   549→// Order pipeline stages for visual tracking
+   550→export interface PipelineStage {
+   551→  key: OrderStatus
+   552→  label: string
+   553→  short: string
+   554→  description: string
+   555→}
+   556→
+   557→export const PIPELINE_STAGES: PipelineStage[] = [
+   558→  { key: 'REQUESTED', label: 'Requested', short: '1', description: 'Pickup booked' },
+   559→  { key: 'PAYMENT_VERIFIED', label: 'Payment Confirmed', short: '2', description: 'Payment received & verified' },
+   560→  { key: 'PICKED_UP', label: 'Picked Up', short: '3', description: 'Goods received by rider' },
+   561→  { key: 'AT_STATION', label: 'At Station', short: '4', description: 'Items logged at our facility' },
+   562→  { key: 'PROCESSING', label: 'Processing', short: '5', description: 'Washing & treatment underway' },
+   563→  { key: 'FINISHING', label: 'Finishing', short: '6', description: 'Ironing & packaging' },
+   564→  { key: 'OUT_FOR_DELIVERY', label: 'Out for Delivery', short: '7', description: 'Rider en route to you' },
+   565→  { key: 'DELIVERED', label: 'Delivered', short: '8', description: 'Order complete' },
+   566→]
+   567→
+   568→// Kanban columns for admin board. REQUESTED is included so orders that
+   569→// were booked without a payment record yet (e.g. card payments, if
+   570→// Paystack is ever re-enabled, or admin-created orders) are still visible
+   571→// and can be advanced — previously they were unreachable from the board.
+   572→export const KANBAN_COLUMNS: OrderStatus[] = [
+   573→  'REQUESTED',
+   574→  'PAYMENT_PENDING_VERIFICATION',
+   575→  'PAYMENT_VERIFIED',
+   576→  'PICKED_UP',
+   577→  'AT_STATION',
+   578→  'PROCESSING',
+   579→  'FINISHING',
+   580→  'OUT_FOR_DELIVERY',
+   581→  'DELIVERED',
+   582→]
+   583→
+   584→export function formatNaira(amount: number): string {
+   585→  return '₦' + Math.round(amount).toLocaleString('en-NG')
+   586→}
+   587→
+   588→export function formatDateTime(iso?: string): string {
+   589→  if (!iso) return '—'
+   590→  const d = new Date(iso)
+   591→  return d.toLocaleString('en-NG', {
+   592→    day: '2-digit',
+   593→    month: 'short',
+   594→    year: 'numeric',
+   595→    hour: '2-digit',
+   596→    minute: '2-digit',
+   597→  })
+   598→}
+   599→
+   600→export function formatDate(iso?: string): string {
+   601→  if (!iso) return '—'
+   602→  const d = new Date(iso)
+   603→  return d.toLocaleDateString('en-NG', {
+   604→    day: '2-digit',
+   605→    month: 'short',
+   606→    year: 'numeric',
+   607→  })
+   608→}
+   609→
+   610→// =====================================================
+   611→// Notification templates (master prompt section 5)
+   612→// =====================================================
+   613→export interface NotificationTemplate {
+   614→  id: string
+   615→  channel: 'SMS' | 'EMAIL' | 'IN_APP'
+   616→  to: string // recipient name
+   617→  orderId: string
+   618→  body: string
+   619→  sentAt: string
+   620→}
+   621→
+   622→export function buildNotification(
+   623→  trigger:
+   624→    | 'BOOKING_PLACED'
+   625→    | 'PICKED_UP'
+   626→    | 'B2B_INVOICE_READY'
+   627→    | 'PROCESSING'
+   628→    | 'FINISHING'
+   629→    | 'OUT_FOR_DELIVERY'
+   630→    | 'DELIVERED'
+   631→    | 'PAYMENT_VERIFIED',
+   632→  order: Order,
+   633→  user: User,
+   634→  driver?: User,
+   635→  extra?: { weight?: number; amount?: number; url?: string }
+   636→): string {
+   637→  switch (trigger) {
+   638→    case 'BOOKING_PLACED':
+   639→      return `Hi ${user.name.split(' ')[0]}, your pickup (#${order.orderNumber}) is booked for ${formatDate(order.pickupDate)}.`
+   640→    case 'PICKED_UP':
+   641→      return `Goods Received! Items collected by ${driver?.name ?? 'our rider'}. Track: ${extra?.url ?? '/portal'}`
+   642→    case 'B2B_INVOICE_READY':
+   643→      return `Order #${order.orderNumber} weighed ${extra?.weight}kg. Total: ₦${extra?.amount?.toLocaleString('en-NG')}. Pay here: ${extra?.url ?? '/portal'}`
+   644→    case 'PROCESSING':
+   645→      return `Your garments are now being washed and treated. Order #${order.orderNumber}.`
+   646→    case 'FINISHING':
+   647→      return `Almost done! Order #${order.orderNumber} is undergoing ironing and packaging.`
+   648→    case 'OUT_FOR_DELIVERY':
+   649→      return `On the way! ${driver?.name ?? 'Our rider'} is delivering your laundry. Call: ${driver?.phone ?? ''}`
+   650→    case 'DELIVERED':
+   651→      return `Delivered! Order #${order.orderNumber} is complete. Rate your experience: ${extra?.url ?? '/rate/' + order.orderNumber}`
+   652→    case 'PAYMENT_VERIFIED':
+   653→      return `Payment Confirmed! ₦${(extra?.amount ?? 0).toLocaleString('en-NG')} received for Order #${order.orderNumber}. Thank you!`
+   654→  }
+   655→}
+   656→

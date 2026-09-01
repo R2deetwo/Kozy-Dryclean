@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the precise layout description:\n\n*   **Location of Doorway:** The **dark doorway** (with its white door frame) is located in the **center-right** portion of the crop, positioned in the **middle to upper-middle** vertical area. It sits directly behind the woman's head.\n*   **Directly LEFT of it:** To the left of the white door frame is a **plain, light-colored wall** (appearing as an off-white or cream color).\n*   **Directly RIGHT of it:** To the right of the doorway/door frame area is the woman's **curly brown hair**, which partially obscures that side of the background.\n*   **ABOVE it:** Yes, there is a horizontal **gold or brass trim line** (likely a house number plaque or decorative molding) situated above the doorway. It does **not** run continuously across the whole crop; it appears only in the **upper-center/right** section above the dark window/door opening, ending before it reaches the left edge of the frame.\n*   **Wall Texture & Other Objects:** The wall on the left is **plain and smooth** with a light cream or beige tone. The other prominent object in the foreground is the **woman** (visible from the shoulders up), wearing a **light taupe or beige top**. There are also faint hints of greenery (plant leaves) visible on the far left edge.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788021078,
+  "id": "2026083000311436e38b107a7747d4",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026083000311436e38b107a7747d4",
+  "usage": {
+    "completion_tokens": 298,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 878,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1176
+  }
+}

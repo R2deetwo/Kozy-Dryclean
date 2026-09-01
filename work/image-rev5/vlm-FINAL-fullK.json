@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) **Stray marks:** No stray gold marks, dots, or specks are visible on the surrounding navy fabric.\n2) **Letterform integrity:** The 'K' is complete and well-formed. Both the top and bottom serifs are intact, and the decorative swash at the top right is clearly defined.\n3) **Fabric appearance:** The fabric exhibits a natural woven texture with a subtle grid-like pattern visible within both the gold letter and the navy background.\n4) **VERDICT:** CLEAN",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788029796,
+  "id": "2026083002563338cfbacda7e64c94",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026083002563338cfbacda7e64c94",
+  "usage": {
+    "completion_tokens": 104,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1111,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1215
+  }
+}

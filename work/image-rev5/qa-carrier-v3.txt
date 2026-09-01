@@ -1,0 +1,16 @@
+SCORES (0-10 each):
+photorealism: 8
+people_natural (hands, fingers, eye contact): 7
+panel_visible (how flat, large, unobstructed the EMPTY front face of the bag is): 5
+panel_blank (10 = completely blank, no logo/text/zipper on front face): 4
+palette_navy_gold: 8
+overall: 6
+
+DETAILS:
+bag_type: Navy bi-fold suit carrier/garment bag, held vertically. Features a top handle and a full-length central zipper running down the front face.
+panel_bounding_box: [345, 230, 705, 940]
+panel_tilt_degrees: ~2 degrees clockwise
+panel_texture: The navy fabric has a subtle synthetic weave with soft vertical creasing from the fold. Lighting is fairly even but shows some subtle shading towards the right edge.
+hands: The man's left hand (on handle) looks natural; his right hand (on bag) has slightly elongated/fused fingers. The woman's right hand (on bag) appears natural with good finger definition.
+problems: Central zipper bisects the front panel, significantly reducing the "blank" canvas area for branding. Minor AI artifacts in the man's right-hand fingers. Small logo visible on the man's shirt.
+verdict: FAIL

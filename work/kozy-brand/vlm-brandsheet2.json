@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Yes. The page includes all five sections (01 through 05) and the footer line is fully visible at the bottom with nothing cut off.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1787789823,
+  "id": "20260827081701e62c1639b7904d4c",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260827081701e62c1639b7904d4c",
+  "usage": {
+    "completion_tokens": 30,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 4523,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 4553
+  }
+}

@@ -1,0 +1,7 @@
+GLYPH_FIDELITY (0-10): 8/10 — The monogram accurately captures the serif structure, the long sweeping top-right curve, and the small dot ornament at the lower-left of the curve. Proportions are very close to the reference.
+DOT_PRESENT: yes
+FLOURISH_PRESENT: yes
+PRINT_REALISM (0-10): 7/10 — The gold K looks well-integrated into the fabric with a slight metallic sheen, though the edges are quite sharp for a woven textile print.
+GLOW: no
+SCENE_INTACT: yes — The two people, their hands, faces, and the background appear natural, undistorted, and free of obvious AI artifacts.
+VERDICT: SHIP — The brand mark is rendered with high fidelity including all key ornamental details, and the overall image quality is professional.

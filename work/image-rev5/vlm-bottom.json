@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the visual evidence in the image:\n\n1.  **Rider's Hands (Left):** There are **two** hands visible belonging to the male rider on the left. \n    *   One hand is resting flat on the top surface of the bag, with the arm clearly extending to the left (wearing a navy sleeve).\n    *   The second hand is gripping the bottom edge of the bag from underneath. The arm for this hand traces back towards the rider's body on the left side.\n2.  **Customer's Hand (Right):** There is **one** hand visible belonging to the female customer on the right. This hand is gripping the bottom right corner of the bag, with the arm extending to the right.\n\n**Total Count:** There are **3** hands visible at the bottom of the bag. There are no extra or floating hands; all visible hands can be traced back to the arms of either the rider or the customer.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788024957,
+  "id": "20260830013553e98d5b6abdc445cb",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830013553e98d5b6abdc445cb",
+  "usage": {
+    "completion_tokens": 195,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 632,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 827
+  }
+}

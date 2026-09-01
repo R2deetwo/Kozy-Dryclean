@@ -1,0 +1,54 @@
+🚀 Initializing Z-AI SDK...
+🔎 Searching images: "how to take body measurements for tailoring illustration chart chest waist hips tape measure"
+✅ Got 6 images
+{
+  "success": true,
+  "query": "how to take body measurements for tailoring illustration chart chest waist hips tape measure",
+  "count": 6,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/5c2d8c387baa.jpg",
+      "caption": "",
+      "source": "Rebecca Angela",
+      "original_width": "875px",
+      "original_height": "1024px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/9ca7cb86206c.jpg",
+      "caption": "",
+      "source": "wikiHow",
+      "original_width": "1200px",
+      "original_height": "675px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/b0f9b2c7568c.jpg",
+      "caption": "",
+      "source": "Alamy",
+      "original_width": "1300px",
+      "original_height": "1190px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/fb764a99aa93.png",
+      "caption": "",
+      "source": "Style Falcon",
+      "original_width": "2111px",
+      "original_height": "1328px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/8b48b2c868c2.png",
+      "caption": "",
+      "source": "Wordans",
+      "original_width": "820px",
+      "original_height": "1024px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/ff9a3e4c43c9.jpg",
+      "caption": "",
+      "source": "Love Notions",
+      "original_width": "1600px",
+      "original_height": "900px"
+    }
+  ]
+}

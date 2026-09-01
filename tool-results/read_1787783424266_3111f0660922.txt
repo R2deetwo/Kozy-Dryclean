@@ -1,0 +1,940 @@
+     1→'use client'
+     2→
+     3→import { useState, useRef, useEffect, useMemo } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  ArrowLeft,
+     7→  ArrowRight,
+     8→  Camera,
+     9→  Check,
+    10→  CheckCircle2,
+    11→  Calendar,
+    12→  Clock,
+    13→  MapPin,
+    14→  CreditCard,
+    15→  Building2,
+    16→  User,
+    17→  Shield,
+    18→  Plus,
+    19→  Minus,
+    20→  Info,
+    21→  Upload,
+    22→  X,
+    23→  Sparkles,
+    24→} from 'lucide-react'
+    25→import {
+    26→  GARMENT_CATALOG,
+    27→  formatNaira,
+    28→  type OrderItem,
+    29→  type OrderType,
+    30→  type Order,
+    31→} from '@/lib/types'
+    32→import { useStore } from '@/lib/store'
+    33→import { useSession } from 'next-auth/react'
+    34→
+    35→// Zustand is now only used for settings (pricing config) — orders/payments go through the API
+    36→import { cn } from '@/lib/utils'
+    37→import { Button } from '@/components/ui/button'
+    38→import { Badge } from '@/components/ui/badge'
+    39→import { Card, CardContent } from '@/components/ui/card'
+    40→import { Input } from '@/components/ui/input'
+    41→import { Label } from '@/components/ui/label'
+    42→import { Textarea } from '@/components/ui/textarea'
+    43→import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+    44→import { toast } from '@/hooks/use-toast'
+    45→import { Toaster } from '@/components/ui/toaster'
+    46→
+    47→interface Props {
+    48→  onComplete: (order: Order) => void
+    49→  onCancel: () => void
+    50→}
+    51→
+    52→const STEPS = [
+    53→  { id: 1, name: 'Service', icon: User },
+    54→  { id: 2, name: 'Condition', icon: Camera },
+    55→  { id: 3, name: 'Logistics', icon: MapPin },
+    56→  { id: 4, name: 'Checkout', icon: CreditCard },
+    57→]
+    58→
+    59→const TIME_SLOTS = [
+    60→  '08:00 - 09:00',
+    61→  '09:00 - 10:00',
+    62→  '10:00 - 11:00',
+    63→  '11:00 - 12:00',
+    64→  '13:00 - 14:00',
+    65→  '14:00 - 15:00',
+    66→  '15:00 - 16:00',
+    67→  '16:00 - 17:00',
+    68→]
+    69→
+    70→export function BookingWizard({ onComplete, onCancel }: Props) {
+    71→  const settings = useStore((s) => s.settings)
+    72→  const { data: session } = useSession()
+    73→  const sessionUser = session?.user
+    74→  const effectiveUser = sessionUser ? {
+    75→    id: (sessionUser as any).id || '',
+    76→    email: sessionUser.email || '',
+    77→    name: sessionUser.name || '',
+    78→    phone: '',
+    79→    role: (sessionUser as any).role || 'B2C',
+    80→    address: undefined,
+    81→    company: undefined,
+    82→    createdAt: '',
+    83→  } : undefined
+    84→
+    85→  const [step, setStep] = useState(1)
+    86→  const [type, setType] = useState<OrderType>('ITEM')
+    87→  const [items, setItems] = useState<Record<string, number>>({})
+    88→  const [photos, setPhotos] = useState<{ url: string; name: string }[]>([])
+    89→  const [guaranteeAck, setGuaranteeAck] = useState(false)
+    90→  const [pickupAddress, setPickupAddress] = useState('')
+    91→  const [pickupDate, setPickupDate] = useState(() => {
+    92→    const d = new Date()
+    93→    d.setDate(d.getDate() + 1)
+    94→    return d.toISOString().slice(0, 10)
+    95→  })
+    96→  const [pickupSlot, setPickupSlot] = useState(TIME_SLOTS[1])
+    97→  const [deliveryAddress, setDeliveryAddress] = useState('')
+    98→  const [paymentMethod, setPaymentMethod] = useState<'BANK_TRANSFER' | 'PAYSTACK'>('BANK_TRANSFER')
+    99→  const [receiptUploaded, setReceiptUploaded] = useState(false)
+   100→  const [catalogTab, setCatalogTab] = useState<'garments' | 'shoes'>('garments')
+   101→  const [loading, setLoading] = useState(false)
+   102→  const fileInputRef = useRef<HTMLInputElement>(null)
+   103→  const receiptInputRef = useRef<HTMLInputElement>(null)
+   104→
+   105→  // Populate address fields once we have the current user
+   106→  useEffect(() => {
+   107→    if (effectiveUser?.address) {
+   108→      setPickupAddress(effectiveUser.address)
+   109→      setDeliveryAddress(effectiveUser.address)
+   110→    }
+   111→  }, [effectiveUser?.address])
+   112→  // If this user is B2B, default the type to KG
+   113→  useEffect(() => {
+   114→    if (effectiveUser?.role === "B2B") setType("KG")
+   115→  }, [effectiveUser?.role])
+   116→
+   117→  // ----- Computed pricing (memoized for performance) -----
+   118→  // Must be called BEFORE any early returns (Rules of Hooks)
+   119→  const selectedItems: OrderItem[] = useMemo(() => {
+   120→    if (!effectiveUser) return []
+   121→    return Object.entries(items)
+   122→      .filter(([, q]) => q > 0)
+   123→      .map(([id, q]) => {
+   124→        const g = GARMENT_CATALOG.find((c) => c.id === id)!
+   125→        const unitPrice = settings.garmentPrices[id] ?? g.price
+   126→        return { id: 'item_' + id, name: g.name, quantity: q, unitPrice }
+   127→      })
+   128→  }, [items, settings.garmentPrices, effectiveUser])
+   129→  const subtotal = selectedItems.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+   130→  const guaranteeActive = type === 'ITEM' && photos.length > 0 && guaranteeAck
+   131→  const discount = guaranteeActive ? subtotal * (settings.guaranteeDiscountPercent / 100) : 0
+   132→  const total = subtotal - discount
+   133→
+   134→  // Defensive guard — auth gate should prevent this, but we don't want to crash.
+   135→  if (!effectiveUser) {
+   136→    return (
+   137→      <div className="p-10 text-center text-sm text-navy-300">
+   138→        Please sign in to start a booking.
+   139→      </div>
+   140→    )
+   141→  }
+   142→  const isB2B = effectiveUser.role === "B2B"
+   143→
+   144→  // ----- Helpers -----
+   145→  const setQty = (id: string, delta: number) => {
+   146→    setItems((prev) => {
+   147→      const next = { ...prev }
+   148→      const q = (next[id] ?? 0) + delta
+   149→      if (q <= 0) delete next[id]
+   150→      else next[id] = q
+   151→      return next
+   152→    })
+   153→  }
+   154→
+   155→  const onPhotos = (files: FileList | null) => {
+   156→    if (!files) return
+   157→    Array.from(files).slice(0, 6 - photos.length).forEach((file) => {
+   158→      const reader = new FileReader()
+   159→      reader.onload = () => {
+   160→        setPhotos((prev) => [...prev, { url: reader.result as string, name: file.name }])
+   161→      }
+   162→      reader.readAsDataURL(file)
+   163→    })
+   164→  }
+   165→
+   166→  const onReceipt = (files: FileList | null) => {
+   167→    if (!files || files.length === 0) return
+   168→    const file = files[0]
+   169→    const reader = new FileReader()
+   170→    reader.onload = () => {
+   171→      setReceiptUploaded(true)
+   172→      // Store receipt as a mock marker — in a real app this would upload to OSS
+   173→      // For the demo we just remember it was uploaded
+   174→    }
+   175→    reader.readAsDataURL(file)
+   176→  }
+   177→
+   178→  const canContinue = () => {
+   179→    if (step === 1) {
+   180→      if (type === 'ITEM') return selectedItems.length > 0
+   181→      return true // B2B always continues (just requests pickup)
+   182→    }
+   183→    if (step === 2) return true // condition capture is optional
+   184→    if (step === 3) return Boolean(pickupAddress && pickupDate && pickupSlot)
+   185→    if (step === 4) return true
+   186→    return false
+   187→  }
+   188→
+   189→  const next = () => {
+   190→    if (step === 2 && type === 'KG') {
+   191→      // Skip condition capture step for B2B
+   192→      setStep(3)
+   193→      return
+   194→    }
+   195→    if (step < 4) setStep(step + 1)
+   196→  }
+   197→  const prev = () => {
+   198→    if (step === 3 && type === 'KG') {
+   199→      // Skip back to step 1 for B2B
+   200→      setStep(1)
+   201→      return
+   202→    }
+   203→    if (step > 1) setStep(step - 1)
+   204→  }
+   205→
+   206→  const handleConfirm = async () => {
+   207→    setLoading(true)
+   208→    try {
+   209→      // Create order via API
+   210→      const res = await fetch('/api/orders', {
+   211→        method: 'POST',
+   212→        headers: { 'Content-Type': 'application/json' },
+   213→        body: JSON.stringify({
+   214→          type,
+   215→          items: type === 'ITEM' ? selectedItems : [],
+   216→          guaranteeActive,
+   217→          pickupAddress,
+   218→          pickupDate: new Date(pickupDate).toISOString(),
+   219→          pickupTimeSlot: pickupSlot,
+   220→          deliveryAddress,
+   221→        }),
+   222→      })
+   223→
+   224→      if (!res.ok) {
+   225→        const err = await res.json().catch(() => ({}))
+   226→        throw new Error(err.error || 'Failed to create order')
+   227→      }
+   228→
+   229→      const data = await res.json()
+   230→      const order = data.order
+   231→
+   232→      // Create payment record via API (for ITEM orders with a total)
+   233→      if (type === 'ITEM' && order.totalPrice) {
+   234→        await fetch('/api/payments', {
+   235→          method: 'POST',
+   236→          headers: { 'Content-Type': 'application/json' },
+   237→          body: JSON.stringify({
+   238→            orderId: order.id,
+   239→            amount: order.totalPrice,
+   240→            method: paymentMethod,
+   241→            receiptUrl: paymentMethod === 'BANK_TRANSFER' && receiptUploaded ? 'mock-receipt' : undefined,
+   242→          }),
+   243→        })
+   244→      }
+   245→
+   246→      toast({
+   247→        title: 'Booking placed!',
+   248→        description: `Order #${order.orderNumber} is confirmed. ${
+   249→          type === 'KG'
+   250→            ? 'We will weigh your items at the station and send the invoice.'
+   251→            : paymentMethod === 'BANK_TRANSFER' && receiptUploaded
+   252→            ? 'Your receipt is in the verification queue.'
+   253→            : 'We\'ve initiated your Paystack payment request.'
+   254→        }`,
+   255→      })
+   256→
+   257→      setTimeout(() => onComplete(order), 300)
+   258→    } catch (e: any) {
+   259→      toast({
+   260→        title: 'Booking failed',
+   261→        description: e.message || 'Something went wrong. Please try again.',
+   262→        variant: 'destructive',
+   263→      })
+   264→      setLoading(false)
+   265→    }
+   266→  }
+   267→
+   268→  return (
+   269→    <div className="min-h-screen bg-gradient-to-b from-linen-200 to-white pb-16">
+   270→      <Toaster />
+   271→      {/* Header / progress */}
+   272→      <div className="border-b border-navy-100 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60[backdrop-filter]:bg-navy-800/60">
+   273→        <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6">
+   274→          <button
+   275→            onClick={onCancel}
+   276→            className="mb-3 inline-flex items-center gap-1 text-xs text-navy-300 hover:text-navy"
+   277→          >
+   278→            <ArrowLeft className="h-3.5 w-3.5" /> Back to home
+   279→          </button>
+   280→          <div className="flex items-center justify-between gap-2">
+   281→            {STEPS.map((s, i) => {
+   282→              const active = step === s.id
+   283→              const done = step > s.id
+   284→              // Hide condition step for B2B
+   285→              if (s.id === 2 && type === 'KG') {
+   286→                return null
+   287→              }
+   288→              const Icon = s.icon
+   289→              return (
+   290→                <div key={s.id} className="flex flex-1 items-center">
+   291→                  <div
+   292→                    className={cn(
+   293→                      'flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ring-2 transition',
+   294→                      active && 'bg-navy text-white ring-gold-400/30',
+   295→                      done && 'bg-gold-100 text-navy ring-gold-200',
+   296→                      !active && !done && 'bg-linen-200 text-navy-300 ring-muted-foreground/15'
+   297→                    )}
+   298→                  >
+   299→                    {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+   300→                  </div>
+   301→                  <span
+   302→                    className={cn(
+   303→                      'ml-2 hidden text-sm font-medium sm:inline',
+   304→                      active ? 'text-navy' : 'text-navy-300'
+   305→                    )}
+   306→                  >
+   307→                    {s.name}
+   308→                  </span>
+   309→                  {i < STEPS.length - 1 && (
+   310→                    <div className="mx-3 hidden h-px flex-1 bg-linen-200 sm:block" />
+   311→                  )}
+   312→                </div>
+   313→              )
+   314→            })}
+   315→          </div>
+   316→        </div>
+   317→      </div>
+   318→
+   319→      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+   320→        <AnimatePresence mode="wait">
+   321→          {/* ====================================================
+   322→              STEP 1 — SERVICE SELECTION
+   323→          ==================================================== */}
+   324→          {step === 1 && (
+   325→            <motion.div
+   326→              key="step1"
+   327→              initial={{ opacity: 0, x: 16 }}
+   328→              animate={{ opacity: 1, x: 0 }}
+   329→              exit={{ opacity: 0, x: -16 }}
+   330→              transition={{ duration: 0.2 }}
+   331→            >
+   332→              <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">Select service</h2>
+   333→              <p className="mt-1 text-sm text-navy-300">
+   334→                {isB2B
+   335→                  ? 'As a corporate client, your order is priced per kilogram.'
+   336→                  : 'Choose per-item retail pricing or request a bulk pickup.'}
+   337→              </p>
+   338→
+   339→              {!isB2B && (
+   340→                <RadioGroup
+   341→                  value={type}
+   342→                  onValueChange={(v) => setType(v as OrderType)}
+   343→                  className="mt-5 grid grid-cols-2 gap-3"
+   344→                >
+   345→                  <label
+   346→                    className={cn(
+   347→                      'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
+   348→                      type === 'ITEM' ? 'border-gold-400 bg-gold-50/50' : 'border-navy-100'
+   349→                    )}
+   350→                  >
+   351→                    <RadioGroupItem value="ITEM" className="sr-only" />
+   352→                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
+   353→                      <User className="h-5 w-5" />
+   354→                    </div>
+   355→                    <div className="flex-1">
+   356→                      <p className="font-semibold text-navy">Per-item (Retail)</p>
+   357→                      <p className="text-xs text-navy-300">
+   358→                        Pick your garments. Exact total at checkout.
+   359→                      </p>
+   360→                    </div>
+   361→                  </label>
+   362→                  <label
+   363→                    className={cn(
+   364→                      'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
+   365→                      type === 'KG' ? 'border-gold-400 bg-gold-50/50' : 'border-navy-100'
+   366→                    )}
+   367→                  >
+   368→                    <RadioGroupItem value="KG" className="sr-only" />
+   369→                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
+   370→                      <Building2 className="h-5 w-5" />
+   371→                    </div>
+   372→                    <div className="flex-1">
+   373→                      <p className="font-semibold text-navy">Bulk (Per kg)</p>
+   374→                      <p className="text-xs text-navy-300">
+   375→                        Total weighed at the station after pickup.
+   376→                      </p>
+   377→                    </div>
+   378→                  </label>
+   379→                </RadioGroup>
+   380→              )}
+   381→
+   382→              {isB2B && (
+   383→                <Card className="mt-5 border-gold-200 bg-gold-50/50">
+   384→                  <CardContent className="p-5">
+   385→                    <div className="flex items-center gap-2">
+   386→                      <Building2 className="h-5 w-5 text-navy-300" />
+   387→                      <p className="font-semibold text-navy">Corporate Bulk Pickup</p>
+   388→                    </div>
+   389→                    <p className="mt-2 text-sm text-navy-300">
+   390→                      Your order will be priced at <strong>{formatNaira(settings.pricePerKg)}/kg</strong>{' '}
+   391→                      with a {settings.minimumKg}kg minimum charge. Our rider will collect your
+   392→                      items, weigh them at the station, and we&apos;ll send you the final invoice
+   393→                      with payment instructions.
+   394→                    </p>
+   395→                    <p className="mt-3 text-xs text-navy-300">
+   396→                      Estimated minimum charge: <strong>{formatNaira(settings.pricePerKg * settings.minimumKg)}</strong>
+   397→                    </p>
+   398→                  </CardContent>
+   399→                </Card>
+   400→              )}
+   401→
+   402→              {type === 'ITEM' && (
+   403→                <div className="mt-6">
+   404→                  {/* Pick your garments / Pick your shoes — two tabs on the same line.
+   405→                      "Pick your garments" stays in the muted navy-300 tone of the old label;
+   406→                      "Pick your shoes" uses a navy fill + white text so it's unmissable,
+   407→                      but still inside the brand palette (navy + gold). */}
+   408→                  <div className="flex items-stretch gap-2 border-b border-navy-100">
+   409→                    <button
+   410→                      type="button"
+   411→                      onClick={() => setCatalogTab('garments')}
+   412→                      className={cn(
+   413→                        '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-wide transition',
+   414→                        catalogTab === 'garments'
+   415→                          ? 'border-gold-400 text-navy'
+   416→                          : 'border-transparent text-navy-300 hover:text-navy'
+   417→                      )}
+   418→                    >
+   419→                      Pick your garments
+   420→                    </button>
+   421→                    <button
+   422→                      type="button"
+   423→                      onClick={() => setCatalogTab('shoes')}
+   424→                      className={cn(
+   425→                        '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-wide transition',
+   426→                        catalogTab === 'shoes'
+   427→                          ? 'border-gold-400 bg-navy text-white'
+   428→                          : 'border-transparent bg-navy text-white hover:bg-[#1B3A5F]'
+   429→                      )}
+   430→                    >
+   431→                      Pick your shoes
+   432→                    </button>
+   433→                  </div>
+   434→                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
+   435→                    {GARMENT_CATALOG.filter(
+   436→                      (g) => (catalogTab === 'garments' ? g.category !== 'Shoes' : g.category === 'Shoes')
+   437→                    ).map((g) => {
+   438→                      const qty = items[g.id] ?? 0
+   439→                      return (
+   440→                        <div
+   441→                          key={g.id}
+   442→                          className={cn(
+   443→                            'flex items-center justify-between rounded-xl border p-3 transition',
+   444→                            qty > 0
+   445→                              ? 'border-gold-300 bg-gold-50/50 ring-1 ring-gold-200'
+   446→                              : 'border-navy-100 hover:border-gold-200'
+   447→                          )}
+   448→                        >
+   449→                          <div className="flex items-center gap-2">
+   450→                            <img
+   451→                              src={g.icon}
+   452→                              alt=""
+   453→                              className="h-7 w-7"
+   454→                            />
+   455→                            <div>
+   456→                              <p className="text-sm font-medium text-navy">{g.name}</p>
+   457→                              <p className="text-xs text-navy-300">
+   458→                                {formatNaira(settings.garmentPrices[g.id] ?? g.price)} each
+   459→                              </p>
+   460→                            </div>
+   461→                          </div>
+   462→                          <div className="flex items-center gap-1.5">
+   463→                            <button
+   464→                              onClick={() => setQty(g.id, -1)}
+   465→                              disabled={qty === 0}
+   466→                              className="flex h-9 w-9 items-center justify-center rounded-full border-2 border-navy-200 text-navy transition hover:bg-navy-100 disabled:opacity-30 disabled:cursor-not-allowed"
+   467→                              aria-label={`Remove one ${g.name}`}
+   468→                            >
+   469→                              <Minus className="h-4 w-4" />
+   470→                            </button>
+   471→                            <span className="w-8 text-center text-sm font-bold text-navy">{qty}</span>
+   472→                            <button
+   473→                              onClick={() => setQty(g.id, 1)}
+   474→                              className="flex h-9 w-9 items-center justify-center rounded-full bg-[#0A192F] text-white shadow-md transition hover:bg-[#1B3A5F] active:scale-95"
+   475→                              aria-label={`Add one ${g.name}`}
+   476→                            >
+   477→                              <Plus className="h-4 w-4" />
+   478→                            </button>
+   479→                          </div>
+   480→                        </div>
+   481→                      )
+   482→                    })}
+   483→                  </div>
+   484→
+   485→                  {selectedItems.length > 0 && (
+   486→                    <div className="mt-4 flex items-center justify-between rounded-xl bg-navy px-4 py-3 text-white">
+   487→                      <span className="text-sm">
+   488→                        {selectedItems.reduce((s, i) => s + i.quantity, 0)} item
+   489→                        {selectedItems.reduce((s, i) => s + i.quantity, 0) === 1 ? '' : 's'} selected
+   490→                      </span>
+   491→                      <span className="text-lg font-bold">{formatNaira(subtotal)}</span>
+   492→                    </div>
+   493→                  )}
+   494→                </div>
+   495→              )}
+   496→            </motion.div>
+   497→          )}
+   498→
+   499→          {/* ====================================================
+   500→              STEP 2 — CONDITION CAPTURE (RETAIL ONLY)
+   501→          ==================================================== */}
+   502→          {step === 2 && type === 'ITEM' && (
+   503→            <motion.div
+   504→              key="step2"
+   505→              initial={{ opacity: 0, x: 16 }}
+   506→              animate={{ opacity: 1, x: 0 }}
+   507→              exit={{ opacity: 0, x: -16 }}
+   508→              transition={{ duration: 0.2 }}
+   509→            >
+   510→              <div className="flex items-start gap-2">
+   511→                <Shield className="mt-1 h-5 w-5 text-gold-400" />
+   512→                <div>
+   513→                  <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">
+   514→                    Activate your Return-as-Received Guarantee
+   515→                  </h2>
+   516→                  <p className="mt-1 text-sm text-navy-300">
+   517→                    Upload photos of your items to activate our guarantee. If we damage anything in
+   518→                    our care, we&apos;ll cover it. Plus — you get a{' '}
+   519→                    <strong>{settings.guaranteeDiscountPercent}% discount</strong> on this order.
+   520→                  </p>
+   521→                </div>
+   522→              </div>
+   523→
+   524→              <Card className="mt-5 border-dashed border-gold-300">
+   525→                <CardContent className="p-5">
+   526→                  <input
+   527→                    ref={fileInputRef}
+   528→                    type="file"
+   529→                    accept="image/*"
+   530→                    capture="environment"
+   531→                    multiple
+   532→                    onChange={(e) => onPhotos(e.target.files)}
+   533→                    className="sr-only"
+   534→                  />
+   535→                  <div className="flex flex-wrap items-center gap-3">
+   536→                    <Button
+   537→                      type="button"
+   538→                      variant="outline"
+   539→                      onClick={() => fileInputRef.current?.click()}
+   540→                      className="border-gold-300 text-navy hover:bg-gold-50"
+   541→                    >
+   542→                      <Camera className="mr-2 h-4 w-4" />
+   543→                      Take or upload photos
+   544→                    </Button>
+   545→                    <span className="text-xs text-navy-300">
+   546→                      {photos.length}/6 photos · optional
+   547→                    </span>
+   548→                  </div>
+   549→
+   550→                  {photos.length > 0 && (
+   551→                    <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
+   552→                      {photos.map((p, i) => (
+   553→                        <div
+   554→                          key={i}
+   555→                          className="group relative aspect-square overflow-hidden rounded-lg ring-1 ring-gold-200"
+   556→                        >
+   557→                          <img
+   558→                            src={p.url}
+   559→                            alt={`Condition photo ${i + 1}`}
+   560→                            className="h-full w-full object-cover"
+   561→                          />
+   562→                          <button
+   563→                            onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+   564→                            className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition group-hover:opacity-100"
+   565→                          >
+   566→                            <X className="h-3 w-3" />
+   567→                          </button>
+   568→                        </div>
+   569→                      ))}
+   570→                    </div>
+   571→                  )}
+   572→
+   573→                  {photos.length > 0 && (
+   574→                    <label className="mt-4 flex items-start gap-2 rounded-lg bg-gold-50/60 p-3 text-sm">
+   575→                      <input
+   576→                        type="checkbox"
+   577→                        checked={guaranteeAck}
+   578→                        onChange={(e) => setGuaranteeAck(e.target.checked)}
+   579→                        className="mt-0.5 h-4 w-4 rounded accent-gold-400"
+   580→                      />
+   581→                      <span className="text-navy">
+   582→                        I confirm these photos document the condition of my items at pickup and I
+   583→                        agree to the Return-as-Received Guarantee terms. Claims must be made within
+   584→                        24 hours of delivery.
+   585→                      </span>
+   586→                    </label>
+   587→                  )}
+   588→
+   589→                  <div className="mt-4 rounded-lg bg-linen-200 p-3 text-xs text-navy-300">
+   590→                    <p className="flex items-center gap-1.5 font-medium text-navy">
+   591→                      <Info className="h-3.5 w-3.5" /> What the guarantee covers
+   592→                    </p>
+   593→                    <p className="mt-1">
+   594→                      Covers physical damage occurring in our care. Does not cover pre-existing
+   595→                      wear or inherent fabric degradation. The guarantee activates automatically
+   596→                      when photos are uploaded and the terms above are acknowledged.
+   597→                    </p>
+   598→                  </div>
+   599→                </CardContent>
+   600→              </Card>
+   601→
+   602→              {guaranteeActive && (
+   603→                <div className="mt-4 flex items-center gap-2 rounded-xl bg-gold-100 px-4 py-3 text-sm text-navy">
+   604→                  <CheckCircle2 className="h-5 w-5" />
+   605→                  <span>
+   606→                    <strong>Guarantee Activated.</strong> You saved{' '}
+   607→                    {formatNaira(discount)} ({settings.guaranteeDiscountPercent}% off).
+   608→                  </span>
+   609→                </div>
+   610→              )}
+   611→            </motion.div>
+   612→          )}
+   613→
+   614→          {/* ====================================================
+   615→              STEP 3 — LOGISTICS
+   616→          ==================================================== */}
+   617→          {step === 3 && (
+   618→            <motion.div
+   619→              key="step3"
+   620→              initial={{ opacity: 0, x: 16 }}
+   621→              animate={{ opacity: 1, x: 0 }}
+   622→              exit={{ opacity: 0, x: -16 }}
+   623→              transition={{ duration: 0.2 }}
+   624→            >
+   625→              <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">
+   626→                Pickup &amp; delivery
+   627→              </h2>
+   628→              <p className="mt-1 text-sm text-navy-300">
+   629→                Pick a date and time slot. We&apos;ll handle the rest.
+   630→              </p>
+   631→
+   632→              <div className="mt-6 grid gap-4">
+   633→                <div>
+   634→                  <Label htmlFor="pickup-date">Pickup date</Label>
+   635→                  <div className="mt-1 flex items-center gap-2">
+   636→                    <Input
+   637→                      id="pickup-date"
+   638→                      type="date"
+   639→                      value={pickupDate}
+   640→                      onChange={(e) => setPickupDate(e.target.value)}
+   641→                      min={new Date().toISOString().slice(0, 10)}
+   642→                    />
+   643→                    <Calendar className="h-5 w-5 shrink-0 text-navy-300" />
+   644→                  </div>
+   645→                </div>
+   646→                <div>
+   647→                  <Label className="text-navy">Pickup time slot</Label>
+   648→                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+   649→                    {TIME_SLOTS.map((slot) => (
+   650→                      <button
+   651→                        key={slot}
+   652→                        type="button"
+   653→                        onClick={() => setPickupSlot(slot)}
+   654→                        className={cn(
+   655→                          'rounded-lg border-2 px-3 py-2.5 text-xs font-medium transition cursor-pointer',
+   656→                          pickupSlot === slot
+   657→                            ? 'border-[#0A192F] bg-[#E8ECF2] text-[#0A192F]'
+   658→                            : 'border-[#E2E5E9] text-[#6F88A8] hover:border-[#D4AF37] hover:text-[#0A192F]'
+   659→                        )}
+   660→                      >
+   661→                        {slot}
+   662→                      </button>
+   663→                    ))}
+   664→                  </div>
+   665→                </div>
+   666→                <div>
+   667→                  <Label htmlFor="pickup-address">Pickup address</Label>
+   668→                  <Textarea
+   669→                    id="pickup-address"
+   670→                    value={pickupAddress}
+   671→                    onChange={(e) => setPickupAddress(e.target.value)}
+   672→                    placeholder="House number, street, area, nearest landmark"
+   673→                    className="mt-1"
+   674→                  />
+   675→                </div>
+   676→                <div>
+   677→                  <Label htmlFor="delivery-address">Delivery address (if different)</Label>
+   678→                  <Textarea
+   679→                    id="delivery-address"
+   680→                    value={deliveryAddress}
+   681→                    onChange={(e) => setDeliveryAddress(e.target.value)}
+   682→                    placeholder="Leave blank to deliver back to pickup address"
+   683→                    className="mt-1"
+   684→                  />
+   685→                </div>
+   686→              </div>
+   687→
+   688→              <div className="mt-4 flex items-start gap-2 rounded-lg bg-linen-200 p-3 text-xs text-navy-300">
+   689→                <Clock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-400" />
+   690→                <p>
+   691→                  Standard turnaround is 48 hours from pickup for retail orders. Corporate
+   692→                  bulk orders may take up to 72 hours depending on volume.
+   693→                </p>
+   694→              </div>
+   695→            </motion.div>
+   696→          )}
+   697→
+   698→          {/* ====================================================
+   699→              STEP 4 — CHECKOUT
+   700→          ==================================================== */}
+   701→          {step === 4 && (
+   702→            <motion.div
+   703→              key="step4"
+   704→              initial={{ opacity: 0, x: 16 }}
+   705→              animate={{ opacity: 1, x: 0 }}
+   706→              exit={{ opacity: 0, x: -16 }}
+   707→              transition={{ duration: 0.2 }}
+   708→            >
+   709→              <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">Checkout</h2>
+   710→              <p className="mt-1 text-sm text-navy-300">
+   711→                {type === 'ITEM'
+   712→                  ? 'Review your order and choose how to pay.'
+   713→                  : 'Confirm your pickup request. Final invoice will be sent after weighing.'}
+   714→              </p>
+   715→
+   716→              <Card className="mt-5">
+   717→                <CardContent className="p-5">
+   718→                  <div className="flex items-center justify-between border-b pb-3">
+   719→                    <span className="text-sm font-medium text-navy-300">Order summary</span>
+   720→                    <Badge variant="outline" className="rounded-full">
+   721→                      {type === 'ITEM' ? 'Per-item' : 'Per-kg (Corporate)'}
+   722→                    </Badge>
+   723→                  </div>
+   724→
+   725→                  {type === 'ITEM' && (
+   726→                    <ul className="mt-3 space-y-2 text-sm">
+   727→                      {selectedItems.map((i) => (
+   728→                        <li key={i.id} className="flex items-center justify-between">
+   729→                          <span className="text-navy-300">
+   730→                            {i.quantity}× {i.name}
+   731→                          </span>
+   732→                          <span className="font-medium">
+   733→                            {formatNaira(i.quantity * i.unitPrice)}
+   734→                          </span>
+   735→                        </li>
+   736→                      ))}
+   737→                      {guaranteeActive && (
+   738→                        <li className="flex items-center justify-between text-navy-300">
+   739→                          <span className="flex items-center gap-1">
+   740→                            <Shield className="h-3.5 w-3.5" />
+   741→                            Return-as-Received discount ({settings.guaranteeDiscountPercent}%)
+   742→                          </span>
+   743→                          <span>−{formatNaira(discount)}</span>
+   744→                        </li>
+   745→                      )}
+   746→                    </ul>
+   747→                  )}
+   748→
+   749→                  {type === 'KG' && (
+   750→                    <div className="mt-3 space-y-2 text-sm">
+   751→                      <p className="text-navy-300">
+   752→                        Bulk pickup requested. Final price depends on weight measured at our
+   753→                        station. Minimum charge: <strong>{formatNaira(settings.pricePerKg * settings.minimumKg)}</strong>{' '}
+   754→                        ({settings.minimumKg}kg @ {formatNaira(settings.pricePerKg)}/kg).
+   755→                      </p>
+   756→                      <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-amber-200">
+   757→                        <span>Total</span>
+   758→                        <span className="font-semibold">Pending weighing</span>
+   759→                      </div>
+   760→                    </div>
+   761→                  )}
+   762→
+   763→                  {type === 'ITEM' && (
+   764→                    <div className="mt-4 flex items-center justify-between border-t pt-3">
+   765→                      <span className="font-semibold">Total</span>
+   766→                      <span className="text-xl font-bold text-navy-300">
+   767→                        {formatNaira(total)}
+   768→                      </span>
+   769→                    </div>
+   770→                  )}
+   771→
+   772→                  {guaranteeActive && (
+   773→                    <div className="mt-3 flex items-center gap-2 rounded-lg bg-gold-50 px-3 py-2 text-xs text-navy-300 ring-1 ring-gold-200">
+   774→                      <Shield className="h-3.5 w-3.5" /> Guarantee Activated · {photos.length} photos
+   775→                      on file
+   776→                    </div>
+   777→                  )}
+   778→                </CardContent>
+   779→              </Card>
+   780→
+   781→              {type === 'ITEM' && (
+   782→                <div className="mt-5">
+   783→                  <p className="text-sm font-semibold">Choose payment method</p>
+   784→                  <RadioGroup
+   785→                    value={paymentMethod}
+   786→                    onValueChange={(v) => setPaymentMethod(v as 'BANK_TRANSFER' | 'PAYSTACK')}
+   787→                    className="mt-2 grid gap-3"
+   788→                  >
+   789→                    <label
+   790→                      className={cn(
+   791→                        'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
+   792→                        paymentMethod === 'BANK_TRANSFER'
+   793→                          ? 'border-gold-400 bg-gold-50/50'
+   794→                          : 'border-navy-100'
+   795→                      )}
+   796→                    >
+   797→                      <RadioGroupItem value="BANK_TRANSFER" className="sr-only" />
+   798→                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
+   799→                        <Building2 className="h-5 w-5" />
+   800→                      </div>
+   801→                      <div className="flex-1">
+   802→                        <p className="font-semibold text-navy">Bank Transfer (Manual)</p>
+   803→                        <p className="text-xs text-navy-300">
+   804→                          Transfer to our account, then upload your receipt. Admin verifies within
+   805→                          minutes.
+   806→                        </p>
+   807→                      </div>
+   808→                    </label>
+   809→                    <label
+   810→                      className={cn(
+   811→                        'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
+   812→                        paymentMethod === 'PAYSTACK'
+   813→                          ? 'border-gold-400 bg-gold-50/50'
+   814→                          : 'border-navy-100'
+   815→                      )}
+   816→                    >
+   817→                      <RadioGroupItem value="PAYSTACK" className="sr-only" />
+   818→                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
+   819→                        <CreditCard className="h-5 w-5" />
+   820→                      </div>
+   821→                      <div className="flex-1">
+   822→                        <p className="font-semibold text-navy">
+   823→                          Paystack Virtual Account
+   824→                        </p>
+   825→                        <p className="text-xs text-navy-300">
+   826→                          Get a dedicated virtual account. We auto-confirm payment via webhook.
+   827→                        </p>
+   828→                      </div>
+   829→                    </label>
+   830→                  </RadioGroup>
+   831→
+   832→                  {paymentMethod === 'BANK_TRANSFER' && (
+   833→                    <Card className="mt-4 border-gold-200 bg-gold-50/40">
+   834→                      <CardContent className="p-4">
+   835→                        <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
+   836→                          Transfer to
+   837→                        </p>
+   838→                        <div className="mt-2 space-y-1 text-sm">
+   839→                          <div className="flex items-center justify-between">
+   840→                            <span className="text-navy-300">Bank</span>
+   841→                            <span className="font-medium">{settings.bankName}</span>
+   842→                          </div>
+   843→                          <div className="flex items-center justify-between">
+   844→                            <span className="text-navy-300">Account Name</span>
+   845→                            <span className="font-medium">{settings.accountName}</span>
+   846→                          </div>
+   847→                          <div className="flex items-center justify-between">
+   848→                            <span className="text-navy-300">Account Number</span>
+   849→                            <span className="font-mono font-bold text-navy-300">
+   850→                              {settings.accountNumber}
+   851→                            </span>
+   852→                          </div>
+   853→                          <div className="flex items-center justify-between">
+   854→                            <span className="text-navy-300">Amount</span>
+   855→                            <span className="font-bold text-navy-300">{formatNaira(total)}</span>
+   856→                          </div>
+   857→                        </div>
+   858→                        <div className="mt-4 border-t pt-3">
+   859→                          <p className="text-xs text-navy-300">
+   860→                            Upload your transfer receipt:
+   861→                          </p>
+   862→                          <input
+   863→                            ref={receiptInputRef}
+   864→                            type="file"
+   865→                            accept="image/*"
+   866→                            onChange={(e) => onReceipt(e.target.files)}
+   867→                            className="sr-only"
+   868→                          />
+   869→                          <Button
+   870→                            type="button"
+   871→                            variant={receiptUploaded ? 'secondary' : 'outline'}
+   872→                            onClick={() => receiptInputRef.current?.click()}
+   873→                            className="mt-2 w-full"
+   874→                          >
+   875→                            {receiptUploaded ? (
+   876→                              <>
+   877→                                <CheckCircle2 className="mr-2 h-4 w-4 text-gold-400" /> Receipt
+   878→                                uploaded
+   879→                              </>
+   880→                            ) : (
+   881→                              <>
+   882→                                <Upload className="mr-2 h-4 w-4" /> Upload receipt
+   883→                              </>
+   884→                            )}
+   885→                          </Button>
+   886→                        </div>
+   887→                      </CardContent>
+   888→                    </Card>
+   889→                  )}
+   890→
+   891→                  {paymentMethod === 'PAYSTACK' && (
+   892→                    <Card className="mt-4 border-blue-200 bg-blue-50/40">
+   893→                      <CardContent className="p-4">
+   894→                        <p className="text-sm text-blue-900">
+   895→                          On confirm, we&apos;ll request a dedicated virtual account from Paystack
+   896→                          tied to this order. You&apos;ll receive the account details by SMS, and
+   897→                          once funds hit the account, we auto-confirm via webhook — no admin
+   898→                          review needed.
+   899→                        </p>
+   900→                        <div className="mt-2 text-xs text-blue-700">
+   901→                          Reference: <span className="font-mono">PSK_LG_{Date.now().toString().slice(-6)}</span>
+   902→                        </div>
+   903→                      </CardContent>
+   904→                    </Card>
+   905→                  )}
+   906→                </div>
+   907→              )}
+   908→            </motion.div>
+   909→          )}
+   910→        </AnimatePresence>
+   911→
+   912→        {/* Footer nav */}
+   913→        <div className="mt-8 flex items-center justify-between border-t pt-5">
+   914→          <Button variant="ghost" onClick={prev} disabled={step === 1}>
+   915→            <ArrowLeft className="mr-2 h-4 w-4" /> Back
+   916→          </Button>
+   917→          {step < 4 ? (
+   918→            <Button
+   919→              onClick={next}
+   920→              disabled={!canContinue()}
+   921→              className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
+   922→            >
+   923→              Continue <ArrowRight className="ml-2 h-4 w-4" />
+   924→            </Button>
+   925→          ) : (
+   926→            <Button
+   927→              onClick={handleConfirm}
+   928→              disabled={loading}
+   929→              className="rounded-full bg-gold-gradient px-6 hover:opacity-90 text-navy"
+   930→            >
+   931→              <Sparkles className="mr-2 h-4 w-4" />
+   932→              {loading ? 'Placing order...' : type === 'ITEM' ? `Pay & Confirm ${formatNaira(total)}` : 'Confirm pickup request'}
+   933→            </Button>
+   934→          )}
+   935→        </div>
+   936→      </div>
+   937→    </div>
+   938→  )
+   939→}
+   940→

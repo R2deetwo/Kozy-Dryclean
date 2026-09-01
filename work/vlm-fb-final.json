@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the evaluation:\n\n1.  **Headline Layout:** The gold headline **\"HOTELS & CORPORATE CLIENTS: 15% OFF\"** is on **ONE line**.\n2.  **Visibility:** The CTA button (\"Book at kozycare.ng\") and the footer contact lines (WhatsApp number, address, etc.) are **fully visible** and not clipped at the bottom edge.\n3.  **Spacing/Crowding:** The outlined box containing the offer does **not overlap** or crowd the elements below it; there is clear separation between it and the yellow CTA button.\n\n**Verdict: ACCEPTABLE**",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788013496,
+  "id": "202608292224546af09cf64ad14a72",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608292224546af09cf64ad14a72",
+  "usage": {
+    "completion_tokens": 139,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1094,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1233
+  }
+}

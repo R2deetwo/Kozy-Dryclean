@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "The image features two people: a smiling woman in a patterned dress holding a navy blue \"KOZY CARE\" shopping bag in the foreground, and a male doorman or security guard in a dark blue uniform with cap standing behind her. The setting appears to be the entrance of an upscale building or hotel, with visible elements including potted plants, wall sconces, and an open doorway revealing interior lighting.\n\n**Regarding the second person:** Yes, there is a second person visible - the male uniformed staff member (doorman/guard) standing behind the woman. However, there is **no courier or delivery rider** visible anywhere in the frame; only the woman and the uniformed male staff member are present.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788012781,
+  "id": "202608292212304fbc745f902d4ca5",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608292212304fbc745f902d4ca5",
+  "usage": {
+    "completion_tokens": 145,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1332,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1477
+  }
+}

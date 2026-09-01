@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) Yes. Screenshot 1 shows the 3-way selector with the options \"Review an order\", \"Make a complaint\", and \"Ask a question\". Below that, it displays the section \"Which order are you reviewing?\" which includes fields for the order number and email or phone number.\n\n(2) Screenshot 2 shows a **loading/processing state**. The form now contains the entered values: Order number **KZ-71167796** and Email/phone **phase17.e2e@example.com**. The button has changed to a yellow bar that says **\"Checking your order...\"** with a loading spinner icon. Additionally, an informational notice is visible below the button featuring a shield icon, stating: **\"One review per order. Your order number proves the review is real — if shown masked (e.g., KZ-****3846) next to your review, and nothing else about your order is ever published.\"** It does not yet show an error, a delivery notice, or the final star-rating form.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788022956,
+  "id": "20260830010234d36138c313a7406f",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830010234d36138c313a7406f",
+  "usage": {
+    "completion_tokens": 218,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1906,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2124
+  }
+}

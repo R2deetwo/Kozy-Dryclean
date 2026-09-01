@@ -1,0 +1,628 @@
+     1→'use client'
+     2→
+     3→// =============================================================================
+     4→// MeasurementsGuide — standalone interactive measurement tutorial (Phase 18,
+     5→// client directive).
+     6→// =============================================================================
+     7→// "There should be some kind of a mini tutorial... it should be cleverly,
+     8→// interactively done that sort of allows men and women to be able to measure
+     9→// themselves, or their children... and what exactly those measurements
+    10→// really mean... something that can just very easily educate users so that
+    11→// they can even be happy with: oh, look at this cool service that they're
+    12→// just even showing us all this information for free."
+    13→//
+    14→// Page anatomy:
+    15→//   hero → what you need → golden rules → profile tabs (men/women/children)
+    16→//   with interactive croquis diagram + measurement detail cards →
+    17→//   "the two everyone mixes up" glossary → save-your-measurements tool →
+    18→//   CTA back to booking.
+    19→// Saved measurements live in localStorage (private to this browser) and can
+    20→// be attached to the seamstress note at booking time.
+    21→// =============================================================================
+    22→
+    23→import { useEffect, useMemo, useState } from 'react'
+    24→import Link from 'next/link'
+    25→import { motion, AnimatePresence } from 'framer-motion'
+    26→import {
+    27→  ArrowLeft,
+    28→  ArrowRight,
+    29→  Ruler,
+    30→  Clock,
+    31→  Users,
+    32→  Camera,
+    33→  Save,
+    34→  Check,
+    35→  Trash2,
+    36→  Scissors,
+    37→  BookOpen,
+    38→  Info,
+    39→} from 'lucide-react'
+    40→import { Logo } from '@/components/shell/logo'
+    41→import { Button } from '@/components/ui/button'
+    42→import { Card, CardContent } from '@/components/ui/card'
+    43→import { cn } from '@/lib/utils'
+    44→import {
+    45→  MEASUREMENTS,
+    46→  CATEGORY_META,
+    47→  loadSavedMeasurements,
+    48→  saveMeasurementsToStorage,
+    49→  clearSavedMeasurements,
+    50→  hasValues,
+    51→  type MeasurementCategory,
+    52→  type SavedMeasurements,
+    53→} from '@/lib/measurements'
+    54→import { MeasurementFigure } from '@/components/customer/measurement-figure'
+    55→
+    56→type Unit = 'cm' | 'in'
+    57→
+    58→const PROFILES: { id: MeasurementCategory; label: string; hint: string }[] = [
+    59→  { id: 'men', label: 'For men', hint: 'Shirts, trousers, agbada & blazers' },
+    60→  { id: 'women', label: 'For women', hint: 'Dresses, blouses, skirts & iro & buba' },
+    61→  { id: 'children', label: 'For children', hint: 'Uniforms & growth hems' },
+    62→]
+    63→
+    64→export function MeasurementsGuide() {
+    65→  const [profile, setProfile] = useState<MeasurementCategory>('men')
+    66→  const [activeId, setActiveId] = useState<string | null>(MEASUREMENTS.men[0]?.id ?? null)
+    67→
+    68→  // ----- saved measurements state -----
+    69→  const [unit, setUnit] = useState<Unit>('cm')
+    70→  const [values, setValues] = useState<Record<string, string>>({})
+    71→  const [saved, setSaved] = useState<SavedMeasurements | null>(null)
+    72→  const [justSaved, setJustSaved] = useState(false)
+    73→
+    74→  // load stored profile on mount
+    75→  useEffect(() => {
+    76→    const m = loadSavedMeasurements()
+    77→    if (m) {
+    78→      setSaved(m)
+    79→      setProfile(m.profile)
+    80→      setUnit(m.unit)
+    81→      setValues(m.values ?? {})
+    82→      setActiveId(MEASUREMENTS[m.profile][0]?.id ?? null)
+    83→    }
+    84→  }, [])
+    85→
+    86→  const defs = MEASUREMENTS[profile]
+    87→  const activeDef = useMemo(
+    88→    () => defs.find((d) => d.id === activeId) ?? defs[0],
+    89→    [defs, activeId],
+    90→  )
+    91→
+    92→  const switchProfile = (p: MeasurementCategory) => {
+    93→    setProfile(p)
+    94→    setActiveId(MEASUREMENTS[p][0]?.id ?? null)
+    95→    // load values already stored for this profile (if the saved profile matches)
+    96→    if (saved && saved.profile === p) {
+    97→      setUnit(saved.unit)
+    98→      setValues(saved.values ?? {})
+    99→    } else {
+   100→      setValues({})
+   101→    }
+   102→    setJustSaved(false)
+   103→  }
+   104→
+   105→  const filledCount = defs.filter((d) => (values[d.id] ?? '').trim().length > 0).length
+   106→
+   107→  const doSave = () => {
+   108→    const m: SavedMeasurements = {
+   109→      profile,
+   110→      unit,
+   111→      values: { ...values },
+   112→      savedAt: new Date().toISOString(),
+   113→    }
+   114→    saveMeasurementsToStorage(m)
+   115→    setSaved(m)
+   116→    setJustSaved(true)
+   117→    window.setTimeout(() => setJustSaved(false), 2600)
+   118→  }
+   119→
+   120→  const doClear = () => {
+   121→    clearSavedMeasurements()
+   122→    setSaved(null)
+   123→    setValues({})
+   124→    setJustSaved(false)
+   125→  }
+   126→
+   127→  const savedDateLabel = useMemo(() => {
+   128→    if (!hasValues(saved)) return null
+   129→    const d = new Date(saved.savedAt)
+   130→    if (Number.isNaN(d.getTime())) return null
+   131→    return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+   132→  }, [saved])
+   133→
+   134→  return (
+   135→    <div className="min-h-screen bg-linen pb-20">
+   136→      <div className="mx-auto max-w-6xl px-4 py-10 sm:px-6 sm:py-14">
+   137→        {/* ---------------- header ---------------- */}
+   138→        <div className="flex flex-col items-center text-center">
+   139→          <Logo />
+   140→          <Link
+   141→            href="/#alterations"
+   142→            className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-navy-300 transition hover:text-navy"
+   143→          >
+   144→            <ArrowLeft className="h-4 w-4" /> Back to alterations
+   145→          </Link>
+   146→          <motion.div
+   147→            initial={{ opacity: 0, y: 12 }}
+   148→            animate={{ opacity: 1, y: 0 }}
+   149→            className="mt-8"
+   150→          >
+   151→            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   152→              Free guide — no order needed
+   153→            </p>
+   154→            <h1 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+   155→              How to take your measurements
+   156→            </h1>
+   157→            <p className="mx-auto mt-4 max-w-2xl leading-relaxed text-navy-300">
+   158→              Whether you are booking an alteration with us or simply want to know your own
+   159→              numbers, this guide shows you exactly where the tape goes and what each
+   160→              measurement means. Take ten minutes with a soft tape measure — the same guide
+   161→              works for men, women and children, and your numbers stay saved on this device
+   162→              so you never have to dig them out again.
+   163→            </p>
+   164→          </motion.div>
+   165→        </div>
+   166→
+   167→        {/* ---------------- what you need ---------------- */}
+   168→        <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+   169→          {[
+   170→            {
+   171→              icon: Ruler,
+   172→              title: 'A soft tape measure',
+   173→              text: 'Tailor\u2019s tape, sold in any market or haberdashery for a few hundred naira. A piece of string plus a ruler works too.',
+   174→            },
+   175→            {
+   176→              icon: Clock,
+   177→              title: 'Ten quiet minutes',
+   178→              text: 'Measure when you are relaxed and at normal temperature — not straight after the gym or a heavy meal.',
+   179→            },
+   180→            {
+   181→              icon: Users,
+   182→              title: 'A helper (optional)',
+   183→              text: 'Shoulder and sleeve measurements are far easier with a second pair of hands, but every number here can be taken alone.',
+   184→            },
+   185→            {
+   186→              icon: Camera,
+   187→              title: 'A mirror or phone camera',
+   188→              text: 'The tape must stay level all the way round. A mirror — or a photo taken over your shoulder — catches tilts you cannot feel.',
+   189→            },
+   190→          ].map((c) => (
+   191→            <Card key={c.title} className="border-navy-100 shadow-none">
+   192→              <CardContent className="p-5">
+   193→                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-navy-50">
+   194→                  <c.icon className="h-4.5 w-4.5 text-navy-400" />
+   195→                </div>
+   196→                <p className="mt-3 text-sm font-semibold text-navy">{c.title}</p>
+   197→                <p className="mt-1.5 text-[13px] leading-relaxed text-navy-300">{c.text}</p>
+   198→              </CardContent>
+   199→            </Card>
+   200→          ))}
+   201→        </div>
+   202→
+   203→        {/* ---------------- golden rules ---------------- */}
+   204→        <Card className="mt-4 border-gold-200 bg-gold-50 shadow-none">
+   205→          <CardContent className="p-5 sm:p-6">
+   206→            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-600">
+   207→              Five golden rules
+   208→            </p>
+   209→            <ul className="mt-3 grid gap-2.5 text-sm leading-relaxed text-navy-300 sm:grid-cols-2">
+   210→              <li className="flex gap-2.5">
+   211→                <span className="mt-0.5 shrink-0 font-serif font-bold text-gold-600">1.</span>
+   212→                Measure over light clothing — a shirt, not a thick jacket or agbada.
+   213→              </li>
+   214→              <li className="flex gap-2.5">
+   215→                <span className="mt-0.5 shrink-0 font-serif font-bold text-gold-600">2.</span>
+   216→                Stand relaxed, feet together, breathing normally. Never hold your breath.
+   217→              </li>
+   218→              <li className="flex gap-2.5">
+   219→                <span className="mt-0.5 shrink-0 font-serif font-bold text-gold-600">3.</span>
+   220→                The tape is snug, not tight — exactly one finger should slide under it.
+   221→              </li>
+   222→              <li className="flex gap-2.5">
+   223→                <span className="mt-0.5 shrink-0 font-serif font-bold text-gold-600">4.</span>
+   224→                Keep the tape level all the way round — check the mirror, not your instinct.
+   225→              </li>
+   226→              <li className="flex gap-2.5 sm:col-span-2">
+   227→                <span className="mt-0.5 shrink-0 font-serif font-bold text-gold-600">5.</span>
+   228→                Round to the nearest centimetre (or half inch), and write each number down the
+   229→                moment you read it. If a measurement matters for an alteration, measure twice.
+   230→              </li>
+   231→            </ul>
+   232→          </CardContent>
+   233→        </Card>
+   234→
+   235→        {/* ---------------- profile tabs ---------------- */}
+   236→        <div className="mt-12 flex justify-center">
+   237→          <div className="inline-flex flex-wrap justify-center gap-1.5 rounded-full border border-navy-100 bg-white p-1.5 shadow-sm">
+   238→            {PROFILES.map((p) => (
+   239→              <button
+   240→                key={p.id}
+   241→                onClick={() => switchProfile(p.id)}
+   242→                className={cn(
+   243→                  'rounded-full px-4 py-2 text-sm font-semibold transition',
+   244→                  profile === p.id
+   245→                    ? 'bg-navy text-white shadow-sm'
+   246→                    : 'text-navy-300 hover:bg-navy-50 hover:text-navy',
+   247→                )}
+   248→              >
+   249→                {p.label}
+   250→              </button>
+   251→            ))}
+   252→          </div>
+   253→        </div>
+   254→        <p className="mt-3 text-center text-sm text-navy-300">{CATEGORY_META[profile].blurb}</p>
+   255→
+   256→        {/* ---------------- figure + measurement list ---------------- */}
+   257→        <div className="mt-8 grid gap-6 lg:grid-cols-[380px_1fr]">
+   258→          {/* sticky interactive diagram */}
+   259→          <div className="lg:sticky lg:top-6 lg:self-start">
+   260→            <Card className="border-navy-100 shadow-navy">
+   261→              <CardContent className="p-4 sm:p-6">
+   262→                <div className="flex items-center justify-between">
+   263→                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-600">
+   264→                    Interactive diagram
+   265→                  </p>
+   266→                  <p className="text-[11px] text-navy-300">Tap a line or a card</p>
+   267→                </div>
+   268→                <div className="mt-2 h-[460px] sm:h-[520px]">
+   269→                  <AnimatePresence mode="wait">
+   270→                    <motion.div
+   271→                      key={profile}
+   272→                      initial={{ opacity: 0, scale: 0.97 }}
+   273→                      animate={{ opacity: 1, scale: 1 }}
+   274→                      exit={{ opacity: 0, scale: 0.97 }}
+   275→                      transition={{ duration: 0.25 }}
+   276→                      className="h-full"
+   277→                    >
+   278→                      <MeasurementFigure
+   279→                        profile={profile}
+   280→                        activeId={activeDef?.id ?? null}
+   281→                        onSelect={(id) => setActiveId(id)}
+   282→                      />
+   283→                    </motion.div>
+   284→                  </AnimatePresence>
+   285→                </div>
+   286→                <p className="mt-2 text-center text-[11px] leading-snug text-navy-300">
+   287→                  {activeDef
+   288→                    ? `The gold line shows where the tape sits for your ${activeDef.label.toLowerCase()} measurement.`
+   289→                    : 'Select a measurement to see where the tape goes.'}
+   290→                </p>
+   291→              </CardContent>
+   292→            </Card>
+   293→          </div>
+   294→
+   295→          {/* measurement detail cards */}
+   296→          <div>
+   297→            {/* quick selector chips */}
+   298→            <div className="flex flex-wrap gap-1.5">
+   299→              {defs.map((d) => (
+   300→                <button
+   301→                  key={d.id}
+   302→                  onMouseEnter={() => setActiveId(d.id)}
+   303→                  onFocus={() => setActiveId(d.id)}
+   304→                  onClick={() => setActiveId(d.id)}
+   305→                  className={cn(
+   306→                    'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+   307→                    activeDef?.id === d.id
+   308→                      ? 'border-gold-400 bg-gold-400/15 text-navy'
+   309→                      : 'border-navy-100 bg-white text-navy-300 hover:border-gold-300 hover:text-navy',
+   310→                  )}
+   311→                >
+   312→                  {d.label}
+   313→                </button>
+   314→              ))}
+   315→            </div>
+   316→
+   317→            {/* active measurement detail */}
+   318→            <AnimatePresence mode="wait">
+   319→              <motion.div
+   320→                key={`${profile}-${activeDef?.id}`}
+   321→                initial={{ opacity: 0, y: 10 }}
+   322→                animate={{ opacity: 1, y: 0 }}
+   323→                exit={{ opacity: 0, y: -8 }}
+   324→                transition={{ duration: 0.22 }}
+   325→              >
+   326→                {activeDef && (
+   327→                  <Card className="mt-4 border-navy-100 shadow-navy">
+   328→                    <CardContent className="p-6 sm:p-8">
+   329→                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+   330→                        <h2 className="font-serif text-2xl font-semibold text-navy">
+   331→                          {activeDef.label}
+   332→                        </h2>
+   333→                        <span className="rounded-full bg-navy-50 px-2.5 py-1 text-[11px] font-semibold text-navy-300">
+   334→                          {PROFILE_POS(profile)} measurement
+   335→                        </span>
+   336→                      </div>
+   337→                      <p className="mt-2 text-[15px] font-medium leading-relaxed text-navy">
+   338→                        {activeDef.tagline}
+   339→                      </p>
+   340→
+   341→                      <div className="mt-5 grid gap-5 sm:grid-cols-2">
+   342→                        <div>
+   343→                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-600">
+   344→                            How to measure
+   345→                          </p>
+   346→                          <ol className="mt-2.5 space-y-2.5">
+   347→                            {activeDef.howTo.map((step, i) => (
+   348→                              <li key={i} className="flex gap-3 text-sm leading-relaxed text-navy-300">
+   349→                                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-navy text-[10px] font-bold text-white">
+   350→                                  {i + 1}
+   351→                                </span>
+   352→                                {step}
+   353→                              </li>
+   354→                            ))}
+   355→                          </ol>
+   356→                        </div>
+   357→                        <div className="space-y-4">
+   358→                          <div className="rounded-xl bg-navy p-4">
+   359→                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-300">
+   360→                              What the seamstress uses it for
+   361→                            </p>
+   362→                            <p className="mt-2 text-sm leading-relaxed text-white/85">
+   363→                              {activeDef.why}
+   364→                            </p>
+   365→                          </div>
+   366→                          {activeDef.mistake && (
+   367→                            <div className="rounded-xl border border-gold-200 bg-gold-50 p-4">
+   368→                              <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-600">
+   369→                                <Info className="h-3.5 w-3.5" /> The classic mistake
+   370→                              </p>
+   371→                              <p className="mt-2 text-sm leading-relaxed text-navy-300">
+   372→                                {activeDef.mistake}
+   373→                              </p>
+   374→                            </div>
+   375→                          )}
+   376→                        </div>
+   377→                      </div>
+   378→                    </CardContent>
+   379→                  </Card>
+   380→                )}
+   381→              </motion.div>
+   382→            </AnimatePresence>
+   383→
+   384→            {/* all measurements at a glance */}
+   385→            <Card className="mt-4 border-navy-100 bg-white/60 shadow-none">
+   386→              <CardContent className="p-5 sm:p-6">
+   387→                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
+   388→                  All {CATEGORY_META[profile].label.toLowerCase()} measurements
+   389→                </p>
+   390→                <ul className="mt-3 divide-y divide-navy-50">
+   391→                  {defs.map((d) => (
+   392→                    <li key={d.id}>
+   393→                      <button
+   394→                        onClick={() => setActiveId(d.id)}
+   395→                        className="group flex w-full items-center justify-between gap-4 py-2.5 text-left"
+   396→                      >
+   397→                        <span className="flex items-center gap-3">
+   398→                          <span
+   399→                            className={cn(
+   400→                              'h-1.5 w-1.5 rounded-full transition',
+   401→                              activeDef?.id === d.id ? 'bg-gold-400' : 'bg-navy-100 group-hover:bg-gold-300',
+   402→                            )}
+   403→                          />
+   404→                          <span className="text-sm font-semibold text-navy">{d.label}</span>
+   405→                        </span>
+   406→                        <span className="hidden max-w-[60%] truncate text-[13px] text-navy-300 sm:block">
+   407→                          {d.tagline}
+   408→                        </span>
+   409→                      </button>
+   410→                    </li>
+   411→                  ))}
+   412→                </ul>
+   413→              </CardContent>
+   414→            </Card>
+   415→          </div>
+   416→        </div>
+   417→
+   418→        {/* ---------------- glossary ---------------- */}
+   419→        <div className="mt-14">
+   420→          <div className="text-center">
+   421→            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   422→              The measurements everyone mixes up
+   423→            </p>
+   424→            <h2 className="mt-2 font-serif text-2xl font-semibold tracking-tight text-navy sm:text-3xl">
+   425→              Waist is not hips. Bust is not band.
+   426→            </h2>
+   427→            <p className="mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-navy-300">
+   428→              Half of all alteration confusion comes from three pairs of numbers that sound
+   429→              similar but sit in different places. Here they are, settled once and for all —
+   430→              and if you only memorise one, make it the first.
+   431→            </p>
+   432→          </div>
+   433→          <div className="mt-6 grid gap-4 md:grid-cols-3">
+   434→            {[
+   435→              {
+   436→                title: 'Natural waist vs hips',
+   437→                body:
+   438→                  'Your natural waist is the narrowest part of your torso — bend sideways and the crease that appears is it, usually just above the navel. Your hips are the fullest part lower down, roughly 20\u2009cm below the waist. Low-rise jeans sit at neither. When we say \u201Cwaist taken in\u201D, we always mean the natural waist.',
+   439→              },
+   440→              {
+   441→                title: 'Bust vs underbust (band)',
+   442→                body:
+   443→                  'The bust is around the fullest part of the chest. The underbust — where a bra band sits — is 5\u201310\u2009cm smaller and snugger. Garment sizing uses the bust; bra sizing uses both. Giving us the bust alone is fine for dresses and kaftans.',
+   444→              },
+   445→              {
+   446→                title: 'Inseam vs outside leg',
+   447→                body:
+   448→                  'The inseam runs from the crotch down the inside of the leg to the hem — it is the number trouser hemming needs. The outside leg runs from the waist over the hip down to the same hem, and it is always longer. If you measure a good trouser flat along its inner seam, you get the inseam directly.',
+   449→              },
+   450→            ].map((g) => (
+   451→              <Card key={g.title} className="border-navy-100 shadow-none">
+   452→                <CardContent className="p-6">
+   453→                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold-50">
+   454→                    <BookOpen className="h-4.5 w-4.5 text-gold-600" />
+   455→                  </div>
+   456→                  <p className="mt-3 font-serif text-lg font-semibold text-navy">{g.title}</p>
+   457→                  <p className="mt-2 text-sm leading-relaxed text-navy-300">{g.body}</p>
+   458→                </CardContent>
+   459→              </Card>
+   460→            ))}
+   461→          </div>
+   462→        </div>
+   463→
+   464→        {/* ---------------- save your measurements ---------------- */}
+   465→        <Card className="mt-14 border-navy-100 shadow-navy">
+   466→          <CardContent className="p-6 sm:p-10">
+   467→            <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
+   468→              <div>
+   469→                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+   470→                  Save your numbers
+   471→                </p>
+   472→                <h2 className="mt-2 font-serif text-2xl font-semibold tracking-tight text-navy sm:text-3xl">
+   473→                  Measure once, reuse every time.
+   474→                </h2>
+   475→                <p className="mt-3 max-w-xl text-sm leading-relaxed text-navy-300">
+   476→                  Fill in your numbers and save them here. They stay on this device — private
+   477→                  to your browser, no account needed, never uploaded anywhere. The next time
+   478→                  you book an alteration, tap <span className="font-semibold text-navy">&ldquo;Attach my saved measurements&rdquo;</span> in
+   479→                  the booking form and the seamstress gets your full set with the order, so
+   480→                  you never type the same numbers twice.
+   481→                </p>
+   482→
+   483→                {/* unit toggle */}
+   484→                <div className="mt-6 flex items-center gap-3">
+   485→                  <span className="text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
+   486→                    Units
+   487→                  </span>
+   488→                  <div className="inline-flex rounded-full border border-navy-100 bg-white p-1">
+   489→                    {(['cm', 'in'] as Unit[]).map((u) => (
+   490→                      <button
+   491→                        key={u}
+   492→                        onClick={() => setUnit(u)}
+   493→                        className={cn(
+   494→                          'rounded-full px-3.5 py-1 text-xs font-semibold transition',
+   495→                          unit === u ? 'bg-navy text-white' : 'text-navy-300 hover:text-navy',
+   496→                        )}
+   497→                      >
+   498→                        {u === 'cm' ? 'Centimetres' : 'Inches'}
+   499→                      </button>
+   500→                    ))}
+   501→                  </div>
+   502→                  {filledCount > 0 && (
+   503→                    <span className="text-xs text-navy-300">
+   504→                      {filledCount} of {defs.length} filled
+   505→                    </span>
+   506→                  )}
+   507→                </div>
+   508→
+   509→                {/* inputs */}
+   510→                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+   511→                  {defs.map((d) => (
+   512→                    <label key={d.id} className="block">
+   513→                      <span className="text-xs font-semibold text-navy">{d.label}</span>
+   514→                      <span className="mt-1 flex items-center overflow-hidden rounded-xl border border-navy-200 bg-white focus-within:border-gold-300 focus-within:ring-2 focus-within:ring-gold-200">
+   515→                        <input
+   516→                          value={values[d.id] ?? ''}
+   517→                          onChange={(e) =>
+   518→                            setValues((prev) => ({ ...prev, [d.id]: e.target.value }))
+   519→                          }
+   520→                          inputMode="decimal"
+   521→                          placeholder="—"
+   522→                          className="w-full px-3 py-2.5 text-sm text-navy placeholder:text-navy-200 focus:outline-none"
+   523→                        />
+   524→                        <span className="pr-3 text-xs font-semibold text-navy-300">{unit}</span>
+   525→                      </span>
+   526→                    </label>
+   527→                  ))}
+   528→                </div>
+   529→
+   530→                <div className="mt-5 flex flex-wrap items-center gap-3">
+   531→                  <Button
+   532→                    onClick={doSave}
+   533→                    disabled={filledCount === 0}
+   534→                    className="rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+   535→                  >
+   536→                    {justSaved ? (
+   537→                      <>
+   538→                        <Check className="h-4 w-4" /> Saved on this device
+   539→                      </>
+   540→                    ) : (
+   541→                      <>
+   542→                        <Save className="h-4 w-4" /> Save my measurements
+   543→                      </>
+   544→                    )}
+   545→                  </Button>
+   546→                  {hasValues(saved) && (
+   547→                    <Button
+   548→                      onClick={doClear}
+   549→                      variant="outline"
+   550→                      className="rounded-full border-navy-200 text-navy-300 hover:border-red-200 hover:text-red-500 hover:bg-white"
+   551→                    >
+   552→                      <Trash2 className="h-4 w-4" /> Clear
+   553→                    </Button>
+   554→                  )}
+   555→                </div>
+   556→              </div>
+   557→
+   558→              {/* status panel */}
+   559→              <div className="flex flex-col justify-center rounded-2xl bg-navy p-6 sm:p-8">
+   560→                <Scissors className="h-6 w-6 text-gold-300" />
+   561→                <p className="mt-4 font-serif text-xl font-semibold text-white">
+   562→                  {hasValues(saved)
+   563→                    ? `Saved: ${CATEGORY_META[saved.profile].label.toLowerCase()}`
+   564→                    : 'Nothing saved yet'}
+   565→                </p>
+   566→                <p className="mt-2 text-sm leading-relaxed text-white/70">
+   567→                  {hasValues(saved)
+   568→                    ? `Updated ${savedDateLabel ?? 'recently'} · ${
+   569→                        Object.values(saved.values).filter((v) => v && v.trim()).length
+   570→                      } measurements stored on this device. They will be offered automatically next time you book an alteration.`
+   571→                    : 'Save your numbers and they will be offered automatically next time you book an alteration — the seamstress gets them with your order.'}
+   572→                </p>
+   573→                <ul className="mt-5 space-y-2 text-[13px] text-white/70">
+   574→                  <li className="flex gap-2">
+   575→                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-gold-300" />
+   576→                    Private to this browser — nothing is uploaded
+   577→                  </li>
+   578→                  <li className="flex gap-2">
+   579→                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-gold-300" />
+   580→                    Edit and re-save any time your numbers change
+   581→                  </li>
+   582→                  <li className="flex gap-2">
+   583→                    <Check className="mt-0.5 h-4 w-4 shrink-0 text-gold-300" />
+   584→                    The seamstress still calls to confirm before quoting
+   585→                  </li>
+   586→                </ul>
+   587→              </div>
+   588→            </div>
+   589→          </CardContent>
+   590→        </Card>
+   591→
+   592→        {/* ---------------- CTA ---------------- */}
+   593→        <div className="mt-12 rounded-2xl bg-navy px-6 py-10 text-center sm:px-10">
+   594→          <h2 className="font-serif text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+   595→            Numbers ready? Put them to work.
+   596→          </h2>
+   597→          <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-white/70">
+   598→            Book a pickup, add an alteration, and describe what needs changing — your saved
+   599→            measurements ride along with the order. The seamstress assesses every piece,
+   600→            calls to confirm, and quotes before a single stitch is sewn.
+   601→          </p>
+   602→          <div className="mt-6 flex flex-wrap justify-center gap-3">
+   603→            <Link href="/book">
+   604→              <Button className="rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90">
+   605→                Book pickup with alterations <ArrowRight className="ml-1 h-4 w-4" />
+   606→              </Button>
+   607→            </Link>
+   608→            <Link href="/#alterations">
+   609→              <Button
+   610→                variant="outline"
+   611→                className="rounded-full border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"
+   612→              >
+   613→                Back to alterations
+   614→              </Button>
+   615→            </Link>
+   616→          </div>
+   617→        </div>
+   618→      </div>
+   619→    </div>
+   620→  )
+   621→}
+   622→
+   623→function PROFILE_POS(profile: MeasurementCategory): string {
+   624→  if (profile === 'men') return 'Men\u2019s'
+   625→  if (profile === 'women') return 'Women\u2019s'
+   626→  return 'Children\u2019s'
+   627→}
+   628→

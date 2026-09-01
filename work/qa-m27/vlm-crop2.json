@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the exact description of the diagram:\n\n*   **View:** It is a **back view**. The diagram shows a woman's head and shoulders from behind (no face or chest is visible).\n*   **Gold Elements:** There is a horizontal **gold line** representing a measuring tape, and it has **two gold dots** at its ends, which are positioned exactly at the shoulder points.\n*   **Other Details:** There is a vertical **dashed line** running down the center of the back, representing the spine.\n*   **Quality:** The diagram is **not clipped or malformed**; it appears complete within its container. There is also an annotation chip at the bottom that reads \"Bony ledge to bony ledge\".",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788187370,
+  "id": "202608312242481c51dcbfac784bf5",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608312242481c51dcbfac784bf5",
+  "usage": {
+    "completion_tokens": 157,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 401,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 558
+  }
+}

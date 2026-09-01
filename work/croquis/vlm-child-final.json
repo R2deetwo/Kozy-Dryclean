@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**QA Score: 3/10 | Verdict: FIX**\n\nHere is the detailed breakdown of the issues found in the current draft:\n\n**(1) Age Readability: FAIL**\n*   **The figure reads as a Teen or Small Adult, not a Young Child (4-9).** \n*   **Head-to-Body Ratio:** The head is roughly 1/7th or 1/8th of the total height. For the target age group (4-9), you need a **~5.5-head canon**. The head needs to be significantly larger and rounder.\n*   **Limb Proportions:** The legs and arms are far too long and slender. A child’s limbs should be \"chunky\" and short, ending well above where an adult's would.\n*   **Shoulders:** The shoulders are too broad and square. A child’s shoulders should be narrow, often appearing **narrower than the width of the large round head**.\n\n**(2) Proportions: UNBELIEVABLE for Target Demo**\n*   **Missing \"Toddler Belly\":** The torso is straight/flat. A key characteristic of this age range is a **round, protruding belly** (the \"potbelly\" look).\n*   **Leg Shape:** The legs are drawn with defined calves and ankles like an adult. They need to be thicker, more cylindrical/tapered (\"chunky\"), without such pronounced adult-like musculature.\n*   **Neck:** The neck is too long and visible. Children of this age often have almost no visible neck due to the proportions of their head and torso.\n\n**(3) Technical & Label Issues: MODERATE**\n*   **Broken/Lumpy Outlines:** The line art is somewhat shaky. Specifically, the curve of the head is slightly lumpy/asymmetrical, and the shoulder-to-arm transition on the viewer's left looks a bit disjointed.\n*   **Label Collisions/Placement:**\n    *   **\"Sleeve\":** This label is floating awkwardly in empty space to the left of the arm. It should ideally have a leader line pointing to the arm or be placed closer to the limb it measures.\n    *   **\"Inseam\":** Placed correctly vertically but lacks a clear indicator (like a bracket or horizontal dashed lines) showing exactly where the measurement starts and ends on the leg.\n    *   **\"Chest/Waist/Hips\":** These are placed clearly but lack the horizontal measurement lines (arcs or brackets) typically seen in professional croquis to define the width.\n\n**Recommendation for Redraw:**\n1.  **Scale up the head** by ~30-40% and make it perfectly round.\n2.  **Shorten the limbs** significantly and thicken the stroke/outline to make them look \"chubby.\"\n3.  **Add a belly curve** that protrudes outward past the chest line.\n4.  **Narrow the shoulders** so they are clearly narrower than the new, larger head.\n5.  **Clean up the linework** for smoother curves and add proper measurement indicators (lines/arrows) for all labels.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788180833,
+  "id": "2026083120534246a870d4fa1a41db",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026083120534246a870d4fa1a41db",
+  "usage": {
+    "completion_tokens": 657,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 389,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1046
+  }
+}

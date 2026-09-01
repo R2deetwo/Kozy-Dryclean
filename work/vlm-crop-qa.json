@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the quality check:\n\n1.  **Content Verification:** **Yes.** The image clearly shows a woman smiling, framed by a gold arch. She is holding a navy blue garment bag (on a wooden hanger) with the text \"**KOZY CARE**\" printed in large, legible gold letters.\n2.  **Crop Cleanliness:** **Yes.** The crop is very clean.\n    *   Her head (face and hair) is fully visible.\n    *   Both hands are visible (one on the left edge, one on the right bottom).\n    *   The garment bag is fully contained within the frame.\n3.  **Arch Frame Integrity:** **Intact.** The gold arch frame is complete; it curves perfectly at the top and runs down both sides without being cut off at the edges.\n4.  **Score for Premium Flyer Use: 9/10**\n    *   **Pros:** The lighting is professional, the colors (Navy/Gold) convey a premium/luxury feel suitable for high-end garment care, the model's expression is welcoming, and the branding text is crisp and centered.\n    *   **Minor Deduction:** While excellent, the bottom of the dress/garment bag hits the very bottom edge of the frame. Depending on the flyer design layout (e.g., if you need padding for text below), this might be slightly tight, but visually it works well as a standalone graphic.\n\n**Verdict:** This is a high-quality asset ready for premium marketing materials.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788010096,
+  "id": "2026082921281100fced42bfcb4961",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082921281100fced42bfcb4961",
+  "usage": {
+    "completion_tokens": 319,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 891,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1210
+  }
+}

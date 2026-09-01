@@ -1,0 +1,54 @@
+🚀 Initializing Z-AI SDK...
+🔎 Searching images: "men suit measurement guide diagram numbered points on fashion croquis"
+✅ Got 6 images
+{
+  "success": true,
+  "query": "men suit measurement guide diagram numbered points on fashion croquis",
+  "count": 6,
+  "ranked": false,
+  "captioned_count": 0,
+  "results": [
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/4c82096437e2.jpg",
+      "caption": "",
+      "source": "Addicted Bespoken",
+      "original_width": "2700px",
+      "original_height": "1405px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/1cab517bcc40.png",
+      "caption": "",
+      "source": "Kustom Kit",
+      "original_width": "1235px",
+      "original_height": "846px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/d149fb4dddde.jpg",
+      "caption": "",
+      "source": "Scribd",
+      "original_width": "768px",
+      "original_height": "1024px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/69524be9c4db.jpg",
+      "caption": "",
+      "source": "VecFashion",
+      "original_width": "1600px",
+      "original_height": "1000px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/b50d0d020b2d.jpg",
+      "caption": "",
+      "source": "Boutique Ernest",
+      "original_width": "2400px",
+      "original_height": "3254px"
+    },
+    {
+      "original_url": "https://z-cdn.chatglm.cn/image-search-mcp/images-ppt/b35eef47662b.jpg",
+      "caption": "",
+      "source": "UnibuyPlus",
+      "original_width": "1440px",
+      "original_height": "1145px"
+    }
+  ]
+}

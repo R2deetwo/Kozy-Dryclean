@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here is the QA review for each image:\n\n**Image 1: Women's Bust Card**\n*   **(1) Diagram:** Correct and clear. The zoomed view shows the tape level at the back, matching the \"Bust\" label.\n*   **(2) Chips:** Readable. The \"tape level at the back\" (gold) and \"Fullest part of the bust\" (dark blue) chips are fully visible with no overlap or clipping.\n*   **(3) Visual Bugs:** None found.\n\n**Image 2: Women's Waist Card**\n*   **(1) Diagram:** Correct and clear. The gold waist tape is positioned correctly on the torso, and the faded grey line for the hips is visible lower down to show the distinction.\n*   **(2) Chips:** Readable. \"The crease is your waist\" (dark blue), \"bend sideways to find it\" (gold), and \"Hips — not here\" (grey) are all legible and properly spaced.\n*   **(3) Visual Bugs:** None found.\n\n**Image 3: Women's Hips Card**\n*   **(1) Diagram:** Correct and clear. The zoomed view highlights the hip area accurately below the waist.\n*   **(2) Chips:** Readable. \"+ 20 cm below the waist\" (gold) and \"Fullest part, feet together\" (dark blue) are clear and unclipped.\n*   **(3) Visual Bugs:** None found.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788187321,
+  "id": "2026083122415511e0cac7e4824cc2",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026083122415511e0cac7e4824cc2",
+  "usage": {
+    "completion_tokens": 316,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5100,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 5416
+  }
+}

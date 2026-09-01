@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) **Yes**, there is an **'ALTERATIONS & REPAIRS — QUOTED'** group containing an **'Alteration / Repair (per garment)'** item, and the quantity is set to **1**.\n\n(2) **Yes**, there is a **'TELL THE SEAMSTRESS WHAT YOU NEED *'** panel. It includes quick-add chips (e.g., '+ Waist taken in', '+ Trouser hem', '+ Sleeves shortened') and the beginning of a textarea below them.\n\n(3) **Yes**, the item card displays **'By quote — after assessment'** in gold text instead of a specific price.\n\n(4) **Layout observations**: The layout appears clean and well-structured with clear visual hierarchy (gold headers, card-based grouping). The 'Alteration / Repair' card has a subtle yellow/gold background to distinguish it as a selected/active item. The spacing between sections is consistent, and the form elements (quantity selectors, mode of wash options) are aligned properly. No obvious broken layouts or overlapping elements are visible in this view.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788023000,
+  "id": "202608300103161bed98fa75cb4f55",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608300103161bed98fa75cb4f55",
+  "usage": {
+    "completion_tokens": 226,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 998,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1224
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1 (Inseam)**\n1. **Close-up:** Renders correctly. The vertical gold tape from the crotch to the ankle is clear, and the \"inner thigh\" label is legible.\n2. **Chips:** All chips are readable with no overlap or clipping. The active \"Inseam\" chip is clearly highlighted.\n3. **Visual Bugs:** None found. The full-body diagram on the left correctly highlights the inseam measurement, and all labels are properly positioned.\n\n**Image 2 (Underbust)**\n1. **Close-up:** Renders correctly. The distinction between the faded grey \"bust\" reference line and the gold \"underbust\" measurement line is clear.\n2. **Chips:** All chips are readable. The two rows of chips are well-spaced without any overlapping or clipping.\n3. **Visual Bugs:** None found. The full-body diagram accurately reflects the selection, and the tooltip/label (\"5-10 cm below the bust\" / \"Where a bra band sits\") in the close-up is properly rendered.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788187295,
+  "id": "20260831224131ae612c4b78c04f5f",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260831224131ae612c4b78c04f5f",
+  "usage": {
+    "completion_tokens": 221,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3458,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3679
+  }
+}

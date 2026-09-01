@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "SHIP\n\n**Reasoning:**\nThe pricing area is rendering cleanly with professional UI/UX standards:\n\n1.  **Clean Layout:** The \"Machine or handwash\" card and the \"Pickup & delivery\" card below it are well-spaced with consistent padding and margins. There is no text overlap, clipping, or element collision.\n2.  **Readability:** Typography is clear, with good contrast between headings (bold), body text (regular), and the accent badges.\n3.  **Specific Elements Verified:**\n    *   The card correctly displays the heading: *\"Machine or handwash — you choose at checkout.\"*\n    *   The body text clearly explains the **+50% premium** for handwash services.\n    *   The **\"Handwash +50%\"** badge is prominently displayed on the right side of that card without being cut off.\n    *   The delivery pricing card (\"Pickup & delivery — first one's on us\") is positioned cleanly below with its own distinct badge (\"First delivery FREE\").\n4.  **Professional Polish:** The use of icons, rounded corners, subtle borders, and a cohesive color palette (yellows/greens for badges) gives it a polished, trustworthy appearance suitable for a service-based website.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788018964,
+  "id": "2026082923560076f5925d17a64526",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082923560076f5925d17a64526",
+  "usage": {
+    "completion_tokens": 257,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1744,
+    "prompt_tokens_details": {
+      "cached_tokens": 5
+    },
+    "total_tokens": 2001
+  }
+}

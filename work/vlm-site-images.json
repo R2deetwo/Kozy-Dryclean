@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here are the descriptions for each of the 8 images:\n\n1.  **Image 1:**\n    *   **Person/Model:** No, there is no person visible in the image.\n    *   **Holding:** N/A (No hands visible).\n    *   **Holiday Items:** No.\n    *   **Art Style:** Photorealistic.\n\n2.  **Image 2:**\n    *   **Person/Model:** Yes, there are two people (a woman and a delivery man).\n    *   **Holding:** They are holding a stack of white folded towels together.\n    *   **Holiday Items:** No.\n    *   **Art Style:** Photorealistic.\n\n3.  **Image 3:**\n    *   **Person/Model:** Yes, there is one man.\n    *   **Holding:** He is holding an iron in his right hand.\n    *   **Holiday Items:** No.\n    *   **Art Style:** Photorealistic.\n\n4.  **Image 4:**\n    *   **Person/Model:** No, there is no person visible.\n    *   **Holding:** N/A.\n    *   **Holiday Items:** Yes, there are stacks of white towels tied with gold ribbons that resemble gift presents.\n    *   **Art Style:** Photorealistic.\n\n5.  **Image 5:**\n    *   **Person/Model:** No, there is no person visible.\n    *   **Holding:** N/A.\n    *   **Holiday Items:** No.\n    *   **Art Style:** Photorealistic (Product photography).\n\n6.  **Image 6:**\n    *   **Person/Model:** Yes, there is one man standing outside a house.\n    *   **Holding:** He is holding a black suit jacket on a hanger (covered by plastic).\n    *   **Holiday Items:** No.\n    *   **Art Style:** Photorealistic.\n\n7.  **Image 7:**\n    *   **Person/Model:** Yes, there is an illustration of a man.\n    *   **Holding:** He is holding a smartphone in his left hand and pointing at it with his right hand.\n    *   **Holiday Items:** No.\n    *   **Art Style:** Cartoon illustration / Vector art.\n\n8.  **Image 8:**\n    *   **Person/Model:** No, there is no person visible.\n    *   **Holding:** N/A.\n    *   **Holiday Items:** Yes, there is a blue gift box with a gold ribbon containing clothing items (shirt and pants).\n    *   **Art Style:** 3D render / Digital graphic.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788007814,
+  "id": "2026082920500564682e52cb574d4a",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082920500564682e52cb574d4a",
+  "usage": {
+    "completion_tokens": 556,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 10748,
+    "prompt_tokens_details": {
+      "cached_tokens": 3
+    },
+    "total_tokens": 11304
+  }
+}

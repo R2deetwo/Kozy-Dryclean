@@ -1,0 +1,62 @@
+KOZY CARE — MARKETING KIT VERSIONS
+==================================
+
+This file tracks every version of the marketing / brand kit so you always
+know which files are current, what changed between versions, and which
+pieces you need to reprint after an update. Older versions are NEVER
+deleted — each update lands in its own folder.
+
+------------------------------------------------------------------
+CURRENT VERSION: v5.1  (29 August 2026)
+------------------------------------------------------------------
+
+WHAT CHANGED IN v5.1 (hotels & corporate wording):
+  The HOTEL15 offer line now addresses HOTELS & CORPORATE CLIENTS
+  (businesses) instead of "HOTEL GUESTS". This matches the corrected
+  reading of the client's instruction and the website wording
+  ("Hotels & corporate clients: 15% off + 5%").
+
+  Only THREE pieces changed — reprint only these:
+    1. Services flyer (A5, double-sided) — front offer band line
+       now reads: "HOTELS & CORPORATE: 15% OFF + 5% WITH CODE HOTEL15"
+    2. Offer flyer (A5, model with KOZY garment bag) — offer strip
+       headline now reads: "HOTELS & CORPORATE CLIENTS: 15% OFF"
+    3. A3 poster — offer band line now reads:
+       "HOTELS & CORPORATE CLIENTS: 15% OFF + 5% WITH CODE HOTEL15"
+
+  UNCHANGED in v5.1 (no reprint needed):
+    - Services flyer BACK (price panel) — identical to v5
+    - Business cards (navy + white)
+    - Brand sheet, logo pack
+
+WHERE THE FILES LIVE:
+  v5.1 (current) .... download/kozy-brand/v5.1-hotel-corporate-update/
+  v5   (previous) ... download/kozy-brand/ (flyer-services-a5/,
+                      flyer-offer-a5/, poster-a3/, business-cards/,
+                      brand-sheet/, logo/)
+  To reprint: give your printer the file from the v5.1 folder for the
+  three changed pieces; everything else still comes from the v5 folders.
+
+------------------------------------------------------------------
+VERSION HISTORY
+------------------------------------------------------------------
+v5.1  29 Aug 2026  HOTEL15 wording targets hotels & corporate clients
+                   (3 pieces updated, all others unchanged). Folder:
+                   v5.1-hotel-corporate-update/
+
+v5    Aug 2026     10% first-order offer everywhere (was 15%), HOTEL15
+                   hotel offer added to all pieces, flyer model now
+                   holds the KOZY CARE garment bag (Christmas presents
+                   removed), prices synced to live catalog.
+
+v4.2  Aug 2026     First-order fine print ("Free pickup and delivery for
+                   first order only"), second address added, duplicate
+                   title removed, 24-hour/3-5 day turnaround wording.
+
+v4.1  Aug 2026     (superseded — original flyer with gift bundle)
+
+Pre-print checks (every print run):
+  1. Phone numbers current  (+234 803 175 5230)
+  2. Prices match the live catalog (check kozycare.ng or admin Settings)
+  3. Offer percentages match admin Settings → Offers & Delivery
+  4. Both addresses correct (Ogombo + Paradise 3 Estate, Chevron)

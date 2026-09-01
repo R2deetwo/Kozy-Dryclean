@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is a complete, detailed description of the flyer:\n\n### **Overall Design and Layout**\n*   **Style:** The flyer has a modern, premium, and professional aesthetic. It uses a \"luxury\" color palette of deep navy blue (background) and metallic gold/yellow (text and accents).\n*   **Dimensions:** The image is in portrait orientation.\n*   **Background:** The background is a solid dark navy blue with subtle, faint geometric line patterns or shapes that add texture without distracting from the text.\n\n---\n\n### **Text Content (Word-for-Word)**\n\n**Header Section:**\n*   **Main Logo/Brand Name:** `KOZY` (Large, bold, serif font, Gold)\n*   **Sub-brand:** `PREMIUM DRYCLEANING & LAUNDRY` (Smaller, sans-serif, all caps, Gold)\n\n**Offer Section:**\n*   **Headline:** `15% OFF` (Very large, bold, Gold)\n*   **Sub-headline:** `your first premium clean` (\"your first\" is white script/cursive font; \"premium clean\" is gold italicized serif font)\n*   **Description:** `Dry cleaning, wash & fold, and shoe care — collected at your door and returned immaculate.` (White sans-serif text)\n\n**Features List (Centered):**\n*   `FREE PICKUP & DELIVERY •`\n*   `48-HOUR TURNAROUND • EXPERT GARMENT CARE`\n\n**Testimonial Quote (Right side, next to photo):**\n*   `\"Uncompromising care. Exceptional convenience.\"` (White italicized serif font)\n\n**Call-to-Action Button (Large Yellow/Gold Bar):**\n*   `Book at kozycare.ng` (Bold, dark navy/black text)\n*   `OR WHATSAPP +234 803 175 5230` (Smaller text below it)\n\n**Bottom Left (QR Code Area):**\n*   Above QR Code: `SCAN · BOOK · RELAX`\n\n**Bottom Right (Contact Details):**\n*   `KOZY CARE`\n*   `No. 20, Westyde Drive, Ogombo, Lagos`\n*   `kozygarmentcare@gmail.com`\n\n---\n\n### **Visual Elements**\n\n*   **The Woman:**\n    *   **Appearance:** She is a Black woman with dark hair pulled back neatly into a low bun or ponytail. She has a warm, welcoming smile showing her teeth. She appears to be wearing makeup (defined eyes, neutral lip color).\n    *   **Pose:** She is facing slightly to her left (the viewer's right), looking directly at the camera with a friendly expression.\n    *   **Clothing:** She wears a black top or dress with an intricate gold or yellow pattern (looks like embroidery or print) on the shoulder/chest area visible in the frame.\n    *   **Framing:** She is positioned inside a thin, circular or arched gold border/frame on the left-center of the lower half of the flyer.\n    *   **What she's holding:** She is holding a stack of folded, crisp blue garments (likely dress shirts or similar items) tied neatly with a matching blue ribbon or band.\n\n*   **Logo:**\n    *   The primary logo is the word **\"KOZY\"** in a distinctive, elegant serif typeface with high contrast between thick and thin strokes. There is no separate graphical icon; the wordmark serves as the logo.\n\n*   **QR Code:**\n    *   Located in the bottom left corner, inside a white square with rounded corners. The code itself is black and white pixelated pattern.\n\n*   **Discount Offer:**\n    *   **15% OFF** your first premium clean. This is the dominant message of the flyer.\n\n*   **Contact Information:**\n    *   **Website:** kozycare.ng\n    *   **Phone/WhatsApp:** +234 803 175 5230\n    *   **Email:** kozycaregarmentcare@gmail.com\n    *   **Physical Address:** No. 20, Westyde Drive, Ogombo, Lagos\n\n### **Color Palette Summary**\n*   **Primary Background:** Deep Navy Blue (#0a192f or similar)\n*   **Primary Accent/Text:** Metallic Gold / Mustard Yellow (#d4af37 or #c5a059 range)\n*   **Secondary Text:** White\n*   **Button Background:** Bright Gold/Yellow\n*   **Photo Element:** Skin tones, Black/Gold clothing, Bright Blue (for the garment stack)",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788007937,
+  "id": "202608292052092ea45cc795f64faf",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608292052092ea45cc795f64faf",
+  "usage": {
+    "completion_tokens": 962,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 636,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1598
+  }
+}

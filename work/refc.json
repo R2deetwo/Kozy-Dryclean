@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is a description of the visual design of this measurement guide:\n\n**Figure Drawing Style**\n*   **Rendered & Filled:** The figures are not simple line drawings or outlines. They are fully rendered, 3D-style digital illustrations with realistic skin tones, shading, and volume.\n*   **Clothed:** The figures are minimally clothed in undergarments (a bra and panties), which allows for clear visibility of measurement points on the body without the interference of bulky clothing.\n*   **Dual View:** The graphic displays two figures side-by-side: a front-facing view (left) and a back-facing view (right).\n\n**Measurement Lines and Tape**\n*   **Solid Lines:** Measurement paths are indicated by solid black lines.\n*   **Arrows:** Most circumference measurements (like Bust, Waist, Hip) feature double-headed arrows to indicate the span across the body. Length measurements (like Sleeve Length or Coat Length) typically have arrows at both ends of the vertical line.\n*   **Dotted Connectors:** Dotted leader lines connect the measurement points on the body to their corresponding text labels.\n\n**Label Callout Style**\n*   **Text-Based:** Labels are written in clear, capitalized sans-serif text (e.g., \"NECK\", \"SHOULDER\").\n*   **Descriptive:** Many labels include parenthetical instructions for clarity, such as \"(Circumference)\" or \"(Edge to edge)\".\n\n**Layout and Additional Elements**\n*   **Data Table:** To the right of the figures is a structured \"MEASUREMENT CHART\" table. It lists 18 specific measurements (numbered 1 through 18) with blank columns for users to fill in their data in inches or centimeters.\n*   **No Zoom Insets:** There are no zoomed-in detail insets or \"callout bubbles\" in this design; all measurements are shown directly on the full-body figures.\n*   **Branding:** A logo featuring a horse silhouette and the brand name \"Addicted Bespoken\" appears in the top right corner above the chart.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788186444,
+  "id": "2026083122271494e8279908774012",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026083122271494e8279908774012",
+  "usage": {
+    "completion_tokens": 429,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5054,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 5483
+  }
+}

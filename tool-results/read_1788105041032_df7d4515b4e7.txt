@@ -1,0 +1,866 @@
+     1→     1→'use client'
+     2→     2→
+     3→     3→import { useState } from 'react'
+     4→     4→import {
+     5→     5→  Building2,
+     6→     6→  Phone,
+     7→     7→  Mail,
+     8→     8→  MapPin,
+     9→     9→  Save,
+    10→    10→  CheckCircle2,
+    11→    11→  Banknote,
+    12→    12→  Tag,
+    13→    13→  Percent,
+    14→    14→  Scale,
+    15→    15→  Truck,
+    16→    16→  Sparkles,
+    17→    17→  Scissors,
+    18→    18→  CreditCard,
+    19→    19→  Bell,
+    20→    20→  BellRing,
+    21→    21→  UserPlus,
+    22→    22→  ShoppingBag,
+    23→    23→  Receipt,
+    24→    24→} from 'lucide-react'
+    25→    25→import { useQuery, useQueryClient } from '@tanstack/react-query'
+    26→    26→import { useStore } from '@/lib/store'
+    27→    27→import { GARMENT_CATALOG, formatNaira, type KozySettings, type KozyAppSettings } from '@/lib/types'
+    28→    28→import { Button } from '@/components/ui/button'
+    29→    29→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+    30→    30→import { Input } from '@/components/ui/input'
+    31→    31→import { Label } from '@/components/ui/label'
+    32→    32→import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+    33→    33→import { toast } from '@/hooks/use-toast'
+    34→    34→import { cn } from '@/lib/utils'
+    35→    35→
+    36→    36→const CATEGORY_LABELS: Record<string, string> = {
+    37→    37→  Shirts: 'Shirts & Tops',
+    38→    38→  Trousers: 'Trousers',
+    39→    39→  Suits: 'Suits & Blazers',
+    40→    40→  Traditional: 'Traditional',
+    41→    41→  "Women's Wear": 'Women’s Wear',
+    42→    42→  Outerwear: 'Outerwear & Knitwear',
+    43→    43→  Household: 'Household',
+    44→    44→  Extras: 'Extras',
+    45→    45→  Shoes: 'Shoes & Sneakers',
+    46→    46→  Other: 'Other & Bespoke (quoted)',
+    47→    47→}
+    48→    48→
+    49→    49→export function SettingsView() {
+    50→    50→  const settings = useStore((s) => s.settings)
+    51→    51→  const updateSettings = useStore((s) => s.updateSettings)
+    52→    52→  const setGarmentPrice = useStore((s) => s.setGarmentPrice)
+    53→    53→  const queryClient = useQueryClient()
+    54→    54→
+    55→    55→  // ----- Server-managed app settings (Phase 14) -----
+    56→    56→  // Bank details, commercial terms and offers live in the AppSetting table
+    57→    57→  // so an edit reaches EVERY visitor instantly — the old flow only updated
+    58→    58→  // this browser's localStorage and customers kept seeing stale details
+    59→    59→  // (the client-reported bug). Load current values from the server.
+    60→    60→  const { data: appSettings } = useQuery({
+    61→    61→    queryKey: ['app-settings'],
+    62→    62→    queryFn: async () => {
+    63→    63→      const res = await fetch('/api/settings/app')
+    64→    64→      if (!res.ok) throw new Error('Failed to load settings')
+    65→    65→      const data = await res.json()
+    66→    66→      return data.settings as KozyAppSettings
+    67→    67→    },
+    68→    68→    staleTime: 30 * 1000,
+    69→    69→  })
+    70→    70→
+    71→    71→  const [appDraft, setAppDraft] = useState<KozyAppSettings | null>(null)
+    72→    72→  // The draft starts from whatever the server currently says (once loaded).
+    73→    73→  const app = appDraft ?? appSettings
+    74→    74→  const setApp = (patch: Partial<KozyAppSettings>) =>
+    75→    75→    setAppDraft({ ...(app as KozyAppSettings), ...patch })
+    76→    76→
+    77→    77→  const [draft, setDraft] = useState<KozySettings>(settings)
+    78→    78→  const [saving, setSaving] = useState(false)
+    79→    79→  const [saved, setSaved] = useState(false)
+    80→    80→
+    81→    81→  const handleSave = async () => {
+    82→    82→    setSaving(true)
+    83→    83→    // ----- 1. Server-side app settings (bank, contact, commercial) -----
+    84→    84→    if (appDraft && appSettings) {
+    85→    85→      const changed: Partial<KozyAppSettings> = {}
+    86→    86→      ;(Object.keys(appDraft) as (keyof KozyAppSettings)[]).forEach((k) => {
+    87→    87→        if (appDraft[k] !== appSettings[k]) {
+    88→    88→          ;(changed as Record<string, unknown>)[k] = appDraft[k]
+    89→    89→        }
+    90→    90→      })
+    91→    91→      if (Object.keys(changed).length > 0) {
+    92→    92→        try {
+    93→    93→          const res = await fetch('/api/settings/app', {
+    94→    94→            method: 'PUT',
+    95→    95→            headers: { 'Content-Type': 'application/json' },
+    96→    96→            body: JSON.stringify({ settings: changed }),
+    97→    97→          })
+    98→    98→          if (!res.ok) {
+    99→    99→            const err = await res.json().catch(() => ({}))
+   100→   100→            throw new Error(err.error || 'Server rejected the settings update')
+   101→   101→          }
+   102→   102→          await queryClient.invalidateQueries({ queryKey: ['app-settings'] })
+   103→   103→        } catch (e: any) {
+   104→   104→          toast({
+   105→   105→            title: 'Settings not saved',
+   106→   106→            description: e?.message || 'Could not reach the server — nothing was changed.',
+   107→   107→            variant: 'destructive',
+   108→   108→          })
+   109→   109→          setSaving(false)
+   110→   110→          return
+   111→   111→        }
+   112→   112→      }
+   113→   113→    }
+   114→   114→
+   115→   115→    // ----- 2. Legacy local settings (B2B per-kg pricing, guarantee note) -----
+   116→   116→    updateSettings({
+   117→   117→      pricePerKg: draft.pricePerKg,
+   118→   118→      minimumKg: draft.minimumKg,
+   119→   119→      guaranteeDiscountPercent: draft.guaranteeDiscountPercent,
+   120→   120→    })
+   121→   121→    // ----- 3. Garment prices -> PriceCatalog (server-side, live for all) -----
+   122→   122→    const changedPrices: Record<string, number> = {}
+   123→   123→    Object.entries(draft.garmentPrices).forEach(([id, price]) => {
+   124→   124→      if (settings.garmentPrices[id] !== price) {
+   125→   125→        setGarmentPrice(id, price)
+   126→   126→        changedPrices[id] = price
+   127→   127→      }
+   128→   128→    })
+   129→   129→    // …and push them to the server (PriceCatalog) so they go live on the
+   130→   130→    // storefront and match what customers are charged at checkout.
+   131→   131→    if (Object.keys(changedPrices).length > 0) {
+   132→   132→      try {
+   133→   133→        const res = await fetch('/api/settings/prices', {
+   134→   134→          method: 'PUT',
+   135→   135→          headers: { 'Content-Type': 'application/json' },
+   136→   136→          body: JSON.stringify({ garmentPrices: changedPrices }),
+   137→   137→        })
+   138→   138→        if (!res.ok) {
+   139→   139→          const err = await res.json().catch(() => ({}))
+   140→   140→          throw new Error(err.error || 'Server rejected the price update')
+   141→   141→        }
+   142→   142→      } catch (e: any) {
+   143→   143→        toast({
+   144→   144→          title: 'Prices saved locally only',
+   145→   145→          description: e?.message || 'Could not reach the server — storefront prices were not updated.',
+   146→   146→          variant: 'destructive',
+   147→   147→        })
+   148→   148→        setSaving(false)
+   149→   149→        return
+   150→   150→      }
+   151→   151→    }
+   152→   152→    setAppDraft(null)
+   153→   153→    setTimeout(() => {
+   154→   154→      setSaving(false)
+   155→   155→      setSaved(true)
+   156→   156→      toast({
+   157→   157→        title: 'Settings saved',
+   158→   158→        description: 'Changes are now live across the customer-facing app.',
+   159→   159→      })
+   160→   160→      setTimeout(() => setSaved(false), 2000)
+   161→   161→    }, 600)
+   162→   162→  }
+   163→   163→
+   164→   164→  return (
+   165→   165→    <div className="p-4 sm:p-6">
+   166→   166→      <div className="mb-6 flex items-center justify-between">
+   167→   167→        <div>
+   168→   168→          <h1 className="font-serif text-2xl font-semibold tracking-tight text-navy">
+   169→   169→            Settings
+   170→   170→          </h1>
+   171→   171→          <p className="mt-1 text-sm text-navy-300">
+   172→   172→            Manage bank account, contact details, and pricing. Changes appear instantly on the
+   173→   173→            customer-facing app.
+   174→   174→          </p>
+   175→   175→        </div>
+   176→   176→        <div className="flex gap-2">
+   177→   177→          <Button
+   178→   178→            onClick={handleSave}
+   179→   179→            disabled={saving}
+   180→   180→            className={cn(
+   181→   181→              'rounded-full',
+   182→   182→              saved
+   183→   183→                ? 'bg-emerald-600 hover:bg-emerald-700'
+   184→   184→                : 'bg-gold-gradient text-navy hover:opacity-90'
+   185→   185→            )}
+   186→   186→          >
+   187→   187→            {saving ? (
+   188→   188→              'Saving...'
+   189→   189→            ) : saved ? (
+   190→   190→              <>
+   191→   191→                <CheckCircle2 className="mr-1.5 h-4 w-4" /> Saved
+   192→   192→              </>
+   193→   193→            ) : (
+   194→   194→              <>
+   195→   195→                <Save className="mr-1.5 h-4 w-4" /> Save changes
+   196→   196→              </>
+   197→   197→            )}
+   198→   198→          </Button>
+   199→   199→        </div>
+   200→   200→      </div>
+   201→   201→
+   202→   202→      <Tabs defaultValue="bank">
+   203→   203→        <TabsList className="bg-linen-200">
+   204→   204→          <TabsTrigger value="bank" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+   205→   205→            <Banknote className="mr-1.5 h-3.5 w-3.5" /> Bank Account
+   206→   206→          </TabsTrigger>
+   207→   207→          <TabsTrigger value="contact" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+   208→   208→            <Phone className="mr-1.5 h-3.5 w-3.5" /> Contact
+   209→   209→          </TabsTrigger>
+   210→   210→          <TabsTrigger value="pricing" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+   211→   211→            <Tag className="mr-1.5 h-3.5 w-3.5" /> Pricing
+   212→   212→          </TabsTrigger>
+   213→   213→          <TabsTrigger value="terms" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+   214→   214→            <Truck className="mr-1.5 h-3.5 w-3.5" /> Offers & Delivery
+   215→   215→          </TabsTrigger>
+   216→   216→          <TabsTrigger value="guarantee" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+   217→   217→            <Percent className="mr-1.5 h-3.5 w-3.5" /> Guarantee
+   218→   218→          </TabsTrigger>
+   219→   219→          <TabsTrigger value="notifications" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+   220→   220→            <Bell className="mr-1.5 h-3.5 w-3.5" /> Notifications
+   221→   221→          </TabsTrigger>
+   222→   222→        </TabsList>
+   223→   223→
+   224→   224→        {/* BANK ACCOUNT TAB — server-backed (Phase 14): edits are saved to
+   225→   225→            the AppSetting table and reach EVERY customer's checkout screen. */}
+   226→   226→        <TabsContent value="bank" className="mt-4">
+   227→   227→          <Card className="border-navy-100 shadow-navy">
+   228→   228→            <CardHeader>
+   229→   229→              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   230→   230→                <Building2 className="h-4 w-4 text-gold-400" /> Bank Account Details
+   231→   231→              </CardTitle>
+   232→   232→              <p className="text-xs text-navy-300">
+   233→   233→                These details appear during checkout when customers choose
+   234→   234→                &ldquo;Bank Transfer&rdquo; — saved on the server, so every customer sees
+   235→   235→                your changes immediately after you hit Save.
+   236→   236→              </p>
+   237→   237→            </CardHeader>
+   238→   238→            <CardContent className="space-y-4">
+   239→   239→              {!app ? (
+   240→   240→                <p className="py-6 text-center text-sm text-navy-300">Loading current account details…</p>
+   241→   241→              ) : (
+   242→   242→                <>
+   243→   243→                  <div>
+   244→   244→                    <Label htmlFor="bank-name" className="text-xs uppercase tracking-wide text-navy-300">
+   245→   245→                      Bank Name
+   246→   246→                    </Label>
+   247→   247→                    <Input
+   248→   248→                      id="bank-name"
+   249→   249→                      value={app.bankName}
+   250→   250→                      onChange={(e) => setApp({ bankName: e.target.value })}
+   251→   251→                      placeholder="e.g. Guaranty Trust Bank (GTB)"
+   252→   252→                      className="mt-1.5"
+   253→   253→                    />
+   254→   254→                  </div>
+   255→   255→                  <div>
+   256→   256→                    <Label htmlFor="account-name" className="text-xs uppercase tracking-wide text-navy-300">
+   257→   257→                      Account Name
+   258→   258→                    </Label>
+   259→   259→                    <Input
+   260→   260→                      id="account-name"
+   261→   261→                      value={app.accountName}
+   262→   262→                      onChange={(e) => setApp({ accountName: e.target.value })}
+   263→   263→                      placeholder="e.g. Kozy Premium Dry Cleaning Ltd"
+   264→   264→                      className="mt-1.5"
+   265→   265→                    />
+   266→   266→                  </div>
+   267→   267→                  <div>
+   268→   268→                    <Label htmlFor="account-number" className="text-xs uppercase tracking-wide text-navy-300">
+   269→   269→                      Account Number
+   270→   270→                    </Label>
+   271→   271→                    <Input
+   272→   272→                      id="account-number"
+   273→   273→                      value={app.accountNumber}
+   274→   274→                      onChange={(e) => setApp({ accountNumber: e.target.value })}
+   275→   275→                      placeholder="10-digit account number"
+   276→   276→                      className="mt-1.5 font-mono"
+   277→   277→                    />
+   278→   278→                  </div>
+   279→   279→
+   280→   280→                  {/* Preview */}
+   281→   281→                  <div className="mt-6 rounded-xl bg-navy p-5 text-white">
+   282→   282→                    <p className="text-xs uppercase tracking-wider text-gold-300">
+   283→   283→                      Customer sees this during checkout:
+   284→   284→                    </p>
+   285→   285→                    <div className="mt-3 space-y-1 text-sm">
+   286→   286→                      <div className="flex justify-between">
+   287→   287→                        <span className="text-navy-100/70">Bank</span>
+   288→   288→                        <span className="font-medium">{app.bankName || '—'}</span>
+   289→   289→                      </div>
+   290→   290→                      <div className="flex justify-between">
+   291→   291→                        <span className="text-navy-100/70">Account Name</span>
+   292→   292→                        <span className="font-medium">{app.accountName || '—'}</span>
+   293→   293→                      </div>
+   294→   294→                      <div className="flex justify-between">
+   295→   295→                        <span className="text-navy-100/70">Account Number</span>
+   296→   296→                        <span className="font-mono font-bold text-gold-300">
+   297→   297→                          {app.accountNumber || '—'}
+   298→   298→                        </span>
+   299→   299→                      </div>
+   300→   300→                    </div>
+   301→   301→                  </div>
+   302→   302→
+   303→   303→                  {/* Card payments (Paystack) status — read-only, env-derived.
+   304→   304→                   * Makes it obvious to the admin why customers only see the
+   305→   305→                   * transfer option at checkout. */}
+   306→   306→                  <div className="mt-4 flex items-start gap-3 rounded-xl border border-navy-100 bg-linen-50 p-4">
+   307→   307→                    <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-navy-300" />
+   308→   308→                    <div className="text-sm">
+   309→   309→                      <p className="font-semibold text-navy">
+   310→   310→                        Card payments (Paystack){' '}
+   311→   311→                        <span
+   312→   312→                          className={
+   313→   313→                            app.paystackAvailable
+   314→   314→                              ? 'ml-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700'
+   315→   315→                              : 'ml-1 rounded-full bg-navy-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-300'
+   316→   316→                          }
+   317→   317→                        >
+   318→   318→                          {app.paystackAvailable ? 'Live' : 'Unavailable'}
+   319→   319→                        </span>
+   320→   320→                      </p>
+   321→   321→                      <p className="mt-1 text-xs leading-relaxed text-navy-300">
+   322→   322→                        {app.paystackAvailable
+   323→   323→                          ? 'Customers can pay by card — the option is selectable at checkout.'
+   324→   324→                          : 'Customers currently see the card option greyed out with “not available at the moment” and pay by bank transfer only. To enable cards, add PAYSTACK_SECRET_KEY in your deployment environment — it switches on automatically.'}
+   325→   325→                      </p>
+   326→   326→                    </div>
+   327→   327→                  </div>
+   328→   328→                </>
+   329→   329→              )}
+   330→   330→            </CardContent>
+   331→   331→          </Card>
+   332→   332→        </TabsContent>
+   333→   333→
+   334→   334→        {/* CONTACT TAB — server-backed, same as bank */}
+   335→   335→        <TabsContent value="contact" className="mt-4">
+   336→   336→          <Card className="border-navy-100 shadow-navy">
+   337→   337→            <CardHeader>
+   338→   338→              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   339→   339→                <Phone className="h-4 w-4 text-gold-400" /> Contact Information
+   340→   340→              </CardTitle>
+   341→   341→              <p className="text-xs text-navy-300">
+   342→   342→                Shown at checkout and on the offers strip — saved on the server for
+   343→   343→                every visitor, not just this browser.
+   344→   344→              </p>
+   345→   345→            </CardHeader>
+   346→   346→            <CardContent className="space-y-4">
+   347→   347→              {!app ? (
+   348→   348→                <p className="py-6 text-center text-sm text-navy-300">Loading contact details…</p>
+   349→   349→              ) : (
+   350→   350→                <>
+   351→   351→                  <div>
+   352→   352→                    <Label htmlFor="contact-phone" className="text-xs uppercase tracking-wide text-navy-300">
+   353→   353→                      <Phone className="mr-1 inline h-3 w-3" /> Phone Number
+   354→   354→                    </Label>
+   355→   355→                    <Input
+   356→   356→                      id="contact-phone"
+   357→   357→                      value={app.contactPhone}
+   358→   358→                      onChange={(e) => setApp({ contactPhone: e.target.value })}
+   359→   359→                      placeholder="+234 803 175 5230"
+   360→   360→                      className="mt-1.5"
+   361→   361→                    />
+   362→   362→                  </div>
+   363→   363→                  <div>
+   364→   364→                    <Label htmlFor="contact-email" className="text-xs uppercase tracking-wide text-navy-300">
+   365→   365→                      <Mail className="mr-1 inline h-3 w-3" /> Email Address
+   366→   366→                    </Label>
+   367→   367→                    <Input
+   368→   368→                      id="contact-email"
+   369→   369→                      type="email"
+   370→   370→                      value={app.contactEmail}
+   371→   371→                      onChange={(e) => setApp({ contactEmail: e.target.value })}
+   372→   372→                      placeholder="kozygarmentcare@gmail.com"
+   373→   373→                      className="mt-1.5"
+   374→   374→                    />
+   375→   375→                  </div>
+   376→   376→                </>
+   377→   377→              )}
+   378→   378→            </CardContent>
+   379→   379→          </Card>
+   380→   380→        </TabsContent>
+   381→   381→
+   382→   382→        {/* NOTIFICATIONS TAB — admin alert emails: where the business owner
+   383→   383→            gets pinged when a new customer signs up, a new order arrives, or
+   384→   384→            a customer says they've paid (bank-transfer verification). */}
+   385→   385→        <TabsContent value="notifications" className="mt-4">
+   386→   386→          <Card className="border-navy-100 shadow-navy">
+   387→   387→            <CardHeader>
+   388→   388→              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   389→   389→                <BellRing className="h-4 w-4 text-gold-400" /> Admin Alert Emails
+   390→   390→              </CardTitle>
+   391→   391→              <p className="text-xs text-navy-300">
+   392→   392→                Know the moment business happens — an email lands in your inbox whenever a
+   393→   393→                new customer signs up, a new order comes in, or a customer confirms a bank
+   394→   394→                transfer (so you can verify it right away). Saved on the server and live
+   395→   395→                immediately after you hit Save.
+   396→   396→              </p>
+   397→   397→            </CardHeader>
+   398→   398→            <CardContent className="space-y-5">
+   399→   399→              {!app ? (
+   400→   400→                <p className="py-6 text-center text-sm text-navy-300">Loading notification settings…</p>
+   401→   401→              ) : (
+   402→   402→                <>
+   403→   403→                  <div>
+   404→   404→                    <Label htmlFor="alerts-email" className="text-xs uppercase tracking-wide text-navy-300">
+   405→   405→                      <Mail className="mr-1 inline h-3 w-3" /> Send alerts to
+   406→   406→                    </Label>
+   407→   407→                    <Input
+   408→   408→                      id="alerts-email"
+   409→   409→                      type="email"
+   410→   410→                      value={app.adminAlertsEmail}
+   411→   411→                      onChange={(e) => setApp({ adminAlertsEmail: e.target.value })}
+   412→   412→                      placeholder="kozygarmentcare@gmail.com"
+   413→   413→                      className="mt-1.5 max-w-md"
+   414→   414→                    />
+   415→   415→                    <p className="mt-1.5 text-[11px] text-navy-300">
+   416→   416→                      Tip: a Gmail address you check on your phone works best — alerts arrive
+   417→   417→                      the second a customer acts.
+   418→   418→                    </p>
+   419→   419→                  </div>
+   420→   420→
+   421→   421→                  <div className="space-y-3">
+   422→   422→                    <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
+   423→   423→                      What should trigger an email?
+   424→   424→                    </p>
+   425→   425→                    <AlertToggle
+   426→   426→                      icon={<UserPlus className="h-4 w-4" />}
+   427→   427→                      title="New customer signup"
+   428→   428→                      description="A new account was created and is waiting to verify their email."
+   429→   429→                      checked={app.adminAlertsNewSignup}
+   430→   430→                      onChange={(v) => setApp({ adminAlertsNewSignup: v })}
+   431→   431→                    />
+   432→   432→                    <AlertToggle
+   433→   433→                      icon={<ShoppingBag className="h-4 w-4" />}
+   434→   434→                      title="New order"
+   435→   435→                      description="A pickup booking came in (card/cash orders). Bank-transfer orders trigger the payment alert below instead — no double emails."
+   436→   436→                      checked={app.adminAlertsNewOrder}
+   437→   437→                      onChange={(v) => setApp({ adminAlertsNewOrder: v })}
+   438→   438→                    />
+   439→   439→                    <AlertToggle
+   440→   440→                      icon={<Receipt className="h-4 w-4" />}
+   441→   441→                      title="Customer says they've paid (bank transfer)"
+   442→   442→                      description="The customer confirmed a transfer — verify it in the queue to release their pickup. Includes the expected amount and narration."
+   443→   443→                      checked={app.adminAlertsPaymentPending}
+   444→   444→                      onChange={(v) => setApp({ adminAlertsPaymentPending: v })}
+   445→   445→                    />
+   446→   446→                  </div>
+   447→   447→                </>
+   448→   448→              )}
+   449→   449→            </CardContent>
+   450→   450→          </Card>
+   451→   451→        </TabsContent>
+   452→   452→
+   453→   453→        {/* PRICING TAB */}
+   454→   454→        <TabsContent value="pricing" className="mt-4 space-y-4">
+   455→   455→          {/* Bulk pricing */}
+   456→   456→          <Card className="border-navy-100 shadow-navy">
+   457→   457→            <CardHeader>
+   458→   458→              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   459→   459→                <Scale className="h-4 w-4 text-gold-400" /> Corporate (Per-Kg) Pricing
+   460→   460→              </CardTitle>
+   461→   461→              <p className="text-xs text-navy-300">
+   462→   462→                Used for bulk/corporate orders. Final invoice = weight × price per kg
+   463→   463→                (minimum charge applies).
+   464→   464→              </p>
+   465→   465→            </CardHeader>
+   466→   466→            <CardContent className="grid gap-4 sm:grid-cols-2">
+   467→   467→              <div>
+   468→   468→                <Label htmlFor="price-per-kg" className="text-xs uppercase tracking-wide text-navy-300">
+   469→   469→                  Price per kg (₦)
+   470→   470→                </Label>
+   471→   471→                <Input
+   472→   472→                  id="price-per-kg"
+   473→   473→                  type="number"
+   474→   474→                  value={draft.pricePerKg}
+   475→   475→                  onChange={(e) =>
+   476→   476→                    setDraft({ ...draft, pricePerKg: parseInt(e.target.value) || 0 })
+   477→   477→                  }
+   478→   478→                  className="mt-1.5"
+   479→   479→                />
+   480→   480→                <p className="mt-1 text-xs text-navy-300">
+   481→   481→                  Current: {formatNaira(draft.pricePerKg)}/kg
+   482→   482→                </p>
+   483→   483→              </div>
+   484→   484→              <div>
+   485→   485→                <Label htmlFor="minimum-kg" className="text-xs uppercase tracking-wide text-navy-300">
+   486→   486→                  Minimum chargeable weight (kg)
+   487→   487→                </Label>
+   488→   488→                <Input
+   489→   489→                  id="minimum-kg"
+   490→   490→                  type="number"
+   491→   491→                  value={draft.minimumKg}
+   492→   492→                  onChange={(e) =>
+   493→   493→                    setDraft({ ...draft, minimumKg: parseInt(e.target.value) || 0 })
+   494→   494→                  }
+   495→   495→                  className="mt-1.5"
+   496→   496→                />
+   497→   497→                <p className="mt-1 text-xs text-navy-300">
+   498→   498→                  Minimum charge: {formatNaira(draft.pricePerKg * draft.minimumKg)}
+   499→   499→                </p>
+   500→   500→              </div>
+   501→   501→            </CardContent>
+   502→   502→          </Card>
+   503→   503→
+   504→   504→          {/* Per-item pricing */}
+   505→   505→          <Card className="border-navy-100 shadow-navy">
+   506→   506→            <CardHeader>
+   507→   507→              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   508→   508→                <Tag className="h-4 w-4 text-gold-400" /> Retail (Per-Item) Pricing
+   509→   509→              </CardTitle>
+   510→   510→              <p className="text-xs text-navy-300">
+   511→   511→                Prices shown on the landing page price list and during retail booking.
+   512→   512→                Changes are reflected immediately on the public site.
+   513→   513→              </p>
+   514→   514→            </CardHeader>
+   515→   515→            <CardContent>
+   516→   516→              {(['Shirts', 'Trousers', 'Suits', 'Traditional', "Women's Wear", 'Outerwear', 'Household', 'Extras', 'Shoes', 'Other'] as const).map(
+   517→   517→                (cat) => (
+   518→   518→                  <div key={cat} className="mb-5 last:mb-0">
+   519→   519→                    <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gold-400">
+   520→   520→                      {CATEGORY_LABELS[cat]}
+   521→   521→                    </h4>
+   522→   522→                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+   523→   523→                      {GARMENT_CATALOG.filter((g) => g.category === cat).map((g) => {
+   524→   524→                        const currentPrice = settings.garmentPrices[g.id] ?? g.price
+   525→   525→                        const draftPrice = draft.garmentPrices[g.id] ?? currentPrice
+   526→   526→                        const changed = draftPrice !== currentPrice
+   527→   527→                        return (
+   528→   528→                          <div
+   529→   529→                            key={g.id}
+   530→   530→                            className={cn(
+   531→   531→                              'flex items-center gap-2 rounded-lg border p-2 transition',
+   532→   532→                              changed
+   533→   533→                                ? 'border-gold-400 bg-gold-50'
+   534→   534→                                : 'border-navy-100 bg-linen-50'
+   535→   535→                            )}
+   536→   536→                          >
+   537→   537→                            <img src={g.icon} alt="" className="h-6 w-6 shrink-0" />
+   538→   538→                            <div className="flex-1 min-w-0">
+   539→   539→                              <p className="truncate text-xs font-medium text-navy">{g.name}</p>
+   540→   540→                              <p className="text-[10px] text-navy-300">
+   541→   541→                                Was {formatNaira(currentPrice)}
+   542→   542→                              </p>
+   543→   543→                            </div>
+   544→   544→                            <div className="flex items-center gap-1">
+   545→   545→                              <span className="text-xs text-navy-300">₦</span>
+   546→   546→                              <Input
+   547→   547→                                type="number"
+   548→   548→                                value={draftPrice}
+   549→   549→                                onChange={(e) =>
+   550→   550→                                  setDraft({
+   551→   551→                                    ...draft,
+   552→   552→                                    garmentPrices: {
+   553→   553→                                      ...draft.garmentPrices,
+   554→   554→                                      [g.id]: parseInt(e.target.value) || 0,
+   555→   555→                                    },
+   556→   556→                                  })
+   557→   557→                                }
+   558→   558→                                className="h-7 w-20 px-2 py-1 text-xs"
+   559→   559→                              />
+   560→   560→                            </div>
+   561→   561→                          </div>
+   562→   562→                        )
+   563→   563→                      })}
+   564→   564→                    </div>
+   565→   565→                  </div>
+   566→   566→                )
+   567→   567→              )}
+   568→   568→            </CardContent>
+   569→   569→          </Card>
+   570→   570→        </TabsContent>
+   571→   571→
+   572→   572→        {/* OFFERS & DELIVERY TAB — the commercial terms customers see
+   573→   573→            (offers strip, delivery pricing, handwash surcharge, guarantee
+   574→   574→            eligibility, alterations from-price). All server-backed. */}
+   575→   575→        <TabsContent value="terms" className="mt-4 space-y-4">
+   576→   576→          {!app ? (
+   577→   577→            <Card className="border-navy-100 shadow-navy">
+   578→   578→              <CardContent className="py-10 text-center text-sm text-navy-300">
+   579→   579→                Loading commercial terms…
+   580→   580→              </CardContent>
+   581→   581→            </Card>
+   582→   582→          ) : (
+   583→   583→            <>
+   584→   584→              {/* Offers */}
+   585→   585→              <Card className="border-navy-100 shadow-navy">
+   586→   586→                <CardHeader>
+   587→   587→                  <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   588→   588→                    <Sparkles className="h-4 w-4 text-gold-400" /> Discounts & Offers
+   589→   589→                  </CardTitle>
+   590→   590→                  <p className="text-xs text-navy-300">
+   591→   591→                    Shown on the site&apos;s offers strip and applied automatically at
+   592→   592→                    checkout. The picture discount is set on the Guarantee tab.
+   593→   593→                  </p>
+   594→   594→                </CardHeader>
+   595→   595→                <CardContent className="grid gap-4 sm:grid-cols-2">
+   596→   596→                  <div>
+   597→   597→                    <Label htmlFor="first-order-pct" className="text-xs uppercase tracking-wide text-navy-300">
+   598→   598→                      First-order discount (%)
+   599→   599→                    </Label>
+   600→   600→                    <Input
+   601→   601→                      id="first-order-pct"
+   602→   602→                      type="number"
+   603→   603→                      min="0"
+   604→   604→                      max="50"
+   605→   605→                      value={app.firstOrderDiscountPercent}
+   606→   606→                      onChange={(e) => setApp({ firstOrderDiscountPercent: Number(e.target.value) || 0 })}
+   607→   607→                      className="mt-1.5 w-32"
+   608→   608→                    />
+   609→   609→                    <p className="mt-1 text-xs text-navy-300">Applied to every new customer&apos;s first order.</p>
+   610→   610→                  </div>
+   611→   611→                  <div>
+   612→   612→                    <Label htmlFor="hotel-guest-pct" className="text-xs uppercase tracking-wide text-navy-300">
+   613→   613→                      Hotel &amp; corporate first-order discount (%)
+   614→   614→                    </Label>
+   615→   615→                    <Input
+   616→   616→                      id="hotel-guest-pct"
+   617→   617→                      type="number"
+   618→   618→                      min="0"
+   619→   619→                      max="50"
+   620→   620→                      value={app.hotelGuestDiscountPercent}
+   621→   621→                      onChange={(e) => setApp({ hotelGuestDiscountPercent: Number(e.target.value) || 0 })}
+   622→   622→                      className="mt-1.5 w-32"
+   623→   623→                    />
+   624→   624→                    <p className="mt-1 text-xs text-navy-300">
+   625→   625→                      Redeemed with the offer code below — replaces the standard first-order
+   626→   626→                      discount and stacks with the 5% picture discount.
+   627→   627→                    </p>
+   628→   628→                  </div>
+   629→   629→                  <div>
+   630→   630→                    <Label htmlFor="hotel-promo-code" className="text-xs uppercase tracking-wide text-navy-300">
+   631→   631→                      Hotel &amp; corporate offer code
+   632→   632→                    </Label>
+   633→   633→                    <Input
+   634→   634→                      id="hotel-promo-code"
+   635→   635→                      value={app.hotelGuestPromoCode}
+   636→   636→                      onChange={(e) => setApp({ hotelGuestPromoCode: e.target.value.toUpperCase() })}
+   637→   637→                      placeholder="HOTEL15"
+   638→   638→                      className="mt-1.5 w-40 font-mono uppercase"
+   639→   639→                    />
+   640→   640→                    <p className="mt-1 text-xs text-navy-300">
+   641→   641→                      Hotels &amp; corporate clients type this at checkout. Print it on hotel partner cards.
+   642→   642→                    </p>
+   643→   643→                  </div>
+   644→   644→                </CardContent>
+   645→   645→              </Card>
+   646→   646→
+   647→   647→              {/* Delivery + handwash */}
+   648→   648→              <Card className="border-navy-100 shadow-navy">
+   649→   649→                <CardHeader>
+   650→   650→                  <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   651→   651→                    <Truck className="h-4 w-4 text-gold-400" /> Delivery & Wash Surcharges
+   652→   652→                  </CardTitle>
+   653→   653→                  <p className="text-xs text-navy-300">
+   654→   654→                    First delivery is always free — these rates apply after that, and to
+   655→   655→                    the handwash option on the order form.
+   656→   656→                  </p>
+   657→   657→                </CardHeader>
+   658→   658→                <CardContent className="grid gap-4 sm:grid-cols-2">
+   659→   659→                  <div>
+   660→   660→                    <Label htmlFor="delivery-fee" className="text-xs uppercase tracking-wide text-navy-300">
+   661→   661→                      Delivery fee after the first free one (₦)
+   662→   662→                    </Label>
+   663→   663→                    <Input
+   664→   664→                      id="delivery-fee"
+   665→   665→                      type="number"
+   666→   666→                      min="0"
+   667→   667→                      value={app.deliveryFee}
+   668→   668→                      onChange={(e) => setApp({ deliveryFee: Number(e.target.value) || 0 })}
+   669→   669→                      className="mt-1.5 w-40"
+   670→   670→                    />
+   671→   671→                    <p className="mt-1 text-xs text-navy-300">
+   672→   672→                      Currently {formatNaira(app.deliveryFee)} flat, island-wide. Research
+   673→   673→                      benchmark: Lagos dispatch platforms ₦800–₦2,500 per delivery.
+   674→   674→                    </p>
+   675→   675→                  </div>
+   676→   676→                  <div>
+   677→   677→                    <Label htmlFor="handwash-pct" className="text-xs uppercase tracking-wide text-navy-300">
+   678→   678→                      Handwash surcharge (% of cleaning subtotal)
+   679→   679→                    </Label>
+   680→   680→                    <Input
+   681→   681→                      id="handwash-pct"
+   682→   682→                      type="number"
+   683→   683→                      min="0"
+   684→   684→                      max="200"
+   685→   685→                      value={app.handwashSurchargePercent}
+   686→   686→                      onChange={(e) => setApp({ handwashSurchargePercent: Number(e.target.value) || 0 })}
+   687→   687→                      className="mt-1.5 w-32"
+   688→   688→                    />
+   689→   689→                    <p className="mt-1 text-xs text-navy-300">
+   690→   690→                      Machine wash stays free of surcharge — this is the gentle-care premium
+   691→   691→                      for hand-finished pieces.
+   692→   692→                    </p>
+   693→   693→                  </div>
+   694→   694→                </CardContent>
+   695→   695→              </Card>
+   696→   696→
+   697→   697→              {/* Guarantee eligibility + alterations */}
+   698→   698→              <Card className="border-navy-100 shadow-navy">
+   699→   699→                <CardHeader>
+   700→   700→                  <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   701→   701→                    <Percent className="h-4 w-4 text-gold-400" /> Guarantee Eligibility & Alterations
+   702→   702→                  </CardTitle>
+   703→   703→                  <p className="text-xs text-navy-300">
+   704→   704→                    &ldquo;Eligible order&rdquo; thresholds are shown word-for-word on the
+   705→   705→                    Guarantee section; set 0 to disable a threshold.
+   706→   706→                  </p>
+   707→   707→                </CardHeader>
+   708→   708→                <CardContent className="grid gap-4 sm:grid-cols-3">
+   709→   709→                  <div>
+   710→   710→                    <Label htmlFor="guarantee-min-garments" className="text-xs uppercase tracking-wide text-navy-300">
+   711→   711→                      Minimum garments
+   712→   712→                    </Label>
+   713→   713→                    <Input
+   714→   714→                      id="guarantee-min-garments"
+   715→   715→                      type="number"
+   716→   716→                      min="0"
+   717→   717→                      value={app.guaranteeMinGarments}
+   718→   718→                      onChange={(e) => setApp({ guaranteeMinGarments: Number(e.target.value) || 0 })}
+   719→   719→                      className="mt-1.5 w-28"
+   720→   720→                    />
+   721→   721→                    <p className="mt-1 text-xs text-navy-300">e.g. 2 garments</p>
+   722→   722→                  </div>
+   723→   723→                  <div>
+   724→   724→                    <Label htmlFor="guarantee-min-value" className="text-xs uppercase tracking-wide text-navy-300">
+   725→   725→                      …or minimum order value (₦)
+   726→   726→                    </Label>
+   727→   727→                    <Input
+   728→   728→                      id="guarantee-min-value"
+   729→   729→                      type="number"
+   730→   730→                      min="0"
+   731→   731→                      value={app.guaranteeMinOrderValue}
+   732→   732→                      onChange={(e) => setApp({ guaranteeMinOrderValue: Number(e.target.value) || 0 })}
+   733→   733→                      className="mt-1.5 w-36"
+   734→   734→                    />
+   735→   735→                    <p className="mt-1 text-xs text-navy-300">Either threshold qualifies.</p>
+   736→   736→                  </div>
+   737→   737→                  <div>
+   738→   738→                    <Label htmlFor="alterations-from" className="text-xs uppercase tracking-wide text-navy-300">
+   739→   739→                      Alterations from-price (₦)
+   740→   740→                    </Label>
+   741→   741→                    <Input
+   742→   742→                      id="alterations-from"
+   743→   743→                      type="number"
+   744→   744→                      min="0"
+   745→   745→                      value={app.alterationsFromPrice}
+   746→   746→                      onChange={(e) => setApp({ alterationsFromPrice: Number(e.target.value) || 0 })}
+   747→   747→                      className="mt-1.5 w-36"
+   748→   748→                    />
+   749→   749→                    <p className="mt-1 text-xs text-navy-300">
+   750→   750→                      <Scissors className="mr-1 inline h-3 w-3" />
+   751→   751→                      Set once the tailor confirms — 0 shows &ldquo;quoted before we sew&rdquo;.
+   752→   752→                    </p>
+   753→   753→                  </div>
+   754→   754→                </CardContent>
+   755→   755→              </Card>
+   756→   756→            </>
+   757→   757→          )}
+   758→   758→        </TabsContent>
+   759→   759→
+   760→   760→        {/* GUARANTEE TAB */}
+   761→   761→        <TabsContent value="guarantee" className="mt-4">
+   762→   762→          <Card className="border-navy-100 shadow-navy">
+   763→   763→            <CardHeader>
+   764→   764→              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+   765→   765→                <Percent className="h-4 w-4 text-gold-400" /> Return-as-Received Guarantee
+   766→   766→              </CardTitle>
+   767→   767→              <p className="text-xs text-navy-300">
+   768→   768→                Discount applied when customers upload condition photos during retail
+   769→   769→                booking.
+   770→   770→              </p>
+   771→   771→            </CardHeader>
+   772→   772→            <CardContent>
+   773→   773→              <div>
+   774→   774→                <Label htmlFor="guarantee-discount" className="text-xs uppercase tracking-wide text-navy-300">
+   775→   775→                  Discount Percentage
+   776→   776→                </Label>
+   777→   777→                <div className="mt-1.5 flex items-center gap-2">
+   778→   778→                  <Input
+   779→   779→                    id="guarantee-discount"
+   780→   780→                    type="number"
+   781→   781→                    min="0"
+   782→   782→                    max="100"
+   783→   783→                    value={draft.guaranteeDiscountPercent}
+   784→   784→                    onChange={(e) =>
+   785→   785→                      setDraft({
+   786→   786→                        ...draft,
+   787→   787→                        guaranteeDiscountPercent: parseInt(e.target.value) || 0,
+   788→   788→                      })
+   789→   789→                    }
+   790→   790→                    className="w-32"
+   791→   791→                  />
+   792→   792→                  <span className="text-sm font-medium text-navy">%</span>
+   793→   793→                  <span className="ml-3 text-xs text-navy-300">
+   794→   794→                    Customers save{' '}
+   795→   795→                    <strong className="text-navy">
+   796→   796→                      {draft.guaranteeDiscountPercent}% off
+   797→   797→                    </strong>{' '}
+   798→   798→                    their order when they upload condition photos
+   799→   799→                  </span>
+   800→   800→                </div>
+   801→   801→              </div>
+   802→   802→
+   803→   803→              <div className="mt-6 rounded-lg bg-gold-50 p-4 text-sm text-navy ring-1 ring-gold-200">
+   804→   804→                <p className="font-serif font-semibold text-navy">Guarantee Terms</p>
+   805→   805→                <p className="mt-2 text-xs leading-relaxed text-navy-300">
+   806→   806→                  Return-as-Received Guarantee: By utilizing our Condition Capture feature,
+   807→   807→                  we guarantee your garments will be returned clean and in the exact
+   808→   808→                  structural condition documented at pickup. Covers physical damage in our
+   809→   809→                  care; does not cover pre-existing wear or inherent fabric degradation.
+   810→   810→                  Claims must be made within 24 hours of delivery.
+   811→   811→                </p>
+   812→   812→              </div>
+   813→   813→            </CardContent>
+   814→   814→          </Card>
+   815→   815→        </TabsContent>
+   816→   816→      </Tabs>
+   817→   817→    </div>
+   818→   818→  )
+   819→   819→}
+   820→   820→
+   821→   821→/** One notification-type row: icon + copy + on/off switch. */
+   822→   822→function AlertToggle({
+   823→   823→  icon,
+   824→   824→  title,
+   825→   825→  description,
+   826→   826→  checked,
+   827→   827→  onChange,
+   828→   828→}: {
+   829→   829→  icon: React.ReactNode
+   830→   830→  title: string
+   831→   831→  description: string
+   832→   832→  checked: boolean
+   833→   833→  onChange: (v: boolean) => void
+   834→   834→}) {
+   835→   835→  return (
+   836→   836→    <label
+   837→   837→      className={cn(
+   838→   838→        'flex cursor-pointer items-start justify-between gap-4 rounded-lg border p-3 transition',
+   839→   839→        checked ? 'border-gold-300 bg-gold-50/50' : 'border-navy-100 bg-white'
+   840→   840→      )}
+   841→   841→    >
+   842→   842→      <span className="flex items-start gap-3">
+   843→   843→        <span
+   844→   844→          className={cn(
+   845→   845→            'mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full',
+   846→   846→            checked ? 'bg-gold-100 text-navy' : 'bg-linen-200 text-navy-300'
+   847→   847→          )}
+   848→   848→        >
+   849→   849→          {icon}
+   850→   850→        </span>
+   851→   851→        <span>
+   852→   852→          <span className="block text-sm font-medium text-navy">{title}</span>
+   853→   853→          <span className="mt-0.5 block text-xs leading-relaxed text-navy-300">{description}</span>
+   854→   854→        </span>
+   855→   855→      </span>
+   856→   856→      <input
+   857→   857→        type="checkbox"
+   858→   858→        checked={checked}
+   859→   859→        onChange={(e) => onChange(e.target.checked)}
+   860→   860→        className="mt-1.5 h-4 w-4 shrink-0 accent-[#0A192F]"
+   861→   861→        aria-label={title}
+   862→   862→      />
+   863→   863→    </label>
+   864→   864→  )
+   865→   865→}
+   866→   866→

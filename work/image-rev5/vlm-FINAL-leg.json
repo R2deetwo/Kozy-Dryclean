@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the 4x zoom image provided:\n\n1) **Is the leg serif complete and undamaged?** Yes, the bottom serif of the diagonal leg appears complete and undamaged. The edges are smooth with no visible bites, notches, or cut corners.\n2) **Any stray gold dot, speck or blob?** No, there are no stray gold dots, specks, or blobs in the fabric area to the right of or below the leg.\n3) **Does the fabric to the right look natural?** Yes, the navy fabric pattern (which appears to be a subtle geometric or plaid-like texture) looks natural and continuous. There are no signs of patching, smudging, or clone artifacts.\n4) **VERDICT:** CLEAN",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788029784,
+  "id": "202608300256221f2450b379ad4b5d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608300256221f2450b379ad4b5d",
+  "usage": {
+    "completion_tokens": 157,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 440,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 597
+  }
+}

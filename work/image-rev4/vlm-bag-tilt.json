@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the visual analysis of the image:\n\n(1) **Yes, the bag's front panel leans.** The **TOP** of the bag sits more to the **LEFT** than the bottom of the bag (it is tilted counter-clockwise). It is tilted by roughly **3 to 5 degrees** from perfectly upright.\n\n(2) The bounding box of the bag's flat front panel is approximately: **(52, 254, 906, 998)**.\n\n(3) The flattest and least obscured area is in the center-right portion of the panel, between the two vertical straps and above where the hands are gripping the sides. A printed logo would sit best at approximately **(530, 650)**.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788021304,
+  "id": "202608300035022bef1a8841124312",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608300035022bef1a8841124312",
+  "usage": {
+    "completion_tokens": 153,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 544,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 697
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) **HOTEL GUESTS: 15% OFF**\n(2) It fits on one line.\n(3) No, nothing is clipped or overflowing the box.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788013452,
+  "id": "2026082922241090d76059e4904925",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082922241090d76059e4904925",
+  "usage": {
+    "completion_tokens": 39,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2330,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2369
+  }
+}

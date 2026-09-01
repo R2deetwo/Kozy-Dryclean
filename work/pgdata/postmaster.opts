@@ -1,0 +1,1 @@
+/home/z/my-project/work/pgvenv/lib/python3.12/site-packages/pgserver/pginstall/bin/postgres "-D" "/home/z/my-project/work/pgdata" "-h" "" "-k" "/home/z/my-project/work/pgdata"

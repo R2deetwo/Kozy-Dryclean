@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the visual evidence in the poster:\n\n1) **Logo Lockup:** The logo consists of a large, serif, gold **\"K\"** mark on the left. To its right is the brand name **\"KOZY CARE\"** in white sans-serif capital letters, with the subtext **\"PREMIUM DRYCLEANING & LAUNDRY\"** (in smaller gold capital letters) positioned directly underneath it.\n**Frequency:** No, the text \"PREMIUM DRY CLEANING & LAUNDRY\" appears **only once** on the poster.\n\n2) **Three Step Labels:**\n*   **01 BOOK A PICKUP**\n*   **02 WE COLLECT & CLEAN**\n*   **03 WE DELIVER**\n\n3) **Address Count and Quote:** There is **one** address block containing **two** distinct locations listed sequentially:\n> **No 20, Westsyde Drive, Ogombo, Lagos · Paradise 3 Estate, Road 5/3, Chevron, Lagos**\n\n4) **Layout Issues:** There are **no visible text clipping, overflow, or layout problems**. All text elements are fully contained within their respective areas, the alignment is consistent, and there are no overlapping or cut-off characters.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1787847705,
+  "id": "202608280021413e1e446117f84087",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608280021413e1e446117f84087",
+  "usage": {
+    "completion_tokens": 258,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5144,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 5402
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) Yes, the gold 'Leave a review' button is present. There is no embedded feedback form visible.\n(2) Yes, the image shows a young seamstress at a sewing machine with a white/cream wall in the background.\n(3) Yes, the image shows a rider handing a navy bag with a gold K to a customer, featuring natural hands and no door frames in the background.\n(4) No, there are no broken images, overlaps, or layout defects across the three screenshots.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788023286,
+  "id": "20260830010804e092e10115fe4e2b",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830010804e092e10115fe4e2b",
+  "usage": {
+    "completion_tokens": 105,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2759,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2864
+  }
+}

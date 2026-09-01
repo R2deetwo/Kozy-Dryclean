@@ -1,0 +1,642 @@
+   601→    }
+   602→    try {
+   603→      // Real receipt capture: downscaled client-side, then sent with the
+   604→      // order and stored on the payment record for the admin queue.
+   605→      const dataUrl = await downscaleImage(file)
+   606→      setReceiptData(dataUrl)
+   607→      setReceiptUploaded(true)
+   608→    } catch {
+   609→      toast({
+   610→        title: 'Receipt not attached',
+   611→        description: "We couldn't read that image — you can continue without it.",
+   612→        variant: 'destructive',
+   613→      })
+   614→    }
+   615→  }
+   616→
+   617→  const canContinue = () => {
+   618→    if (step === 1) {
+   619→      if (type === 'ITEM')
+   620→        // Mode of wash is a REQUIRED choice on the order form (client
+   621→        // directive) — the customer must pick handwash or machine wash.
+   622→        return selectedItems.length > 0 && modeOfWash !== null
+   623→      return true // B2B always continues (just requests pickup)
+   624→    }
+   625→    if (step === 2) return true // condition capture is optional
+   626→    if (step === 3)
+   627→      return Boolean(
+   628→        pickupAddress && pickupDate && pickupSlot && (!isGuest || guestValid)
+   629→      )
+   630→    if (step === 4) return true
+   631→    return false
+   632→  }
+   633→
+   634→  const next = () => {
+   635→    // B2B (per-kg) orders have no condition-capture step — jump straight
+   636→    // over it (both when leaving step 1 and defensively from step 2)
+   637→    if (type === 'KG' && (step === 1 || step === 2)) {
+   638→      setStep(3)
+   639→      return
+   640→    }
+   641→    if (step < 4) setStep(step + 1)
+   642→  }
+   643→  const prev = () => {
+   644→    if (step === 3 && type === 'KG') {
+   645→      // Skip back to step 1 for B2B
+   646→      setStep(1)
+   647→      return
+   648→    }
+   649→    if (step > 1) setStep(step - 1)
+   650→  }
+   651→
+   652→  // ---- Guest guarantee-gate helpers -------------------------------------
+   653→  // "Skip for now" is free for everyone (guests included) — it simply forgoes
+   654→  // the guarantee. The auth gate only appears when a GUEST who has uploaded
+   655→  // photos tries to CONTINUE, because claiming the guarantee (5% off + damage
+   656→  // coverage) requires an account we can honour claims against.
+   657→
+   658→  /** Force-save the current state as a draft (used right before the gate
+   659→   *  redirects the customer away to login/signup). */
+   660→  const ensureDraftSaved = () => {
+   661→    saveDraft({
+   662→      savedAt: Date.now(),
+   663→      step,
+   664→      type,
+   665→      items,
+   666→      pickupAddress,
+   667→      pickupDate,
+   668→      pickupSlot,
+   669→      deliveryAddress,
+   670→      paymentMethod,
+   671→      guestName,
+   672→      guestEmail,
+   673→      guestPhone,
+   674→    })
+   675→  }
+   676→
+   677→  const openAuthGate = () => {
+   678→    ensureDraftSaved()
+   679→    // Stash the photos for the login round-trip (sessionStorage survives
+   680→    // same-tab navigation to /login and back, unlike component state).
+   681→    // Best-effort: quota errors just mean re-uploading after sign-in.
+   682→    try {
+   683→      if (photos.length > 0) {
+   684→        sessionStorage.setItem(GATE_PHOTOS_KEY, JSON.stringify(photos))
+   685→      } else {
+   686→        sessionStorage.removeItem(GATE_PHOTOS_KEY)
+   687→      }
+   688→    } catch {
+   689→      /* sessionStorage full or unavailable — proceed without the stash */
+   690→    }
+   691→    setGateEmail((prev) => prev || guestEmail)
+   692→    setShowAuthGate(true)
+   693→  }
+   694→
+   695→  /** Skip = move on without the guarantee. Free for guests AND members —
+   696→   *  this is the low-friction escape hatch, never gated. */
+   697→  const handleSkipPhotos = () => {
+   698→    setGuaranteeAck(false) // skipping always forfeits the 5%
+   699→    setStep(3)
+   700→  }
+   701→
+   702→  const handleNext = () => {
+   703→    if (step === 2 && type === 'ITEM') {
+   704→      // Continue is the UPLOAD path:
+   705→      //   no photos yet            -> nudge to upload (or skip)
+   706→      //   photos, terms not ticked -> nudge to acknowledge the terms
+   707→      //   photos + terms, guest    -> sign-in gate to claim the guarantee
+   708→      //   photos + terms, member   -> proceed with the guarantee active
+   709→      if (photos.length === 0) {
+   710→        toast({
+   711→          title: 'Please upload a photo to activate your guarantee',
+   712→          description:
+   713→            'Add at least one condition photo for the Return-as-Received Guarantee and its 5% discount — or tap "Skip for now" to continue without it.',
+   714→        })
+   715→        return
+   716→      }
+   717→      if (!guaranteeAck) {
+   718→        toast({
+   719→          title: 'One more tick',
+   720→          description:
+   721→            'Tick the confirmation box above to accept the Return-as-Received Guarantee terms and activate your 5% discount.',
+   722→        })
+   723→        return
+   724→      }
+   725→      if (isGuest) {
+   726→        openAuthGate()
+   727→        return
+   728→      }
+   729→      setStep(3)
+   730→      return
+   731→    }
+   732→    next()
+   733→  }
+   734→
+   735→  /** Gate submit: check the email against accounts and route to /login
+   736→   *  (account exists) or /signup (new email). The draft is already saved,
+   737→   *  so both paths land back on this exact step after auth. */
+   738→  const submitAuthGate = async (e: React.FormEvent) => {
+   739→    e.preventDefault()
+   740→    const email = gateEmail.trim().toLowerCase()
+   741→    if (!EMAIL_RE.test(email)) return
+   742→    setGateChecking(true)
+   743→    ensureDraftSaved()
+   744→    rememberAuthRedirect('/book')
+   745→    try {
+   746→      const res = await fetch('/api/auth/check-account', {
+   747→        method: 'POST',
+   748→        headers: { 'Content-Type': 'application/json' },
+   749→        body: JSON.stringify({ email }),
+   750→      })
+   751→      if (!res.ok) throw new Error('check failed')
+   752→      const data = await res.json()
+   753→      const params = `email=${encodeURIComponent(email)}&callbackUrl=${encodeURIComponent('/book')}`
+   754→      window.location.href = data.exists === true ? `/login?${params}` : `/signup?${params}`
+   755→    } catch {
+   756→      setGateChecking(false)
+   757→      toast({
+   758→        title: 'Something went wrong',
+   759→        description: 'We could not check that email. Please try again in a moment.',
+   760→        variant: 'destructive',
+   761→      })
+   762→    }
+   763→  }
+   764→
+   765→  /** Discard the saved draft and start the wizard from scratch. */
+   766→  const resetToFresh = () => {
+   767→    clearDraft()
+   768→    setResumedAt(null)
+   769→    setStep(1)
+   770→    setType(effectiveUser?.role === 'B2B' ? 'KG' : 'ITEM')
+   771→    setItems({})
+   772→    setPhotos([])
+   773→    setGuaranteeAck(false)
+   774→    setPickupAddress('')
+   775→    setPickupDate(defaultPickupDate())
+   776→    setPickupSlot(TIME_SLOTS[1])
+   777→    setServiceSpeed('STANDARD')
+   778→    setModeOfWash(null)
+   779→    setPromoCode('')
+   780→    setDeliveryAddress('')
+   781→    setPaymentMethod('BANK_TRANSFER')
+   782→    setGuestName('')
+   783→    setGuestEmail('')
+   784→    setGuestPhone('')
+   785→  }
+   786→
+   787→  const handleConfirm = async () => {
+   788→    // Alterations (Phase 17): the seamstress works from the customer's note —
+   789→    // block checkout until the note describes the work.
+   790→    if (type === 'ITEM' && hasAlterationItems && !alterationNotesValid) {
+   791→      toast({
+   792→        title: 'Describe the alteration work',
+   793→        description:
+   794→          'Please tell our seamstress what to change on which garment — add a short note on the service step (e.g. "navy trousers — waist taken in").',
+   795→        variant: 'destructive',
+   796→      })
+   797→      setStep(1)
+   798→      setLoading(false)
+   799→      return
+   800→    }
+   801→    setLoading(true)
+   802→    setAccountExists(false)
+   803→    try {
+   804→      // Create order via API (guests pass their contact details; the payment
+   805→      // record for BANK_TRANSFER is created server-side in the same request)
+   806→      const res = await fetch('/api/orders', {
+   807→        method: 'POST',
+   808→        headers: { 'Content-Type': 'application/json' },
+   809→        body: JSON.stringify({
+   810→          type,
+   811→          items: type === 'ITEM' ? selectedItems : [],
+   812→          guaranteeActive,
+   813→          serviceSpeed: type === 'ITEM' ? effectiveSpeed : 'STANDARD',
+   814→          modeOfWash: type === 'ITEM' ? modeOfWash : undefined,
+   815→          promoCode: type === 'ITEM' && promoCode.trim() ? promoCode.trim().toUpperCase() : undefined,
+   816→          alterationNotes:
+   817→            type === 'ITEM' && alterationNotes.trim() ? alterationNotes.trim() : undefined,
+   818→          pickupAddress,
+   819→          pickupDate: new Date(pickupDate).toISOString(),
+   820→          pickupTimeSlot: pickupSlot,
+   821→          deliveryAddress,
+   822→          ...(isGuest
+   823→            ? {
+   824→                guest: {
+   825→                  name: guestName.trim(),
+   826→                  email: guestEmail.trim(),
+   827→                  phone: guestPhone.trim(),
+   828→                },
+   829→              }
+   830→            : {}),
+   831→          ...(type === 'ITEM' ? { paymentMethod } : {}),
+   832→          // The optional transfer-receipt screenshot rides along with the
+   833→          // order — the server stores it on the payment record.
+   834→          ...(type === 'ITEM' && paymentMethod === 'BANK_TRANSFER' && receiptData
+   835→            ? { transferReceipt: receiptData }
+   836→            : {}),
+   837→        }),
+   838→      })
+   839→
+   840→      if (!res.ok) {
+   841→        const err = await res.json().catch(() => ({}))
+   842→        if (err.error === 'ACCOUNT_EXISTS') {
+   843→          setAccountExists(true)
+   844→          setLoading(false)
+   845→          return
+   846→        }
+   847→        // Friendly copy for the Phase-14 server validations — never raw JSON.
+   848→        if (err.error === 'MODE_OF_WASH_REQUIRED' || err.error === 'GUARANTEE_NOT_ELIGIBLE' || err.error === 'ALTERATION_NOTES_REQUIRED') {
+   849→          toast({
+   850→            title: 'Almost there',
+   851→            description: err.message || 'Please review your order details.',
+   852→            variant: 'destructive',
+   853→          })
+   854→          setLoading(false)
+   855→          setStep(1)
+   856→          return
+   857→        }
+   858→        throw new Error(err.error === 'Validation failed' ? 'Please check your details and try again.' : err.error || 'Failed to create order')
+   859→      }
+   860→
+   861→      const data = await res.json()
+   862→      const order = data.order
+   863→
+   864→      // The order is placed — the saved draft is no longer needed
+   865→      clearDraft()
+   866→      setResumedAt(null)
+   867→
+   868→      // ----- Bank transfer: straight to the payment-verification page -----
+   869→      // The dedicated /payment/pending screen states unmistakably that the
+   870→      // transfer is being verified, an email is coming, and the customer
+   871→      // must NOT pay or submit again — and it live-polls until admin
+   872→      // verifies. This replaces the old toast + generic success screen that
+   873→      // left customers unsure whether their payment had gone through.
+   874→      // (Applies to fresh orders AND de-duplicated re-submissions — the
+   875→      // server flags the latter with duplicate: true, but the customer
+   876→      // experience is identical either way.)
+   877→      if (type === 'ITEM' && paymentMethod === 'BANK_TRANSFER' && order.totalPrice) {
+   878→        const emailForLookup = order.user?.email || (isGuest ? guestEmail.trim() : '')
+   879→        window.location.href = `/payment/pending?order=${encodeURIComponent(
+   880→          order.orderNumber
+   881→        )}&email=${encodeURIComponent(emailForLookup)}`
+   882→        return
+   883→      }
+   884→
+   885→      // ----- Online card payment: redirect to Paystack's hosted checkout -----
+   886→      if (type === 'ITEM' && paymentMethod === 'PAYSTACK' && order.totalPrice) {
+   887→        try {
+   888→          const initRes = await fetch('/api/paystack/initialize', {
+   889→            method: 'POST',
+   890→            headers: { 'Content-Type': 'application/json' },
+   891→            body: JSON.stringify({
+   892→              orderId: order.id,
+   893→              ...(isGuest ? { email: guestEmail.trim() } : {}),
+   894→            }),
+   895→          })
+   896→          const initData = await initRes.json().catch(() => ({}))
+   897→          if (initRes.ok && initData.authorizationUrl) {
+   898→            // Redirect to the Paystack checkout page — after payment the
+   899→            // customer lands on /payment/callback and the webhook verifies.
+   900→            window.location.href = initData.authorizationUrl
+   901→            return
+   902→          }
+   903→          // Online payment unavailable — the order is still placed; fall
+   904→          // back to transfer instructions on the success screen.
+   905→          toast({
+   906→            title: 'Online payment unavailable',
+   907→            description:
+   908→              'Your order is confirmed — please complete payment by bank transfer using the details on the next screen.',
+   909→            variant: 'destructive',
+   910→          })
+   911→        } catch {
+   912→          toast({
+   913→            title: 'Online payment unavailable',
+   914→            description:
+   915→              'Your order is confirmed — please complete payment by bank transfer using the details on the next screen.',
+   916→            variant: 'destructive',
+   917→          })
+   918→        }
+   919→      }
+   920→
+   921→      toast({
+   922→        title: 'Booking placed!',
+   923→        description: `Order #${order.orderNumber} is confirmed. ${
+   924→          type === 'KG'
+   925→            ? 'We will weigh your items at the station and send the invoice.'
+   926→            : quoteOnly
+   927→            ? 'Our specialist will assess your pieces and send your quote for approval.'
+   928→            : paymentMethod === 'BANK_TRANSFER'
+   929→            ? receiptUploaded
+   930→              ? 'Your receipt is in the verification queue.'
+   931→              : 'Please complete your transfer to confirm payment.'
+   932→            : 'Complete your card payment to confirm.'
+   933→        }`,
+   934→      })
+   935→
+   936→      setTimeout(() => onComplete(order, { guestAccountCreated: !!data.guestAccountCreated }), 300)
+   937→    } catch (e: any) {
+   938→      toast({
+   939→        title: 'Booking failed',
+   940→        description: e.message || 'Something went wrong. Please try again.',
+   941→        variant: 'destructive',
+   942→      })
+   943→      setLoading(false)
+   944→    }
+   945→  }
+   946→
+   947→  return (
+   948→    <div className="min-h-screen bg-gradient-to-b from-linen-200 to-white pb-16">
+   949→      <Toaster />
+   950→      {/* Header / progress */}
+   951→      <div className="border-b border-navy-100 bg-white/80 backdrop-blur supports-[backdrop-filter]:bg-white/60[backdrop-filter]:bg-navy-800/60">
+   952→        <div className="mx-auto max-w-3xl px-4 py-4 sm:px-6">
+   953→          <button
+   954→            onClick={onCancel}
+   955→            className="mb-3 inline-flex items-center gap-1 text-xs text-navy-300 hover:text-navy"
+   956→          >
+   957→            <ArrowLeft className="h-3.5 w-3.5" /> Back to home
+   958→          </button>
+   959→          <div className="flex items-center justify-between gap-2">
+   960→            {STEPS.map((s, i) => {
+   961→              const active = step === s.id
+   962→              const done = step > s.id
+   963→              // Hide condition step for B2B
+   964→              if (s.id === 2 && type === 'KG') {
+   965→                return null
+   966→              }
+   967→              const Icon = s.icon
+   968→              return (
+   969→                <div key={s.id} className="flex flex-1 items-center">
+   970→                  <div
+   971→                    className={cn(
+   972→                      'flex h-9 w-9 items-center justify-center rounded-full text-xs font-semibold ring-2 transition',
+   973→                      active && 'bg-navy text-white ring-gold-400/30',
+   974→                      done && 'bg-gold-100 text-navy ring-gold-200',
+   975→                      !active && !done && 'bg-linen-200 text-navy-300 ring-muted-foreground/15'
+   976→                    )}
+   977→                  >
+   978→                    {done ? <Check className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
+   979→                  </div>
+   980→                  <span
+   981→                    className={cn(
+   982→                      'ml-2 hidden text-sm font-medium sm:inline',
+   983→                      active ? 'text-navy' : 'text-navy-300'
+   984→                    )}
+   985→                  >
+   986→                    {s.name}
+   987→                  </span>
+   988→                  {i < STEPS.length - 1 && (
+   989→                    <div className="mx-3 hidden h-px flex-1 bg-linen-200 sm:block" />
+   990→                  )}
+   991→                </div>
+   992→              )
+   993→            })}
+   994→          </div>
+   995→        </div>
+   996→      </div>
+   997→
+   998→      <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
+   999→        {/* Draft resumed — let the customer know their basket came back */}
+  1000→        {resumedAt && (
+  1001→          <motion.div
+  1002→            initial={{ opacity: 0, y: -8 }}
+  1003→            animate={{ opacity: 1, y: 0 }}
+  1004→            className="mb-5 flex flex-col gap-2 rounded-xl border border-gold-200 bg-gold-50/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+  1005→          >
+  1006→            <p className="text-sm text-navy">
+  1007→              <strong>Welcome back.</strong> We saved your booking on{' '}
+  1008→              {new Date(resumedAt).toLocaleDateString('en-NG', {
+  1009→                weekday: 'short',
+  1010→                day: 'numeric',
+  1011→                month: 'short',
+  1012→              })}{' '}
+  1013→              — continue right where you left off.
+  1014→            </p>
+  1015→            <button
+  1016→              type="button"
+  1017→              onClick={resetToFresh}
+  1018→              className="shrink-0 text-xs font-semibold text-navy-300 underline decoration-gold-300 decoration-2 underline-offset-2 hover:text-navy"
+  1019→            >
+  1020→              Start fresh
+  1021→            </button>
+  1022→          </motion.div>
+  1023→        )}
+  1024→
+  1025→        <AnimatePresence mode="wait">
+  1026→          {/* ====================================================
+  1027→              STEP 1 — SERVICE SELECTION
+  1028→          ==================================================== */}
+  1029→          {step === 1 && (
+  1030→            <motion.div
+  1031→              key="step1"
+  1032→              initial={{ opacity: 0, x: 16 }}
+  1033→              animate={{ opacity: 1, x: 0 }}
+  1034→              exit={{ opacity: 0, x: -16 }}
+  1035→              transition={{ duration: 0.2 }}
+  1036→            >
+  1037→              <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">Select service</h2>
+  1038→              <p className="mt-1 text-sm text-navy-300">
+  1039→                {isB2B
+  1040→                  ? 'As a corporate client, your order is priced per kilogram.'
+  1041→                  : 'Choose per-item retail pricing or request a bulk pickup.'}
+  1042→              </p>
+  1043→
+  1044→              {!isB2B && (
+  1045→                <RadioGroup
+  1046→                  value={type}
+  1047→                  onValueChange={(v) => setType(v as OrderType)}
+  1048→                  className="mt-5 grid grid-cols-2 gap-3"
+  1049→                >
+  1050→                  <label
+  1051→                    className={cn(
+  1052→                      'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
+  1053→                      type === 'ITEM' ? 'border-gold-400 bg-gold-50/50' : 'border-navy-100'
+  1054→                    )}
+  1055→                  >
+  1056→                    <RadioGroupItem value="ITEM" className="sr-only" />
+  1057→                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
+  1058→                      <User className="h-5 w-5" />
+  1059→                    </div>
+  1060→                    <div className="flex-1">
+  1061→                      <p className="font-semibold text-navy">Per-item (Retail)</p>
+  1062→                      <p className="text-xs text-navy-300">
+  1063→                        Pick your items. Exact total at checkout.
+  1064→                      </p>
+  1065→                    </div>
+  1066→                  </label>
+  1067→                  <label
+  1068→                    className={cn(
+  1069→                      'flex cursor-pointer items-start gap-3 rounded-xl border-2 p-4 transition',
+  1070→                      type === 'KG' ? 'border-gold-400 bg-gold-50/50' : 'border-navy-100'
+  1071→                    )}
+  1072→                  >
+  1073→                    <RadioGroupItem value="KG" className="sr-only" />
+  1074→                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gold-100 text-navy">
+  1075→                      <Building2 className="h-5 w-5" />
+  1076→                    </div>
+  1077→                    <div className="flex-1">
+  1078→                      <p className="font-semibold text-navy">Bulk (Per kg)</p>
+  1079→                      <p className="text-xs text-navy-300">
+  1080→                        Total weighed at the station after pickup.
+  1081→                      </p>
+  1082→                    </div>
+  1083→                  </label>
+  1084→                </RadioGroup>
+  1085→              )}
+  1086→
+  1087→              {isB2B && (
+  1088→                <Card className="mt-5 border-gold-200 bg-gold-50/50">
+  1089→                  <CardContent className="p-5">
+  1090→                    <div className="flex items-center gap-2">
+  1091→                      <Building2 className="h-5 w-5 text-navy-300" />
+  1092→                      <p className="font-semibold text-navy">Corporate Bulk Pickup</p>
+  1093→                    </div>
+  1094→                    <p className="mt-2 text-sm text-navy-300">
+  1095→                      Your order will be priced at <strong>{formatNaira(settings.pricePerKg)}/kg</strong>{' '}
+  1096→                      with a {settings.minimumKg}kg minimum charge. Our rider will collect your
+  1097→                      items, weigh them at the station, and we&apos;ll send you the final invoice
+  1098→                      with payment instructions.
+  1099→                    </p>
+  1100→                    <p className="mt-3 text-xs text-navy-300">
+  1101→                      Estimated minimum charge: <strong>{formatNaira(settings.pricePerKg * settings.minimumKg)}</strong>
+  1102→                    </p>
+  1103→                  </CardContent>
+  1104→                </Card>
+  1105→              )}
+  1106→
+  1107→              {type === 'ITEM' && (
+  1108→                <div className="mt-6">
+  1109→                  {/* Men / Women / Shoes — separated exactly like the landing
+  1110→                      pricing section. Shoes keep their own tab; all three tabs
+  1111→                      share the same quiet underline style (the old navy-filled
+  1112→                      shoes tab read like a banner, not a tab). */}
+  1113→                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
+  1114→                    Pick your items
+  1115→                  </p>
+  1116→                  <div className="mt-1 flex items-stretch gap-2 border-b border-navy-100">
+  1117→                    {(['men', 'women', 'shoes'] as const).map((tab) => (
+  1118→                      <button
+  1119→                        key={tab}
+  1120→                        type="button"
+  1121→                        onClick={() => setCatalogTab(tab)}
+  1122→                        className={cn(
+  1123→                          '-mb-px border-b-2 px-4 py-2 text-sm font-semibold uppercase tracking-wide transition',
+  1124→                          catalogTab === tab
+  1125→                            ? 'border-gold-400 text-navy'
+  1126→                            : 'border-transparent text-navy-300 hover:text-navy'
+  1127→                        )}
+  1128→                      >
+  1129→                        {tab === 'men' ? 'Men' : tab === 'women' ? 'Women' : 'Shoes'}
+  1130→                      </button>
+  1131→                    ))}
+  1132→                  </div>
+  1133→
+  1134→                  {/* Restoration consultation (owner directive): assessment
+  1135→                    comes BEFORE the trip, not after — a pair that can't be
+  1136→                    saved shouldn't be collected only to be returned as-is. */}
+  1137→                  {catalogTab === 'shoes' && (
+  1138→                    <div className="mt-4 flex items-start gap-3 rounded-xl border border-gold-200 bg-gold-50/60 p-4">
+  1139→                      <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+  1140→                      <div>
+  1141→                        <p className="text-sm font-semibold text-navy">
+  1142→                          Restorations start with a free assessment
+  1143→                        </p>
+  1144→                        <p className="mt-1 text-xs leading-relaxed text-navy-300">
+  1145→                          Restoration projects are priced by the extent of work —
+  1146→                          sole whitening, repaints, repairs — and begin at ₦5,000.
+  1147→                          Our specialist assesses your pair first and sends the
+  1148→                          final quote for your approval before any work begins.
+  1149→                          If a pair is beyond saving, we tell you straight — no
+  1150→                          charge, no wasted collection.
+  1151→                        </p>
+  1152→                      </div>
+  1153→                    </div>
+  1154→                  )}
+  1155→
+  1156→                  {/* Gendered groups for the active tab */}
+  1157→                  {(catalogTab === 'men'
+  1158→                    ? MEN_CATALOG_GROUPS
+  1159→                    : catalogTab === 'women'
+  1160→                      ? WOMEN_CATALOG_GROUPS
+  1161→                      : [SHOES_GROUP]
+  1162→                  ).map(renderCatalogGroup)}
+  1163→
+  1164→                  {/* Shared strip — household & extras serve everyone, so they
+  1165→                      show under BOTH the Men and Women tabs (mirrors the
+  1166→                      landing page's "For the home & everything else" row).
+  1167→                      Shoes are excluded here — they have their own tab above. */}
+  1168→                  {catalogTab !== 'shoes' && (
+  1169→                    <div className="mt-6 border-t border-navy-100 pt-3">
+  1170→                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
+  1171→                        For the home &amp; everything else
+  1172→                      </p>
+  1173→                      {WIZARD_SHARED_GROUPS.map(renderCatalogGroup)}
+  1174→                    </div>
+  1175→                  )}
+  1176→
+  1177→                  {/* MODE OF WASH — required order-form option (client directive:
+  1178→                      "customer special request, on mode of wash of clothes,
+  1179→                      either handwash or Machine wash"). Machine is standard;
+  1180→                      handwash adds the gentle-care surcharge. */}
+  1181→                  {type === 'ITEM' && (
+  1182→                    <div className="mt-6">
+  1183→                      <div className="flex items-center justify-between">
+  1184→                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold-600">
+  1185→                          Mode of wash <span className="text-red-500">*</span>
+  1186→                        </p>
+  1187→                        <p className="text-[10px] text-navy-300">Required</p>
+  1188→                      </div>
+  1189→                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+  1190→                        <button
+  1191→                          type="button"
+  1192→                          onClick={() => setModeOfWash('MACHINE')}
+  1193→                          aria-pressed={modeOfWash === 'MACHINE'}
+  1194→                          className={cn(
+  1195→                            'flex items-start gap-3 rounded-xl border-2 p-3 text-left transition',
+  1196→                            modeOfWash === 'MACHINE'
+  1197→                              ? 'border-gold-400 bg-gold-50/60 ring-1 ring-gold-200'
+  1198→                              : 'border-navy-100 hover:border-gold-200'
+  1199→                          )}
+  1200→                        >
+  1201→                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-100 text-navy">
+  1202→                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+  1203→                              <rect x="4" y="3" width="16" height="18" rx="2" />
+  1204→                              <circle cx="12" cy="13" r="4.5" />
+  1205→                              <path d="M8 3h8" />
+  1206→                            </svg>
+  1207→                          </div>
+  1208→                          <div>
+  1209→                            <p className="text-sm font-semibold text-navy">Machine Wash</p>
+  1210→                            <p className="text-xs text-navy-300">
+  1211→                              Standard professional care — no extra charge.
+  1212→                            </p>
+  1213→                          </div>
+  1214→                        </button>
+  1215→                        <button
+  1216→                          type="button"
+  1217→                          onClick={() => setModeOfWash('HANDWASH')}
+  1218→                          aria-pressed={modeOfWash === 'HANDWASH'}
+  1219→                          className={cn(
+  1220→                            'flex items-start gap-3 rounded-xl border-2 p-3 text-left transition',
+  1221→                            modeOfWash === 'HANDWASH'
+  1222→                              ? 'border-gold-400 bg-gold-50/60 ring-1 ring-gold-200'
+  1223→                              : 'border-navy-100 hover:border-gold-200'
+  1224→                          )}
+  1225→                        >
+  1226→                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-100 text-navy">
+  1227→                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+  1228→                              <path d="M6 20c0-4 1.5-6 4-6.5C12.5 13 13 11 12 9s-.5-5 3-5c2 0 3 1.5 3 3.5S17 11 17 13s1.5 3.5 4 3.5" />
+  1229→                              <path d="M7 20h10" />
+  1230→                            </svg>
+  1231→                          </div>
+  1232→                          <div>
+  1233→                            <p className="text-sm font-semibold text-navy">
+  1234→                              Handwash{' '}
+  1235→                              <span className="ml-1 rounded-full bg-gold-100 px-1.5 py-0.5 text-[10px] font-bold text-gold-700">
+  1236→                                +{appSettings.handwashSurchargePercent}%
+  1237→                              </span>
+  1238→                            </p>
+  1239→                            <p className="text-xs text-navy-300">
+  1240→                              Gentle per-garment hand care for delicate fabrics.
+
+[showing lines 601-1240 of 2309; use offset=1241 with limit to continue reading]

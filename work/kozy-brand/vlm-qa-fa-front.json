@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the QA check:\n\n1)  **Logo Lockup:** The logo at the top consists of a large, serif **gold letter \"K\"** (the mark) followed by the wordmark **\"KOZY CARE\"** in white sans-serif capital letters. Below that is the tagline **\"PREMIUM DRYCLEANING & LAUNDRY\"** in smaller gold capital letters.\n    *   **Yes**, the text \"PREMIUM DRYCLEANING & LAUNDRY\" appears exactly twice: once under the main logo at the top and once as part of the fine print at the very bottom (though slightly rephrased there).\n\n2)  **Exact Quote of Paragraph:**\n    \"Free pickup and delivery* across Lagos. Expert dry cleaning, wash & fold, and shoe care. Within 24 hours service (regular service is 3–5 days).\"\n\n3)  **Asterisked Fine-Print:**\n    Yes, there is an asterisked line at the bottom center.\n    *   **Quote:** \"*Free pickup and delivery for first order only.\"\n\n4)  **Layout/Clipping Issues:**\n    There are no obvious text clipping or overflow errors; all text is fully legible within the canvas boundaries. However, there is a minor **layout/design inconsistency**:\n    *   The **gold banner** containing the offer (\"15% OFF...\") is not perfectly centered horizontally. It appears to be shifted slightly to the **left**, leaving more empty navy space on the right side of the banner than the left. The text inside the banner itself is centered relative to the banner's width, but the banner element itself is off-center relative to the page.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1787847662,
+  "id": "202608280020572f07e6972eb04041",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608280020572f07e6972eb04041",
+  "usage": {
+    "completion_tokens": 362,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2352,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2714
+  }
+}

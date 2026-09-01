@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here are the exact details:\n\n**1) People/Illustrations of people:**\nNo, there are **no people or illustrations of people** on this poster. The design consists entirely of text, numbers, a QR code, and abstract background shapes (curved lines/shadows). There is no human figure depicted holding anything.\n\n**2) Gift box/Christmas presents:**\nNo, there is **no gift box, Christmas present, or any wrapped package** visible anywhere on the poster.\n\n**3) The three step illustrations:**\nThere are **no illustrations, icons, or pictorial images** for the three steps. Instead, each step is presented as **text-only information** with large numerals:\n\n*   **Step 01:** Labeled \"**BOOK A PICKUP**\" — The text describes choosing a time so their rider comes to your door.\n*   **Step 02:** Labeled \"**WE COLLECT & CLEAN**\" — The text describes expert dry cleaning, wash & fold, and shoe care services.\n*   **Step 03:** Labeled \"**DELIVERED IN 48H**\" — The text describes fresh, pressed garments returned in protective bags within 48 hours.\n\nThe poster uses only typography (text) and graphic design elements (the gold/yellow color scheme, dark blue background, and abstract curved shapes) without any representational drawings or photographs of objects or people.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788007858,
+  "id": "2026082920505417385e7dc3a04326",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082920505417385e7dc3a04326",
+  "usage": {
+    "completion_tokens": 293,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2714,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3007
+  }
+}

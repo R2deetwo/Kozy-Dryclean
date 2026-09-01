@@ -1,0 +1,688 @@
+     1→// =============================================================================
+     2→// Order notifications — email (Brevo) + SMS (Termii)
+     3→// =============================================================================
+     4→// Sends booking confirmations and status-change updates to customers.
+     5→//
+     6→// Design rules:
+     7→//   - NEVER throws: a failed notification must never break an order update.
+     8→//     Every public function wraps its work in try/catch and logs failures.
+     9→//   - Env-gated: if BREVO_API_KEY / TERMII_API_KEY are not set, the channel
+    10→//     is skipped with a console warning (so the feature is safe to deploy
+    11→//     before keys are configured).
+    12→//   - SMS is reserved for the statuses a customer actually needs to act on
+    13→//     (picked up, out for delivery, delivered) to conserve Termii credits.
+    14→//     Email is sent for every status change.
+    15→// =============================================================================
+    16→
+    17→import { sendEmail } from '@/lib/email'
+    18→import { formatNaira } from '@/lib/types'
+    19→import { getAppSettings } from '@/lib/app-settings'
+    20→import { isValidEmail, normalizeEmail } from '@/lib/email-validation'
+    21→
+    22→type NotifiableOrder = {
+    23→  id: string
+    24→  orderNumber: string
+    25→  status: string
+    26→  type: string
+    27→  totalPrice?: number | null
+    28→  serviceSpeed?: string | null
+    29→  pickupAddress: string
+    30→  pickupDate: Date | string
+    31→  pickupTimeSlot: string
+    32→  deliveryAddress?: string | null
+    33→  user: {
+    34→    id?: string
+    35→    name: string
+    36→    email: string
+    37→    phone: string
+    38→  }
+    39→}
+    40→
+    41→/** Customer-facing turnaround promise for an order's service-speed tier. */
+    42→function turnaroundCopy(speed?: string | null): string {
+    43→  if (speed === 'EXPRESS_48') return 'Express 48 — back within 48 hours of pickup'
+    44→  if (speed === 'EXPRESS_24') return 'Express 24 — back within 24 hours of pickup'
+    45→  return 'Standard — back within 3–5 days'
+    46→}
+    47→
+    48→// ----- Status copy (single source of truth for customer-facing wording) -----
+    49→const STATUS_COPY: Record<string, { title: string; body: string }> = {
+    50→  REQUESTED: {
+    51→    title: 'Booking received',
+    52→    body: 'We have your pickup request and will confirm shortly.',
+    53→  },
+    54→  PAYMENT_PENDING_VERIFICATION: {
+    55→    title: 'Payment submitted for review',
+    56→    body: 'We received your transfer and are verifying it. This usually takes just a few minutes during business hours.',
+    57→  },
+    58→  PAYMENT_VERIFIED: {
+    59→    title: 'Payment confirmed',
+    60→    body: 'Your payment is confirmed. Your pickup is now scheduled.',
+    61→  },
+    62→  PICKED_UP: {
+    63→    title: 'Your garments have been picked up',
+    64→    body: 'Our rider has collected your items and they are on the way to our station.',
+    65→  },
+    66→  AT_STATION: {
+    67→    title: 'Items checked in at our station',
+    68→    body: 'Your garments have arrived at our facility and are being inspected and logged.',
+    69→  },
+    70→  PROCESSING: {
+    71→    title: 'Cleaning in progress',
+    72→    body: 'Your garments are being cleaned with premium care.',
+    73→  },
+    74→  FINISHING: {
+    75→    title: 'Finishing touches',
+    76→    body: 'We are pressing and finishing your garments to Kozy standards.',
+    77→  },
+    78→  OUT_FOR_DELIVERY: {
+    79→    title: 'Out for delivery',
+    80→    body: 'Your order is on its way back to you. Please keep your phone nearby — our rider may call on arrival.',
+    81→  },
+    82→  DELIVERED: {
+    83→    title: 'Delivered — thank you!',
+    84→    body: 'Your order has been delivered. We hope everything is exactly as it should be.',
+    85→  },
+    86→  CANCELLED: {
+    87→    title: 'Order cancelled',
+    88→    body: 'This order has been cancelled. If this is unexpected, please contact us.',
+    89→  },
+    90→}
+    91→
+    92→// Statuses worth an SMS (actionable, time-sensitive)
+    93→const SMS_STATUSES = new Set(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'])
+    94→
+    95→function baseUrl(): string {
+    96→  return (
+    97→    process.env.NEXTAUTH_URL ||
+    98→    process.env.NEXT_PUBLIC_APP_URL ||
+    99→    'https://kozycare.ng'
+   100→  )
+   101→}
+   102→
+   103→function fmtDate(d: Date | string): string {
+   104→  const date = new Date(d)
+   105→  return date.toLocaleDateString('en-NG', {
+   106→    weekday: 'long',
+   107→    day: 'numeric',
+   108→    month: 'long',
+   109→    year: 'numeric',
+   110→  })
+   111→}
+   112→
+   113→// ----- Branded email wrapper (navy/gold, consistent with verification email) -----
+   114→// Async: the footer contact phone comes from AppSetting so the admin can
+   115→// change the business line once in Settings and every future email follows
+   116→// (previously every template hardcoded +234 803 175 5230 and silently
+   117→// contradicted an edited setting).
+   118→async function brandedEmail(opts: {
+   119→  heading: string
+   120→  intro: string
+   121→  order: NotifiableOrder
+   122→  extraRows?: { label: string; value: string }[]
+   123→  cta?: { label: string; url: string }
+   124→  footer?: string
+   125→}): Promise<{ subject: string; html: string }> {
+   126→  const { heading, intro, order, extraRows = [], cta, footer } = opts
+   127→  const { contactPhone } = await getAppSettings()
+   128→  const rows: { label: string; value: string }[] = [
+   129→    { label: 'Order', value: `#${order.orderNumber}` },
+   130→    { label: 'Pickup', value: `${fmtDate(order.pickupDate)} · ${order.pickupTimeSlot}` },
+   131→    { label: 'Pickup address', value: order.pickupAddress },
+   132→  ]
+   133→  if (order.serviceSpeed && order.serviceSpeed !== 'STANDARD') {
+   134→    rows.push({ label: 'Turnaround', value: turnaroundCopy(order.serviceSpeed) })
+   135→  }
+   136→  if (order.totalPrice) {
+   137→    rows.push({ label: 'Total', value: formatNaira(order.totalPrice) })
+   138→  }
+   139→  rows.push(...extraRows)
+   140→
+   141→  const subject = `${heading} — Order #${order.orderNumber} · Kozy Care`
+   142→
+   143→  const html = `
+   144→  <!DOCTYPE html>
+   145→  <html>
+   146→  <body style="font-family: Georgia, serif; background: #F8F9FA; padding: 40px 0; margin: 0;">
+   147→    <div style="max-width: 520px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
+   148→      <div style="background: linear-gradient(135deg, #0A192F, #102740); padding: 32px 40px; text-align: center;">
+   149→        <h1 style="color: #D4AF37; font-family: Georgia, serif; font-size: 28px; font-weight: 700; margin: 0;">Kozy Care</h1>
+   150→        <p style="color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0 0 0;">Drycleaning &amp; Laundry</p>
+   151→      </div>
+   152→      <div style="padding: 40px;">
+   153→        <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">${heading}, ${order.user.name.split(' ')[0]}!</h2>
+   154→        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 24px 0;">${intro}</p>
+   155→        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+   156→          ${rows
+   157→            .map(
+   158→              (r) => `
+   159→            <tr>
+   160→              <td style="padding: 8px 0; color: #6F88A8; width: 140px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">${r.label}</td>
+   161→              <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;">${r.value}</td>
+   162→            </tr>`
+   163→            )
+   164→            .join('')}
+   165→        </table>
+   166→        ${
+   167→          cta
+   168→            ? `<div style="text-align: center; margin: 28px 0 8px 0;">
+   169→                 <a href="${cta.url}" style="display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);">${cta.label}</a>
+   170→               </div>
+   171→               <p style="color: #6F88A8; font-size: 12px; margin: 12px 0 0 0; line-height: 1.5;">Or paste this link into your browser:<br><span style="color: #0A192F; word-break: break-all;">${cta.url}</span></p>`
+   172→            : ''
+   173→        }
+   174→        <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
+   175→          ${
+   176→            footer || `Questions? Call us on ${contactPhone} or reply to this email.<br>Kozy Care — Uncompromising care. Exceptional convenience.`
+   177→          }
+   178→        </p>
+   179→      </div>
+   180→    </div>
+   181→  </body>
+   182→  </html>`
+   183→
+   184→  return { subject, html }
+   185→}
+   186→
+   187→// ----- Termii SMS -----
+   188→async function sendSMS(to: string, message: string): Promise<void> {
+   189→  const apiKey = process.env.TERMII_API_KEY
+   190→  if (!apiKey) {
+   191→    console.warn('TERMII_API_KEY not set — skipping SMS send')
+   192→    return
+   193→  }
+   194→  const senderId = process.env.TERMII_SENDER_ID || 'Kozy'
+   195→  const channel = process.env.TERMII_CHANNEL || 'generic'
+   196→
+   197→  const res = await fetch('https://api.ng.termii.com/api/sms/send', {
+   198→    method: 'POST',
+   199→    headers: { 'Content-Type': 'application/json' },
+   200→    body: JSON.stringify({
+   201→      to: to.replace(/\s|-/g, ''),
+   202→      from: senderId,
+   203→      sms: message,
+   204→      type: 'plain',
+   205→      channel,
+   206→    }),
+   207→  })
+   208→  if (!res.ok) {
+   209→    const err = await res.text()
+   210→    throw new Error(`Termii send failed (${res.status}): ${err}`)
+   211→  }
+   212→}
+   213→
+   214→// =============================================================================
+   215→// Public API — all functions are safe to call from any route handler
+   216→// =============================================================================
+   217→
+   218→// ----- Bank-transfer order: verification underway -----
+   219→// Sent the moment a bank-transfer order is confirmed. This is the email that
+   220→// answers "did my payment go through?" — it says clearly that verification is
+   221→// underway, another email follows the moment admin confirms, and the customer
+   222→// must NOT pay again.
+   223→export async function notifyTransferPendingVerification(
+   224→  order: NotifiableOrder
+   225→): Promise<void> {
+   226→  try {
+   227→    const amount = order.totalPrice ?? 0
+   228→    const { subject, html } = await brandedEmail({
+   229→      heading: 'We’re verifying your transfer',
+   230→      intro:
+   231→        'Thank you for booking with Kozy Care. Your order is in and our team is verifying your bank transfer right now — usually within minutes during business hours (Mon–Sat, 8am–6pm). You’ll get another email the moment it’s confirmed. Please don’t send the transfer again or re-book: if you completed it, we have it, and your rider is dispatched as soon as payment is verified.',
+   232→      order,
+   233→      extraRows: [
+   234→        { label: 'Amount', value: formatNaira(amount) },
+   235→        { label: 'Payment', value: 'Bank transfer — being verified' },
+   236→        { label: 'Narration reference', value: `Use #${order.orderNumber}` },
+   237→      ],
+   238→      cta: { label: 'Check payment status', url: `${baseUrl()}/payment/pending?order=${order.orderNumber}&email=${encodeURIComponent(order.user.email)}` },
+   239→      footer:
+   240→        'The status page updates itself while we verify — no need to refresh or resend anything.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+   241→    })
+   242→    await sendEmail({ to: order.user.email, subject, html })
+   243→
+   244→    await sendSMS(
+   245→      order.user.phone,
+   246→      `Kozy Care: Order #${order.orderNumber} received — we're verifying your transfer of ${formatNaira(amount)}. You'll get an email once confirmed. Please do not pay again.`
+   247→    )
+   248→  } catch (e) {
+   249→    console.error('notifyTransferPendingVerification failed:', e)
+   250→  }
+   251→}
+   252→
+   253→// ----- Booking confirmation (order created — authed or guest) -----
+   254→export async function notifyOrderCreated(order: NotifiableOrder): Promise<void> {
+   255→  try {
+   256→    const { subject, html } = await brandedEmail({
+   257→      heading: 'Your booking is confirmed',
+   258→      intro:
+   259→        'Thank you for choosing Kozy Care. Here are your pickup details — keep this email for your records.',
+   260→      order,
+   261→      cta: { label: 'Track your order', url: `${baseUrl()}/portal` },
+   262→    })
+   263→    await sendEmail({ to: order.user.email, subject, html })
+   264→
+   265→    await sendSMS(
+   266→      order.user.phone,
+   267→      `Kozy Care: Booking confirmed! Order #${order.orderNumber}, pickup ${fmtDate(order.pickupDate)} (${order.pickupTimeSlot}). Track: ${baseUrl()}/portal`
+   268→    )
+   269→  } catch (e) {
+   270→    console.error('notifyOrderCreated failed:', e)
+   271→  }
+   272→}
+   273→
+   274→// ----- Guest account created alongside a booking -----
+   275→// opts.transferPending: the booking was paid by bank transfer and is awaiting
+   276→// verification — the email then leads with that (plus the "don't pay again"
+   277→// reassurance) so a first-time guest is never left wondering.
+   278→export async function notifyGuestAccountCreated(
+   279→  order: NotifiableOrder,
+   280→  email: string,
+   281→  opts?: { transferPending?: boolean }
+   282→): Promise<void> {
+   283→  try {
+   284→    const transferPending = opts?.transferPending === true
+   285→    const { subject, html } = await brandedEmail({
+   286→      heading: transferPending ? 'We’re verifying your transfer' : 'Your booking is confirmed',
+   287→      intro: transferPending
+   288→        ? 'Thank you for booking with Kozy Care. Your order is in and our team is verifying your bank transfer right now — usually within minutes during business hours (Mon–Sat, 8am–6pm). You’ll get another email the moment it’s confirmed, so please don’t send the transfer again or re-book. We also created an account with this email so you can track this order and book again faster — just set a password with the button below.'
+   289→        : 'Thank you for choosing Kozy Care. We created an account with this email so you can track this order and book again faster — just set a password with the button below.',
+   290→      order,
+   291→      extraRows: transferPending
+   292→        ? [
+   293→            { label: 'Amount', value: formatNaira(order.totalPrice ?? 0) },
+   294→            { label: 'Payment', value: 'Bank transfer — being verified' },
+   295→            { label: 'Narration reference', value: `Use #${order.orderNumber}` },
+   296→          ]
+   297→        : [],
+   298→      cta: {
+   299→        label: transferPending ? 'Check payment status & set password' : 'Set my password',
+   300→        url: `${baseUrl()}/forgot-password?email=${encodeURIComponent(email)}`,
+   301→      },
+   302→      footer: transferPending
+   303→        ? 'You booked as a guest, so no password exists yet — the button above lets you set one for future visits. We’ll email you the moment your transfer is verified.<br>Kozy Care — Uncompromising care. Exceptional convenience.'
+   304→        : 'You booked as a guest, so no password exists yet. The button above lets you set one — it also works for signing in on future visits.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+   305→    })
+   306→    await sendEmail({ to: email, subject, html })
+   307→
+   308→    await sendSMS(
+   309→      order.user.phone,
+   310→      transferPending
+   311→        ? `Kozy Care: Order #${order.orderNumber} received — we're verifying your transfer. You'll get an email once confirmed. Please do not pay again. Set your password: ${baseUrl()}/forgot-password`
+   312→        : `Kozy Care: Booking confirmed! Order #${order.orderNumber}, pickup ${fmtDate(order.pickupDate)} (${order.pickupTimeSlot}). Set your password: ${baseUrl()}/forgot-password`
+   313→    )
+   314→  } catch (e) {
+   315→    console.error('notifyGuestAccountCreated failed:', e)
+   316→  }
+   317→}
+   318→
+   319→// ----- Status change (called from PATCH /api/orders/[id]) -----
+   320→export async function notifyOrderStatus(
+   321→  order: NotifiableOrder,
+   322→  newStatus: string
+   323→): Promise<void> {
+   324→  try {
+   325→    const copy = STATUS_COPY[newStatus]
+   326→    if (!copy) return
+   327→
+   328→    // Email — every status change
+   329→    const { subject, html } = await brandedEmail({
+   330→      heading: copy.title,
+   331→      intro: copy.body,
+   332→      order,
+   333→      cta:
+   334→        newStatus === 'DELIVERED'
+   335→          ? { label: 'Rate your experience', url: `${baseUrl()}/review/${order.id}` }
+   336→          : { label: 'Track your order', url: `${baseUrl()}/portal` },
+   337→    })
+   338→    await sendEmail({ to: order.user.email, subject, html })
+   339→
+   340→    // SMS — only the actionable statuses
+   341→    if (SMS_STATUSES.has(newStatus)) {
+   342→      const smsText =
+   343→        newStatus === 'DELIVERED'
+   344→          ? `Kozy Care: Order #${order.orderNumber} delivered. Thank you! Rate your experience: ${baseUrl()}/review/${order.id}`
+   345→          : `Kozy Care: ${copy.title} — order #${order.orderNumber}. ${newStatus === 'OUT_FOR_DELIVERY' ? 'Our rider is on the way to you.' : ''}`.trim()
+   346→      await sendSMS(order.user.phone, smsText)
+   347→    }
+   348→  } catch (e) {
+   349→    console.error('notifyOrderStatus failed:', e)
+   350→  }
+   351→}
+   352→
+   353→// ----- Payment verified via Paystack webhook -----
+   354→export async function notifyPaymentVerified(order: NotifiableOrder): Promise<void> {
+   355→  try {
+   356→    const { subject, html } = await brandedEmail({
+   357→      heading: 'Payment confirmed',
+   358→      intro:
+   359→        'Your online payment was received and confirmed automatically. Your pickup is now scheduled.',
+   360→      order,
+   361→      cta: { label: 'Track your order', url: `${baseUrl()}/portal` },
+   362→    })
+   363→    await sendEmail({ to: order.user.email, subject, html })
+   364→  } catch (e) {
+   365→    console.error('notifyPaymentVerified failed:', e)
+   366→  }
+   367→}
+   368→
+   369→// ----- Bank transfer REJECTED by admin -----
+   370→// The customer must act (their transfer didn't match the order), so the email
+   371→// spells out exactly what to check and what NOT to do (don't pay twice —
+   372→// if they were debited, we sort it out with a phone call).
+   373→export async function notifyPaymentRejected(order: NotifiableOrder): Promise<void> {
+   374→  try {
+   375→    const { contactPhone } = await getAppSettings()
+   376→    const { subject, html } = await brandedEmail({
+   377→      heading: 'We couldn’t match your transfer',
+   378→      intro:
+   379→        `Our team checked but couldn’t match a transfer to this order yet. Please check in your banking app that the transfer went through to the correct account. If you were debited, don’t pay again — call us on ${contactPhone} with your order number and we’ll sort it out the same day. If the transfer never left your account, simply send it with your order number as the narration and we’ll verify it right away.`,
+   380→      order,
+   381→      extraRows: [{ label: 'Payment', value: 'Bank transfer — not matched yet' }],
+   382→      cta: { label: 'Check payment status', url: `${baseUrl()}/payment/pending?order=${order.orderNumber}&email=${encodeURIComponent(order.user.email)}` },
+   383→      footer:
+   384→        'Nothing is lost — your order is safe with us and we’ll get it moving as soon as the payment is sorted.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+   385→    })
+   386→    await sendEmail({ to: order.user.email, subject, html })
+   387→
+   388→    await sendSMS(
+   389→      order.user.phone,
+   390→      `Kozy Care: We couldn't match a transfer for order #${order.orderNumber} yet. If you were debited, do NOT pay again — call ${contactPhone} and we'll sort it out.`
+   391→    )
+   392→  } catch (e) {
+   393→    console.error('notifyPaymentRejected failed:', e)
+   394→  }
+   395→}
+   396→
+   397→// =============================================================================
+   398→// ADMIN ALERTS — ping the business owner's inbox the moment something needs
+   399→// their attention (new signup, new order, customer says they've paid).
+   400→//
+   401→// The destination address + per-alert toggles live in AppSetting (admin
+   402→// Settings → Notifications) so the owner can change them without a redeploy.
+   403→// Fallback chain: DB setting → ADMIN_ALERTS_EMAIL env → the default contact
+   404→// email. Like every notification here: never throws, never blocks a request.
+   405→// =============================================================================
+   406→
+   407→/** Resolve where admin alerts go + which types are enabled. */
+   408→async function adminAlertConfig(): Promise<{
+   409→  email: string
+   410→  newSignup: boolean
+   411→  newOrder: boolean
+   412→  paymentPending: boolean
+   413→}> {
+   414→  const settings = await getAppSettings()
+   415→  const fallback =
+   416→    process.env.ADMIN_ALERTS_EMAIL || settings.contactEmail || 'kozygarmentcare@gmail.com'
+   417→  return {
+   418→    email: isValidEmail(settings.adminAlertsEmail)
+   419→      ? normalizeEmail(settings.adminAlertsEmail)
+   420→      : normalizeEmail(fallback),
+   421→    newSignup: settings.adminAlertsNewSignup !== false,
+   422→    newOrder: settings.adminAlertsNewOrder !== false,
+   423→    paymentPending: settings.adminAlertsPaymentPending !== false,
+   424→  }
+   425→}
+   426→
+   427→/** Compact operational email wrapper for admin alerts (scannable, not marketing-pretty). */
+   428→function adminEmail(opts: {
+   429→  badge: string
+   430→  heading: string
+   431→  intro: string
+   432→  rows: { label: string; value: string }[]
+   433→  cta: { label: string; url: string }
+   434→}): { subject: string; html: string } {
+   435→  const { badge, heading, intro, rows, cta } = opts
+   436→  return {
+   437→    subject: `[Kozy Care] ${heading}`,
+   438→    html: `
+   439→    <!DOCTYPE html>
+   440→    <html>
+   441→    <body style="font-family: Arial, Helvetica, sans-serif; background: #F8F9FA; padding: 32px 0; margin: 0;">
+   442→      <div style="max-width: 560px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
+   443→        <div style="background: #0A192F; padding: 18px 32px;">
+   444→          <table style="width: 100%; border-collapse: collapse;"><tr>
+   445→            <td style="vertical-align: middle;">
+   446→              <span style="color: #D4AF37; font-weight: 700; font-size: 18px; letter-spacing: 0.5px;">Kozy Care</span>
+   447→              <span style="color: rgba(255,255,255,0.5); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin-left: 10px;">Operations</span>
+   448→            </td>
+   449→            <td style="vertical-align: middle; text-align: right;">
+   450→              <span style="background: #D4AF37; color: #0A192F; font-size: 11px; font-weight: 700; padding: 4px 12px; border-radius: 9999px; text-transform: uppercase; letter-spacing: 1px;">${badge}</span>
+   451→            </td>
+   452→          </tr></table>
+   453→        </div>
+   454→        <div style="padding: 28px 32px;">
+   455→          <h2 style="color: #0A192F; font-size: 18px; margin: 0 0 10px 0;">${heading}</h2>
+   456→          <p style="color: #6F88A8; font-size: 14px; line-height: 1.6; margin: 0 0 18px 0;">${intro}</p>
+   457→          <table style="width: 100%; border-collapse: collapse; font-size: 14px; background: #F8F9FA; border-radius: 8px;">
+   458→            ${rows
+   459→              .map(
+   460→                (r) => `
+   461→            <tr>
+   462→              <td style="padding: 9px 14px; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #EDEFF2;">${r.label}</td>
+   463→              <td style="padding: 9px 14px; color: #0A192F; font-weight: 600; border-bottom: 1px solid #EDEFF2;">${r.value}</td>
+   464→            </tr>`
+   465→              )
+   466→              .join('')}
+   467→          </table>
+   468→          <div style="margin: 22px 0 4px 0; text-align: center;">
+   469→            <a href="${cta.url}" style="display: inline-block; background: #0A192F; color: #ffffff; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: 700; font-size: 14px;">${cta.label}</a>
+   470→          </div>
+   471→          <p style="color: #98A8BD; font-size: 11px; margin: 18px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 14px; line-height: 1.5;">
+   472→            You receive this because admin alerts are on — manage the alert email and toggles in
+   473→            Admin → Settings → Notifications.
+   474→          </p>
+   475→        </div>
+   476→      </div>
+   477→    </body>
+   478→    </html>`,
+   479→  }
+   480→}
+   481→
+   482→/** A new customer signed up (account created, pending email verification). */
+   483→export async function notifyAdminNewCustomer(user: {
+   484→  name: string
+   485→  email: string
+   486→  phone: string
+   487→  role: string
+   488→  company?: string | null
+   489→}): Promise<void> {
+   490→  try {
+   491→    const cfg = await adminAlertConfig()
+   492→    if (!cfg.newSignup) return
+   493→    const { subject, html } = adminEmail({
+   494→      badge: 'New customer',
+   495→      heading: `${user.name} just signed up`,
+   496→      intro:
+   497→        'A new account was created and is waiting for the customer to verify their email. They’ll show up in the CRM with a NEW badge for their first week.',
+   498→      rows: [
+   499→        { label: 'Name', value: user.name },
+   500→        { label: 'Email', value: user.email },
+   501→        { label: 'Phone', value: user.phone },
+   502→        { label: 'Account type', value: user.role === 'B2B' ? `Corporate${user.company ? ` — ${user.company}` : ''}` : 'Personal' },
+   503→      ],
+   504→      cta: { label: 'Open the CRM', url: `${baseUrl()}/admin` },
+   505→    })
+   506→    await sendEmail({ to: cfg.email, subject, html })
+   507→  } catch (e) {
+   508→    console.error('notifyAdminNewCustomer failed:', e)
+   509→  }
+   510→}
+   511→
+   512→/** A new order was placed (authed customer or guest checkout). */
+   513→export async function notifyAdminNewOrder(order: NotifiableOrder): Promise<void> {
+   514→  try {
+   515→    const cfg = await adminAlertConfig()
+   516→    if (!cfg.newOrder) return
+   517→    let itemCount = '—'
+   518→    try {
+   519→      const parsed = JSON.parse((order as any).itemsManifest || '[]')
+   520→      if (Array.isArray(parsed) && parsed.length > 0) itemCount = `${parsed.length} item${parsed.length === 1 ? '' : 's'}`
+   521→    } catch {
+   522→      /* KG orders have no manifest */
+   523→    }
+   524→    const { subject, html } = adminEmail({
+   525→      badge: 'New order',
+   526→      heading: `New order #${order.orderNumber}`,
+   527→      intro:
+   528→        order.type === 'KG'
+   529→          ? 'A corporate/bulk booking came in — total is quoted after weighing at the station.'
+   530→          : 'A new pickup booking came in. It will appear on your Orders board immediately.',
+   531→      rows: [
+   532→        { label: 'Customer', value: order.user.name },
+   533→        { label: 'Phone', value: order.user.phone },
+   534→        { label: 'Pickup', value: `${fmtDate(order.pickupDate)} · ${order.pickupTimeSlot}` },
+   535→        { label: 'Address', value: order.pickupAddress },
+   536→        { label: 'Basket', value: order.type === 'KG' ? 'Bulk (per-kg)' : itemCount },
+   537→        { label: 'Total', value: order.totalPrice ? formatNaira(order.totalPrice) : 'To be weighed' },
+   538→        {
+   539→          label: 'Payment',
+   540→          value: (order as any).payments?.some?.((p: any) => p.status === 'PENDING') || order.status === 'PAYMENT_PENDING_VERIFICATION'
+   541→            ? 'Bank transfer — verify it now'
+   542→            : 'Bank transfer / card',
+   543→        },
+   544→      ],
+   545→      cta: { label: 'Open the Orders board', url: `${baseUrl()}/admin` },
+   546→    })
+   547→    await sendEmail({ to: cfg.email, subject, html })
+   548→  } catch (e) {
+   549→    console.error('notifyAdminNewOrder failed:', e)
+   550→  }
+   551→}
+   552→
+   553→/** A customer confirmed a bank transfer — needs admin verification NOW. */
+   554→export async function notifyAdminTransferPending(order: NotifiableOrder): Promise<void> {
+   555→  try {
+   556→    const cfg = await adminAlertConfig()
+   557→    if (!cfg.paymentPending) return
+   558→    const { subject, html } = adminEmail({
+   559→      badge: 'Payment to verify',
+   560→      heading: `Verify payment — order #${order.orderNumber}`,
+   561→      intro:
+   562→        'A customer just confirmed they’ve made the bank transfer. The customer is watching their payment status page — verifying it releases the pickup.',
+   563→      rows: [
+   564→        { label: 'Customer', value: `${order.user.name} (${order.user.email})` },
+   565→        { label: 'Amount', value: formatNaira(order.totalPrice ?? 0) },
+   566→        { label: 'Expected narration', value: `#${order.orderNumber}` },
+   567→        { label: 'Pickup', value: `${fmtDate(order.pickupDate)} · ${order.pickupTimeSlot}` },
+   568→        { label: 'Receipt', value: (order as any).payments?.[0]?.receiptUrl ? 'Screenshot attached in the queue' : 'Not attached — match on your bank statement' },
+   569→      ],
+   570→      cta: { label: 'Open the verification queue', url: `${baseUrl()}/admin` },
+   571→    })
+   572→    await sendEmail({ to: cfg.email, subject, html })
+   573→  } catch (e) {
+   574→    console.error('notifyAdminTransferPending failed:', e)
+   575→  }
+   576→}
+   577→
+   578→// ----- B2B invoice ready (admin recorded the weight) -----
+   579→// Called when the admin saves a final weight on a per-kg order. The order
+   580→// modal has always claimed "Weight recorded — invoice sent"; now the email
+   581→// actually exists, priced with the SAME server-side price-per-kg the admin
+   582→// edits in Settings (previously the API hardcoded ₦800/kg).
+   583→export async function notifyInvoiceReady(
+   584→  order: NotifiableOrder,
+   585→  billableKg: number,
+   586→  totalPrice: number
+   587→): Promise<void> {
+   588→  try {
+   589→    const settings = await getAppSettings()
+   590→    const { subject, html } = await brandedEmail({
+   591→      heading: 'Your bulk invoice is ready',
+   592→      intro:
+   593→        `We weighed your items and your invoice is ready: ${billableKg}kg billable at ${formatNaira(settings.pricePerKg)}/kg. Kindly complete the bank transfer below with your order number as the narration — your pickup/delivery is released as soon as we verify it.`,
+   594→      order,
+   595→      extraRows: [
+   596→        { label: 'Billable weight', value: `${billableKg}kg (minimum ${settings.minimumKg}kg)` },
+   597→        { label: 'Rate', value: `${formatNaira(settings.pricePerKg)}/kg` },
+   598→        { label: 'Amount due', value: formatNaira(totalPrice) },
+   599→        { label: 'Pay to', value: `${settings.bankName} · ${settings.accountName} · ${settings.accountNumber}` },
+   600→        { label: 'Narration', value: `#${order.orderNumber}` },
+   601→      ],
+   602→      cta: { label: 'Check payment status', url: `${baseUrl()}/payment/pending?order=${order.orderNumber}&email=${encodeURIComponent(order.user.email)}` },
+   603→    })
+   604→    await sendEmail({ to: order.user.email, subject, html })
+   605→
+   606→    await sendSMS(
+   607→      order.user.phone,
+   608→      `Kozy Care: Invoice for order #${order.orderNumber} — ${billableKg}kg, ${formatNaira(totalPrice)}. Transfer with #${order.orderNumber} as narration. Thank you!`
+   609→    )
+   610→  } catch (e) {
+   611→    console.error('notifyInvoiceReady failed:', e)
+   612→  }
+   613→}
+   614→
+   615→/** A visitor submitted feedback (complaint / question / review) on /feedback. */
+   616→export async function notifyAdminNewFeedback(feedback: {
+   617→  type: string
+   618→  name: string
+   619→  email: string
+   620→  phone?: string | null
+   621→  reference?: string | null
+   622→  rating?: number | null
+   623→  message: string
+   624→}): Promise<void> {
+   625→  try {
+   626→    const cfg = await adminAlertConfig()
+   627→    const typeLabel =
+   628→      feedback.type === 'COMPLAINT' ? 'Complaint' : feedback.type === 'QUESTION' ? 'Question' : 'Feedback'
+   629→    const { subject, html } = adminEmail({
+   630→      badge: typeLabel,
+   631→      heading: `New ${typeLabel.toLowerCase()} from ${feedback.name}`,
+   632→      intro:
+   633→        feedback.type === 'COMPLAINT'
+   634→          ? 'A customer filed a complaint — it is waiting in your Feedback inbox. Complaints left unanswered are the fastest way to lose a Lagos customer, so this one pings you directly.'
+   635→          : 'A visitor reached out through the feedback form. It is saved in your Feedback inbox.',
+   636→      rows: [
+   637→        { label: 'From', value: `${feedback.name} (${feedback.email})` },
+   638→        ...(feedback.phone ? [{ label: 'Phone', value: feedback.phone }] : []),
+   639→        ...(feedback.reference ? [{ label: 'Reference', value: feedback.reference }] : []),
+   640→        ...(feedback.rating ? [{ label: 'Rating', value: `${feedback.rating}/5` }] : []),
+   641→        { label: 'Message', value: feedback.message },
+   642→      ],
+   643→      cta: { label: 'Open the Feedback inbox', url: `${baseUrl()}/admin` },
+   644→    })
+   645→    await sendEmail({ to: cfg.email, subject, html })
+   646→  } catch (e) {
+   647→    console.error('notifyAdminNewFeedback failed:', e)
+   648→  }
+   649→}
+   650→
+   651→/** A rider applied to join the Kozy delivery team (/join-riders). */
+   652→export async function notifyAdminRiderApplication(app: {
+   653→  fullName: string
+   654→  email?: string | null
+   655→  phone: string
+   656→  altPhone?: string | null
+   657→  lga: string
+   658→  bikeModel: string
+   659→  bikeYear: string
+   660→  licenseNumber: string
+   661→  availability: string
+   662→  experience?: string | null
+   663→}): Promise<void> {
+   664→  try {
+   665→    const cfg = await adminAlertConfig()
+   666→    const { subject, html } = adminEmail({
+   667→      badge: 'Rider application',
+   668→      heading: `${app.fullName} applied to ride for Kozy`,
+   669→      intro:
+   670→        'A new rider application came in through the Join the Team page. Applications are stored in the database — reply to this alert to follow up with them directly.',
+   671→      rows: [
+   672→        { label: 'Name', value: app.fullName },
+   673→        { label: 'Phone', value: app.phone + (app.altPhone ? ` / ${app.altPhone}` : '') },
+   674→        ...(app.email ? [{ label: 'Email', value: app.email }] : []),
+   675→        { label: 'Preferred area', value: app.lga },
+   676→        { label: 'Bike', value: `${app.bikeModel} (${app.bikeYear})` },
+   677→        { label: 'License no.', value: app.licenseNumber },
+   678→        { label: 'Availability', value: app.availability },
+   679→        ...(app.experience ? [{ label: 'Experience', value: app.experience }] : []),
+   680→      ],
+   681→      cta: { label: 'Contact the rider', url: `tel:${app.phone.replace(/\s/g, '')}` },
+   682→    })
+   683→    await sendEmail({ to: cfg.email, subject, html })
+   684→  } catch (e) {
+   685→    console.error('notifyAdminRiderApplication failed:', e)
+   686→  }
+   687→}
+   688→

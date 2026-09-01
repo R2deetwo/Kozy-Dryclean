@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Yes, the close-up diagram in the right-hand measurement card renders correctly and looks professional. \n\nThere is **no clipping or overlapping elements**. The illustration of the neck and shoulders is clean, with the gold tape arc, dashed grey reference line, and dark blue instruction chip (\"Snug at the base of the neck\") all properly positioned and clearly visible. The layout is well-balanced and visually polished.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788187687,
+  "id": "202608312248021d510f22a84a42ea",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608312248021d510f22a84a42ea",
+  "usage": {
+    "completion_tokens": 83,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1735,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1818
+  }
+}

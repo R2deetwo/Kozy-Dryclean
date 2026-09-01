@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the images provided, here is the description for each:\n\n**Image 1:**\n*   **Is there a woman/female model?** No. The image depicts two male figures.\n*   **What exactly is she holding in her hands?** N/A (There are no women in the image). However, the man on the **right** is holding a dark blue suit jacket on a wooden clothes hanger with his right hand. The man on the left has empty hands at his sides.\n\n**Image 2:**\n*   **Is there a woman/female model?** No. This image contains only text and graphic design elements (a letter \"K\" and a button).\n*   **Are there Christmas presents/gift boxes with ribbons?** No. There are no physical objects or presents in this image; it is an advertisement for \"Kozy\" dry cleaning services.\n\n**Image 3:**\n*   **Is there a woman/female model?** No. This image is a logo consisting of text (\"Kozy\") and a graphic of a hanger.\n*   **Are there Christmas presents/gift boxes with ribbons?** No. There are no gift boxes or presents; the object depicted is a gold clothes hanger positioned above the letter \"K\".",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788007835,
+  "id": "20260829205031bb24f4f76afd435f",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829205031bb24f4f76afd435f",
+  "usage": {
+    "completion_tokens": 265,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3708,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3973
+  }
+}

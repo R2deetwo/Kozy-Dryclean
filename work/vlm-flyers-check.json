@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here are the details for each marketing piece:\n\n**Image 1 (Flyer B - Offer)**\n1) **No**, there is no human model or person illustration.\n2) **N/A** (No person is shown).\n3) **No**, there is no Christmas theme or presents visible.\n4) **15% OFF**\n\n**Image 2 (Flyer A5 Front)**\n1) **No**, there is no human model or person illustration.\n2) **N/A** (No person is shown).\n3) **No**, there is no Christmas theme or presents visible.\n4) **15% OFF**\n\n**Image 3 (Poster A5)**\n1) **No**, there is no human model or person illustration.\n2) **N/A** (No person is shown).\n3) **No**, there is no Christmas theme or presents visible.\n4) **15% OFF**\n\n**Image 4 (Flyer A5 Back / Pricing List)**\n1) **No**, there is no human model or person illustration.\n2) **N/A** (No person is shown).\n3) **No**, there is no Christmas theme or presents visible.\n4) **None** (This image displays a price list with specific costs in Naira, but no discount percentage is advertised).",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788007794,
+  "id": "2026082920494906ef0a6a9ff64639",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082920494906ef0a6a9ff64639",
+  "usage": {
+    "completion_tokens": 266,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 10636,
+    "prompt_tokens_details": {
+      "cached_tokens": 3
+    },
+    "total_tokens": 10902
+  }
+}

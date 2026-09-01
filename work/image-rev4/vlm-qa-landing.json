@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided screenshots, here is the QA check:\n\n1.  **Testimonials Section:** **No.** There is no \"Loved by Lagos\" testimonials section or a gold \"Leave a review\" button visible in any of the provided screenshots.\n2.  **Feedback/Review Form:** **No.** There is no large embedded feedback or review form section on the page.\n3.  **Alterations Section:** **No.** While there is an \"Inside the Atelier\" section (Screenshot 3) showing a man at a pressing station, there is no alterations section featuring a young seamstress at a sewing machine against a white or cream wall.\n4.  **'Trusted by thousands' / Rider Photo:** **Yes (Partially).** Screenshot 4 shows a rider handing a navy laundry bag with a large gold \"K\" logo to a smiling female customer.\n    *   **Doorway Situation:** The photo is taken outdoors, likely on a porch or patio entrance. In the background, behind the customer's right shoulder, there is a **large potted plant** sitting next to what appears to be an open doorway or the corner of a building structure leading inside. The background wall is a light cream color.\n5.  **Layout Problems:** **No obvious errors.** The layout appears clean with proper alignment, no overlapping text/images, and all images are fully loaded and intact across all four views.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788022811,
+  "id": "20260830010006fc14e9b02a514346",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830010006fc14e9b02a514346",
+  "usage": {
+    "completion_tokens": 294,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3690,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3984
+  }
+}

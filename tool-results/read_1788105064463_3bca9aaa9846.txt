@@ -1,0 +1,647 @@
+     1→// =============================================================================
+     2→// GET /api/orders — list orders (RBAC-filtered, cursor-paginated)
+     3→// POST /api/orders — create a new order (authed OR guest checkout)
+     4→// =============================================================================
+     5→// RBAC rules:
+     6→//   GET:
+     7→//     - ADMIN: sees all orders
+     8→//     - DRIVER: sees only orders where driverId === their own ID
+     9→//     - B2C/B2B: sees only orders where userId === their own ID
+    10→//   Pagination (GET):
+    11→//     - `?cursor=<id>&limit=<n>` — cursor-based, default limit 25, hard cap 100.
+    12→//     - Ordered by (createdAt DESC, id DESC) so the cursor is stable.
+    13→//     - Response shape: { items, nextCursor, ... } — nextCursor is null on the
+    14→//       last page. RBAC filters compose with the cursor exactly as before.
+    15→//   POST:
+    16→//     - Authenticated users create orders for themselves (userId is forced to
+    17→//       the session user's ID; ADMIN can optionally pass userId for someone else)
+    18→//     - GUESTS (no session): must pass `guest: { name, email, phone }`.
+    19→//       The server find-or-creates a customer record from those details:
+    20→//         * email unknown             -> create a B2C "guest account" with a
+    21→//                                        random password + emailVerified set
+    22→//                                        (the guest can set a real password via
+    23→//                                        the forgot-password flow to claim it)
+    24→//         * email exists w/o password -> reuse the earlier guest account
+    25→//         * email exists w/ password  -> 409 ACCOUNT_EXISTS (they should log in)
+    26→//     - `paymentMethod: BANK_TRANSFER` creates the Payment record atomically
+    27→//       with the order (works for guests too, who can't call /api/payments).
+    28→//       PAYSTACK payments are initialized separately after the order exists.
+    29→// =============================================================================
+    30→
+    31→import { NextResponse, after } from 'next/server'
+    32→import bcrypt from 'bcryptjs'
+    33→import crypto from 'crypto'
+    34→import { db } from '@/lib/db'
+    35→import { getSession } from '@/lib/auth'
+    36→import { CreateOrderSchema } from '@/lib/schemas'
+    37→import {
+    38→  notifyOrderCreated,
+    39→  notifyGuestAccountCreated,
+    40→  notifyTransferPendingVerification,
+    41→  notifyAdminNewOrder,
+    42→  notifyAdminTransferPending,
+    43→} from '@/lib/notifications'
+    44→import { rateLimit, getClientIP } from '@/lib/rate-limit'
+    45→import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
+    46→import { getServiceSpeed, allowsExpress24, GARMENT_CATALOG, GUARANTEE_DISCOUNT } from '@/lib/types'
+    47→import { getAppSettings } from '@/lib/app-settings'
+    48→
+    49→// ----- GET /api/orders -----
+    50→export async function GET(req: Request) {
+    51→  const session = await getSession()
+    52→  if (!session) {
+    53→    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    54→  }
+    55→
+    56→  // ----- Cursor pagination params -----
+    57→  const { searchParams } = new URL(req.url)
+    58→  const limitRaw = parseInt(searchParams.get('limit') ?? '', 10)
+    59→  const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 25, 1), 100)
+    60→  const cursor = searchParams.get('cursor') || undefined
+    61→
+    62→  let where: any = {}
+    63→
+    64→  if (session.user?.role === 'DRIVER') {
+    65→    // Drivers see only assigned orders
+    66→    where = { driverId: session.user?.id }
+    67→  } else if (session.user?.role === 'B2C' || session.user?.role === 'B2B') {
+    68→    // Customers see only their own orders
+    69→    where = { userId: session.user?.id }
+    70→  }
+    71→  // ADMIN sees all orders (no filter)
+    72→
+    73→  // take limit+1 rows so we can tell whether another page exists
+    74→  let orders = await db.order.findMany({
+    75→    where,
+    76→    include: {
+    77→      user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+    78→      driver: { select: { id: true, name: true, phone: true } },
+    79→      payments: true,
+    80→      media: true,
+    81→    },
+    82→    orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+    83→    take: limit + 1,
+    84→    ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    85→  })
+    86→
+    87→  const hasMore = orders.length > limit
+    88→  if (hasMore) orders = orders.slice(0, limit)
+    89→  const nextCursor = hasMore ? orders[orders.length - 1].id : null
+    90→
+    91→  // ----- Rider geofencing (DRIVER only) -----
+    92→  // Applied to the current PAGE (the query is already RBAC-filtered and
+    93→  // cursor-paginated; visibility is a per-order computation). hiddenCount is
+    94→  // therefore page-scoped.
+    95→  // With a fresh GPS ping on file, gate the rider's activity:
+    96→  //   - outside every service zone  -> order activity paused (empty page)
+    97→  //   - inside a zone               -> only stops within ORDER_VISIBILITY_RADIUS_KM
+    98→  // No ping / stale ping / lookup error -> legacy behaviour (no filtering),
+    99→  // so the feature can never brick the driver app.
+   100→  let geofence: Record<string, unknown> | undefined
+   101→  if (session.user?.role === 'DRIVER') {
+   102→    try {
+   103→      const loc = await db.driverLocation.findUnique({
+   104→        where: { driverId: session.user.id },
+   105→      })
+   106→      const fresh =
+   107→        loc && Date.now() - loc.updatedAt.getTime() < GEO.PING_STALE_MINUTES * 60 * 1000
+   108→      if (loc && fresh) {
+   109→        const nearest = nearestZone(loc.lat, loc.lng)
+   110→        const inArea = nearest.distanceKm <= nearest.zone.radiusKm + GEO.ZONE_BUFFER_KM
+   111→        if (!inArea) {
+   112→          geofence = {
+   113→            status: 'outside',
+   114→            zone: nearest.zone.name,
+   115→            distanceKm: Math.round(nearest.distanceKm * 10) / 10,
+   116→          }
+   117→          orders = [] // activity paused while outside all service areas
+   118→        } else {
+   119→          const visible = orders.filter((o) => {
+   120→            const zone = zoneFromAddress(o.pickupAddress)
+   121→            // Unknown addresses are always shown (never hide a stop we can't place)
+   122→            if (!zone) return true
+   123→            return (
+   124→              haversineKm(loc.lat, loc.lng, zone.lat, zone.lng) <=
+   125→              GEO.ORDER_VISIBILITY_RADIUS_KM
+   126→            )
+   127→          })
+   128→          geofence = {
+   129→            status: 'in',
+   130→            zone: nearest.zone.name,
+   131→            distanceKm: Math.round(nearest.distanceKm * 10) / 10,
+   132→            hiddenCount: orders.length - visible.length,
+   133→          }
+   134→          orders = visible
+   135→        }
+   136→      } else {
+   137→        geofence = { status: loc ? 'stale' : 'none' }
+   138→      }
+   139→    } catch {
+   140→      geofence = { status: 'error' } // degrade gracefully
+   141→    }
+   142→  }
+   143→
+   144→  return NextResponse.json({ items: orders, nextCursor, ...(geofence ? { geofence } : {}) })
+   145→}
+   146→
+   147→// ----- POST /api/orders -----
+   148→export async function POST(req: Request) {
+   149→  const session = await getSession()
+   150→
+   151→  // ----- Guest checkout rate limit: 5 orders/hour per IP -----
+   152→  // (authed users are identified by their session — no extra limit needed)
+   153→  if (!session) {
+   154→    const ip = getClientIP(req)
+   155→    const limit = await rateLimit(`guest-order:${ip}`, { max: 5, windowMs: 60 * 60 * 1000 })
+   156→    if (!limit.success) {
+   157→      return NextResponse.json(
+   158→        { error: 'Too many bookings from this device. Please try again later or sign in.' },
+   159→        { status: 429, headers: { 'Retry-After': String(Math.ceil((limit.resetAt - Date.now()) / 1000)) } }
+   160→      )
+   161→    }
+   162→  }
+   163→
+   164→  const body = await req.json()
+   165→  const parsed = CreateOrderSchema.safeParse(body)
+   166→  if (!parsed.success) {
+   167→    return NextResponse.json(
+   168→      { error: 'Validation failed', details: parsed.error.flatten() },
+   169→      { status: 400 }
+   170→    )
+   171→  }
+   172→
+   173→  const { type, items, serviceSpeed, modeOfWash, promoCode, alterationNotes, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod, transferReceipt } = parsed.data
+   174→
+   175→  // ----- Alterations note (Phase 17, client directive) -----
+   176→  // Riders never measure at the door: the customer DESCRIBES the work at
+   177→  // booking and the in-house seamstress works from that note. Any ITEM
+   178→  // order containing an alterations item must therefore carry a note of at
+   179→  // least 10 characters — the wizard collects it with a guided panel.
+   180→  const hasAlterationItems =
+   181→    type === 'ITEM' &&
+   182→    items.some((i: any) => (i.id || '').replace('item_', '') === 'alteration')
+   183→  if (hasAlterationItems && (!alterationNotes || alterationNotes.trim().length < 10)) {
+   184→    return NextResponse.json(
+   185→      {
+   186→        error: 'ALTERATION_NOTES_REQUIRED',
+   187→        message: 'Please describe the alteration work (what should change on which garment) — our seamstress works from your note and will call you to confirm before quoting.',
+   188→      },
+   189→      { status: 400 }
+   190→    )
+   191→  }
+   192→
+   193→  // ----- Mode of wash (client-requested order-form option) -----
+   194→  // Retail orders must carry an explicit choice — the wizard makes it a
+   195→  // required field. KG/corporate orders skip it (washed by weight).
+   196→  if (type === 'ITEM' && !modeOfWash) {
+   197→    return NextResponse.json(
+   198→      { error: 'MODE_OF_WASH_REQUIRED', message: 'Please choose a mode of wash (handwash or machine wash) for your order.' },
+   199→      { status: 400 }
+   200→    )
+   201→  }
+   202→
+   203→  // ----- Guarantee integrity (aligns the server with the wizard's UX) -----
+   204→  // The Return-as-Received Guarantee (5% off + damage coverage) requires an
+   205→  // authenticated account in the booking flow — a guest cannot activate it.
+   206→  // Ignore the client flag for unauthenticated requests so the discount can
+   207→  // never be claimed by crafting a request. (Server-side pricing integrity,
+   208→  // same class of fix as unitPrice coming from PriceCatalog.)
+   209→  const guaranteeActive = session ? Boolean(parsed.data.guaranteeActive) : false
+   210→
+   211→  // ----- Determine the order's owner (authed) or guest customer -----
+   212→  let ownerId: string | undefined
+   213→  let guestAccountCreated = false
+   214→  let guestEmail: string | null = null
+   215→
+   216→  // Set when a guest re-books with an email that already has a password.
+   217→  // We no longer reject immediately: pricing + the duplicate-submission guard
+   218→  // run first, so a confused customer RE-SUBMITTING the same transfer order
+   219→  // gets their original order back (and lands on /payment/pending) instead of
+   220→  // a dead-end "sign in" error. Only a genuinely new basket from that email
+   221→  // gets the ACCOUNT_EXISTS prompt, exactly as before.
+   222→  let existingAccountNeedsSignIn = false
+   223→
+   224→  if (session) {
+   225→    // ADMIN can create orders for other users (by passing userId in the body)
+   226→    // Non-admins always create orders for themselves
+   227→    ownerId = session.user?.role === 'ADMIN' && body.userId ? body.userId : session.user?.id
+   228→  } else {
+   229→    // Guest checkout — contact details are mandatory
+   230→    if (!guest) {
+   231→      return NextResponse.json(
+   232→        { error: 'Guest bookings require a name, email and phone number.' },
+   233→        { status: 401 }
+   234→      )
+   235→    }
+   236→    const email = guest.email.toLowerCase()
+   237→    const existing = await db.user.findUnique({ where: { email } })
+   238→    if (existing) {
+   239→      ownerId = existing.id
+   240→      if (existing.passwordHash) {
+   241→        // Account with a password exists — hold the sign-in requirement until
+   242→        // the duplicate guard has had its chance (see comment above).
+   243→        existingAccountNeedsSignIn = true
+   244→      } else {
+   245→        // Previous guest account (no password) — reuse and refresh contact info
+   246→        await db.user.update({
+   247→          where: { id: existing.id },
+   248→          data: { name: guest.name, phone: guest.phone },
+   249→        })
+   250→      }
+   251→    } else {
+   252→      // First-time guest — create a customer record with a random password.
+   253→      // emailVerified is set so the guest can claim the account via the
+   254→      // forgot-password flow without an extra verification round-trip.
+   255→      const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10)
+   256→      const guestUser = await db.user.create({
+   257→        data: {
+   258→          email,
+   259→          name: guest.name,
+   260→          phone: guest.phone,
+   261→          role: 'B2C',
+   262→          passwordHash,
+   263→          emailVerified: new Date(),
+   264→          signupDiscountUsed: false,
+   265→        },
+   266→      })
+   267→      ownerId = guestUser.id
+   268→      guestAccountCreated = true
+   269→      guestEmail = email
+   270→    }
+   271→  }
+   272→
+   273→  // ownerId is always set by this point (session user, admin override, or the
+   274→  // guest find-or-create branches above) — the guard is for TypeScript.
+   275→  if (!ownerId) {
+   276→    return NextResponse.json({ error: 'Could not determine the order owner.' }, { status: 400 })
+   277→  }
+   278→
+   279→  // Verify the owner exists
+   280→  const owner = await db.user.findUnique({ where: { id: ownerId } })
+   281→  if (!owner) {
+   282→    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+   283→  }
+   284→
+   285→  // Generate human-readable order number — timestamp + random for uniqueness (Item 5)
+   286→  const orderNumber = `KZ-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 90 + 10)}`
+   287→
+   288→  // Calculate total price for ITEM orders — SERVER-SIDE PRICING ONLY
+   289→  let totalPrice: number | undefined
+   290→  let appliedDiscounts: string[] = []
+   291→  // Phase-14 order attributes (mode of wash, promo code, delivery fee) —
+   292→  // filled in by the ITEM pricing block below.
+   293→  const orderExtras: { deliveryFee?: number; modeOfWash?: string | null; promoCode?: string | null } = {}
+   294→
+   295→  // ----- Service speed (turnaround tier) -----
+   296→  // KG / corporate orders always run on the standard SLA. For ITEM orders
+   297→  // the tier must be live (enabled) and the 24-hour tier is blocked for
+   298→  // bulky household items — they cannot honestly be finished in 24h.
+   299→  let speed = getServiceSpeed(type === 'ITEM' ? serviceSpeed : 'STANDARD')
+   300→  if (!speed.enabled) {
+   301→    speed = getServiceSpeed('STANDARD')
+   302→  }
+   303→  if (type === 'ITEM' && speed.id === 'EXPRESS_24') {
+   304→    const itemIds = items.map((i: any) => (i.id || '').replace('item_', ''))
+   305→    if (!allowsExpress24(itemIds)) {
+   306→      return NextResponse.json(
+   307→        {
+   308→          error: 'EXPRESS_24_UNAVAILABLE',
+   309→          message: '24-hour express is not available for bulky home items (duvets, curtains, bedsheets). Please choose Standard or Express 48.',
+   310→        },
+   311→        { status: 400 }
+   312→      )
+   313→    }
+   314→  }
+   315→
+   316→  if (type === 'ITEM') {
+   317→    // Look up prices from PriceCatalog (Item 3 — server-side price validation)
+   318→    const itemKeys = items.map((i: any) => (i.id || '').replace('item_', '') || i.name)
+   319→    const catalogEntries = await db.priceCatalog.findMany({
+   320→      where: { itemKey: { in: itemKeys }, active: true },
+   321→    })
+   322→    const catalogMap = new Map(catalogEntries.map(c => [c.itemKey, c]))
+   323→
+   324→    // Compute subtotal from server-side catalog prices — client-supplied unitPrice is IGNORED
+   325→    let subtotal = 0
+   326→    const pricedItems = items.map((i: any) => {
+   327→      const key = (i.id || '').replace('item_', '') || i.name
+   328→      const catalog = catalogMap.get(key)
+   329→      const unitPrice = catalog?.unitPrice ?? 0 // 0 if not found in catalog
+   330→      subtotal += unitPrice * i.quantity
+   331→      // Quoted items (wedding dress, couture) carry no fixed price until the
+   332→      // assessment quote is approved — annotate the stored manifest so admin
+   333→      // sees "quote to follow" instead of a bare ₦0 line and knows to send
+   334→      // the customer a quote after assessment.
+   335→      const isQuote = GARMENT_CATALOG.find((g) => g.id === key)?.pricingMode === 'quote'
+   336→      return {
+   337→        ...i,
+   338→        unitPrice,
+   339→        ...(isQuote ? { name: `${i.name} — quote to follow` } : {}),
+   340→      }
+   341→    })
+   342→
+   343→    // ----- Server-managed commercial settings (AppSetting) -----
+   344→    // Delivery fee, handwash surcharge, offer percentages and guarantee
+   345→    // thresholds all come from the DB so admin edits reach every customer.
+   346→    const appSettings = await getAppSettings()
+   347→
+   348→    // ----- Guarantee eligibility (client-requested transparency) -----
+   349→    // An order qualifies for the Return-as-Received Guarantee when it has
+   350→    // at least N garments OR meets the minimum order value (either counts).
+   351→    // Photos + acknowledgement are still required in the wizard; this check
+   352→    // prevents a single-₦500-shirt order claiming guarantee coverage.
+   353→    if (guaranteeActive) {
+   354→      const garmentCount = pricedItems.reduce((s: number, i: any) => s + (i.quantity || 0), 0)
+   355→      const eligible =
+   356→        garmentCount >= appSettings.guaranteeMinGarments ||
+   357→        subtotal >= appSettings.guaranteeMinOrderValue
+   358→      if (!eligible) {
+   359→        return NextResponse.json(
+   360→          {
+   361→            error: 'GUARANTEE_NOT_ELIGIBLE',
+   362→            message: `The Return-as-Received Guarantee covers orders of at least ${appSettings.guaranteeMinGarments} garments or ${appSettings.guaranteeMinOrderValue.toLocaleString('en-NG')} naira. Please continue without the guarantee or add to your basket.`,
+   363→          },
+   364→          { status: 400 }
+   365→        )
+   366→      }
+   367→    }
+   368→
+   369→    let totalDiscount = 0
+   370→
+   371→    // Apply guarantee discount if active (5% photo-upload discount — kept
+   372→    // separate from the first-order offer so the two stack)
+   373→    if (guaranteeActive) {
+   374→      totalDiscount += GUARANTEE_DISCOUNT
+   375→      appliedDiscounts.push('Return-as-Received photo discount (5%)')
+   376→    }
+   377→
+   378→    // ----- First-order offer: promo code (hotels & corporate clients) or
+   379→    // signup discount -----
+   380→    // A valid offer code REPLACES the standard signup discount — hotels &
+   381→    // corporate clients (15%) get the better first-order deal; everyone else
+   382→    // gets the standard 10%. The picture discount (5%) always stacks on top.
+   383→    let appliedPromoCode: string | null = null
+   384→    const isFirstOrder = owner.signupDiscountUsed === false
+   385→    if (isFirstOrder && promoCode) {
+   386→      const code = promoCode.toUpperCase().trim()
+   387→      let promo = await db.discount.findFirst({ where: { code, active: true } })
+   388→      // Built-in hotel/corporate offer: the code + percentage live in
+   389→      // AppSetting, so it works even before a Discount row exists. Upsert the
+   390→      // row for admin visibility/auditability.
+   391→      if (!promo && code === appSettings.hotelGuestPromoCode.toUpperCase()) {
+   392→        promo = await db.discount.upsert({
+   393→          where: { code },
+   394→          update: {
+   395→            active: true,
+   396→            value: appSettings.hotelGuestDiscountPercent,
+   397→            name: 'HOTEL15 First-Order Offer (Hotels & Corporate)',
+   398→            description: `${appSettings.hotelGuestDiscountPercent}% off the first order for hotels & corporate clients (stacks with the 5% picture discount).`,
+   399→          },
+   400→          create: {
+   401→            name: 'HOTEL15 First-Order Offer (Hotels & Corporate)',
+   402→            code,
+   403→            type: 'PERCENTAGE',
+   404→            value: appSettings.hotelGuestDiscountPercent,
+   405→            active: true,
+   406→            appliesTo: 'FIRST_ORDER',
+   407→            description: `${appSettings.hotelGuestDiscountPercent}% off the first order for hotels & corporate clients (stacks with the 5% picture discount).`,
+   408→          },
+   409→        })
+   410→      }
+   411→      if (promo && promo.type === 'PERCENTAGE') {
+   412→        appliedPromoCode = code
+   413→        totalDiscount += promo.value / 100
+   414→        appliedDiscounts.push(`Offer code ${code} (${promo.value}% off first order)`)
+   415→        // The promo consumed the first-order benefit (it is strictly better
+   416→        // than the standard signup discount).
+   417→        await db.user.update({
+   418→          where: { id: ownerId },
+   419→          data: { signupDiscountUsed: true },
+   420→        })
+   421→      } else {
+   422→        appliedDiscounts.push(`Offer code ${code} not recognised — standard offers applied`)
+   423→      }
+   424→    } else if (isFirstOrder) {
+   425→      // Standard first-order discount — the percentage ALWAYS comes from
+   426→      // AppSetting (default 10%, admin-tunable). A legacy SIGNUP Discount row
+   427→      // only acts as an on/off switch: if it exists and is inactive, the
+   428→      // first-order offer is switched off entirely.
+   429→      const signupGate = await db.discount.findFirst({
+   430→        where: { appliesTo: 'SIGNUP' },
+   431→      })
+   432→      if (!signupGate || signupGate.active) {
+   433→        const pct = appSettings.firstOrderDiscountPercent
+   434→        totalDiscount += pct / 100
+   435→        appliedDiscounts.push(`First-order discount (${pct}%)`)
+   436→        await db.user.update({
+   437→          where: { id: ownerId },
+   438→          data: { signupDiscountUsed: true },
+   439→        })
+   440→      }
+   441→    }
+   442→
+   443→    // ----- Handwash surcharge (mode of wash) -----
+   444→    // Handwash is per-garment labour-intensive care: +50% of the item
+   445→    // cleaning subtotal (admin-tunable). Machine wash is standard — no fee.
+   446→    const handwashSurcharge =
+   447→      modeOfWash === 'HANDWASH'
+   448→        ? Math.round(subtotal * (appSettings.handwashSurchargePercent / 100))
+   449→        : 0
+   450→    if (handwashSurcharge > 0) {
+   451→      appliedDiscounts.push(`Handwash care (+${appSettings.handwashSurchargePercent}% of cleaning)`)
+   452→    }
+   453→
+   454→    // ----- Delivery fee: first delivery free, then the going rate -----
+   455→    // The free delivery is per CUSTOMER (not per browser): count their
+   456→    // previous orders. Cancelled orders don't consume the free delivery.
+   457→    const previousOrders = await db.order.count({
+   458→      where: { userId: ownerId, status: { not: 'CANCELLED' } },
+   459→    })
+   460→    const isFirstDelivery = previousOrders === 0
+   461→    const deliveryFee = isFirstDelivery ? 0 : appSettings.deliveryFee
+   462→    if (deliveryFee > 0) {
+   463→      appliedDiscounts.push(`Delivery fee`) // informational line in admin
+   464→    } else {
+   465→      appliedDiscounts.push(`Free first delivery`)
+   466→    }
+   467→
+   468→    // Express surcharge on the item subtotal, then percentage discounts apply
+   469→    // to the combined service charge (item cleaning + express premium)
+   470→    const expressSurcharge = Math.round(subtotal * speed.surcharge)
+   471→    if (expressSurcharge > 0) {
+   472→      appliedDiscounts.push(`${speed.label} surcharge (+${Math.round(speed.surcharge * 100)}%)`)
+   473→    }
+   474→
+   475→    // Total = (cleaning + handwash + express) − percentage discounts, plus
+   476→    // the flat delivery fee (fees are never discounted).
+   477→    const serviceTotal = subtotal + handwashSurcharge + expressSurcharge
+   478→    totalPrice = Math.round(serviceTotal * (1 - Math.min(totalDiscount, 0.95))) + deliveryFee
+   479→    // Record the delivery fee + mode + code on the order for transparency
+   480→    orderExtras.deliveryFee = deliveryFee
+   481→    orderExtras.modeOfWash = modeOfWash ?? null
+   482→    orderExtras.promoCode = appliedPromoCode
+   483→    // Update items with server-side prices for storage
+   484→    items.length = 0
+   485→    items.push(...pricedItems)
+   486→  }
+   487→  // KG orders: totalPrice is undefined until admin weighs at station
+   488→
+   489→  // ----- Create the order (+ bank-transfer payment record atomically) -----
+   490→  // BANK_TRANSFER: create a PENDING payment now and move the order straight
+   491→  // to PAYMENT_PENDING_VERIFICATION — one atomic request, works for guests.
+   492→  // PAYSTACK: no payment record here; the client initializes the transaction
+   493→  // separately (POST /api/paystack/initialize) which creates it.
+   494→  const bankTransferAmount =
+   495→    type === 'ITEM' && paymentMethod === 'BANK_TRANSFER' && totalPrice && totalPrice > 0
+   496→      ? totalPrice
+   497→      : null
+   498→
+   499→  // ----- Duplicate-submission guard (bank transfer only) -----
+   500→  // When a customer is unsure whether their payment went through, the
+   501→  // instinct is to hit confirm again — each hit used to create a fresh
+   502→  // order + PENDING payment, flooding the admin queue with the same
+   503→  // verification request. The same basket submitted twice within 15 minutes
+   504→  // is treated as ONE submission: we return the original order and skip both
+   505→  // the DB write and the notification.
+   506→  //
+   507→  // Matched fields: manifest (items + server unit prices), pickup address,
+   508→  // mode of wash, service speed and promo code — every field that defines
+   509→  // the basket. totalPrice is deliberately NOT compared: it is derived, and
+   510→  // one-time benefits (first-order discount, free first delivery) are
+   511→  // consumed by the first submission, so a replay legitimately reprices
+   512→  // higher while still being the SAME order intent. A genuinely different
+   513→  // basket (any item, speed, wash mode or address change) never matches.
+   514→  if (bankTransferAmount !== null) {
+   515→    const manifest = JSON.stringify(items)
+   516→    const duplicate = await db.order.findFirst({
+   517→      where: {
+   518→        userId: ownerId,
+   519→        status: 'PAYMENT_PENDING_VERIFICATION',
+   520→        itemsManifest: manifest,
+   521→        pickupAddress,
+   522→        modeOfWash: orderExtras.modeOfWash ?? null,
+   523→        serviceSpeed: speed.id,
+   524→        promoCode: orderExtras.promoCode ?? null,
+   525→        createdAt: { gte: new Date(Date.now() - 15 * 60 * 1000) },
+   526→      },
+   527→      include: {
+   528→        user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+   529→        driver: { select: { id: true, name: true, phone: true } },
+   530→        payments: true,
+   531→        media: true,
+   532→      },
+   533→      orderBy: { createdAt: 'desc' },
+   534→    })
+   535→    if (duplicate) {
+   536→      // Trimmed order — the client only needs the identity fields to route
+   537→      // the customer to /payment/pending; no need to echo addresses or
+   538→      // contact details back to an unauthenticated caller.
+   539→      return NextResponse.json(
+   540→        {
+   541→          order: {
+   542→            id: duplicate.id,
+   543→            orderNumber: duplicate.orderNumber,
+   544→            status: duplicate.status,
+   545→            totalPrice: duplicate.totalPrice,
+   546→            user: { email: duplicate.user.email },
+   547→          },
+   548→          guestAccountCreated: false,
+   549→          duplicate: true,
+   550→        },
+   551→        { status: 201 }
+   552→      )
+   553→    }
+   554→  }
+   555→
+   556→  // ----- Guest re-booking with an email that has a real password -----
+   557→  // The duplicate guard above already had its chance (an identical pending
+   558→  // order was returned). This is a genuinely new basket from an email that
+   559→  // belongs to an existing account — they should sign in (prevents order
+   560→  // hijacking), exactly as the flow always worked.
+   561→  if (existingAccountNeedsSignIn) {
+   562→    return NextResponse.json(
+   563→      {
+   564→        error: 'ACCOUNT_EXISTS',
+   565→        message:
+   566→          'An account with this email already exists. Please sign in to book — your details will be waiting.',
+   567→      },
+   568→      { status: 409 }
+   569→    )
+   570→  }
+   571→
+   572→  const order = await db.order.create({
+   573→    data: {
+   574→      orderNumber,
+   575→      userId: ownerId,
+   576→      status: bankTransferAmount !== null ? 'PAYMENT_PENDING_VERIFICATION' : 'REQUESTED',
+   577→      type,
+   578→      guaranteeActive,
+   579→      serviceSpeed: speed.id,
+   580→      modeOfWash: orderExtras.modeOfWash ?? null,
+   581→      promoCode: orderExtras.promoCode ?? null,
+   582→      deliveryFee: orderExtras.deliveryFee ?? 0,
+   583→      itemsManifest: JSON.stringify(items),
+   584→      alterationNotes: hasAlterationItems ? alterationNotes!.trim() : (alterationNotes?.trim() || null),
+   585→      totalPrice,
+   586→      pickupAddress,
+   587→      pickupDate: new Date(pickupDate),
+   588→      pickupTimeSlot,
+   589→      deliveryAddress: deliveryAddress || null,
+   590→      ...(bankTransferAmount !== null
+   591→        ? {
+   592→            payments: {
+   593→              create: {
+   594→                amount: bankTransferAmount,
+   595→                method: 'BANK_TRANSFER',
+   596→                status: 'PENDING',
+   597→                // The customer's optional transfer screenshot (downscaled
+   598→                // client-side) — the admin queue verifies against the real
+   599→                // receipt instead of the old mock.
+   600→                ...(transferReceipt ? { receiptUrl: transferReceipt } : {}),
+   601→              },
+   602→            },
+   603→          }
+   604→        : {}),
+   605→    },
+   606→    include: {
+   607→      user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+   608→      driver: { select: { id: true, name: true, phone: true } },
+   609→      payments: true,
+   610→      media: true,
+   611→    },
+   612→  })
+   613→
+   614→  // ----- Notifications (email + SMS) — never block the booking -----
+   615→  // Runs AFTER the response is sent (next/server after()): a slow email
+   616→  // provider must not make checkout feel broken. Bank-transfer orders get a
+   617→  // transfer-specific email: it tells the customer the verification is
+   618→  // underway and an email will follow the moment admin confirms — the exact
+   619→  // reassurance that stops double payments.
+   620→  after(async () => {
+   621→    try {
+   622→      if (guestAccountCreated && guestEmail) {
+   623→        await notifyGuestAccountCreated(order, guestEmail, {
+   624→          transferPending: bankTransferAmount !== null,
+   625→        })
+   626→      } else if (bankTransferAmount !== null) {
+   627→        await notifyTransferPendingVerification(order)
+   628→      } else {
+   629→        await notifyOrderCreated(order)
+   630→      }
+   631→
+   632→      // ----- Admin alert (one email per event) -----
+   633→      // Bank transfer → "payment to verify" (the actionable one: the
+   634→      // customer is waiting on the status page). Anything else → "new order".
+   635→      if (bankTransferAmount !== null) {
+   636→        await notifyAdminTransferPending(order)
+   637→      } else {
+   638→        await notifyAdminNewOrder(order)
+   639→      }
+   640→    } catch (e) {
+   641→      console.error('Post-booking notifications failed:', e)
+   642→    }
+   643→  })
+   644→
+   645→  return NextResponse.json({ order, guestAccountCreated }, { status: 201 })
+   646→}
+   647→

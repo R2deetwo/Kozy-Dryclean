@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "QUESTION 1: Yes, there is a gold button reading \"Leave a review\". No, there is no large feedback form with text input fields visible.\n\nQUESTION 2: The person appears to be a young adult woman. Yes, she is working at a sewing machine. The wall behind her is light-colored (white or off-white).\n\nQUESTION 3: The photo shows two people (a man and a woman) holding a large blue bag together. Their hands are natural. Yes, there is a large gold letter K on the bag. There are no doors or door frames visible in the background; instead, there are potted plants and a plain wall.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788022907,
+  "id": "20260830010145dd5b1f19d2f74110",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830010145dd5b1f19d2f74110",
+  "usage": {
+    "completion_tokens": 134,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2794,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2928
+  }
+}

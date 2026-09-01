@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the visual analysis of the provided image:\n\n(1) **No**, there is no door, door frame, or dark doorway visible in the background. The background consists of a light-colored wall with a large framed object (possibly a whiteboard or canvas) and some greenery.\n(2) **Yes**, there are exactly 2 people. Their hands appear natural with the correct number of fingers (the man's hand shows 4 fingers and a thumb; the woman's hands show natural finger counts). Their eye contact is natural as they look at each other while smiling.\n(3) **Yes**, the navy laundry bag appears to be plain/unmarked. There is no visible logo or text on the front panel.\n(4) **Yes**, the bag's flat front panel is clearly visible and facing the camera. \n*   **Bounding Box (approximate):** [30%, 57%, 79%, 100%]\n*   **Tilt Angle:** Approximately 2-3 degrees clockwise (it is very nearly perfectly upright).\n(5) The image is of high quality and photorealistic.\n\n**SHIP**",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788021166,
+  "id": "20260830003242ce854a50b0a04cea",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830003242ce854a50b0a04cea",
+  "usage": {
+    "completion_tokens": 230,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1407,
+    "prompt_tokens_details": {
+      "cached_tokens": 3
+    },
+    "total_tokens": 1637
+  }
+}

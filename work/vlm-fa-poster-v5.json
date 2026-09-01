@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1 (A5 Flyer)**\n1. **10% OFF** – correct.\n2. **Yes.**\n3. **Yes** – the line is clearly readable and well‑integrated within the gold band; it is not cramped or cut off.\n4. **No layout regressions** – the design is clean, balanced, and all elements are properly contained.\n\n**Image 2 (A3 Poster)**\n1. **10% OFF** – correct.\n2. **Yes.**\n3. **Yes** – the hotel guests line is legible, well‑spaced, and fits comfortably inside the gold band without crowding or clipping.\n4. **No layout regressions** – the three‑step section is well‑structured, the gold band is proportionate, and the footer (QR code, contact details, address) is neatly arranged with no overlaps or misalignments.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788010324,
+  "id": "20260829213159c6ceda3ea58545ad",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829213159c6ceda3ea58545ad",
+  "usage": {
+    "completion_tokens": 187,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 7407,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 7594
+  }
+}

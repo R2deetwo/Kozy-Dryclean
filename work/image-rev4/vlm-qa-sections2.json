@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "QUESTION 1: No, there is no gold-colored button that says 'Leave a review' in the first screenshot. The only gold-colored button present is labeled \"Book your pickup\".\n\nQUESTION 2: No, there is no large feedback form with input fields visible in the first screenshot.\n\nQUESTION 3: The person appears to be a young adult woman with curly hair. She is not sitting at a sewing machine; she is standing and holding a blue bag. The wall behind her is a light, neutral color, likely off-white or beige.\n\nQUESTION 4: The photo features a man and a woman holding a large blue bag with a yellow \"K\" on it. They appear to be handing the bag to each other. The background shows an outdoor setting with a light-colored wall and some greenery in a pot; there are no doors or door frames visible. Their hands appear natural.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788022880,
+  "id": "202608300101166ce3c8378f334fb5",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608300101166ce3c8378f334fb5",
+  "usage": {
+    "completion_tokens": 181,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2807,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2988
+  }
+}

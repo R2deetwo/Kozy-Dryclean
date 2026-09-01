@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) **Gold Headlines:**\n*   **Image 1 (Original):** `HOTEL GUESTS: 15% OFF`\n*   **Image 2 (Revised):** `HOTELS & CORPORATE CLIENTS: 15% OFF`\n\n(2) **Line Count for the Small Text:**\n*   **Image 1:** The small text line (`your first order + 5% with pictures — use code HOTEL15 at checkout`) occupies **1 line**. It fits entirely on a single line within the box.\n*   **Image 2:** The small text line also occupies **1 line**. Despite the longer headline above it, this specific line of text remains on a single line and does not wrap.\n\n(3) **Clipping or Overflow Difference:**\nThere is **no clipping or overflow difference** between the two versions regarding that specific text line. In both images, the text \"at checkout\" sits comfortably within the box boundaries without being cut off. The main visual difference is that the box in **Image 2 is taller** than in **Image 1** to accommodate the longer two-line gold headline (\"HOTELS & CORPORATE CLIENTS...\"), whereas the box in Image 1 is more compact.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788013479,
+  "id": "2026082922243474428fd5bf2643ac",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082922243474428fd5bf2643ac",
+  "usage": {
+    "completion_tokens": 262,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1721,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1983
+  }
+}

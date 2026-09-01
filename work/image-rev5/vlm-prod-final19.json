@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) No, the area around the gold \"K\" is clean and free of stray marks or artifacts. \n2) No, there are no visible editing artifacts, unnatural patches, or smudges. \n3) Yes, this is a high-quality, clean professional brand photo. \n\n**Verdict:** The image is a pristine, professional-quality photograph suitable for brand use.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788030074,
+  "id": "202608300301129f4602af3e3b4e95",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608300301129f4602af3e3b4e95",
+  "usage": {
+    "completion_tokens": 78,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1374,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1452
+  }
+}

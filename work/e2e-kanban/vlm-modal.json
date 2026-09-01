@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot of the admin order modal for the laundry service, here are the answers to your questions:\n\n1.  **Payment Section:** It shows a **Verified** badge (specifically a yellow pill-shaped badge with a checkmark icon next to the amount ₦2,100).\n2.  **Active Progress Stage:** The active stage is **\"2: Payment Confirmed\"** (indicated by the filled dark circle and bold text). The stepper also shows \"1: Requested\" as completed.\n3.  **Receipt Thumbnail:** Yes, there is a receipt thumbnail visible under the Payment section. It appears as a small image placeholder with the text \"Transfe... receipt\" next to it.\n4.  **Overall Assessment:** \n    *   **Clean & Professional:** Yes, it looks very clean, modern, and professional. The typography is clear, the spacing is consistent, and the color palette (dark sidebar, white modal, gold/yellow accents) is cohesive.\n    *   **Visual Glitches:** There are no obvious visual glitches or layout breaks. The modal is centered, the progress stepper connects correctly, and all text is legible. The only minor observation is that the receipt thumbnail text seems slightly truncated (\"Transfe...\"), but this appears to be an intentional design choice for space constraints rather than a bug.\n\n**Summary of Order Status:**\nThe order #KZ-E2EA7100 is currently at the **Payment Confirmed** stage. Payment of **₦2,100** has been verified via Bank Transfer. The system has automatically moved the status to \"Ready to Pick Up,\" and a notification confirms the customer has been emailed and texted.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788078639,
+  "id": "202608301630295127164e5dd0476d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202608301630295127164e5dd0476d",
+  "usage": {
+    "completion_tokens": 346,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1733,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2079
+  }
+}

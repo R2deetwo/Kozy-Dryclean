@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the visual check of the flyer:\n\n1.  **10% OFF Headline:** Yes, it is prominently displayed in large gold text.\n2.  **Woman & Garment Bag:** The woman's face is clearly visible and the image is not distorted. She is holding a blue garment bag with \"KOZY\" visible at the bottom, though the full \"KOZY CARE\" branding is partially obscured by her hands.\n3.  **Hotel Guests Strip:** Yes, there is a dedicated section for \"HOTEL GUESTS: 15% OFF\" with the code **HOTEL15**.\n4.  **QR Code & Contact Info:** Yes, a QR code is located at the bottom left, and contact information (address, phone) is on the right.\n5.  **Fine Print:** Yes, technical details (flyer size, bleed, trim) and offer terms are present at the very bottom edge.\n6.  **Cutoffs/Overlaps:** No elements appear to be cut off or improperly overlapping; the layout is clean and well-balanced.\n\n**Score: 9/10**\n**SHIP** (The design is professional, all key information is legible, and it meets premium standards for distribution).",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788010284,
+  "id": "20260829213119a2ebbfc0255c4b32",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260829213119a2ebbfc0255c4b32",
+  "usage": {
+    "completion_tokens": 256,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1847,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2103
+  }
+}

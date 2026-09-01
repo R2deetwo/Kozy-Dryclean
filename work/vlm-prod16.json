@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Screenshot 1: SHIP**\nThe seamstress image loads with high fidelity, showing a professional tailor in a workshop setting that aligns perfectly with the \"Alterations & Repairs\" copy.\n\n**Screenshot 2: SHIP**\nThe rider is captured in a natural, friendly interaction handing over the navy blue branded laundry bag to a customer at a doorway.\n\n**Screenshot 3: NO-SHIP**\nWhile the main pricing cards render cleanly, the specific \"Machine or handwash\" card with the \"+50%\" premium, delivery pricing card, and express card are not visible in this viewport.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788018950,
+  "id": "2026082923554642e32eee76d94e78",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026082923554642e32eee76d94e78",
+  "usage": {
+    "completion_tokens": 121,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5113,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 5234
+  }
+}

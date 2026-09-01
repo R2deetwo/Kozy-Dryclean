@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on a careful examination of the provided image, here is the count and description of the visible hands:\n\n**Total Hands Visible: 1**\n\nHere are the details for the single hand observed:\n\n*   **Identity:** **Man's Left Hand**\n    *   *Reasoning:* The man's face (left side of the image) is oriented towards the right. His left hand would naturally reach across his body to interact with an object on that side. The skin tone matches the man's face.\n*   **Exact Position:** The hand is positioned in the upper-center of the crop, gripping the top handle of the navy garment bag. The thumb is on the right side of the strap, and the fingers are curled around the left side.\n*   **Arm Connection:** Yes, there appears to be a proper arm connected. You can see the wrist and forearm extending downwards behind the bag, suggesting it belongs to the body partially visible on the left.\n\n**Are there any floating, duplicated, or extra hands?**\n**No.** There is only one hand clearly visible in this specific crop near the top handle. There are no artifacts or extra hands belonging to the woman or anyone else in this view.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788024924,
+  "id": "20260830013520f0d105c471184e86",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260830013520f0d105c471184e86",
+  "usage": {
+    "completion_tokens": 244,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1059,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1303
+  }
+}

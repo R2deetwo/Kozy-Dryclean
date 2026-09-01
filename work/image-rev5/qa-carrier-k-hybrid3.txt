@@ -1,0 +1,7 @@
+GLYPH_FIDELITY: 7/10
+DOT_PRESENT: yes
+FLOURISH_PRESENT: no (the long top-right sweep is missing; the stroke ends abruptly)
+PRINT_REALISM: 6/10
+GLOW: no
+SCENE_INTACT: yes, but the bag's background pattern is heavily distorted with jagged, unnatural gold artifacts.
+VERDICT: FIX + The monogram is missing its defining long sweeping curve and the bag's texture has severe digital artifacts.

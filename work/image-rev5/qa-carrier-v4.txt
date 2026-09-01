@@ -1,0 +1,16 @@
+SCORES (0-10 each):
+photorealism: 9
+people_natural (hands, fingers, eye contact): 8
+panel_visible (how flat, large, unobstructed the EMPTY front face of the bag is): 9
+panel_blank (10 = completely blank, no logo/text/zipper on front face): 10
+palette_navy_gold: 7
+overall: 8.5
+
+DETAILS:
+bag_type: Navy bi-fold suit carrier/garment bag, held vertically in portrait orientation, featuring two top handles and a visible side/bottom zipper.
+panel_bounding_box: [234, 362, 752, 922]
+panel_tilt_degrees: ~2
+panel_texture: The front face is a smooth, tightly woven navy fabric with minimal creasing. It is evenly lit with soft, natural lighting that highlights the texture without harsh shadows.
+hands: The man's right hand is placed flat against the lower center of the bag; his left hand supports the bottom edge. The woman's left hand grips the bottom-right corner. A third hand (belonging to an unseen person or an AI artifact) is visible at the top holding the handle. Fingers are mostly well-rendered, though some slight softness is present.
+problems: A third hand appears at the top of the bag without a visible arm or body attached to it. The man's left hand supporting the bottom has slightly unnatural finger positioning/overlap.
+verdict: SHIP
