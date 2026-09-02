@@ -738,18 +738,33 @@ export async function notifyAdminTransferPending(order: NotifiableOrder): Promis
 export async function notifyInvoiceReady(
   order: NotifiableOrder,
   billableKg: number,
-  totalPrice: number
+  totalPrice: number,
+  onlineDiscountPercent = 0
 ): Promise<void> {
   try {
     const settings = await getAppSettings()
+    const gross = Math.round(billableKg * settings.pricePerKg)
     const { subject, html } = await brandedEmail({
       heading: 'Your bulk invoice is ready',
       intro:
-        `We weighed your items and your invoice is ready: ${billableKg}kg billable at ${formatNaira(settings.pricePerKg)}/kg. Kindly complete the bank transfer below with your order number as the narration — your pickup/delivery is released as soon as we verify it.`,
+        `We weighed your items and your invoice is ready: ${billableKg}kg billable at ${formatNaira(settings.pricePerKg)}/kg${
+          onlineDiscountPercent > 0
+            ? ` — with your ${onlineDiscountPercent}% online-order discount applied as a registered customer`
+            : ''
+        }. Kindly complete the bank transfer below with your order number as the narration — your pickup/delivery is released as soon as we verify it.`,
       order,
       extraRows: [
         { label: 'Billable weight', value: `${billableKg}kg (minimum ${settings.minimumKg}kg)` },
         { label: 'Rate', value: `${formatNaira(settings.pricePerKg)}/kg` },
+        ...(onlineDiscountPercent > 0
+          ? [
+              { label: 'Subtotal', value: formatNaira(gross) },
+              {
+                label: `Online order discount (${onlineDiscountPercent}%)`,
+                value: `−${formatNaira(Math.round(gross * (onlineDiscountPercent / 100)))}`,
+              },
+            ]
+          : []),
         { label: 'Amount due', value: formatNaira(totalPrice) },
         { label: 'Pay to', value: `${settings.bankName} · ${settings.accountName} · ${settings.accountNumber}` },
         { label: 'Narration', value: `#${order.orderNumber}` },
@@ -760,7 +775,9 @@ export async function notifyInvoiceReady(
 
     await sendSMS(
       order.user.phone,
-      `Kozy Care: Invoice for order #${order.orderNumber} — ${billableKg}kg, ${formatNaira(totalPrice)}. Transfer with #${order.orderNumber} as narration. Thank you!`
+      `Kozy Care: Invoice for order #${order.orderNumber} — ${billableKg}kg${
+        onlineDiscountPercent > 0 ? ` less ${onlineDiscountPercent}% online discount` : ''
+      }, ${formatNaira(totalPrice)}. Transfer with #${order.orderNumber} as narration. Thank you!`
     )
   } catch (e) {
     console.error('notifyInvoiceReady failed:', e)

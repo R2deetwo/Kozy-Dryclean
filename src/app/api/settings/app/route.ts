@@ -144,6 +144,8 @@ export async function PUT(req: NextRequest) {
   pct('firstOrderDiscountPercent', 0, 50)
   pct('hotelGuestDiscountPercent', 0, 50)
   str('hotelGuestPromoCode', 24)
+  // Permanent online-order discount (phase-30) — 0 disables it.
+  pct('onlineOrderDiscountPercent', 0, 50)
   pct('alterationsFromPrice', 0, 100000)
   pct('pricePerKg', 0, 1000000)
   pct('minimumKg', 0, 1000)

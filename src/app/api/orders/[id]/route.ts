@@ -183,7 +183,22 @@ export async function PATCH(
     // never reached the invoice the customer received).
     const settings = await getAppSettings()
     const billableKg = Math.max(parsed.data.finalWeight ?? 0, settings.minimumKg)
-    updateData.totalPrice = billableKg * settings.pricePerKg
+    // Phase-30: the permanent online-order discount also lands on the bulk
+    // invoice — the client's "5% off all orders made online". The wizard is
+    // the only order-creation path, so a KG order owned by a B2B account
+    // was self-placed online. (An explicit admin totalPrice below still
+    // wins — this auto-calc never overrides a manual price.)
+    const kgOwner = await db.user.findUnique({
+      where: { id: order.userId },
+      select: { role: true },
+    })
+    const kgOnlinePct =
+      kgOwner && kgOwner.role !== 'ADMIN'
+        ? Math.max(0, Math.min(settings.onlineOrderDiscountPercent, 50))
+        : 0
+    updateData.totalPrice = Math.round(
+      billableKg * settings.pricePerKg * (1 - kgOnlinePct / 100)
+    )
   }
   if (parsed.data.totalPrice !== undefined) updateData.totalPrice = parsed.data.totalPrice
 
@@ -284,10 +299,20 @@ export async function PATCH(
   ) {
     const settings = await getAppSettings()
     const billableKg = Math.max(parsed.data.finalWeight ?? 0, settings.minimumKg)
+    // Phase-30: tell the customer which online discount shaped the invoice
+    // so the "amount due" never looks arbitrary against kg × rate.
+    const invoiceOwner = await db.user.findUnique({
+      where: { id: order.userId },
+      select: { role: true },
+    })
+    const invoiceOnlinePct =
+      invoiceOwner && invoiceOwner.role !== 'ADMIN'
+        ? Math.max(0, Math.min(settings.onlineOrderDiscountPercent, 50))
+        : 0
     const invoiceTotal = updated.totalPrice ?? billableKg * settings.pricePerKg
     after(async () => {
       try {
-        await notifyInvoiceReady(updated, billableKg, invoiceTotal)
+        await notifyInvoiceReady(updated, billableKg, invoiceTotal, invoiceOnlinePct)
       } catch (e) {
         console.error('Invoice-ready notification failed:', e)
       }

@@ -488,6 +488,24 @@ export async function POST(req: Request) {
       }
     }
 
+    // ----- Permanent online-order discount (phase-30, client directive) -----
+    // 5% (admin-tunable) off EVERY order placed by a signed-in customer —
+    // the standing registration incentive. Guests are deliberately excluded:
+    // the wizard shows them the sign-in offer instead, and eligibility is
+    // computed here server-side anyway (a client flag is never trusted —
+    // same class of fix as guaranteeActive). ADMIN sessions are excluded:
+    // those are phone/walk-in customers placed on their behalf, not online
+    // self-service. Stacks with the guarantee 5% and the first-order/hotel
+    // offers; the combined cap below (95%) still applies.
+    const onlinePct =
+      session && session.user?.role !== 'ADMIN'
+        ? Math.max(0, Math.min(appSettings.onlineOrderDiscountPercent, 50))
+        : 0
+    if (onlinePct > 0) {
+      totalDiscount += onlinePct / 100
+      appliedDiscounts.push(`Online order discount (${onlinePct}%) — for registered customers, every order`)
+    }
+
     // ----- Handwash surcharge (mode of wash) -----
     // Handwash is per-garment labour-intensive care: +50% of the item
     // cleaning subtotal (admin-tunable). Machine wash is standard — no fee.

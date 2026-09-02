@@ -731,6 +731,26 @@ export function SettingsView() {
                       Hotels &amp; corporate clients type this at checkout. Print it on hotel partner cards.
                     </p>
                   </div>
+                  <div>
+                    <Label htmlFor="online-order-pct" className="text-xs uppercase tracking-wide text-navy-300">
+                      Online-order discount (%)
+                    </Label>
+                    <Input
+                      id="online-order-pct"
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={app.onlineOrderDiscountPercent}
+                      onChange={(e) => setApp({ onlineOrderDiscountPercent: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-32"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Applied automatically to <strong>every order placed by a signed-in customer</strong> —
+                      retail checkout and bulk invoices alike. Guests are shown a sign-in offer for it instead
+                      (the registration incentive). Set 0 to switch it off. Stacks with the first-order and
+                      picture discounts; the combined discount stays capped at 95%.
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
 

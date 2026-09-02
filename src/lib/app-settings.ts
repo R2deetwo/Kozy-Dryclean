@@ -37,6 +37,7 @@ export const APP_SETTING_KEYS = [
   'first_order_discount_percent',
   'hotel_guest_discount_percent',
   'hotel_guest_promo_code',
+  'online_order_discount_percent',
   'alterations_from_price',
   'price_per_kg',
   'minimum_kg',
@@ -91,6 +92,7 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     firstOrderDiscountPercent: num('first_order_discount_percent', d.firstOrderDiscountPercent),
     hotelGuestDiscountPercent: num('hotel_guest_discount_percent', d.hotelGuestDiscountPercent),
     hotelGuestPromoCode: str('hotel_guest_promo_code', d.hotelGuestPromoCode),
+    onlineOrderDiscountPercent: num('online_order_discount_percent', d.onlineOrderDiscountPercent),
     alterationsFromPrice: num('alterations_from_price', d.alterationsFromPrice),
     pricePerKg: num('price_per_kg', d.pricePerKg),
     minimumKg: num('minimum_kg', d.minimumKg),
@@ -129,6 +131,7 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
       first_order_discount_percent: JSON.stringify(d.firstOrderDiscountPercent),
       hotel_guest_discount_percent: JSON.stringify(d.hotelGuestDiscountPercent),
       hotel_guest_promo_code: JSON.stringify(d.hotelGuestPromoCode),
+      online_order_discount_percent: JSON.stringify(d.onlineOrderDiscountPercent),
       alterations_from_price: JSON.stringify(d.alterationsFromPrice),
       price_per_kg: JSON.stringify(d.pricePerKg),
       minimum_kg: JSON.stringify(d.minimumKg),
@@ -187,6 +190,8 @@ export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<
     map.hotel_guest_discount_percent = JSON.stringify(patch.hotelGuestDiscountPercent)
   if (patch.hotelGuestPromoCode !== undefined)
     map.hotel_guest_promo_code = JSON.stringify(patch.hotelGuestPromoCode.toUpperCase().trim())
+  if (patch.onlineOrderDiscountPercent !== undefined)
+    map.online_order_discount_percent = JSON.stringify(patch.onlineOrderDiscountPercent)
   if (patch.alterationsFromPrice !== undefined)
     map.alterations_from_price = JSON.stringify(Math.round(patch.alterationsFromPrice))
   if (patch.pricePerKg !== undefined)

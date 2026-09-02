@@ -239,13 +239,25 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       </section>
 
       {/* ============================================================
-          OFFERS — first-order, hotel/corporate & picture discounts
-          (Phase 14: one clear strip so the site and flyers tell the
-          same story — 10% first order, HOTEL15 for hotels & corporate
+          OFFERS — online-order, first-order, hotel/corporate & picture
+          discounts (Phase 14/30: one clear strip so the site and flyers
+          tell the same story — 5% off every online order for registered
+          customers, 10% first order, HOTEL15 for hotels & corporate
           clients, 5% for uploading pictures with each order)
       ============================================================ */}
       <section className="border-b border-gold-200 bg-linen-50">
-        <div className="mx-auto grid max-w-7xl gap-3 px-4 py-6 sm:px-6 md:grid-cols-3">
+        <div className="mx-auto grid max-w-7xl gap-3 px-4 py-6 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="flex items-center gap-3 rounded-xl bg-navy p-4 text-white shadow-sm ring-1 ring-gold-400/30">
+            <Sparkles className="h-6 w-6 shrink-0 text-gold-400" />
+            <div>
+              <p className="text-sm font-bold text-gold-100">
+                {appSettings.onlineOrderDiscountPercent}% off every online order
+              </p>
+              <p className="text-xs text-navy-100/80">
+                Yours for good when you book with an account — applied automatically at checkout.
+              </p>
+            </div>
+          </div>
           <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
             <Sparkles className="h-6 w-6 shrink-0 text-gold-500" />
             <div>
@@ -255,14 +267,14 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               <p className="text-xs text-navy-300">For every new customer — applied automatically at checkout.</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-xl bg-navy p-4 text-white shadow-sm ring-1 ring-gold-400/30">
+          <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
             <Building2 className="h-6 w-6 shrink-0 text-gold-400" />
             <div>
-              <p className="text-sm font-bold text-gold-100">
+              <p className="text-sm font-bold text-navy">
                 Hotels &amp; corporate clients: {appSettings.hotelGuestDiscountPercent}% off + 5%
               </p>
-              <p className="text-xs text-navy-100/80">
-                Use code <span className="font-mono font-bold text-gold-300">{appSettings.hotelGuestPromoCode}</span> at
+              <p className="text-xs text-navy-300">
+                Use code <span className="font-mono font-bold text-gold-500">{appSettings.hotelGuestPromoCode}</span> at
                 checkout for your first order — plus the 5% picture discount.
               </p>
             </div>

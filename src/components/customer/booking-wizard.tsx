@@ -457,12 +457,32 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     : appSettings.firstOrderDiscountPercent
   const firstOrderDiscountActive =
     type === 'ITEM' && isFirstOrder && subtotal > 0
+  // ----- Phase-30: permanent online-order discount (client directive) -----
+  // Registered customers get a standing discount on EVERY online order (the
+  // registration incentive); guests see a sign-in offer in the summary
+  // instead. Mirrors the server's eligibility rule exactly (authed,
+  // non-admin) and reads the SAME server-backed setting, so the preview
+  // always matches what POST /api/orders will charge.
+  const onlineDiscountPct =
+    type === 'ITEM' && !isGuest && subtotal > 0
+      ? Math.max(0, appSettings.onlineOrderDiscountPercent)
+      : 0
+  // Guest CTA for the online-order discount: deep-links into /signup with
+  // the contact details they already typed (name/email/phone prefill is
+  // supported by the signup page) and returns them to the wizard, where the
+  // saved-draft restore puts this exact basket back on screen.
+  const discountSignupHref =
+    '/signup?callbackUrl=/book' +
+    (guestEmailValid ? `&email=${encodeURIComponent(guestEmail.trim())}` : '') +
+    (guestName.trim().length >= 2 ? `&name=${encodeURIComponent(guestName.trim())}` : '') +
+    (guestPhone.trim().length >= 7 ? `&phone=${encodeURIComponent(guestPhone.trim())}` : '')
   // Discounts apply to the SERVICE charge (cleaning + handwash + express),
   // never to the delivery fee — mirrors the server's math exactly.
   const serviceSubtotal = subtotal + handwashSurcharge + expressSurcharge
   const discountPercent =
     (guaranteeActive ? settings.guaranteeDiscountPercent : 0) +
-    (firstOrderDiscountActive ? firstOrderPercent : 0)
+    (firstOrderDiscountActive ? firstOrderPercent : 0) +
+    onlineDiscountPct
   const discount = serviceSubtotal * (discountPercent / 100)
   const grossTotal = subtotal + expressSurcharge
   const total = Math.max(0, Math.round(serviceSubtotal - discount)) + deliveryFeeEstimate
@@ -1992,6 +2012,36 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                           <span>−{formatNaira(Math.round(serviceSubtotal * (firstOrderPercent / 100)))}</span>
                         </li>
                       )}
+                      {onlineDiscountPct > 0 && (
+                        <li className="flex items-center justify-between rounded-lg bg-gold-50 px-2 text-navy-300 ring-1 ring-gold-200">
+                          <span className="flex items-center gap-1">
+                            <Sparkles className="h-3.5 w-3.5 text-gold-500" />
+                            Online-order discount ({onlineDiscountPct}%) — yours on every order as a registered customer
+                          </span>
+                          <span>−{formatNaira(Math.round(serviceSubtotal * (onlineDiscountPct / 100)))}</span>
+                        </li>
+                      )}
+                      {isGuest && type === 'ITEM' && appSettings.onlineOrderDiscountPercent > 0 && subtotal > 0 && (
+                        /* Phase-30 registration driver: guests see exactly what
+                         * the standing online discount is worth on THIS basket
+                         * and can claim it in one tap — the wizard's draft
+                         * restore brings them straight back to this basket
+                         * after signing in. */
+                        <li>
+                          <a
+                            href={discountSignupHref}
+                            className="flex items-center justify-between rounded-lg bg-navy-800 px-3 py-2 text-xs font-semibold text-white transition hover:bg-navy-700"
+                          >
+                            <span className="flex items-center gap-1.5">
+                              <LogIn className="h-3.5 w-3.5 text-gold-300" />
+                              Registered customers get {appSettings.onlineOrderDiscountPercent}% off every order — create your free account to claim
+                            </span>
+                            <span className="whitespace-nowrap text-gold-300">
+                              save {formatNaira(Math.round(serviceSubtotal * (appSettings.onlineOrderDiscountPercent / 100)))}
+                            </span>
+                          </a>
+                        </li>
+                      )}
                       <li className="flex items-center justify-between text-navy-300">
                         <span className="flex items-center gap-1">
                           <Truck className="h-3.5 w-3.5 text-gold-500" />
@@ -2011,6 +2061,13 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         station. Minimum charge: <strong>{formatNaira(appSettings.pricePerKg * appSettings.minimumKg)}</strong>{' '}
                         ({appSettings.minimumKg}kg @ {formatNaira(appSettings.pricePerKg)}/kg).
                       </p>
+                      {!isGuest && appSettings.onlineOrderDiscountPercent > 0 && (
+                        <p className="rounded-lg bg-gold-50 px-3 py-2 text-xs text-navy-300 ring-1 ring-gold-200">
+                          <Sparkles className="mr-1 inline h-3.5 w-3.5 text-gold-500" />
+                          Your <strong>{appSettings.onlineOrderDiscountPercent}% online-order discount</strong> for registered
+                          customers is applied to the invoice automatically.
+                        </p>
+                      )}
                       <div className="flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-amber-900 ring-1 ring-amber-200">
                         <span>Total</span>
                         <span className="font-semibold">Pending weighing</span>

@@ -424,6 +424,16 @@ export const DEFAULT_HANDWASH_SURCHARGE_PERCENT = 50
  *  and stacks with it. */
 export const FIRST_ORDER_DISCOUNT_PERCENT = 10
 
+/** Permanent online-order discount (phase-30, client directive Sep 2026:
+ *  "5% discount on all orders made online, always — to ensure people get
+ *  registered"). Applied to every order placed by a SIGNED-IN customer —
+ *  guests deliberately don't get it (the wizard shows them the sign-in
+ *  offer instead, which is the whole registration incentive). Stacks with
+ *  the guarantee 5% and the first-order/hotel offers; the combined
+ *  percentage discount stays capped server-side at 95%. Admin-tunable in
+ *  Settings → Discounts & Offers (0 switches it off). */
+export const ONLINE_ORDER_DISCOUNT_PERCENT = 5
+
 /** Hotel & corporate first-order offer: 15% + the 5% picture discount.
  *  Hotels (corporate clients) are already high-value customers who bring
  *  volume, so they earn the better deal. Redeemed with the offer code
@@ -461,6 +471,10 @@ export interface KozyAppSettings {
   firstOrderDiscountPercent: number
   hotelGuestDiscountPercent: number
   hotelGuestPromoCode: string
+  // Permanent online-order discount for registered customers (phase-30).
+  // 0 disables it. Applied server-side at checkout (ITEM orders) and on the
+  // bulk invoice (KG orders) — never a client-supplied number.
+  onlineOrderDiscountPercent: number
   // Alterations — "Exclusive to Kozy Care"; pricing confirmed with the
   // tailor, so the site says "quoted after assessment" until set (> 0).
   alterationsFromPrice: number
@@ -502,6 +516,7 @@ export function defaultAppSettings(): KozyAppSettings {
     firstOrderDiscountPercent: FIRST_ORDER_DISCOUNT_PERCENT,
     hotelGuestDiscountPercent: HOTEL_GUEST_DISCOUNT_PERCENT,
     hotelGuestPromoCode: HOTEL_GUEST_PROMO_CODE,
+    onlineOrderDiscountPercent: ONLINE_ORDER_DISCOUNT_PERCENT,
     // 0 = pricing not confirmed with the tailor yet → the storefront shows
     // "quoted after assessment" instead of a from-price.
     alterationsFromPrice: 0,
