@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided image of the Kozy Care institutional flyer, here is the QA review:\n\n1.  **BRAND LOCKUP:** The main name is **\"KOZY CARE\"** and the small descriptor line under it reads **\"PREMIUM DRYCLEANING & LAUNDRY\"**.\n2.  **OFFER BAND:** Yes, the \"PREFERRED PARTNER RATES\" band is fully visible and safely inside the cut lines with adequate clear space at the bottom.\n3.  **FOOTER:** No, the bottom contact/footer line (containing the phone number, website, and the production info line) is **not** fully visible inside the trim. It is positioned too low and appears to be sliced or dangerously close to the bottom crop mark.\n4.  **FIT:** Yes, the footer text elements (contact details and the technical slug line) are touching or crossing the bottom crop marks.\n5.  **VERDICT:** **FIX** (The footer content needs to be moved up to ensure it is safely within the trim area).",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788607171,
+  "id": "202609051919276fce27d6b76c4b5a",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609051919276fce27d6b76c4b5a",
+  "usage": {
+    "completion_tokens": 223,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 965,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1188
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here is the precise QA review of the front of the business card:\n\n1.  **LOGO PLACEMENT:** The brand lockup is at **top-LEFT**. Yes, the **K monogram is to the LEFT** of the wordmark.\n2.  **WORDMARK:** It reads exactly \"**Kozy Care**\" in title case. There is no caps-lock spelling.\n3.  **DESCRIPTOR:** The small tracked-caps line is: \"**PREMIUM DRYCLEANING & LAUNDRY**\"\n4.  **ALIGNMENT:** Yes, the lockup (mark + text) is **left-aligned as a unit**.\n5.  **REST OF CARD:** Yes, the person's name (\"Mr. Orion Akenruwa\") is centered mid-card with a small title and gold rule. Contacts are centered at the bottom. \n    *   Email: **kozygarmentcare@gmail.com**\n    *   Phone: **+234 808 888 8846**\n6.  **FIT:** No text or elements are touching or crossing the crop marks/cut lines. Everything is safely inside the inner hairline frame.\n7.  **VERDICT:** **PASS** (The design strictly adheres to brand guidelines, maintains proper margins, and uses correct typography).",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788607162,
+  "id": "2026090519191585a8b163b028465c",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026090519191585a8b163b028465c",
+  "usage": {
+    "completion_tokens": 274,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 480,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 754
+  }
+}

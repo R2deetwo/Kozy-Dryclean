@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here is the precise QA review for the Kozy Care business card front:\n\n1.  **LOGO PLACEMENT:** Top-LEFT. Yes, the **K** mark is to the left of the wordmark.\n2.  **WORDMARK:** \"Kozy Care\" (Title Case).\n3.  **DESCRIPTOR:** \"PREMIUM DRYCLEANING & LAUNDRY\".\n4.  **REST:**\n    *   Name (\"Ms. Khare Akenuwa\") is centered.\n    *   Title: None present.\n    *   Contacts are centered at bottom:\n        *   Email: `kozygarmentcare@gmail.com`\n        *   Phone: `+234 808 888 8846`\n5.  **FIT:** No elements cross the crop marks or are cut off. (Note: The bottom text \"BUSINESS CARD...\" appears outside the bleed area/crop marks, which is standard for printer specs/slugs and does not affect the final card cut).\n6.  **VERDICT:** **FIX** — The email address uses \"garmentcare\" instead of the brand name \"kozycare\" (or a consistent domain). Ensure the email domain matches the brand identity.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788607167,
+  "id": "202609051919226d9b6a9a58f74d76",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609051919226d9b6a9a58f74d76",
+  "usage": {
+    "completion_tokens": 256,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 386,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 642
+  }
+}

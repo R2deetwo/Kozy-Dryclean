@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here is the precise QA review for the Kozy Care corporate services sheet:\n\n1.  **BRAND LOCKUP:**\n    *   **Name:** KOZY CARE\n    *   **Descriptor Line (Exact):** PREMIUM DRYCLEANING & LAUNDRY\n    *(It reads \"PREMIUM DRYCLEANING & LAUNDRY\", not \"INSTITUTIONAL & CORPORATE GARMENT CARE\".)*\n\n2.  **COMMERCIAL TERMS:** **YES**, the terms box containing the 15% / 5% partner rates is fully visible and well within the trim area.\n\n3.  **CONTACT BAND + LEGAL FOOT:** **YES**, both the gold contact band and the legal footer text are fully visible at the bottom and are not sliced by the cut line.\n\n4.  **FIT:** **NO**, there is no content crossing the cut lines (other than the intentional gold bands bleeding to the crop marks). All text and boxes are safely inside the trim.\n\n5.  **VERDICT:** **FIX**\n    *(One Fix Required: The \"SERVICE OVERVIEW - LAGOS 2026\" header in the top-right corner is positioned dangerously close to the top trim edge and appears to be partially clipped or lacking sufficient clear space from the cut line. It needs to be moved down slightly to ensure it is safely within the live area.)*",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788607176,
+  "id": "202609051919312094049eba4042e0",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609051919312094049eba4042e0",
+  "usage": {
+    "completion_tokens": 289,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1580,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1869
+  }
+}
