@@ -26,6 +26,22 @@ import { requireRole } from '@/lib/auth'
 import { UpdateStaffSchema } from '@/lib/schemas'
 import { notifyStaffInvite, notifyStaffAccessRestored, logStaffEvent } from '@/lib/notifications'
 
+/** Same conversion as /api/staff: thrown 401/403 Responses must reach the
+ *  client as real status codes, not empty 500s. */
+async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
+  try {
+    return await requireRole('ADMIN')
+  } catch (e) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    throw e
+  }
+}
+
 const STAFF_SELECT = {
   id: true,
   email: true,
@@ -42,7 +58,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireRole('ADMIN')
+  const guard = await requireAdmin()
+  if (guard instanceof NextResponse) return guard
+  const session = guard
   const { id } = await params
 
   const staff = await db.user.findUnique({ where: { id } })

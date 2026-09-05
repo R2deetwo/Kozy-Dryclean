@@ -7,6 +7,22 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 
+// Phase 31: explicit 401/403 instead of the thrown-Response-becomes-500
+// quirk (same pattern as the other console routes).
+async function guardAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
+  try {
+    return await requireRole('ADMIN')
+  } catch (e) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    throw e
+  }
+}
+
 const PatchDiscountSchema = z.object({
   value: z.coerce.number().finite().min(0).max(100).optional(),
   active: z.boolean().optional(),
@@ -17,7 +33,9 @@ export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  await requireRole('ADMIN')
+  const guard = await guardAdmin()
+  if (guard instanceof NextResponse) return guard
+
   const { id } = await params
 
   let body: unknown

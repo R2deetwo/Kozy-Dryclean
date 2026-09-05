@@ -20,6 +20,24 @@ import { requireRole } from '@/lib/auth'
 import { CreateStaffSchema } from '@/lib/schemas'
 import { notifyStaffInvite, logStaffEvent } from '@/lib/notifications'
 
+/** requireRole throws its 401/403 as a Response; some Next 16 builds turn a
+ *  thrown Response into an empty 500 (phase-24 finding). Converting it keeps
+ *  the status code honest — a forbidden staff member sees a real 403, and
+ *  monitoring doesn't cry wolf on 500s. */
+async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
+  try {
+    return await requireRole('ADMIN')
+  } catch (e) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    throw e
+  }
+}
+
 const STAFF_SELECT = {
   id: true,
   email: true,
@@ -34,7 +52,8 @@ const STAFF_SELECT = {
 
 // ----- GET /api/staff -----
 export async function GET() {
-  await requireRole('ADMIN')
+  const guard = await requireAdmin()
+  if (guard instanceof NextResponse) return guard
 
   const staff = await db.user.findMany({
     where: { role: 'STAFF' },
@@ -47,7 +66,9 @@ export async function GET() {
 
 // ----- POST /api/staff (invite) -----
 export async function POST(req: Request) {
-  const session = await requireRole('ADMIN')
+  const guard = await requireAdmin()
+  if (guard instanceof NextResponse) return guard
+  const session = guard
 
   const body = await req.json().catch(() => null)
   const parsed = CreateStaffSchema.safeParse(body)

@@ -16,8 +16,27 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 
+// Phase 31: explicit 401/403 instead of the thrown-Response-becomes-500
+// quirk — the console's Customers tab polls this route, so a paused staff
+// member must see a real 403, not an empty 500 (same pattern as payments).
+async function requireConsole(): Promise<ReturnType<typeof requireRole> | NextResponse> {
+  try {
+    return await requireRole('ADMIN', 'STAFF')
+  } catch (e) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    throw e
+  }
+}
+
 export async function GET(req: Request) {
-  const session = await requireRole('ADMIN', 'STAFF')
+  const guard = await requireConsole()
+  if (guard instanceof NextResponse) return guard
+  const session = guard
   const isStaff = (session.user as any)?.role === 'STAFF'
 
   // ----- Cursor pagination params -----

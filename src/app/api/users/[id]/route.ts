@@ -25,11 +25,29 @@ import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 
+// Phase 31: explicit 401/403 instead of the thrown-Response-becomes-500
+// quirk (same conversion as the other console routes).
+async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
+  try {
+    return await requireRole('ADMIN')
+  } catch (e) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    throw e
+  }
+}
+
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await requireRole('ADMIN')
+  const guard = await requireAdmin()
+  if (guard instanceof NextResponse) return guard
+  const session = guard
 
   const { id } = await params
 
