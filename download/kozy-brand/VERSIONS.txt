@@ -7,7 +7,7 @@ pieces you need to reprint after an update. Older versions are NEVER
 deleted — each update lands in its own folder.
 
 ------------------------------------------------------------------
-CURRENT VERSION: v6.1  (5 September 2026) — see VERSION HISTORY below
+CURRENT VERSION: v6.2  (5 September 2026) — see VERSION HISTORY below
 ------------------------------------------------------------------
 
 WHAT CHANGED IN v5.1 (hotels & corporate wording):
@@ -82,6 +82,35 @@ reprint. Reprint whenever natural. New print work: use the corrected
 "Kozy Care" logo files from the v6 logo pack going forward.
 
 ------------------------------------------------------------------
+CURRENT VERSION: v6.2  (5 September 2026) — BRAND LOCKUP + DESCRIPTOR
+                                CORRECTION
+------------------------------------------------------------------
+WHAT CHANGED IN v6.2 (client brand review):
+
+  1. BUSINESS CARDS — the logo lockup moved from the top RIGHT to the
+     TOP LEFT and now matches the website header exactly: K mark on the
+     left, "Kozy Care" in title case (Playfair), small tracked-caps
+     descriptor beneath, all left-aligned. Everything else on the
+     v6.1 cards is unchanged (centered name/title/rule, contacts at the
+     bottom, turn-over back with QR/web/customer-care/addresses).
+
+  2. GOLD CORPORATE SERIES — the descriptor line under "KOZY CARE" on
+     the A5 institutional flyer (front) and the A4 corporate sheet now
+     reads "PREMIUM DRYCLEANING & LAUNDRY", the standard brand line
+     used on every other piece in the kit. The invented
+     "INSTITUTIONAL & CORPORATE GARMENT CARE" wording has been removed —
+     the brand presentation stays identical everywhere; only the body
+     copy speaks to the institutional audience.
+
+  3. All affected pieces re-measured against their trim boxes (safe
+     margins confirmed) and re-verified on the final print PDFs.
+
+WHERE THE FILES LIVE:
+  v6.2 (current) .... download/kozy-brand/v6-name-and-series-update/
+  client zip ........ download/kozy-brand-kit-v6-complete.zip
+  v5.1 (previous) ... download/kozy-brand/v5.1-hotel-corporate-update/
+
+------------------------------------------------------------------
 CURRENT VERSION: v6.1  (5 September 2026) — PRINT-FIT FIX + CARD
                                 REDESIGN
 ------------------------------------------------------------------
@@ -116,6 +145,19 @@ WHAT CHANGED IN v6.1 (client print review):
 ------------------------------------------------------------------
 VERSION HISTORY
 ------------------------------------------------------------------
+v6.2  5 Sep 2026   Brand review: card lockup moved to top-left in the
+                   website style; gold-corporate descriptor standardized
+                   to PREMIUM DRYCLEANING & LAUNDRY.
+
+v6.1  5 Sep 2026   Print-fit fix (QR, partner-rates band, terms box now
+                   safely inside trim; true full-bleed gold bands) +
+                   business card redesign (centered person side, turn-over
+                   back, standard email kozygarmentcare@gmail.com).
+
+v6    5 Sep 2026   Name enforcement ("Kozy Care" everywhere) + Light
+                   series (cream) + Gold Corporate series (institutional
+                   B2B material) + personal cards + Brand Sheet V2.
+
 v5.1  29 Aug 2026  HOTEL15 wording targets hotels & corporate clients
                    (3 pieces updated, all others unchanged). Folder:
                    v5.1-hotel-corporate-update/

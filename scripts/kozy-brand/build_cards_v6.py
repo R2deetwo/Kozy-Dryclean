@@ -7,7 +7,12 @@ approved v5 card geometry (85x55mm trim, 3mm bleed, 5mm marks margin).
 
 v6.1 REDESIGN (client review, verbatim directions):
   FRONT = the person, centered and classier:
-     - Kozy Care lockup small at the top-RIGHT
+     - Kozy Care lockup small at the top
+  v6.2 (client review, 5 Sep 2026): lockup moved from top-RIGHT to
+     top-LEFT and restyled to match the WEBSITE header exactly —
+     K mark on the left, title-case "Kozy Care" (Playfair Bold) over the
+     small tracked-caps descriptor, left-aligned (src/components/shell/
+     logo.tsx is the reference lockup).
      - "Mr./Ms. <Name>" centered, smaller and less shouty (title case)
      - title ("CHIEF EXECUTIVE OFFICER") centered under the name
      - the gold demarcation rule (kept from the approved design)
@@ -110,12 +115,12 @@ FRONT_CSS = """
              display:flex; flex-direction:column; font-family:'Outfit', Arial, sans-serif; }
   .frame { position:absolute; inset:15px; border:1px solid __FRAME__; border-radius:2px;
            pointer-events:none; }
-  /* brand lockup small, top-right */
-  .brandrow { display:flex; align-items:center; gap:7px; justify-content:flex-end; }
+  /* brand lockup top-LEFT, website-style (mark + stacked title-case name) */
+  .brandrow { display:flex; align-items:center; gap:8px; justify-content:flex-start; }
   .brandrow .bn { font-family:'Playfair Display', Georgia, serif; font-weight:700;
-                  font-size:11.5px; letter-spacing:1.3px; color:__WORD__; line-height:1; }
+                  font-size:13px; letter-spacing:.3px; color:__WORD__; line-height:1; }
   .brandrow .bd { font-family:'Marcellus', 'Times New Roman', serif; font-size:4.8px;
-                  letter-spacing:1.7px; color:__DESC__; margin-top:2.5px; white-space:nowrap; }
+                  letter-spacing:1.5px; color:__DESC__; margin-top:3px; white-space:nowrap; }
   /* the person — centered, classier, smaller */
   .mid { flex:1; display:flex; flex-direction:column; justify-content:center;
          align-items:center; text-align:center; }
@@ -206,7 +211,7 @@ def front_html(person: dict, f: str, p: dict, digital: bool) -> str:
   <div class="bleedbox"><div class="trim">
     <div class="content">
       <div class="frame"></div>
-      <div class="brandrow">{mark_svg}<div style="text-align:right;"><div class="bn">KOZY CARE</div>
+      <div class="brandrow">{mark_svg}<div><div class="bn">Kozy Care</div>
         <div class="bd">PREMIUM DRYCLEANING &amp; LAUNDRY</div></div></div>
       <div class="mid">
         <div class="name">{person['display_name']}</div>
@@ -269,7 +274,7 @@ def main() -> None:
             (OUT / f'card-{f}-back{suffix}.html').write_text(
                 back_html(f, p, digital), encoding='utf-8')
             count += 1
-    print(f'BUILT {count} card HTML files in {OUT} (v6.1 centered redesign)')
+    print(f'BUILT {count} card HTML files in {OUT} (v6.2 left-aligned website-style lockup)')
 
 
 if __name__ == '__main__':

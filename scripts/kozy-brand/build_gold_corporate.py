@@ -162,7 +162,7 @@ def a4_sheet(digital: bool) -> str:
     <div class="content">
       <div class="brandrow">
         <div class="brandlock">{mark}<div><div class="bn">KOZY CARE</div>
-          <div class="bd">INSTITUTIONAL &amp; CORPORATE GARMENT CARE</div></div></div>
+          <div class="bd">PREMIUM DRYCLEANING &amp; LAUNDRY</div></div></div>
         <div class="docref">SERVICE OVERVIEW · LAGOS<br>2026</div>
       </div>
       <h1>Partnership-grade garment care.<br><em>Delivered to standard.</em></h1>
@@ -313,7 +313,7 @@ def a5_flyer_front(digital: bool) -> str:
     <div class="trim">
     <div class="content">
       <div class="brandlock">{mark}<div><div class="bn">KOZY CARE</div>
-        <div class="bd">INSTITUTIONAL &amp; CORPORATE GARMENT CARE</div></div></div>
+        <div class="bd">PREMIUM DRYCLEANING &amp; LAUNDRY</div></div></div>
       <div class="kicker">A PARTNER IN PRESENTATION</div>
       <h1>Immaculate presentation.<br><em>Zero admin effort.</em></h1>
       <div class="rule"></div>

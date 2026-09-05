@@ -3,6 +3,20 @@ KOZY CARE — BRAND KIT v6 README (WHAT CHANGED & HOW TO USE)
 One name. Three finishes. This update makes the name on every piece of
 Kozy Care material match the website exactly, and adds two new finishes.
 
+v6.2 (5 September 2026) — brand lockup + descriptor correction (client review):
+  - BUSINESS CARDS: the logo lockup now sits at the TOP LEFT, matching the
+    website header exactly — K mark on the left, "Kozy Care" in title case
+    with the small descriptor line under it, all left-aligned. (It was
+    previously pushed to the top right, which the client rejected.)
+  - GOLD CORPORATE SERIES: the descriptor under "KOZY CARE" on the A5
+    institutional flyer and the A4 corporate sheet now reads
+    "PREMIUM DRYCLEANING & LAUNDRY" — the standard brand line used across
+    the whole kit. The one-off "INSTITUTIONAL & CORPORATE GARMENT CARE"
+    wording is gone: the brand stays the same everywhere; the audience is
+    addressed in the copy, not in the logo lockup.
+  - Everything re-measured against the trim box (all pieces pass with safe
+    margins) and re-verified on the rendered print PDFs.
+
 v6.1 (5 September 2026) — print-fit correction + business card redesign:
   - EVERY new v6 piece was measured against its trim box. The first v6
     build let bottom sections drift up to 8mm past the cut line (the
@@ -68,8 +82,8 @@ GOLD CORPORATE (new)
   Both cards use the standard company contacts:
      kozygarmentcare@gmail.com · +234 808 888 8846
 
-  FRONT (the person — centered, refined): the Kozy Care lockup sits
-  small at the top right; "Mr./Ms. + Name" is centered in elegant serif
+  FRONT (the person — centered, refined): the Kozy Care lockup sits at
+  the top LEFT in the website style (K mark + left-aligned name); "Mr./Ms. + Name" is centered in elegant serif
   with the title (CEO card only) and a short gold rule beneath; the
   email and call/WhatsApp line sit centered at the bottom. No web
   address on the front.
