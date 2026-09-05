@@ -97,6 +97,7 @@ python3 "$PDFPY" pages.merge light-series/flyer-light-front-cmyk.pdf light-serie
 cp light-series/flyer-light-2sided-cmyk.pdf "$D/light-series/print/kozy-flyer-light-A5-print-CMYK.pdf"
 cp light-series/flyer-light-2sided-rgb.pdf  "$D/light-series/print/kozy-flyer-light-A5-print-RGB.pdf"
 cp light-series/flyer-light-front-digital.pdf "$D/light-series/digital/kozy-flyer-light-front-digital.pdf"
+cp light-series/flyer-light-back-digital.pdf "$D/light-series/digital/kozy-flyer-light-back-digital.pdf"
 cp light-series/flyer-light-front.html light-series/flyer-light-back.html "$D/light-series/html-source/"
 node "$SNAP" light-series/flyer-light-front-digital.html "$D/light-series/digital/kozy-flyer-light-front.png" --w 560 --h 794 --scale 2 >/dev/null
 node "$SNAP" light-series/flyer-light-back-digital.html  "$D/light-series/digital/kozy-flyer-light-back.png"  --w 560 --h 794 --scale 2 >/dev/null
@@ -138,6 +139,7 @@ python3 "$PDFPY" pages.merge gold-corporate/flyer-inst-front-cmyk.pdf gold-corpo
 cp gold-corporate/flyer-inst-2sided-cmyk.pdf "$D/gold-corporate/print/kozy-flyer-institutional-A5-print-CMYK.pdf"
 cp gold-corporate/flyer-inst-2sided-rgb.pdf  "$D/gold-corporate/print/kozy-flyer-institutional-A5-print-RGB.pdf"
 cp gold-corporate/flyer-inst-front-digital.pdf "$D/gold-corporate/digital/kozy-flyer-institutional-front-digital.pdf"
+cp gold-corporate/flyer-inst-back-digital.pdf "$D/gold-corporate/digital/kozy-flyer-institutional-back-digital.pdf"
 cp gold-corporate/flyer-institutional-front.html gold-corporate/flyer-institutional-back.html "$D/gold-corporate/html-source/"
 node "$SNAP" gold-corporate/flyer-institutional-front-digital.html "$D/gold-corporate/digital/kozy-flyer-institutional-front.png" --w 560 --h 794 --scale 2 >/dev/null
 node "$SNAP" gold-corporate/flyer-institutional-back-digital.html  "$D/gold-corporate/digital/kozy-flyer-institutional-back.png"  --w 560 --h 794 --scale 2 >/dev/null

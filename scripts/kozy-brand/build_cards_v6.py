@@ -1,17 +1,29 @@
 #!/usr/bin/env python3
-"""build_cards_v6.py — personal business cards (v6).
+"""build_cards_v6.py — personal business cards (v6.1 redesign).
 
 Two people (Mr. Orion Akenuwa — CEO; Ms. Khare Akenuwa) x three finishes
 (navy signature / white light / gold corporate) x two sides, following the
 approved v5 card geometry (85x55mm trim, 3mm bleed, 5mm marks margin).
 
-Design intent:
-  FRONT = the person (their name, role, direct contacts) with the brand
-          header small at the top — so the card is recognisably theirs.
-  BACK  = the approved company side (KOZY CARE, company phone/email/web,
-          scan-to-book QR, both addresses) — unchanged in feel.
+v6.1 REDESIGN (client review, verbatim directions):
+  FRONT = the person, centered and classier:
+     - Kozy Care lockup small at the top-RIGHT
+     - "Mr./Ms. <Name>" centered, smaller and less shouty (title case)
+     - title ("CHIEF EXECUTIVE OFFICER") centered under the name
+     - the gold demarcation rule (kept from the approved design)
+     - contact information at the BOTTOM, centered:
+       EMAIL kozygarmentcare@gmail.com  +  CALL / WHATSAPP line
+     - NO web address on the front (it lives on the back)
+  BACK  = turn-over information only (no repeated logo/name block):
+     - scan-to-book QR centered with SCAN TO BOOK caption
+     - WEB kozycare.ng  +  CUSTOMER CARE +234 803 175 5230
+     - both addresses at the bottom, centered, under the hairline
+  The standard email on both cards is kozygarmentcare@gmail.com (the
+  address printed on the flyer) — the personal @kozycare.ng addresses
+  are retired from print.
 
-Print + digital variants for each.
+Print + digital variants for each. Geometry measured fit-safe with
+scripts/kozy-brand/audit_v6_fit.js.
 """
 import sys
 from pathlib import Path
@@ -94,28 +106,32 @@ FRONT_CSS = """
   .bleedbox { position:absolute; inset:__BINSET__px; background:__BG__; overflow:hidden; }
   .trim { position:absolute; inset:__TINSET__px; }
   .marks { position:absolute; left:0; top:0; pointer-events:none; }
-  .content { position:absolute; inset:0; padding:23px 26px 27px;
+  .content { position:absolute; inset:0; padding:20px 24px 22px;
              display:flex; flex-direction:column; font-family:'Outfit', Arial, sans-serif; }
   .frame { position:absolute; inset:15px; border:1px solid __FRAME__; border-radius:2px;
            pointer-events:none; }
-  .brandrow { display:flex; align-items:center; gap:8px; }
+  /* brand lockup small, top-right */
+  .brandrow { display:flex; align-items:center; gap:7px; justify-content:flex-end; }
   .brandrow .bn { font-family:'Playfair Display', Georgia, serif; font-weight:700;
-                  font-size:13px; letter-spacing:1.5px; color:__WORD__; line-height:1; }
-  .brandrow .bd { font-family:'Marcellus', 'Times New Roman', serif; font-size:5.4px;
-                  letter-spacing:1.9px; color:__DESC__; margin-top:3px; white-space:nowrap; }
-  .mid { flex:1; display:flex; flex-direction:column; justify-content:center; }
+                  font-size:11.5px; letter-spacing:1.3px; color:__WORD__; line-height:1; }
+  .brandrow .bd { font-family:'Marcellus', 'Times New Roman', serif; font-size:4.8px;
+                  letter-spacing:1.7px; color:__DESC__; margin-top:2.5px; white-space:nowrap; }
+  /* the person — centered, classier, smaller */
+  .mid { flex:1; display:flex; flex-direction:column; justify-content:center;
+         align-items:center; text-align:center; }
   .name { font-family:'Playfair Display', Georgia, serif; font-weight:700;
-          font-size:21px; letter-spacing:2.0px; color:__NAME__; line-height:1; }
-  .role { font-family:'Marcellus', 'Times New Roman', serif; font-size:6.6px;
-          letter-spacing:2.4px; color:__TITLE__; margin-top:7px; white-space:nowrap; }
+          font-size:16.5px; letter-spacing:1.1px; color:__NAME__; line-height:1.15; }
+  .role { font-family:'Marcellus', 'Times New Roman', serif; font-size:6.4px;
+          letter-spacing:2.6px; color:__TITLE__; margin-top:6px; white-space:nowrap; }
   .rule { width:42px; height:1px; background:__RULE__; margin-top:11px; }
-  .rows { display:flex; gap:28px; margin-top:2px; }
-  .col { display:flex; flex-direction:column; gap:9px; min-width:0; }
-  .lbl { font-family:'Marcellus', 'Times New Roman', serif; font-size:6.2px;
+  /* direct contacts at the bottom, centered */
+  .rows { display:flex; gap:24px; justify-content:center; }
+  .col { display:flex; flex-direction:column; align-items:center; text-align:center;
+         gap:8px; min-width:0; }
+  .lbl { font-family:'Marcellus', 'Times New Roman', serif; font-size:6.0px;
          letter-spacing:1.8px; color:__LBL__; }
-  .val { font-size:10px; font-weight:500; color:__VAL__; letter-spacing:.35px;
+  .val { font-size:9.5px; font-weight:500; color:__VAL__; letter-spacing:.3px;
          margin-top:2px; white-space:nowrap; }
-  .fillrow { flex:1; }
 """
 
 BACK_CSS = """
@@ -125,25 +141,24 @@ BACK_CSS = """
   .bleedbox { position:absolute; inset:__BINSET__px; background:__BG__; overflow:hidden; }
   .trim { position:absolute; inset:__TINSET__px; }
   .marks { position:absolute; left:0; top:0; pointer-events:none; }
-  .content { position:absolute; inset:0; padding:23px 26px 18px;
+  .content { position:absolute; inset:0; padding:20px 24px 18px;
              display:flex; flex-direction:column; font-family:'Outfit', Arial, sans-serif; }
   .frame { position:absolute; inset:15px; border:1px solid __FRAME__; border-radius:2px;
            pointer-events:none; }
-  .headrow { display:flex; align-items:center; gap:9px; }
-  .headrow .hn { font-family:'Playfair Display', Georgia, serif; font-weight:700;
-                 font-size:14.5px; letter-spacing:1.6px; color:__WORD__; line-height:1; }
-  .rows { display:flex; flex-direction:column; gap:11px; margin-top:2px; }
-  .lbl { font-family:'Marcellus', 'Times New Roman', serif; font-size:6.4px;
-         letter-spacing:1.7px; color:__LBL__; }
-  .val { font-size:10.5px; font-weight:500; color:__VAL__; letter-spacing:.4px;
-         margin-top:2.5px; white-space:nowrap; }
-  .qrbox { width:78px; padding:3px; background:__QRPAD__; border-radius:5px;
+  /* turn-over information only — no repeated logo/name block */
+  .mid { flex:1; display:flex; flex-direction:column; justify-content:center;
+         align-items:center; gap:13px; }
+  .qrbox { width:72px; padding:3px; background:__QRPAD__; border-radius:5px;
            border:1px solid __QRBORDER__; }
   .qrbox img { width:100%; display:block; }
-  .scan { font-family:'Marcellus', 'Times New Roman', serif; font-size:6.4px;
-          letter-spacing:1.7px; color:__LBL__; text-align:center; margin-top:5px; }
-  .mid { display:flex; justify-content:space-between; align-items:center;
-          flex:1; padding-right:6px; }
+  .scan { font-family:'Marcellus', 'Times New Roman', serif; font-size:6.2px;
+          letter-spacing:1.9px; color:__LBL__; text-align:center; margin-top:5px; }
+  .bkrow { display:flex; gap:26px; justify-content:center; margin-top:2px; }
+  .col { display:flex; flex-direction:column; align-items:center; text-align:center; }
+  .lbl { font-family:'Marcellus', 'Times New Roman', serif; font-size:6.2px;
+         letter-spacing:1.9px; color:__LBL__; }
+  .val { font-size:10px; font-weight:500; color:__VAL__; letter-spacing:.4px;
+         margin-top:2.5px; white-space:nowrap; }
   .addrrule { height:1px; background:__HAIRLINE__; margin:0 2px; }
   .addr { font-size:6.6px; color:__ADDR__; letter-spacing:.5px; text-align:center;
           margin-top:6.5px; line-height:1.6; white-space:nowrap; }
@@ -164,17 +179,16 @@ def front_html(person: dict, f: str, p: dict, digital: bool) -> str:
     pw, ph = (DW, DH) if digital else (PW, PH)
     css = sub(FRONT_CSS, p, pw=str(pw), ph=str(ph),
               binset='0' if digital else '18.9', tinset='0' if digital else '11.34')
-    mark_svg = k_mark(p['mark'], 30 if digital else 34)
+    mark_svg = k_mark(p['mark'], 24 if digital else 26)
     role = f'<div class="role">{person["title"]}</div>' if person['title'] else ''
-    # contact columns: direct email + phone / web
+    # direct contacts at the bottom: the standard company email + the direct line
     contacts = (
         '<div class="rows">'
         '<div class="col">'
-        f'<div><div class="lbl">EMAIL</div><div class="val">{person["email"]}</div></div>'
-        f'<div><div class="lbl">CALL / WHATSAPP</div><div class="val">{person["phone"]}</div></div>'
+        f'<div><div class="lbl">EMAIL</div><div class="val">{COMPANY["email"]}</div></div>'
         '</div>'
         '<div class="col">'
-        f'<div><div class="lbl">WEB</div><div class="val">{COMPANY["web"]}</div></div>'
+        f'<div><div class="lbl">CALL / WHATSAPP</div><div class="val">{person["phone"]}</div></div>'
         '</div>'
         '</div>'
     )
@@ -192,13 +206,12 @@ def front_html(person: dict, f: str, p: dict, digital: bool) -> str:
   <div class="bleedbox"><div class="trim">
     <div class="content">
       <div class="frame"></div>
-      <div class="brandrow">{mark_svg}<div><div class="bn">KOZY CARE</div>
+      <div class="brandrow">{mark_svg}<div style="text-align:right;"><div class="bn">KOZY CARE</div>
         <div class="bd">PREMIUM DRYCLEANING &amp; LAUNDRY</div></div></div>
       <div class="mid">
-        <div class="name">{person['name']}</div>
+        <div class="name">{person['display_name']}</div>
         {role}
         <div class="rule"></div>
-        <div class="fillrow"></div>
       </div>
       {contacts}
     </div>
@@ -212,7 +225,6 @@ def back_html(f: str, p: dict, digital: bool) -> str:
     pw, ph = (DW, DH) if digital else (PW, PH)
     css = sub(BACK_CSS, p, pw=str(pw), ph=str(ph),
               binset='0' if digital else '18.9', tinset='0' if digital else '11.34')
-    mark_svg = k_mark(p['mark'], 21)
     marks = '' if digital else crop_marks(
         pw, ph, 85, 55,
         f'KOZY CARE · BUSINESS CARD 85 x 55 MM · BLEED 3 MM · KOZYCARE.NG · '
@@ -227,16 +239,14 @@ def back_html(f: str, p: dict, digital: bool) -> str:
   <div class="bleedbox"><div class="trim">
     <div class="content">
       <div class="frame"></div>
-      <div class="headrow">{mark_svg}<div class="hn">KOZY CARE</div></div>
       <div class="mid">
-        <div class="rows">
-          <div><div class="lbl">CALL / WHATSAPP</div><div class="val">{COMPANY['phone']}</div></div>
-          <div><div class="lbl">EMAIL</div><div class="val">{COMPANY['email']}</div></div>
-          <div><div class="lbl">WEB</div><div class="val">{COMPANY['web']}</div></div>
-        </div>
         <div>
           <div class="qrbox"><img src="{QR}" alt="QR"></div>
           <div class="scan">SCAN TO BOOK</div>
+        </div>
+        <div class="bkrow">
+          <div class="col"><div class="lbl">WEB</div><div class="val">{COMPANY['web']}</div></div>
+          <div class="col"><div class="lbl">CUSTOMER CARE</div><div class="val">{COMPANY['phone']}</div></div>
         </div>
       </div>
       <div class="addrrule"></div>
@@ -259,7 +269,7 @@ def main() -> None:
             (OUT / f'card-{f}-back{suffix}.html').write_text(
                 back_html(f, p, digital), encoding='utf-8')
             count += 1
-    print(f'BUILT {count} card HTML files in {OUT}')
+    print(f'BUILT {count} card HTML files in {OUT} (v6.1 centered redesign)')
 
 
 if __name__ == '__main__':

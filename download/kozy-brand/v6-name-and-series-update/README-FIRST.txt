@@ -3,6 +3,20 @@ KOZY CARE — BRAND KIT v6 README (WHAT CHANGED & HOW TO USE)
 One name. Three finishes. This update makes the name on every piece of
 Kozy Care material match the website exactly, and adds two new finishes.
 
+v6.1 (5 September 2026) — print-fit correction + business card redesign:
+  - EVERY new v6 piece was measured against its trim box. The first v6
+    build let bottom sections drift up to 8mm past the cut line (the
+    institutional flyer's QR code, the PREFERRED PARTNER RATES band, the
+    corporate sheet's COMMERCIAL TERMS box and contact band). All fixed —
+    every element now sits inside the trim with a safe margin, and the
+    gold edge bands run to the bleed edge so no cream sliver shows after
+    cutting.
+  - BUSINESS CARDS redesigned: the person's side is now centered and
+    classier (honourific + name, title, gold rule, contacts at the
+    bottom); the turn-over side carries only the QR, web address,
+    customer-care line and addresses. The standard email on both cards
+    is kozygarmentcare@gmail.com. Full details in section 3.
+
 ------------------------------------------------------------
 1. THE NAME IS NOW ENFORCED — "Kozy Care", always two words
 ------------------------------------------------------------
@@ -46,17 +60,26 @@ GOLD CORPORATE (new)
   and notice boards; the gold business cards at B2B meetings.
 
 ------------------------------------------------------------
-3. PERSONAL BUSINESS CARDS (new)
+3. PERSONAL BUSINESS CARDS (v6.1 layout)
 ------------------------------------------------------------
   MR. ORION AKENUWA — Chief Executive Officer
-     orion@kozycare.ng · +234 808 888 8846
   MS. KHARE AKENUWA
-     khare@kozycare.ng · +234 808 888 8846 (shared company line)
+
+  Both cards use the standard company contacts:
+     kozygarmentcare@gmail.com · +234 808 888 8846
+
+  FRONT (the person — centered, refined): the Kozy Care lockup sits
+  small at the top right; "Mr./Ms. + Name" is centered in elegant serif
+  with the title (CEO card only) and a short gold rule beneath; the
+  email and call/WhatsApp line sit centered at the bottom. No web
+  address on the front.
+
+  BACK (turn it over): the scan-to-book QR code with SCAN TO BOOK,
+  kozycare.ng, the customer-care line +234 803 175 5230, and both
+  addresses under a hairline. No logo or brand-name repeat — the front
+  already carries the brand.
 
 Each person's card comes in all three finishes (navy, white, gold).
-Front = the person (name, role, direct contacts). Back = the company
-(phone, email, web, scan-to-book QR, both addresses) — so no information
-from the old cards is lost.
 See: 02-new-v6/business-cards/kozy-card-VERSIONS-overview.png for a
 one-glance comparison of every version.
 

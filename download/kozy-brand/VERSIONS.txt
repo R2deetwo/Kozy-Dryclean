@@ -7,7 +7,7 @@ pieces you need to reprint after an update. Older versions are NEVER
 deleted — each update lands in its own folder.
 
 ------------------------------------------------------------------
-CURRENT VERSION: v6  (5 September 2026) — see VERSION HISTORY below
+CURRENT VERSION: v6.1  (5 September 2026) — see VERSION HISTORY below
 ------------------------------------------------------------------
 
 WHAT CHANGED IN v5.1 (hotels & corporate wording):
@@ -80,6 +80,38 @@ WHERE THE FILES LIVE:
 REPRINT GUIDANCE: the navy v5/v5.1 material is still valid — no forced
 reprint. Reprint whenever natural. New print work: use the corrected
 "Kozy Care" logo files from the v6 logo pack going forward.
+
+------------------------------------------------------------------
+CURRENT VERSION: v6.1  (5 September 2026) — PRINT-FIT FIX + CARD
+                                REDESIGN
+------------------------------------------------------------------
+WHAT CHANGED IN v6.1 (client print review):
+
+  1. EVERYTHING NOW FITS THE PAGE. The first v6 printouts let bottom
+     sections drift past the trim line — on the institutional A5 flyer
+     the QR code and the PREFERRED PARTNER RATES band were being sliced
+     by the cutter, and on the corporate A4 sheet the COMMERCIAL TERMS
+     box, the contact band and the legal foot ran off the page. Every
+     v6 piece was re-measured against its trim box and re-set so all
+     content sits safely inside the cut lines. The gold edge bands now
+     bleed properly (they run past the trim into the bleed area, so no
+     cream sliver can appear at the cut edge).
+
+  2. BUSINESS CARDS REDESIGNED (client direction):
+     FRONT — the person, centered and classier: Kozy Care lockup small
+     at the top right; "Mr./Ms. + Name" centered (smaller, refined) with
+     the title and the gold rule beneath; contacts at the bottom:
+     kozygarmentcare@gmail.com + the direct line +234 808 888 8846.
+     No web address on the front.
+     BACK — turn-over information only (no repeated logo/name block):
+     the scan-to-book QR, kozycare.ng, CUSTOMER CARE +234 803 175 5230,
+     and both addresses.
+     The personal orion@/khare@kozycare.ng addresses are retired from
+     print — kozygarmentcare@gmail.com (the address on the flyer) is
+     now the standard on both cards.
+
+  3. Full set regenerated: print PDFs (CMYK + RGB), digital PDFs, PNG
+     previews and the card versions overview sheet.
 
 ------------------------------------------------------------------
 VERSION HISTORY

@@ -153,24 +153,29 @@ def crop_marks(poster_w: float, poster_h: float, trim_w_mm: float, trim_h_mm: fl
 
 
 # ------------------------------------------------------------------ persons
+# v6.1 (client directive): BOTH cards carry the standard company email
+# kozygarmentcare@gmail.com (the address on the flyer — recoverable/real).
+# Personal @kozycare.ng addresses are retired from print. Honorific kept.
 PERSONS = [
     {
         'key': 'orion',
         'name': 'ORION AKENUWA',
-        'display_name': 'Orion Akenuwa',
+        'honorific': 'Mr.',
+        'display_name': 'Mr. Orion Akenuwa',
         'title': 'CHIEF EXECUTIVE OFFICER',
         'title_short': 'CEO',
-        'email': 'orion@kozycare.ng',
+        'email': 'kozygarmentcare@gmail.com',
         'phone': '+234 808 888 8846',
         'phone_raw': '08088888846',
     },
     {
         'key': 'khare',
         'name': 'KHARE AKENUWA',
-        'display_name': 'Khare Akenuwa',
+        'honorific': 'Ms.',
+        'display_name': 'Ms. Khare Akenuwa',
         'title': '',
         'title_short': '',
-        'email': 'khare@kozycare.ng',
+        'email': 'kozygarmentcare@gmail.com',
         'phone': '+234 808 888 8846',
         'phone_raw': '08088888846',
     },
