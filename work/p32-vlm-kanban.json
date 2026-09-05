@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided screenshot, here is the precise verification of the requested elements:\n\n1.  **Red 'flagged' pill/badge in header:** **Yes**. There is a red pill badge in the header area next to the green \"Live\" pill that reads \"**1 flagged**\" with a small flag icon inside it.\n2.  **Red flag badge on order cards:** **Yes**. The order card with ID **#KZ-E2E32-2** (in the \"Ready to Pick Up\" column) has a small red circular badge containing the number \"2\" immediately to the right of its order number.\n3.  **'Completed (N)' toggle button:** **Yes**. In the top right corner of the main content area, there is a button labeled \"**Completed (6)**\" with a house icon.\n4.  **'Delivered' column visible:** **No**. The visible columns are \"Requested\", \"Awaiting Payment\", \"Ready to Pick Up\", and \"Picked Up\". There is no \"Delivered\" column currently displayed on the board.\n5.  **Navy sidebar appearance:** **Yes**, it looks correct. The dark navy sidebar extends from the very top of the viewport down to the very bottom, spanning the full height of the screen.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788588354,
+  "id": "20260905140536e708f1eac0c6410d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260905140536e708f1eac0c6410d",
+  "usage": {
+    "completion_tokens": 270,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1569,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1839
+  }
+}

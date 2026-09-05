@@ -1,0 +1,704 @@
+     1→'use client'
+     2→
+     3→// =============================================================================
+     4→// StaffView (phase 31) — super-admin staff management tab
+     5→// =============================================================================
+     6→// The client's brief: "a staff login like the admin's own that sees the
+     7→// operational side, while super admins send the invites, set names and
+     8→// passwords, and can pause or revoke access."
+     9→//
+    10→// What this tab does:
+    11→//   - Invite staff: name + email + phone + initial password (generate button
+    12→//     included) + optional personal note → account created ACTIVE and a
+    13→//     credentials email goes out. The toast reports whether the email
+    14→//     actually landed (if Brevo failed, the password must be handed over
+    15→//     manually — the admin needs to KNOW that).
+    16→//   - Pause / resume: reversible time-out (login + console APIs blocked).
+    17→//   - Revoke: permanent offboarding. Silent by design — no email is sent,
+    18→//     the manager decides how to communicate it.
+    19→//   - Reset password: new credentials + re-sent invite email. Also un-pauses.
+    20→//
+    21→// Everything here is ADMIN-only UI; the /api/staff routes enforce that
+    22→// server-side regardless of what any client renders.
+    23→// =============================================================================
+    24→
+    25→import { useMemo, useState } from 'react'
+    26→import {
+    27→  UserPlus,
+    28→  UserCog,
+    29→  Pause,
+    30→  Play,
+    31→  Ban,
+    32→  KeyRound,
+    33→  Mail,
+    34→  Phone,
+    35→  RefreshCw,
+    36→  ShieldAlert,
+    37→  BadgeCheck,
+    38→  Copy,
+    39→} from 'lucide-react'
+    40→import { Button } from '@/components/ui/button'
+    41→import { Badge } from '@/components/ui/badge'
+    42→import { Card, CardContent } from '@/components/ui/card'
+    43→import { Input } from '@/components/ui/input'
+    44→import { Label } from '@/components/ui/label'
+    45→import { toast } from '@/hooks/use-toast'
+    46→import {
+    47→  Dialog,
+    48→  DialogContent,
+    49→  DialogDescription,
+    50→  DialogFooter,
+    51→  DialogHeader,
+    52→  DialogTitle,
+    53→} from '@/components/ui/dialog'
+    54→import {
+    55→  AlertDialog,
+    56→  AlertDialogAction,
+    57→  AlertDialogCancel,
+    58→  AlertDialogContent,
+    59→  AlertDialogDescription,
+    60→  AlertDialogFooter,
+    61→  AlertDialogHeader,
+    62→  AlertDialogTitle,
+    63→} from '@/components/ui/alert-dialog'
+    64→import { useStaff, useCreateStaff, useUpdateStaff, type ApiStaff } from '@/lib/hooks'
+    65→import { cn } from '@/lib/utils'
+    66→
+    67→/** Strong-but-typeable password: guaranteed lower+upper+digit+symbol. */
+    68→function generatePassword(): string {
+    69→  const lower = 'abcdefghjkmnpqrstuvwxyz'
+    70→  const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ'
+    71→  const digits = '23456789'
+    72→  const symbols = '!#$%&*?'
+    73→  const all = lower + upper + digits + symbols
+    74→  const pick = (chars: string) => chars[Math.floor(Math.random() * chars.length)]
+    75→  const rand = (n: number) =>
+    76→    Array.from({ length: n }, () => pick(all))
+    77→  // One of each class + 10 more random, then shuffle.
+    78→  const core = [pick(lower), pick(upper), pick(digits), pick(symbols), ...rand(10)]
+    79→  for (let i = core.length - 1; i > 0; i--) {
+    80→    const j = Math.floor(Math.random() * (i + 1))
+    81→    ;[core[i], core[j]] = [core[j], core[i]]
+    82→  }
+    83→  return core.join('')
+    84→}
+    85→
+    86→function initials(name: string): string {
+    87→  return name
+    88→    .split(' ')
+    89→    .map((p) => p[0])
+    90→    .slice(0, 2)
+    91→    .join('')
+    92→    .toUpperCase()
+    93→}
+    94→
+    95→function StatusBadge({ status }: { status: ApiStaff['accessStatus'] }) {
+    96→  if (status === 'ACTIVE')
+    97→    return (
+    98→      <Badge className="gap-1 rounded-full bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
+    99→        <BadgeCheck className="h-3 w-3" /> Active
+   100→      </Badge>
+   101→    )
+   102→  if (status === 'PAUSED')
+   103→    return (
+   104→      <Badge className="gap-1 rounded-full bg-amber-100 text-amber-800 hover:bg-amber-100">
+   105→        <Pause className="h-3 w-3" /> Paused
+   106→      </Badge>
+   107→    )
+   108→  return (
+   109→    <Badge className="gap-1 rounded-full bg-rose-100 text-rose-700 hover:bg-rose-100">
+   110→      <Ban className="h-3 w-3" /> Revoked
+   111→    </Badge>
+   112→  )
+   113→}
+   114→
+   115→export function StaffView() {
+   116→  const { data: staff, isLoading, error } = useStaff()
+   117→  const createMutation = useCreateStaff()
+   118→  const updateMutation = useUpdateStaff()
+   119→
+   120→  const [inviteOpen, setInviteOpen] = useState(false)
+   121→  const [resetTarget, setResetTarget] = useState<ApiStaff | null>(null)
+   122→  const [pauseTarget, setPauseTarget] = useState<ApiStaff | null>(null)
+   123→  const [revokeTarget, setRevokeTarget] = useState<ApiStaff | null>(null)
+   124→
+   125→  const counts = useMemo(() => {
+   126→    const list = staff ?? []
+   127→    return {
+   128→      active: list.filter((s) => s.accessStatus === 'ACTIVE').length,
+   129→      paused: list.filter((s) => s.accessStatus === 'PAUSED').length,
+   130→      revoked: list.filter((s) => s.accessStatus === 'REVOKED').length,
+   131→    }
+   132→  }, [staff])
+   133→
+   134→  const reportEmail = (
+   135→    label: string,
+   136→    member: ApiStaff,
+   137→    email: { ok: boolean; error: string | null } | null
+   138→  ) => {
+   139→    if (!email) return
+   140→    if (email.ok) {
+   141→      toast({
+   142→        title: `${label} — email sent`,
+   143→        description: `${member.name} (${member.email}) has received the email from Kozy Care.`,
+   144→      })
+   145→    } else {
+   146→      toast({
+   147→        title: `${label} — email FAILED`,
+   148→        description: `The account was updated, but the email to ${member.email} could not be sent. Hand the password over directly, or try again in a moment. (${email.error ?? 'provider error'})`,
+   149→        variant: 'destructive',
+   150→      })
+   151→    }
+   152→  }
+   153→
+   154→  return (
+   155→    <div className="p-4 sm:p-6">
+   156→      <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
+   157→        <div>
+   158→          <h1 className="font-serif text-2xl font-semibold tracking-tight text-navy">
+   159→            Staff access
+   160→          </h1>
+   161→          <p className="mt-1 max-w-2xl text-sm text-navy-300">
+   162→            Invite team members into the operations console. Staff see orders, payment
+   163→            verifications, customers and feedback — never pricing, discounts, finances or
+   164→            admin settings. Pause temporarily or revoke permanently at any time.
+   165→          </p>
+   166→        </div>
+   167→        <Button
+   168→          onClick={() => setInviteOpen(true)}
+   169→          className="bg-gold-gradient font-semibold text-[#0A192F] hover:opacity-90"
+   170→        >
+   171→          <UserPlus className="mr-2 h-4 w-4" /> Invite staff
+   172→        </Button>
+   173→      </div>
+   174→
+   175→      {/* Summary chips */}
+   176→      <div className="mb-4 flex flex-wrap items-center gap-2 text-xs">
+   177→        <span className="rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700 ring-1 ring-emerald-200">
+   178→          {counts.active} active
+   179→        </span>
+   180→        <span className="rounded-full bg-amber-50 px-3 py-1 font-medium text-amber-700 ring-1 ring-amber-200">
+   181→          {counts.paused} paused
+   182→        </span>
+   183→        <span className="rounded-full bg-rose-50 px-3 py-1 font-medium text-rose-600 ring-1 ring-rose-200">
+   184→          {counts.revoked} revoked
+   185→        </span>
+   186→      </div>
+   187→
+   188→      {/* List */}
+   189→      {isLoading && <p className="text-sm text-navy-300">Loading staff…</p>}
+   190→      {error && (
+   191→        <div className="rounded-lg bg-rose-50 p-4 text-sm text-rose-700 ring-1 ring-rose-200">
+   192→          Could not load the staff list — {error.message}
+   193→        </div>
+   194→      )}
+   195→      {staff && staff.length === 0 && (
+   196→        <Card className="border-dashed">
+   197→          <CardContent className="flex flex-col items-center gap-3 p-10 text-center">
+   198→            <UserCog className="h-8 w-8 text-navy-300" />
+   199→            <p className="text-sm font-medium text-navy">No staff yet</p>
+   200→            <p className="max-w-sm text-xs text-navy-300">
+   201→              When you invite your first team member they&apos;ll sign in at the same
+   202→              console you do — with the operational tabs only. Their sign-in details
+   203→              arrive by email the moment you create the account.
+   204→            </p>
+   205→            <Button
+   206→              onClick={() => setInviteOpen(true)}
+   207→              variant="outline"
+   208→              className="mt-1 border-navy-200"
+   209→            >
+   210→              <UserPlus className="mr-2 h-4 w-4" /> Invite your first staff member
+   211→            </Button>
+   212→          </CardContent>
+   213→        </Card>
+   214→      )}
+   215→
+   216→      <div className="space-y-3">
+   217→        {(staff ?? []).map((member) => (
+   218→          <Card key={member.id} className="border-navy-100">
+   219→            <CardContent className="p-4">
+   220→              <div className="flex flex-wrap items-center gap-3">
+   221→                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-navy text-xs font-semibold text-gold-400">
+   222→                  {initials(member.name)}
+   223→                </div>
+   224→                <div className="min-w-0 flex-1">
+   225→                  <div className="flex flex-wrap items-center gap-2">
+   226→                    <p className="font-medium text-navy">{member.name}</p>
+   227→                    <StatusBadge status={member.accessStatus} />
+   228→                  </div>
+   229→                  <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-xs text-navy-300">
+   230→                    <span className="inline-flex items-center gap-1">
+   231→                      <Mail className="h-3 w-3" /> {member.email}
+   232→                    </span>
+   233→                    <span className="inline-flex items-center gap-1">
+   234→                      <Phone className="h-3 w-3" /> {member.phone}
+   235→                    </span>
+   236→                  </div>
+   237→                </div>
+   238→
+   239→                {/* Actions */}
+   240→                <div className="flex flex-wrap items-center gap-2">
+   241→                  {member.accessStatus !== 'ACTIVE' && (
+   242→                    <Button
+   243→                      size="sm"
+   244→                      variant="outline"
+   245→                      disabled={updateMutation.isPending}
+   246→                      onClick={() => {
+   247→                        updateMutation.mutate(
+   248→                          { id: member.id, accessStatus: 'ACTIVE' },
+   249→                          {
+   250→                            onSuccess: (data) => {
+   251→                              toast({
+   252→                                title: 'Access restored',
+   253→                                description: `${member.name} can sign in again${
+   254→                                  data.email?.ok ? ' — they were emailed.' : '.'
+   255→                                }`,
+   256→                              })
+   257→                            },
+   258→                            onError: (e: any) =>
+   259→                              toast({
+   260→                                title: 'Could not restore access',
+   261→                                description: e?.message,
+   262→                                variant: 'destructive',
+   263→                              }),
+   264→                          }
+   265→                        )
+   266→                      }}
+   267→                    >
+   268→                      <Play className="mr-1.5 h-3.5 w-3.5" /> Restore
+   269→                    </Button>
+   270→                  )}
+   271→                  {member.accessStatus === 'ACTIVE' && (
+   272→                    <Button
+   273→                      size="sm"
+   274→                      variant="outline"
+   275→                      className="border-amber-200 text-amber-700 hover:bg-amber-50"
+   276→                      disabled={updateMutation.isPending}
+   277→                      onClick={() => setPauseTarget(member)}
+   278→                    >
+   279→                      <Pause className="mr-1.5 h-3.5 w-3.5" /> Pause
+   280→                    </Button>
+   281→                  )}
+   282→                  <Button
+   283→                    size="sm"
+   284→                    variant="outline"
+   285→                    disabled={updateMutation.isPending}
+   286→                    onClick={() => setResetTarget(member)}
+   287→                  >
+   288→                    <KeyRound className="mr-1.5 h-3.5 w-3.5" /> Reset password
+   289→                  </Button>
+   290→                  {member.accessStatus !== 'REVOKED' && (
+   291→                    <Button
+   292→                      size="sm"
+   293→                      variant="outline"
+   294→                      className="border-rose-200 text-rose-600 hover:bg-rose-50"
+   295→                      disabled={updateMutation.isPending}
+   296→                      onClick={() => setRevokeTarget(member)}
+   297→                    >
+   298→                      <Ban className="mr-1.5 h-3.5 w-3.5" /> Revoke
+   299→                    </Button>
+   300→                  )}
+   301→                </div>
+   302→              </div>
+   303→            </CardContent>
+   304→          </Card>
+   305→        ))}
+   306→      </div>
+   307→
+   308→      {/* ----- Invite dialog ----- */}
+   309→      <InviteDialog
+   310→        open={inviteOpen}
+   311→        onClose={() => setInviteOpen(false)}
+   312→        pending={createMutation.isPending}
+   313→        onSubmit={(input) => {
+   314→          createMutation.mutate(input, {
+   315→            onSuccess: (data) => {
+   316→              setInviteOpen(false)
+   317→              reportEmail('Staff invited', data.staff, data.invite)
+   318→            },
+   319→            onError: (e: any) =>
+   320→              toast({
+   321→                title: 'Could not create the account',
+   322→                description: e?.message,
+   323→                variant: 'destructive',
+   324→              }),
+   325→          })
+   326→        }}
+   327→      />
+   328→
+   329→      {/* ----- Reset password dialog ----- */}
+   330→      <ResetPasswordDialog
+   331→        member={resetTarget}
+   332→        pending={updateMutation.isPending}
+   333→        onClose={() => setResetTarget(null)}
+   334→        onSubmit={(password) => {
+   335→          if (!resetTarget) return
+   336→          updateMutation.mutate(
+   337→            { id: resetTarget.id, password },
+   338→            {
+   339→              onSuccess: (data) => {
+   340→                setResetTarget(null)
+   341→                reportEmail('Password reset', data.staff, data.email)
+   342→              },
+   343→              onError: (e: any) =>
+   344→                toast({
+   345→                  title: 'Could not reset the password',
+   346→                  description: e?.message,
+   347→                  variant: 'destructive',
+   348→                }),
+   349→            }
+   350→          )
+   351→        }}
+   352→      />
+   353→
+   354→      {/* ----- Pause confirm ----- */}
+   355→      <AlertDialog open={!!pauseTarget} onOpenChange={(o) => !o && setPauseTarget(null)}>
+   356→        <AlertDialogContent>
+   357→          <AlertDialogHeader>
+   358→            <AlertDialogTitle className="flex items-center gap-2">
+   359→              <Pause className="h-4 w-4 text-amber-600" /> Pause {pauseTarget?.name}&apos;s access?
+   360→            </AlertDialogTitle>
+   361→            <AlertDialogDescription>
+   362→              They will be signed out of the console within about a minute and will not be
+   363→              able to sign in until you restore access (their password stays the same).
+   364→              No email is sent — tell them yourself. This is the right tool for leave,
+   365→              investigations or &quot;let&apos;s talk first&quot; moments.
+   366→            </AlertDialogDescription>
+   367→          </AlertDialogHeader>
+   368→          <AlertDialogFooter>
+   369→            <AlertDialogCancel>Keep access on</AlertDialogCancel>
+   370→            <AlertDialogAction
+   371→              className="bg-amber-600 text-white hover:bg-amber-700"
+   372→              onClick={() => {
+   373→                if (!pauseTarget) return
+   374→                const target = pauseTarget
+   375→                updateMutation.mutate(
+   376→                  { id: target.id, accessStatus: 'PAUSED' },
+   377→                  {
+   378→                    onSuccess: () =>
+   379→                      toast({
+   380→                        title: 'Access paused',
+   381→                        description: `${target.name} is locked out of the console.`,
+   382→                      }),
+   383→                  }
+   384→                )
+   385→                setPauseTarget(null)
+   386→              }}
+   387→            >
+   388→              Pause access
+   389→            </AlertDialogAction>
+   390→          </AlertDialogFooter>
+   391→        </AlertDialogContent>
+   392→      </AlertDialog>
+   393→
+   394→      {/* ----- Revoke confirm ----- */}
+   395→      <AlertDialog open={!!revokeTarget} onOpenChange={(o) => !o && setRevokeTarget(null)}>
+   396→        <AlertDialogContent>
+   397→          <AlertDialogHeader>
+   398→            <AlertDialogTitle className="flex items-center gap-2">
+   399→              <ShieldAlert className="h-4 w-4 text-rose-600" /> Revoke {revokeTarget?.name}&apos;s
+   400→              access permanently?
+   401→            </AlertDialogTitle>
+   402→            <AlertDialogDescription>
+   403→              They will be signed out within about a minute and their sign-in will stop
+   404→              working immediately after that. No email is sent — decide how to tell them
+   405→              yourself. You can still restore the account later from this tab if needed.
+   406→            </AlertDialogDescription>
+   407→          </AlertDialogHeader>
+   408→          <AlertDialogFooter>
+   409→            <AlertDialogCancel>Cancel</AlertDialogCancel>
+   410→            <AlertDialogAction
+   411→              className="bg-rose-600 text-white hover:bg-rose-700"
+   412→              onClick={() => {
+   413→                if (!revokeTarget) return
+   414→                const target = revokeTarget
+   415→                updateMutation.mutate(
+   416→                  { id: target.id, accessStatus: 'REVOKED' },
+   417→                  {
+   418→                    onSuccess: () =>
+   419→                      toast({
+   420→                        title: 'Access revoked',
+   421→                        description: `${target.name} no longer has console access. Restore anytime from the Staff tab if circumstances change.`,
+   422→                      }),
+   423→                  }
+   424→                )
+   425→                setRevokeTarget(null)
+   426→              }}
+   427→            >
+   428→              Revoke access
+   429→            </AlertDialogAction>
+   430→          </AlertDialogFooter>
+   431→        </AlertDialogContent>
+   432→      </AlertDialog>
+   433→    </div>
+   434→  )
+   435→}
+   436→
+   437→// =============================================================================
+   438→// Invite dialog — name / email / phone / password / note
+   439→// =============================================================================
+   440→
+   441→function InviteDialog({
+   442→  open,
+   443→  onClose,
+   444→  pending,
+   445→  onSubmit,
+   446→}: {
+   447→  open: boolean
+   448→  onClose: () => void
+   449→  pending: boolean
+   450→  onSubmit: (input: {
+   451→    name: string
+   452→    email: string
+   453→    phone: string
+   454→    password: string
+   455→    note?: string
+   456→  }) => void
+   457→}) {
+   458→  const [name, setName] = useState('')
+   459→  const [email, setEmail] = useState('')
+   460→  const [phone, setPhone] = useState('')
+   461→  const [password, setPassword] = useState('')
+   462→  const [note, setNote] = useState('')
+   463→
+   464→  const valid =
+   465→    name.trim().length >= 2 &&
+   466→    /\S+@\S+\.\S+/.test(email) &&
+   467→    phone.trim().length >= 7 &&
+   468→    password.length >= 10
+   469→
+   470→  const reset = () => {
+   471→    setName('')
+   472→    setEmail('')
+   473→    setPhone('')
+   474→    setPassword('')
+   475→    setNote('')
+   476→  }
+   477→
+   478→  return (
+   479→    <Dialog
+   480→      open={open}
+   481→      onOpenChange={(o) => {
+   482→        if (!o) {
+   483→          reset()
+   484→          onClose()
+   485→        }
+   486→      }}
+   487→    >
+   488→      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
+   489→        <DialogHeader>
+   490→          <DialogTitle>Invite a staff member</DialogTitle>
+   491→          <DialogDescription>
+   492→            The account is created the moment you send this. Their sign-in email and the
+   493→            password you set are emailed to them immediately — copy the password now if
+   494→            you also want to hand it over in person.
+   495→          </DialogDescription>
+   496→        </DialogHeader>
+   497→
+   498→        <div className="space-y-4">
+   499→          <div>
+   500→            <Label htmlFor="staff-name" className="text-xs uppercase tracking-wide text-navy-300">
+   501→              Full name
+   502→            </Label>
+   503→            <Input
+   504→              id="staff-name"
+   505→              value={name}
+   506→              onChange={(e) => setName(e.target.value)}
+   507→              placeholder="e.g. Ngozi Adeyemi"
+   508→              className="mt-1.5"
+   509→            />
+   510→          </div>
+   511→          <div>
+   512→            <Label htmlFor="staff-email" className="text-xs uppercase tracking-wide text-navy-300">
+   513→              Their email
+   514→            </Label>
+   515→            <Input
+   516→              id="staff-email"
+   517→              type="email"
+   518→              value={email}
+   519→              onChange={(e) => setEmail(e.target.value)}
+   520→              placeholder="they@example.com"
+   521→              className="mt-1.5"
+   522→            />
+   523→            <p className="mt-1 text-[11px] text-navy-300">
+   524→              Must not already belong to a Kozy Care account.
+   525→            </p>
+   526→          </div>
+   527→          <div>
+   528→            <Label htmlFor="staff-phone" className="text-xs uppercase tracking-wide text-navy-300">
+   529→              Phone
+   530→            </Label>
+   531→            <Input
+   532→              id="staff-phone"
+   533→              value={phone}
+   534→              onChange={(e) => setPhone(e.target.value)}
+   535→              placeholder="+234 801 234 5678"
+   536→              className="mt-1.5"
+   537→            />
+   538→          </div>
+   539→          <div>
+   540→            <Label htmlFor="staff-password" className="text-xs uppercase tracking-wide text-navy-300">
+   541→              Initial password
+   542→            </Label>
+   543→            <div className="mt-1.5 flex gap-2">
+   544→              <Input
+   545→                id="staff-password"
+   546→                value={password}
+   547→                onChange={(e) => setPassword(e.target.value)}
+   548→                placeholder="At least 10 characters"
+   549→                className="font-mono"
+   550→              />
+   551→              <Button
+   552→                type="button"
+   553→                variant="outline"
+   554→                className="shrink-0"
+   555→                onClick={() => {
+   556→                  const pw = generatePassword()
+   557→                  setPassword(pw)
+   558→                  navigator.clipboard?.writeText(pw).catch(() => {})
+   559→                  toast({
+   560→                    title: 'Password generated and copied',
+   561→                    description: 'Paste it anywhere — it also goes in the invite email.',
+   562→                  })
+   563→                }}
+   564→              >
+   565→                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Generate
+   566→              </Button>
+   567→            </div>
+   568→            <p className="mt-1 text-[11px] text-navy-300">
+   569→              They should set their own after first sign-in (Forgot password → reset link).
+   570→            </p>
+   571→          </div>
+   572→          <div>
+   573→            <Label htmlFor="staff-note" className="text-xs uppercase tracking-wide text-navy-300">
+   574→              Personal note (optional)
+   575→            </Label>
+   576→            <Input
+   577→              id="staff-note"
+   578→              value={note}
+   579→              onChange={(e) => setNote(e.target.value)}
+   580→              placeholder="e.g. You'll be running the Lekki pickups"
+   581→              className="mt-1.5"
+   582→            />
+   583→            <p className="mt-1 text-[11px] text-navy-300">
+   584→              Included in the invite email, just above the sign-in button.
+   585→            </p>
+   586→          </div>
+   587→        </div>
+   588→
+   589→        <DialogFooter>
+   590→          <Button
+   591→            variant="outline"
+   592→            onClick={() => {
+   593→              reset()
+   594→              onClose()
+   595→            }}
+   596→          >
+   597→            Cancel
+   598→          </Button>
+   599→          <Button
+   600→            disabled={!valid || pending}
+   601→            onClick={() =>
+   602→              onSubmit({
+   603→                name: name.trim(),
+   604→                email: email.trim().toLowerCase(),
+   605→                phone: phone.trim(),
+   606→                password,
+   607→                note: note.trim() || undefined,
+   608→              })
+   609→            }
+   610→            className={cn('bg-gold-gradient font-semibold text-[#0A192F] hover:opacity-90')}
+   611→          >
+   612→            {pending ? 'Creating account…' : 'Create account & send invite'}
+   613→          </Button>
+   614→        </DialogFooter>
+   615→      </DialogContent>
+   616→    </Dialog>
+   617→  )
+   618→}
+   619→
+   620→// =============================================================================
+   621→// Reset password dialog
+   622→// =============================================================================
+   623→
+   624→function ResetPasswordDialog({
+   625→  member,
+   626→  pending,
+   627→  onClose,
+   628→  onSubmit,
+   629→}: {
+   630→  member: ApiStaff | null
+   631→  pending: boolean
+   632→  onClose: () => void
+   633→  onSubmit: (password: string) => void
+   634→}) {
+   635→  const [password, setPassword] = useState('')
+   636→
+   637→  return (
+   638→    <Dialog
+   639→      open={!!member}
+   640→      onOpenChange={(o) => {
+   641→        if (!o) {
+   642→          setPassword('')
+   643→          onClose()
+   644→        }
+   645→      }}
+   646→    >
+   647→      <DialogContent className="sm:max-w-md">
+   648→        <DialogHeader>
+   649→          <DialogTitle>Reset {member?.name}&apos;s password</DialogTitle>
+   650→          <DialogDescription>
+   651→            Sets a new password and emails it to {member?.email}. If their access is
+   652→            paused or revoked, it is restored at the same time.
+   653→          </DialogDescription>
+   654→        </DialogHeader>
+   655→        <div>
+   656→          <Label htmlFor="reset-password" className="text-xs uppercase tracking-wide text-navy-300">
+   657→            New password
+   658→          </Label>
+   659→          <div className="mt-1.5 flex gap-2">
+   660→            <Input
+   661→              id="reset-password"
+   662→              value={password}
+   663→              onChange={(e) => setPassword(e.target.value)}
+   664→              placeholder="At least 10 characters"
+   665→              className="font-mono"
+   666→            />
+   667→            <Button
+   668→              type="button"
+   669→              variant="outline"
+   670→              className="shrink-0"
+   671→              onClick={() => {
+   672→                const pw = generatePassword()
+   673→                setPassword(pw)
+   674→                navigator.clipboard?.writeText(pw).catch(() => {})
+   675→                toast({ title: 'Password generated and copied' })
+   676→              }}
+   677→            >
+   678→              <Copy className="mr-1.5 h-3.5 w-3.5" /> Generate
+   679→            </Button>
+   680→          </div>
+   681→        </div>
+   682→        <DialogFooter>
+   683→          <Button
+   684→            variant="outline"
+   685→            onClick={() => {
+   686→              setPassword('')
+   687→              onClose()
+   688→            }}
+   689→          >
+   690→            Cancel
+   691→          </Button>
+   692→          <Button
+   693→            disabled={password.length < 10 || pending}
+   694→            onClick={() => onSubmit(password)}
+   695→            className="bg-gold-gradient font-semibold text-[#0A192F] hover:opacity-90"
+   696→          >
+   697→            {pending ? 'Resetting…' : 'Reset & email them'}
+   698→          </Button>
+   699→        </DialogFooter>
+   700→      </DialogContent>
+   701→    </Dialog>
+   702→  )
+   703→}
+   704→

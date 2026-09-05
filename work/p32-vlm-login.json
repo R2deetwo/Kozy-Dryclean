@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "This is a **login page for \"Kozy Care\"** (a drycleaning & laundry service). Here's what it contains:\n\n## **Form Elements:**\n- **Header:** \"Welcome back\" with subtitle \"Sign in to your Kozy Care account\"\n- **Email field:** Pre-filled with `e2e-admin-phase32@kozy-test.example`\n- **Password field:** Filled with masked characters (dots) and has a visibility toggle (eye icon)\n- **Submit button:** Shows \"**Signing in...**\" (indicating the form is currently processing/submitting)\n- **Links:** \n  - \"Forgot password?\"\n  - \"Sign up\" (for new users)\n  - \"Back to home\"\n\n## **Error Messages:**\n**No error messages are visible.** The page appears to be in a **loading/processing state** (the button shows \"Signing in...\" rather than displaying an error or success message).\n\n## **Additional Info:**\nThere's an informational note for guest users: *\"Booked as a guest? Set a password to track your orders — no sign-up needed.\"*\n\nThe page uses a clean, minimal design with a gold/yellow color scheme matching the Kozy Care branding (gold \"K\" logo at top).",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788588013,
+  "id": "202609051400039703572e72284918",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609051400039703572e72284918",
+  "usage": {
+    "completion_tokens": 261,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1481,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1742
+  }
+}

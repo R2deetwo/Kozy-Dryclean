@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the provided screenshot, here are the verifications:\n\n1.  **Modal Title and Badge:** Yes. The modal title displays **'#KZ-E2E32-2'** followed by a red badge that reads **'2 Flags'**.\n2.  **Flagged Activity Section:** Yes. There is a section titled **'Flagged activity (manager only)'** with a red icon and red text styling. It lists the flagged events including actor names (E2E Staff Member) and timestamps.\n3.  **First Flagged Line Quote:** \"Staff attempted to DELETE a pending payment claim (₦6,000) — blocked, managers only · E2E Staff Member · 5 Sept, 06:03\"\n4.  **Cancel Order Button:** Yes. A **'Cancel order'** button is visible on the right side of the 'Set status' row, featuring a red outline and text.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788588363,
+  "id": "202609051406006914fe379d8341b7",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609051406006914fe379d8341b7",
+  "usage": {
+    "completion_tokens": 193,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1555,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 1748
+  }
+}

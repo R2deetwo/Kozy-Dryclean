@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: system-ui, sans-serif; background: #FFFFFF; }
+  .container { display: flex; min-height: 100vh; background: #EEF0F2; }
+  aside { position: sticky; top: 0; height: 100vh; width: 256px; flex-shrink: 0; background: #0A192F; color: #C8D2DF; display: flex; flex-direction: column; }
+  .brand { border-bottom: 1px solid #1B3A5F; padding: 16px; }
+  nav { flex: 1; padding: 8px; }
+  nav div { padding: 8px 12px; margin-bottom: 2px; }
+  .live { border-top: 1px solid #1B3A5F; padding: 12px 16px; font-size: 11px; display: flex; gap: 8px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; flex-shrink: 0; }
+  .signout { border-top: 1px solid #1B3A5F; padding: 12px; }
+  main { flex: 1; padding: 24px; }
+  .card { background: white; border: 1px solid #E2E5E9; border-radius: 12px; padding: 16px; margin-bottom: 16px; min-height: 120px; }
+  .desktop-header { display: flex; justify-content: space-between; align-items: center; background: white; border-bottom: 1px solid #E2E5E9; padding: 12px 24px; }
+  .content-col { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .main-area { flex: 1; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <aside>
+      <div class="brand">
+        <div style="color:#fff;font-weight:600">Kozy Care</div>
+        <div style="font-size:11px;color:#6F88A8">Testerman Staff</div>
+        <div style="font-size:11px;color:#6F88A8">staff@kozy-test.example</div>
+      </div>
+      <nav>
+        <div style="background:#D4AF37;color:#0A192F;font-weight:500;border-radius:8px">Dashboard</div>
+        <div>Notifications</div>
+        <div>Orders</div>
+        <div>Verify Payments</div>
+        <div>Customers</div>
+        <div>Feedback</div>
+        <div>Help</div>
+      </nav>
+      <div class="live"><span class="dot"></span><span>Live — lists update automatically. No refresh needed.</span></div>
+      <div class="signout" style="font-size:12px;color:#6F88A8">⎋ Sign out</div>
+    </aside>
+    <div class="content-col">
+      <div class="desktop-header">
+        <span style="font-size:13px;color:#6F88A8">Use the tabs below to move between operations</span>
+        <span style="font-size:12px">Testerman Staff · Staff</span>
+      </div>
+      <div class="main-area">
+        <div class="card">Atelier Console — short content case</div>
+        <div class="card">Second card</div>
+      </div>
+    </div>
+  </div>
+</body>
+</html>
