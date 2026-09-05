@@ -9,6 +9,10 @@
 // to mirror reality: if an email bounced or a toggle was off, the recorded
 // emailStatus says so — the owner no longer has to take the spam folder's
 // word for it.
+//
+// Phase 31: STAFF joins ADMIN on this feed — knowing a new order landed or
+// a transfer is waiting is exactly the operational awareness staff need.
+// (requireRole's live check keeps paused/revoked staff out.)
 // =============================================================================
 
 import { NextResponse } from 'next/server'
@@ -20,7 +24,7 @@ import { requireRole } from '@/lib/auth'
  * it explicitly guarantees clients see the proper 401/403). */
 async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
   try {
-    return await requireRole('ADMIN')
+    return await requireRole('ADMIN', 'STAFF')
   } catch (e) {
     if (e instanceof Response) {
       return new NextResponse(e.body, {

@@ -409,6 +409,103 @@ export function useDeleteUser() {
   })
 }
 
+// ----- Staff management (phase 31, ADMIN only) -----
+export interface ApiStaff {
+  id: string
+  email: string
+  name: string
+  phone: string
+  role: 'STAFF'
+  accessStatus: 'ACTIVE' | 'PAUSED' | 'REVOKED'
+  emailVerified: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export function useStaff(options?: {
+  refetchInterval?: number | false
+  refetchOnWindowFocus?: boolean
+}) {
+  return useQuery<ApiStaff[]>({
+    queryKey: ['staff'],
+    queryFn: async () => {
+      const res = await fetch('/api/staff')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to load staff list')
+      }
+      const data = await res.json()
+      return data.items as ApiStaff[]
+    },
+    staleTime: 30 * 1000,
+    ...options,
+  })
+}
+
+export function useCreateStaff() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      name: string
+      email: string
+      phone: string
+      password: string
+      note?: string
+    }) => {
+      const res = await fetch('/api/staff', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Failed to create staff account')
+      }
+      return data as {
+        staff: ApiStaff
+        invite: { ok: boolean; error: string | null }
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['staff'] })
+      // The invite logs a STAFF_INVITE event into the operations feed.
+      qc.invalidateQueries({ queryKey: ['admin-notifications'] })
+    },
+  })
+}
+
+export function useUpdateStaff() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      name?: string
+      phone?: string
+      accessStatus?: 'ACTIVE' | 'PAUSED' | 'REVOKED'
+      password?: string
+    }) => {
+      const { id, ...patch } = input
+      const res = await fetch(`/api/staff/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Failed to update staff account')
+      }
+      return data as {
+        staff: ApiStaff
+        email: { ok: boolean; error: string | null } | null
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['staff'] })
+      qc.invalidateQueries({ queryKey: ['admin-notifications'] })
+    },
+  })
+}
+
 // ----- Current user -----
 export function useCurrentUser() {
   return useQuery({

@@ -5,10 +5,16 @@
 // RBAC rules:
 //   GET:
 //     - ADMIN: can view any order
+//     - STAFF (phase 31): can view any order — order detail is operational
 //     - DRIVER: can view only orders assigned to them (driverId === session.user?.id)
 //     - B2C/B2B: can view only their own orders (userId === session.user?.id)
 //   PATCH:
 //     - ADMIN: can change anything (status, driverId, finalWeight, totalPrice)
+//     - STAFF (phase 31): can change status, driverId and finalWeight (the
+//               server prices KG orders itself from admin-controlled rates),
+//               but can NEVER set totalPrice directly — price integrity is
+//               admin-only, per the client's "no price setting for staff"
+//               directive.
 //     - DRIVER: can change ONLY the status, and ONLY to 'PICKED_UP' or 'DELIVERED',
 //               and ONLY on orders assigned to them (driverId === session.user?.id)
 //     - B2C/B2B: cannot PATCH orders at all (403)
@@ -16,7 +22,7 @@
 
 import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
-import { getSession, requireSession } from '@/lib/auth'
+import { getSession, requireSession, verifyLiveAccess } from '@/lib/auth'
 import { UpdateOrderSchema } from '@/lib/schemas'
 import { notifyOrderStatus, notifyInvoiceReady } from '@/lib/notifications'
 import { STAGE_RANK } from '@/lib/types'
@@ -34,6 +40,17 @@ export async function GET(
   }
 
   const { id } = await params
+
+  // ----- Staff live-access check (phase 31) -----
+  if (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') {
+    const blocked = await verifyLiveAccess(session)
+    if (blocked) {
+      return new NextResponse(blocked.body, {
+        status: blocked.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
 
   const order = await db.order.findUnique({
     where: { id },
@@ -60,7 +77,7 @@ export async function GET(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
   }
-  // ADMIN: no restriction
+  // ADMIN and STAFF: no restriction
 
   return NextResponse.json({ order })
 }
@@ -73,6 +90,17 @@ export async function PATCH(
   const session = await requireSession()
 
   const { id } = await params
+
+  // ----- Staff live-access check (phase 31) -----
+  if (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') {
+    const blocked = await verifyLiveAccess(session)
+    if (blocked) {
+      return new NextResponse(blocked.body, {
+        status: blocked.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
 
   const order = await db.order.findUnique({ where: { id } })
   if (!order) {
@@ -147,6 +175,24 @@ export async function PATCH(
       }
     }
   }
+  // ----- STAFF restrictions (phase 31) -----
+  // Staff run the pipeline: status moves, driver assignment, and recording
+  // the actual weighed kilos are all operational facts. The ONLY thing they
+  // cannot do is set totalPrice directly — the server prices every KG order
+  // itself from the admin-controlled per-kg rate (and applies the online
+  // discount), so a staff member can never invent or negotiate a price.
+  if (session.user?.role === 'STAFF') {
+    if (parsed.data.totalPrice !== undefined) {
+      return NextResponse.json(
+        {
+          error: 'FORBIDDEN_PRICE_OVERRIDE',
+          message:
+            'Staff accounts cannot set prices directly. Record the weight instead — the price is calculated from the current rates. Ask a manager for price changes.',
+        },
+        { status: 403 }
+      )
+    }
+  }
   // ADMIN: can change anything — no restriction
 
   // ----- Apply the update -----
@@ -213,16 +259,16 @@ export async function PATCH(
     },
   })
 
-  // ----- Consistency guard (admin status -> PAYMENT_VERIFIED) -----
-  // When the admin moves an order to PAYMENT_VERIFIED via the dropdown or a
-  // drag, any PENDING/REJECTED bank-transfer payment on it is auto-verified.
-  // Without this, the order says "paid" while the payment queue still flags
-  // the receipt — the exact ghost state that confused the pipeline before
-  // (real-world case: an order at PAYMENT_VERIFIED whose receipt was still
-  // marked REJECTED).
+  // ----- Consistency guard (console status -> PAYMENT_VERIFIED) -----
+  // When an admin or staff member moves an order to PAYMENT_VERIFIED via the
+  // dropdown or a drag, any PENDING/REJECTED bank-transfer payment on it is
+  // auto-verified. Without this, the order says "paid" while the payment
+  // queue still flags the receipt — the exact ghost state that confused the
+  // pipeline before (real-world case: an order at PAYMENT_VERIFIED whose
+  // receipt was still marked REJECTED).
   if (
     parsed.data.status === 'PAYMENT_VERIFIED' &&
-    session.user?.role === 'ADMIN' &&
+    (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') &&
     order.status !== 'PAYMENT_VERIFIED'
   ) {
     const unverified = (updated.payments ?? []).filter(

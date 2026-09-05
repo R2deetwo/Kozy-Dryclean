@@ -5,6 +5,9 @@
 // RBAC rules:
 //   GET:
 //     - ADMIN: sees all payments
+//     - STAFF (phase 31): sees all payments — the verification queue is their
+//       day job. Live ACTIVE status is enforced (paused staff get 403 within
+//       ~60s).
 //     - DRIVER: 403 (drivers have zero access to payment data — per master prompt)
 //     - B2C/B2B: sees only payments for their own orders
 //   Pagination (GET):
@@ -15,12 +18,13 @@
 //   POST:
 //     - ADMIN: can create payments for any order
 //     - B2C/B2B: can create payments only for their own orders
-//     - DRIVER: 403 (drivers cannot create payments)
+//     - STAFF/DRIVER: 403 (payment-record creation stays with admins and
+//       customers — staff verify and reject, they never fabricate claims)
 // =============================================================================
 
 import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
-import { getSession, requireSession } from '@/lib/auth'
+import { getSession, requireSession, verifyLiveAccess } from '@/lib/auth'
 import { CreatePaymentSchema } from '@/lib/schemas'
 import { rateLimit } from '@/lib/rate-limit'
 import { notifyAdminTransferPending } from '@/lib/notifications'
@@ -37,6 +41,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
+  // ----- Staff live-access check (phase 31) -----
+  // ADMIN/STAFF sessions are re-checked against the database so a pause or
+  // revoke takes effect within ~60s even mid-session.
+  const blocked = await verifyLiveAccess(session)
+  if (blocked) {
+    return new NextResponse(blocked.body, {
+      status: blocked.status,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
   // ----- Cursor pagination params -----
   const { searchParams } = new URL(req.url)
   const limitRaw = parseInt(searchParams.get('limit') ?? '', 10)
@@ -49,7 +64,7 @@ export async function GET(req: Request) {
     // Customers see only payments for their own orders
     where = { order: { userId: session.user?.id } }
   }
-  // ADMIN sees all payments
+  // ADMIN and STAFF see all payments (the verification queue)
 
   // take limit+1 rows so we can tell whether another page exists
   let payments = await db.payment.findMany({
@@ -78,6 +93,14 @@ export async function POST(req: Request) {
   // Drivers cannot create payments
   if (session.user?.role === 'DRIVER') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  // Staff verify and reject payments — they never create claims (phase 31).
+  if (session.user?.role === 'STAFF') {
+    return NextResponse.json(
+      { error: 'Forbidden', message: 'Staff accounts cannot create payment records — verify or reject them in the queue instead.' },
+      { status: 403 }
+    )
   }
 
   // ----- Rate limit: 10 payment submissions per hour per user -----

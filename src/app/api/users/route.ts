@@ -1,16 +1,24 @@
 // =============================================================================
-// GET /api/users — list users (ADMIN only, cursor-paginated)
+// GET /api/users — list users (console roles, cursor-paginated)
 // =============================================================================
 // `?cursor=<id>&limit=<n>` — cursor-based, default limit 25, hard cap 100.
 // Ordered by (createdAt DESC, id DESC) so the cursor is stable.
 // Response shape: { items, nextCursor } — nextCursor is null on the last page.
+//
+// Phase 31: STAFF joins ADMIN here because the customer directory is part
+// of the operational side (calling customers, checking who placed what).
+// Scope differs: STAFF only ever gets customer records (B2C/B2B) — never
+// other staff or admin accounts — so console identities can't be
+// enumerated from a staff login.
+// =============================================================================
 
 import { NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 
 export async function GET(req: Request) {
-  const session = await requireRole('ADMIN')
+  const session = await requireRole('ADMIN', 'STAFF')
+  const isStaff = (session.user as any)?.role === 'STAFF'
 
   // ----- Cursor pagination params -----
   const { searchParams } = new URL(req.url)
@@ -20,6 +28,9 @@ export async function GET(req: Request) {
 
   // take limit+1 rows so we can tell whether another page exists
   let users = await db.user.findMany({
+    // Staff see customers only — the staff list itself lives in /api/staff
+    // (ADMIN-only) and admin identities are invisible to staff.
+    where: isStaff ? { role: { in: ['B2C', 'B2B'] } } : undefined,
     select: {
       id: true,
       email: true,

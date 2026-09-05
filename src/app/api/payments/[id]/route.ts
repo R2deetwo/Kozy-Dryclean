@@ -2,7 +2,10 @@
 // PATCH /api/payments/[id] — verify or reject a payment
 // =============================================================================
 // RBAC rules:
-//   - ADMIN ONLY: can verify or reject payments
+//   - ADMIN and STAFF (phase 31): can verify or reject payments — this is
+//     core operational work. Requiring the staff member to still be ACTIVE
+//     is enforced inside requireRole (live access check), so a paused staff
+//     member loses this power within ~60 seconds.
 //   - All other roles: 403
 //   - Drivers: 403 (explicitly forbidden from any payment access per master prompt)
 //
@@ -44,10 +47,10 @@ const ORDER_INCLUDE = {
 /** Call requireRole and convert its thrown Response into a real response
  * (some Next 16 builds surface thrown Response objects as 500s — returning
  * it explicitly guarantees clients see the proper 401/403). Same pattern as
- * the notifications route (phase 24). */
-async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
+ * the notifications route (phase 24). Phase 31: console roles = ADMIN+STAFF. */
+async function requireConsole(): Promise<ReturnType<typeof requireRole> | NextResponse> {
   try {
-    return await requireRole('ADMIN')
+    return await requireRole('ADMIN', 'STAFF')
   } catch (e) {
     if (e instanceof Response) {
       return new NextResponse(e.body, {
@@ -64,7 +67,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   // requireRole throws a 401 if no session, 403 if wrong role
-  const guard = await requireAdmin()
+  const guard = await requireConsole()
   if (guard instanceof NextResponse) return guard
   const session = guard
 
@@ -77,6 +80,7 @@ export async function PATCH(
   if (!payment) {
     return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
   }
+
 
   const body = await req.json()
   const parsed = UpdatePaymentSchema.safeParse(body)
@@ -200,7 +204,7 @@ export async function PATCH(
 // to pile up forever (queue hygiene), with no organic way for them to leave.
 //
 // Rules:
-//   - ADMIN only.
+//   - ADMIN and STAFF (phase 31) — queue hygiene is operational work.
 //   - Only BANK_TRANSFER claims in REJECTED or PENDING status can be removed.
 //     VERIFIED payments are financial records — they can never be deleted
 //     (revenue reporting / audit trail would silently change).
@@ -221,7 +225,7 @@ export async function DELETE(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const guard = await requireAdmin()
+  const guard = await requireConsole()
   if (guard instanceof NextResponse) return guard
   const session = guard
 

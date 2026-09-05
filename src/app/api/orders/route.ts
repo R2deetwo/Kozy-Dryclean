@@ -32,7 +32,7 @@ import { NextResponse, after } from 'next/server'
 import bcrypt from 'bcryptjs'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { getSession, verifyLiveAccess } from '@/lib/auth'
 import { CreateOrderSchema } from '@/lib/schemas'
 import {
   notifyOrderCreated,
@@ -67,6 +67,19 @@ export async function GET(req: Request) {
   const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 25, 1), 100)
   const cursor = searchParams.get('cursor') || undefined
 
+  // ----- Staff live-access check (phase 31) -----
+  // Console roles (ADMIN/STAFF) get their DB status re-checked so a pause or
+  // revoke bites within ~60s even mid-session. Drivers/customers skip it.
+  if (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') {
+    const blocked = await verifyLiveAccess(session)
+    if (blocked) {
+      return new NextResponse(blocked.body, {
+        status: blocked.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
   let where: any = {}
 
   if (session.user?.role === 'DRIVER') {
@@ -76,7 +89,7 @@ export async function GET(req: Request) {
     // Customers see only their own orders
     where = { userId: session.user?.id }
   }
-  // ADMIN sees all orders (no filter)
+  // ADMIN and STAFF see all orders (no filter) — the ops board
 
   // take limit+1 rows so we can tell whether another page exists
   let orders = await db.order.findMany({
@@ -167,6 +180,24 @@ export async function POST(req: Request) {
   // Abuse is still structurally capped: every order costs a duplicate-guard
   // check + several emails, and the alert pipeline's stage-dedup keeps the
   // owner's inbox from re-sending on back-and-forth status moves.
+
+  // ----- Staff cannot place customer orders (phase 31) -----
+  // Staff accounts exist to RUN operations, not to buy laundry. A staff
+  // member browsing the public site should book with their personal
+  // customer account — mixing staff bookings into the console would pollute
+  // the pipeline and apply the staff online-discount logic to the wrong
+  // role family.
+  if (session?.user?.role === 'STAFF') {
+    return NextResponse.json(
+      {
+        error: 'FORBIDDEN_STAFF_BOOKING',
+        message:
+          'Staff accounts cannot place orders. Please use a customer account to book, or sign out.',
+      },
+      { status: 403 }
+    )
+  }
+
   const minutesLeft = (resetAt: number) =>
     Math.max(1, Math.ceil((resetAt - Date.now()) / 60_000))
   if (!session) {

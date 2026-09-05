@@ -1,7 +1,15 @@
 // Type system for Kozy Care — Premium Drycleaning & Laundry Services
 // Mirrors the Prisma schema but as plain TS types for client-side state.
 
-export type Role = 'ADMIN' | 'DRIVER' | 'B2C' | 'B2B'
+export type Role = 'ADMIN' | 'STAFF' | 'DRIVER' | 'B2C' | 'B2B'
+
+// Staff-access lifecycle (phase 31). Console roles are policed against this
+// at login and on every console API call; customer roles ignore it.
+export type AccessStatus = 'ACTIVE' | 'PAUSED' | 'REVOKED'
+
+// Roles that share the Atelier Console (src/app/admin). ADMIN sees
+// everything; STAFF is restricted to the operational tabs.
+export const CONSOLE_ROLES: Role[] = ['ADMIN', 'STAFF']
 
 export type OrderStatus =
   | 'REQUESTED'
@@ -35,6 +43,18 @@ export interface User {
   // Company name for corporate clients
   company?: string
   createdAt: string
+}
+
+// Staff member as returned by GET /api/staff (ADMIN only)
+export interface StaffMember {
+  id: string
+  email: string
+  name: string
+  phone: string
+  role: 'STAFF'
+  accessStatus: AccessStatus
+  createdAt: string
+  updatedAt: string
 }
 
 export interface GarmentMedia {
@@ -625,6 +645,7 @@ export type NotificationEventType =
   | 'TRANSFER_PENDING'
   | 'FEEDBACK'
   | 'RIDER_APPLICATION'
+  | 'STAFF_INVITE'
   | 'TEST'
 
 export type NotificationEmailStatus = 'NONE' | 'DISABLED' | 'SENT' | 'PARTIAL' | 'FAILED'

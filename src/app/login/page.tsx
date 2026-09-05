@@ -38,7 +38,7 @@ function LoginForm() {
   useEffect(() => {
     if (status === 'authenticated') {
       const role = (session?.user as any)?.role
-      if (role === 'ADMIN') router.replace('/admin')
+      if (role === 'ADMIN' || role === 'STAFF') router.replace('/admin')
       else if (role === 'DRIVER') router.replace('/driver')
       else router.replace(callbackUrl || '/portal')
     }
@@ -52,12 +52,19 @@ function LoginForm() {
 
   const [unverifiedEmail, setUnverifiedEmail] = useState(false)
   const [resending, setResending] = useState(false)
+  // Phase 31: staff lockout messaging (paused / revoked) — shown as its own
+  // banner because "invalid email or password" would be actively misleading
+  // after a CORRECT password match.
+  const [accessNotice, setAccessNotice] = useState<
+    { kind: 'ACCOUNT_PAUSED' | 'ACCOUNT_REVOKED' } | null
+  >(null)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError('')
     setUnverifiedEmail(false)
+    setAccessNotice(null)
 
     const res = await signIn('credentials', {
       email,
@@ -66,9 +73,13 @@ function LoginForm() {
     })
 
     if (res?.error) {
-      // Check if the error is the email-not-verified case
-      // NextAuth passes the thrown error message as the error string
-      if (res.error === 'EMAIL_NOT_VERIFIED' || res.error?.includes('EMAIL_NOT_VERIFIED')) {
+      setAccessNotice(null)
+      // Staff lockout codes (phase 31) — thrown by authorize() after the
+      // password was verified correct, same channel as EMAIL_NOT_VERIFIED.
+      if (res.error === 'ACCOUNT_PAUSED' || res.error === 'ACCOUNT_REVOKED') {
+        setAccessNotice({ kind: res.error })
+        setError('')
+      } else if (res.error === 'EMAIL_NOT_VERIFIED' || res.error?.includes('EMAIL_NOT_VERIFIED')) {
         setUnverifiedEmail(true)
         setError('')
       } else {
@@ -83,7 +94,7 @@ function LoginForm() {
       // Consume any stored post-auth destination (set by the booking wizard's
       // member gate) regardless of role, so stale entries never linger.
       const storedRedirect = consumeAuthRedirect()
-      if (role === 'ADMIN') router.push('/admin')
+      if (role === 'ADMIN' || role === 'STAFF') router.push('/admin')
       else if (role === 'DRIVER') router.push('/driver')
       else {
         // Customers: an explicit return destination wins (e.g. back to a
@@ -112,6 +123,32 @@ function LoginForm() {
               <div className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 flex items-start gap-2 ring-1 ring-rose-200">
                 <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                 <span>{error}</span>
+              </div>
+            )}
+
+            {accessNotice && (
+              <div
+                role="alert"
+                className={`mb-4 rounded-lg px-3 py-2 text-xs flex items-start gap-2 ring-1 ${
+                  accessNotice.kind === 'ACCOUNT_PAUSED'
+                    ? 'bg-amber-50 text-amber-800 ring-amber-200'
+                    : 'bg-rose-50 text-rose-700 ring-rose-200'
+                }`}
+              >
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">
+                    {accessNotice.kind === 'ACCOUNT_PAUSED'
+                      ? 'Your access is paused'
+                      : 'Your access has been revoked'}
+                  </p>
+                  <p className="mt-1">
+                    Your sign-in details are correct, but a Kozy Care manager has
+                    {accessNotice.kind === 'ACCOUNT_PAUSED'
+                      ? ' temporarily paused this account. Contact your manager to be reactivated.'
+                      : " closed this account's access to the console. Contact your manager if you believe this is a mistake."}
+                  </p>
+                </div>
               </div>
             )}
 

@@ -25,6 +25,13 @@ model User {
   // Auth fields
   passwordHash  String?
   emailVerified DateTime?
+  // Staff-access lifecycle (phase 31): 'ACTIVE' | 'PAUSED' | 'REVOKED'.
+  // Soft state — pausing or revoking a staff member never destroys their
+  // audit trail (StatusEvent actor links, payment verifier trail). Only
+  // console roles (ADMIN/STAFF/DRIVER) are policed against this field; a
+  // customer's value is ignored. Enforced at login (authorize rejects) and
+  // on every console API call via the cached live check in src/lib/auth.ts.
+  accessStatus  String   @default("ACTIVE")
   // Discount tracking
   signupDiscountUsed Boolean @default(false)
   createdAt     DateTime @default(now())
@@ -45,6 +52,12 @@ model User {
 
 enum Role {
   ADMIN
+  // Phase 31: back-office staff (invited by a super admin). Signs into the
+  // SAME Atelier Console as admins, restricted to the operational side
+  // (orders, payment verification, customers, notifications, feedback) —
+  // never pricing, the discount engine, finances, reviews or staff admin.
+  // Only admins can create/pause/revoke STAFF accounts (see /api/staff).
+  STAFF
   DRIVER
   B2C
   B2B

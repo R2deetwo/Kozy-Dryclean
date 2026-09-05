@@ -23,6 +23,7 @@ import {
   MessageSquareHeart,
   Bike,
   FlaskConical,
+  UserCog,
   MailCheck,
   MailX,
   MailQuestion,
@@ -70,6 +71,12 @@ const TYPE_META: Record<
     label: 'Rider application',
     icon: Bike,
     cls: 'bg-sky-100 text-sky-800',
+  },
+  STAFF_INVITE: {
+    label: 'Staff account',
+    icon: UserCog,
+    cls: 'bg-indigo-100 text-indigo-800',
+    link: { label: 'Open Staff', tab: 'staff' },
   },
   TEST: {
     label: 'Test',

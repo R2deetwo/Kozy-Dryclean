@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
   LayoutDashboard,
@@ -16,6 +17,7 @@ import {
   LifeBuoy,
   LogOut,
   Bell,
+  UserCog,
 } from 'lucide-react'
 import { useOrders, usePayments, useUsers, useNotificationEvents, ADMIN_POLL } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
@@ -30,19 +32,88 @@ import { ReviewsView } from './reviews-view'
 import { FeedbackView } from './feedback-view'
 import { HelpView } from './help-view'
 import { NotificationsView } from './notifications-view'
+import { StaffView } from './staff-view'
 import { Logo } from '@/components/shell/logo'
 import { Star, MessageSquareHeart } from 'lucide-react'
 
-type Tab = 'overview' | 'kanban' | 'payments' | 'customers' | 'finance' | 'reviews' | 'feedback' | 'notifications' | 'settings' | 'help'
+type Tab =
+  | 'overview'
+  | 'kanban'
+  | 'payments'
+  | 'customers'
+  | 'finance'
+  | 'reviews'
+  | 'feedback'
+  | 'notifications'
+  | 'staff'
+  | 'settings'
+  | 'help'
 
 export function AdminDashboard() {
   // Real signed-in identity (the old header hardcoded a fake
   // "admin@kozy.ng" account that doesn't exist — audit finding).
-  const { data: session } = useSession()
+  const router = useRouter()
+  const { data: session, status } = useSession()
+  // Phase 31: the console is shared by ADMIN (everything) and STAFF (the
+  // operational side). The ROLE comes from the JWT, but the gate below +
+  // the heartbeat keep it honest against the live database.
+  const role = (session?.user as any)?.role as string | undefined
+  const isAdmin = role === 'ADMIN'
+  const isConsoleUser = isAdmin || role === 'STAFF'
   const admin = {
-    name: session?.user?.name || 'Admin',
+    name: session?.user?.name || (role === 'STAFF' ? 'Staff' : 'Admin'),
     email: session?.user?.email || '',
   }
+
+  // ----- Console gate (phase 31) -----
+  // ADMIN and STAFF only. Signed-out visitors go to login; customers and
+  // riders are redirected to THEIR portals — the console shell must never
+  // render for them, even with empty data. (APIs enforce this too; this
+  // gate is for honest UX, not security.)
+  useEffect(() => {
+    if (status === 'loading' || status === 'authenticated') {
+      // fall through to the role check below
+    } else if (status === 'unauthenticated') {
+      router.replace('/login')
+    }
+    if (status === 'authenticated' && session && !isConsoleUser) {
+      if (role === 'DRIVER') router.replace('/driver')
+      else router.replace('/portal')
+    }
+  }, [status, session, isConsoleUser, role, router])
+
+  // ----- Pause/revoke heartbeat (phase 31) -----
+  // /api/users/me reads the DATABASE (not the 30-day JWT). Polling it once
+  // a minute means a paused or revoked staff member — or a demoted admin —
+  // is signed out of the console within ~60 seconds, without waiting for
+  // an API call to 403 first. Server-side, every console API ALSO checks
+  // live access, so this is UX polish on top of real enforcement.
+  useEffect(() => {
+    if (status !== 'authenticated' || !isConsoleUser) return
+    const check = async () => {
+      try {
+        const res = await fetch('/api/users/me', { cache: 'no-store' })
+        if (res.status === 401) {
+          signOut({ callbackUrl: '/login' })
+          return
+        }
+        if (!res.ok) return // transient error — the APIs still guard us
+        const data = await res.json()
+        const liveRole = data?.user?.role
+        const liveStatus = data?.user?.accessStatus
+        if (liveRole !== 'ADMIN' && liveRole !== 'STAFF') {
+          signOut({ callbackUrl: '/login' })
+        } else if (liveStatus !== 'ACTIVE') {
+          signOut({ callbackUrl: '/login' })
+        }
+      } catch {
+        // Network blip — ignore; next poll or the API guard will catch it.
+      }
+    }
+    check()
+    const timer = setInterval(check, 60_000)
+    return () => clearInterval(timer)
+  }, [status, isConsoleUser])
   // fetchAll: sidebar badges (active orders, pending payments) are counts over
   // the whole collections — the hooks page through the cursor API for them.
   // LIVE MODE (phase 25): the dashboard polls itself — badges, KPIs and every
@@ -71,7 +142,18 @@ export function AdminDashboard() {
   const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
   const unreadNotifications = notifications?.unread ?? 0
 
-  const nav: { key: Tab; label: string; icon: any; badge?: number }[] = [
+  // ----- Role-aware navigation (phase 31) -----
+  // STAFF gets the operational side only. Money (Finances), marketing
+  // (Reviews moderation), business configuration (Settings — pricing + the
+  // discount engine) and staff management itself are ADMIN-only, hidden
+  // here AND enforced server-side on every one of those API routes.
+  const allNav: {
+    key: Tab
+    label: string
+    icon: any
+    badge?: number
+    adminOnly?: boolean
+  }[] = [
     { key: 'overview', label: 'Dashboard', icon: LayoutDashboard },
     {
       key: 'notifications',
@@ -87,12 +169,14 @@ export function AdminDashboard() {
       badge: pendingPayments.length,
     },
     { key: 'customers', label: 'Customers', icon: UsersIcon },
-    { key: 'finance', label: 'Finances', icon: Wallet },
-    { key: 'reviews', label: 'Reviews', icon: Star },
+    { key: 'finance', label: 'Finances', icon: Wallet, adminOnly: true },
+    { key: 'reviews', label: 'Reviews', icon: Star, adminOnly: true },
     { key: 'feedback', label: 'Feedback', icon: MessageSquareHeart },
-    { key: 'settings', label: 'Settings', icon: Settings },
+    { key: 'staff', label: 'Staff', icon: UserCog, adminOnly: true },
+    { key: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
     { key: 'help', label: 'Help', icon: LifeBuoy },
   ]
+  const nav = allNav.filter((n) => isAdmin || !n.adminOnly)
 
   return (
     <div className="flex min-h-[calc(100vh-3.5rem)] bg-linen-200">
@@ -105,6 +189,11 @@ export function AdminDashboard() {
             </div>
             <p className="font-serif font-semibold text-white">{admin.name}</p>
             <p className="truncate text-xs text-navy-300">{admin.email}</p>
+            {!isAdmin && (
+              <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-gold-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-300">
+                <UserCog className="h-3 w-3" /> Staff access
+              </p>
+            )}
           </div>
           <nav className="flex-1 space-y-0.5 p-2">
             {nav.map((n) => {
@@ -208,22 +297,25 @@ export function AdminDashboard() {
             </div>
             <div className="leading-tight">
               <p className="text-xs font-medium text-navy">{admin.name}</p>
-              <p className="text-[10px] text-navy-300">Administrator</p>
+              <p className="text-[10px] text-navy-300">{isAdmin ? 'Administrator' : 'Staff'}</p>
             </div>
           </div>
         </header>
 
-        {/* Body */}
+        {/* Body — admin-only tabs are doubly gated (nav is filtered above,
+            and this render check keeps a stale tab state from ever mounting
+            a restricted view for a staff session). */}
         <main className="flex-1 overflow-x-hidden">
-          {tab === 'overview' && <Overview onGoto={setTab} />}
+          {tab === 'overview' && <Overview onGoto={setTab} isAdmin={isAdmin} />}
           {tab === 'notifications' && <NotificationsView onGoto={(t) => setTab(t as Tab)} />}
           {tab === 'kanban' && <KanbanBoard />}
           {tab === 'payments' && <PaymentQueue />}
           {tab === 'customers' && <CustomersView />}
-          {tab === 'finance' && <FinanceView />}
-          {tab === 'reviews' && <ReviewsView />}
+          {isAdmin && tab === 'finance' && <FinanceView />}
+          {isAdmin && tab === 'reviews' && <ReviewsView />}
           {tab === 'feedback' && <FeedbackView />}
-          {tab === 'settings' && <SettingsView />}
+          {isAdmin && tab === 'staff' && <StaffView />}
+          {isAdmin && tab === 'settings' && <SettingsView />}
           {tab === 'help' && <HelpView />}
         </main>
       </div>
@@ -231,7 +323,7 @@ export function AdminDashboard() {
   )
 }
 
-function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
+function Overview({ onGoto, isAdmin }: { onGoto: (t: Tab) => void; isAdmin: boolean }) {
   // fetchAll: overview aggregates (revenue, active orders, customer counts)
   // must see every record — shared cache with the sidebar badges above.
   // Live mode: same polling as the sidebar so KPIs tick over on their own.
@@ -281,7 +373,8 @@ function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
         </p>
       </div>
 
-      {/* KPI tiles */}
+      {/* KPI tiles — staff get the operational KPIs only; revenue is
+          financial reporting, which the client keeps admin-only. */}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <KpiCard
           label="Active orders"
@@ -298,14 +391,16 @@ function Overview({ onGoto }: { onGoto: (t: Tab) => void }) {
           tone={pendingPayments.length > 0 ? 'amber' : 'emerald'}
           onClick={() => onGoto('payments')}
         />
-        <KpiCard
-          label="Revenue (verified payments)"
-          value={`₦${collectedRevenue.toLocaleString('en-NG')}`}
-          delta={`₦${pipelineValue.toLocaleString('en-NG')} in pipeline`}
-          icon={TrendingUp}
-          tone="emerald"
-          onClick={() => onGoto('finance')}
-        />
+        {isAdmin && (
+          <KpiCard
+            label="Revenue (verified payments)"
+            value={`₦${collectedRevenue.toLocaleString('en-NG')}`}
+            delta={`₦${pipelineValue.toLocaleString('en-NG')} in pipeline`}
+            icon={TrendingUp}
+            tone="emerald"
+            onClick={() => onGoto('finance')}
+          />
+        )}
         <KpiCard
           label="Total customers"
           value={customers.length}

@@ -9,7 +9,11 @@ import { z } from 'zod'
 import { EMAIL_REGEX, EMAIL_HELP } from '@/lib/email-validation'
 
 // ----- Enums (must match prisma/schema.prisma) -----
-export const RoleSchema = z.enum(['ADMIN', 'DRIVER', 'B2C', 'B2B'])
+export const RoleSchema = z.enum(['ADMIN', 'STAFF', 'DRIVER', 'B2C', 'B2B'])
+// Staff-access lifecycle (phase 31) — mirrors User.accessStatus in
+// prisma/schema.prisma (a String column, not an enum, so adding future
+// states needs no migration).
+export const AccessStatusSchema = z.enum(['ACTIVE', 'PAUSED', 'REVOKED'])
 export const OrderStatusSchema = z.enum([
   'REQUESTED',
   'PAYMENT_PENDING_VERIFICATION',
@@ -125,6 +129,49 @@ export const UpdatePaymentSchema = z.object({
   status: PaymentStatusSchema,
 })
 
+// ----- Staff schemas (phase 31) -----
+// Super-admin invites: the admin sets the staff member's name, contact and
+// their INITIAL password; the invite email carries the credentials. Staff
+// are trusted at creation (emailVerified = now) — no verification loop —
+// because a real admin vouched for them. Password floor is slightly above
+// the public signup's 8: staff accounts open the operations console.
+export const CreateStaffSchema = z.object({
+  name: z.string().trim().min(2, 'Name is required').max(100),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(255)
+    .regex(EMAIL_REGEX, EMAIL_HELP),
+  phone: z.string().trim().min(7, 'Phone is required').max(20),
+  password: z
+    .string()
+    .min(10, 'Password must be at least 10 characters')
+    .max(128)
+    // Must contain at least two of: lowercase, uppercase, digit, symbol —
+    // the "generate password" button in the UI always satisfies all four.
+    .refine(
+      (p) =>
+        [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(p)).length >= 2,
+      'Password needs a mix of letters, numbers or symbols'
+    ),
+  // Optional personal line the manager can add to the invite email
+  // ("You'll be handling the Lekki pickups").
+  note: z.string().trim().max(300).optional(),
+})
+
+export const UpdateStaffSchema = z.object({
+  name: z.string().trim().min(2).max(100).optional(),
+  phone: z.string().trim().min(7).max(20).optional(),
+  accessStatus: AccessStatusSchema.optional(),
+  // New password — re-sends the invite email with the new credentials.
+  password: z
+    .string()
+    .min(10, 'Password must be at least 10 characters')
+    .max(128)
+    .optional(),
+})
+
 // ----- Review schemas -----
 // Two accepted references to the order being reviewed:
 //   • orderId — the full order id (cuid) from the customer's private review
@@ -168,3 +215,5 @@ export type UpdateOrderInput = z.infer<typeof UpdateOrderSchema>
 export type CreatePaymentInput = z.infer<typeof CreatePaymentSchema>
 export type UpdatePaymentInput = z.infer<typeof UpdatePaymentSchema>
 export type CreateReviewInput = z.infer<typeof CreateReviewSchema>
+export type CreateStaffInput = z.infer<typeof CreateStaffSchema>
+export type UpdateStaffInput = z.infer<typeof UpdateStaffSchema>

@@ -67,6 +67,21 @@ export async function DELETE(
     )
   }
 
+  // ----- Staff-account guard (phase 31) -----
+  // Staff lifecycle (invite / pause / revoke / reset) lives in the Staff tab
+  // so every action has one home and a consistent audit trail. A hard delete
+  // from the CRM would also orphan the StatusEvent/payment-verifier history
+  // a staff member's work already wrote.
+  if (user.role === 'STAFF') {
+    return NextResponse.json(
+      {
+        error:
+          'Staff accounts are managed from the Staff tab — use Pause or Revoke access there instead of deleting.',
+      },
+      { status: 400 }
+    )
+  }
+
   // ----- Count what will be lost (for the response + audit log) -----
   const [orderCount, reviewCount] = await Promise.all([
     db.order.count({ where: { userId: id } }),

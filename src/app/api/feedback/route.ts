@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { after } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
-import { getSession } from '@/lib/auth'
+import { getSession, verifyLiveAccess } from '@/lib/auth'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { moderateText } from '@/lib/content-filter'
 import { notifyAdminNewFeedback } from '@/lib/notifications'
@@ -101,8 +101,20 @@ export async function POST(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const session = await getSession()
-  if (!session || session.user?.role !== 'ADMIN') {
+  // Phase 31: feedback triage is operational — staff can read and work the
+  // inbox alongside admins. (Paused/revoked staff are blocked by the live
+  // access check inside this branch.)
+  if (!session || !['ADMIN', 'STAFF'].includes(session.user?.role as string)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (session.user?.role === 'STAFF') {
+    const blocked = await verifyLiveAccess(session)
+    if (blocked) {
+      return new NextResponse(blocked.body, {
+        status: blocked.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
   }
   const { searchParams } = new URL(req.url)
   const status = searchParams.get('status')
@@ -122,8 +134,17 @@ const PatchFeedbackSchema = z.object({
 
 export async function PATCH(req: NextRequest) {
   const session = await getSession()
-  if (!session || session.user?.role !== 'ADMIN') {
+  if (!session || !['ADMIN', 'STAFF'].includes(session.user?.role as string)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+  if (session.user?.role === 'STAFF') {
+    const blocked = await verifyLiveAccess(session)
+    if (blocked) {
+      return new NextResponse(blocked.body, {
+        status: blocked.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
   }
   let body: unknown
   try {

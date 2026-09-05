@@ -956,3 +956,164 @@ export async function notifyAdminTestEmails(): Promise<{
 
   return { recipients: cfg.emails, results }
 }
+
+// =============================================================================
+// STAFF-ACCESS emails (phase 31)
+// =============================================================================
+// Super admins invite staff from the console's Staff tab; the account's
+// initial password is set by the admin and delivered by email. These emails
+// never throw — a failed send is reported to the API caller so the admin can
+// hand the credentials over manually instead of silently losing them.
+
+/** Shared brand chrome for staff emails (same look as the customer emails). */
+function staffEmailChrome(opts: {
+  heading: string
+  bodyHtml: string
+  cta?: { label: string; url: string }
+  footer?: string
+}): { subject: string; html: string } {
+  const { heading, bodyHtml, cta, footer } = opts
+  const subject = `${heading} — Kozy Care`
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <body style="font-family: Georgia, serif; background: #F8F9FA; padding: 40px 0; margin: 0;">
+    <div style="max-width: 520px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
+      <div style="background: linear-gradient(135deg, #0A192F, #102740); padding: 32px 40px; text-align: center;">
+        <h1 style="color: #D4AF37; font-family: Georgia, serif; font-size: 28px; font-weight: 700; margin: 0;">Kozy Care</h1>
+        <p style="color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0 0 0;">Drycleaning &amp; Laundry · Staff Console</p>
+      </div>
+      <div style="padding: 40px;">
+        <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">${heading}</h2>
+        ${bodyHtml}
+        ${
+          cta
+            ? `<div style="text-align: center; margin: 28px 0 8px 0;">
+                 <a href="${cta.url}" style="display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);">${cta.label}</a>
+               </div>
+               <p style="color: #6F88A8; font-size: 12px; margin: 12px 0 0 0; line-height: 1.5;">Or paste this link into your browser:<br><span style="color: #0A192F; word-break: break-all;">${cta.url}</span></p>`
+            : ''
+        }
+        <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
+          ${
+            footer ||
+            'This is an automated message from the Kozy Care staff console.<br>Kozy Care — Uncompromising care. Exceptional convenience.'
+          }
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`
+  return { subject, html }
+}
+
+/**
+ * Invite / credentials email for a staff member. Returns the delivery
+ * outcome so the API can tell the admin exactly what happened (the
+ * password MUST reach the staff member one way or another).
+ */
+export async function notifyStaffInvite(opts: {
+  to: string
+  name: string
+  password: string
+  managerName: string
+  note?: string
+  isReset?: boolean
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { to, name, password, managerName, note, isReset } = opts
+    const loginUrl = `${baseUrl()}/login?email=${encodeURIComponent(to)}`
+    const firstName = name.split(' ')[0]
+
+    const bodyHtml = `
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+          ${isReset ? `Your Kozy Care staff password has been reset by <strong style="color:#0A192F;">${managerName}</strong>.` : `You have been added to the Kozy Care team by <strong style="color:#0A192F;">${managerName}</strong>.`} Sign in to the operations console to manage orders, payments and customers.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; width: 140px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Sign-in email</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;">${to}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">${isReset ? 'New password' : 'Initial password'}</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;"><code style="background:#F8F9FA; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:13px;">${password}</code></td>
+          </tr>
+        </table>
+        ${
+          note
+            ? `<div style="margin: 20px 0 0 0; padding: 14px 16px; background: #F8F9FA; border-left: 3px solid #D4AF37; border-radius: 4px;">
+                 <p style="color: #0A192F; font-size: 14px; margin: 0; line-height: 1.6;"><strong>Message from ${managerName}:</strong><br>${note}</p>
+               </div>`
+            : ''
+        }
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+          <strong style="color: #0A192F;">After your first sign-in,</strong> choose your own password — tap “Forgot password?” on the login page and follow the reset link sent to this inbox. Keep this email private: it is the only place your password appears.
+        </p>`
+
+    const { subject, html } = staffEmailChrome({
+      heading: isReset ? `New password, ${firstName}` : `Welcome to the team, ${firstName}!`,
+      bodyHtml,
+      cta: { label: 'Open the staff console', url: loginUrl },
+    })
+
+    await sendEmail({ to, subject, html })
+    return { ok: true }
+  } catch (e: any) {
+    console.error('Staff invite email failed:', e)
+    return { ok: false, error: e?.message ?? 'unknown error' }
+  }
+}
+
+/** "Your access is back on" email (un-pause). Never throws. */
+export async function notifyStaffAccessRestored(opts: {
+  to: string
+  name: string
+  managerName: string
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { to, name, managerName } = opts
+    const loginUrl = `${baseUrl()}/login?email=${encodeURIComponent(to)}`
+    const firstName = name.split(' ')[0]
+    const bodyHtml = `
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+          Your access to the Kozy Care operations console has been restored by <strong style="color:#0A192F;">${managerName}</strong>. You can sign in and pick up where you left off — your password is unchanged.
+        </p>`
+    const { subject, html } = staffEmailChrome({
+      heading: `Your access is back on, ${firstName}`,
+      bodyHtml,
+      cta: { label: 'Sign in', url: loginUrl },
+    })
+    await sendEmail({ to, subject, html })
+    return { ok: true }
+  } catch (e: any) {
+    console.error('Staff access-restored email failed:', e)
+    return { ok: false, error: e?.message ?? 'unknown error' }
+  }
+}
+
+/** Log a staff-management event to the admin operations feed (never throws). */
+export async function logStaffEvent(opts: {
+  type: 'STAFF_INVITE'
+  title: string
+  body: string
+  staffEmail: string
+  emailStatus: NotificationEmailStatus
+  detail?: Record<string, unknown>
+}): Promise<void> {
+  try {
+    await db.notificationEvent.create({
+      data: {
+        type: opts.type,
+        title: opts.title,
+        body: opts.body,
+        data: JSON.stringify({ staffEmail: opts.staffEmail, ...opts.detail }),
+        recipients: JSON.stringify([opts.staffEmail]),
+        emailStatus: opts.emailStatus,
+        emailDetail: opts.detail ? JSON.stringify(opts.detail) : undefined,
+        linkTab: 'staff',
+      },
+    })
+  } catch (e) {
+    console.error('Staff NotificationEvent create failed:', e)
+  }
+}

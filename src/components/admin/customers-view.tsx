@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useSession } from 'next-auth/react'
 import {
   Search,
   Phone,
@@ -260,6 +261,11 @@ function CustomerDetailModal({
   orderCount: number
   onClose: () => void
 }) {
+  // Phase 31: staff browse the CRM but the destructive delete is
+  // admin-only (the API enforces this too — hide the button so a staff
+  // member never sees an action that would just 403).
+  const { data: session } = useSession()
+  const isManager = (session?.user as any)?.role === 'ADMIN'
   // fetchAll: the modal computes this customer's LTV/order counts over the
   // whole order history, not just the first page.
   const allOrders = useOrders({ fetchAll: true }).data ?? []
@@ -418,7 +424,7 @@ function CustomerDetailModal({
           </div>
 
           {/* ----- Danger zone (client-requested): permanent deletion ----- */}
-          {user.role !== 'ADMIN' && (
+          {user.role !== 'ADMIN' && isManager && (
             <div className="rounded-lg border border-rose-200 bg-rose-50/60 p-4">
               <p className="flex items-center gap-1.5 text-sm font-semibold text-rose-800">
                 <AlertTriangle className="h-4 w-4" /> Danger zone
