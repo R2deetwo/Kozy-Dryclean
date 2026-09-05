@@ -3,20 +3,23 @@
 // =============================================================================
 // StaffView (phase 31) — super-admin staff management tab
 // =============================================================================
-// The client's brief: "a staff login like the admin's own that sees the
-// operational side, while super admins send the invites, set names and
-// passwords, and can pause or revoke access."
+// The client's brief evolved in phase 32: "there is no need for the owner to
+// be able to generate those passwords. It should just generate the password
+// for them, send it, and get them directed to change it."
 //
 // What this tab does:
-//   - Invite staff: name + email + phone + initial password (generate button
-//     included) + optional personal note → account created ACTIVE and a
-//     credentials email goes out. The toast reports whether the email
-//     actually landed (if Brevo failed, the password must be handed over
-//     manually — the admin needs to KNOW that).
+//   - Invite staff: name + email + phone + optional personal note → the
+//     SERVER generates a strong initial password (the owner never sees or
+//     types one), the account is created ACTIVE with mustChangePassword set,
+//     and a credentials email goes out. The toast reports whether the email
+//     landed — and tells the admin the recipient should check their spam
+//     folder if it is nowhere to be seen (the client's deliverability note).
 //   - Pause / resume: reversible time-out (login + console APIs blocked).
 //   - Revoke: permanent offboarding. Silent by design — no email is sent,
 //     the manager decides how to communicate it.
-//   - Reset password: new credentials + re-sent invite email. Also un-pauses.
+//   - Reset password: the server generates + emails new credentials, access
+//     is re-armed, and the staff member is asked to set their own at the
+//     next sign-in. No admin-typed password anywhere.
 //
 // Everything here is ADMIN-only UI; the /api/staff routes enforce that
 // server-side regardless of what any client renders.
@@ -32,10 +35,8 @@ import {
   KeyRound,
   Mail,
   Phone,
-  RefreshCw,
   ShieldAlert,
   BadgeCheck,
-  Copy,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -63,25 +64,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { useStaff, useCreateStaff, useUpdateStaff, type ApiStaff } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
-
-/** Strong-but-typeable password: guaranteed lower+upper+digit+symbol. */
-function generatePassword(): string {
-  const lower = 'abcdefghjkmnpqrstuvwxyz'
-  const upper = 'ABCDEFGHJKMNPQRSTUVWXYZ'
-  const digits = '23456789'
-  const symbols = '!#$%&*?'
-  const all = lower + upper + digits + symbols
-  const pick = (chars: string) => chars[Math.floor(Math.random() * chars.length)]
-  const rand = (n: number) =>
-    Array.from({ length: n }, () => pick(all))
-  // One of each class + 10 more random, then shuffle.
-  const core = [pick(lower), pick(upper), pick(digits), pick(symbols), ...rand(10)]
-  for (let i = core.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1))
-    ;[core[i], core[j]] = [core[j], core[i]]
-  }
-  return core.join('')
-}
 
 function initials(name: string): string {
   return name
@@ -134,18 +116,25 @@ export function StaffView() {
   const reportEmail = (
     label: string,
     member: ApiStaff,
-    email: { ok: boolean; error: string | null } | null
+    email: { ok: boolean; error: string | null } | null,
+    hint?: string
   ) => {
     if (!email) return
     if (email.ok) {
       toast({
         title: `${label} — email sent`,
-        description: `${member.name} (${member.email}) has received the email from Kozy Care.`,
+        description:
+          hint ??
+          `${member.name} (${member.email}) has received the email from Kozy Care.`,
       })
     } else {
       toast({
         title: `${label} — email FAILED`,
-        description: `The account was updated, but the email to ${member.email} could not be sent. Hand the password over directly, or try again in a moment. (${email.error ?? 'provider error'})`,
+        description: `The email to ${member.email} could not be sent (${email.error ?? 'provider error'}). ${
+          label === 'Staff invited'
+            ? 'The account exists — use "Reset password" to re-send once email is working, or pause the account in the meantime.'
+            : 'Nothing was changed — their current password still works. Try again in a moment.'
+        }`,
         variant: 'destructive',
       })
     }
@@ -314,7 +303,7 @@ export function StaffView() {
           createMutation.mutate(input, {
             onSuccess: (data) => {
               setInviteOpen(false)
-              reportEmail('Staff invited', data.staff, data.invite)
+              reportEmail('Staff invited', data.staff, data.invite, data.hint)
             },
             onError: (e: any) =>
               toast({
@@ -326,19 +315,19 @@ export function StaffView() {
         }}
       />
 
-      {/* ----- Reset password dialog ----- */}
+      {/* ----- Reset password dialog (phase 32: server-generated) ----- */}
       <ResetPasswordDialog
         member={resetTarget}
         pending={updateMutation.isPending}
         onClose={() => setResetTarget(null)}
-        onSubmit={(password) => {
+        onSubmit={() => {
           if (!resetTarget) return
           updateMutation.mutate(
-            { id: resetTarget.id, password },
+            { id: resetTarget.id, resetPassword: true },
             {
               onSuccess: (data) => {
                 setResetTarget(null)
-                reportEmail('Password reset', data.staff, data.email)
+                reportEmail('Password reset', data.staff, data.email, data.hint)
               },
               onError: (e: any) =>
                 toast({
@@ -435,7 +424,9 @@ export function StaffView() {
 }
 
 // =============================================================================
-// Invite dialog — name / email / phone / password / note
+// Invite dialog — name / email / phone / note (phase 32: NO password field —
+// the server generates it, emails it, and the staff member sets their own at
+// first sign-in)
 // =============================================================================
 
 function InviteDialog({
@@ -451,27 +442,23 @@ function InviteDialog({
     name: string
     email: string
     phone: string
-    password: string
     note?: string
   }) => void
 }) {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [phone, setPhone] = useState('')
-  const [password, setPassword] = useState('')
   const [note, setNote] = useState('')
 
   const valid =
     name.trim().length >= 2 &&
     /\S+@\S+\.\S+/.test(email) &&
-    phone.trim().length >= 7 &&
-    password.length >= 10
+    phone.trim().length >= 7
 
   const reset = () => {
     setName('')
     setEmail('')
     setPhone('')
-    setPassword('')
     setNote('')
   }
 
@@ -489,9 +476,9 @@ function InviteDialog({
         <DialogHeader>
           <DialogTitle>Invite a staff member</DialogTitle>
           <DialogDescription>
-            The account is created the moment you send this. Their sign-in email and the
-            password you set are emailed to them immediately — copy the password now if
-            you also want to hand it over in person.
+            The account is created the moment you send this. A secure password is generated
+            automatically and emailed to them — you never see or set it. They&apos;ll be asked to
+            choose their own password the first time they sign in.
           </DialogDescription>
         </DialogHeader>
 
@@ -521,7 +508,9 @@ function InviteDialog({
               className="mt-1.5"
             />
             <p className="mt-1 text-[11px] text-navy-300">
-              Must not already belong to a Kozy Care account.
+              Must not already belong to a Kozy Care account. Their sign-in details go here — if
+              the email doesn&apos;t arrive within a few minutes, ask them to check their spam or
+              junk folder.
             </p>
           </div>
           <div>
@@ -535,39 +524,6 @@ function InviteDialog({
               placeholder="+234 801 234 5678"
               className="mt-1.5"
             />
-          </div>
-          <div>
-            <Label htmlFor="staff-password" className="text-xs uppercase tracking-wide text-navy-300">
-              Initial password
-            </Label>
-            <div className="mt-1.5 flex gap-2">
-              <Input
-                id="staff-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="At least 10 characters"
-                className="font-mono"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="shrink-0"
-                onClick={() => {
-                  const pw = generatePassword()
-                  setPassword(pw)
-                  navigator.clipboard?.writeText(pw).catch(() => {})
-                  toast({
-                    title: 'Password generated and copied',
-                    description: 'Paste it anywhere — it also goes in the invite email.',
-                  })
-                }}
-              >
-                <RefreshCw className="mr-1.5 h-3.5 w-3.5" /> Generate
-              </Button>
-            </div>
-            <p className="mt-1 text-[11px] text-navy-300">
-              They should set their own after first sign-in (Forgot password → reset link).
-            </p>
           </div>
           <div>
             <Label htmlFor="staff-note" className="text-xs uppercase tracking-wide text-navy-300">
@@ -603,7 +559,6 @@ function InviteDialog({
                 name: name.trim(),
                 email: email.trim().toLowerCase(),
                 phone: phone.trim(),
-                password,
                 note: note.trim() || undefined,
               })
             }
@@ -618,7 +573,8 @@ function InviteDialog({
 }
 
 // =============================================================================
-// Reset password dialog
+// Reset password dialog (phase 32 — server-generated password, confirmation
+// only: the admin never types a password anywhere in this tab anymore)
 // =============================================================================
 
 function ResetPasswordDialog({
@@ -630,71 +586,38 @@ function ResetPasswordDialog({
   member: ApiStaff | null
   pending: boolean
   onClose: () => void
-  onSubmit: (password: string) => void
+  onSubmit: () => void
 }) {
-  const [password, setPassword] = useState('')
-
   return (
     <Dialog
       open={!!member}
       onOpenChange={(o) => {
-        if (!o) {
-          setPassword('')
-          onClose()
-        }
+        if (!o) onClose()
       }}
     >
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Reset {member?.name}&apos;s password</DialogTitle>
+          <DialogTitle>Reset {member?.name}&apos;s password?</DialogTitle>
           <DialogDescription>
-            Sets a new password and emails it to {member?.email}. If their access is
-            paused or revoked, it is restored at the same time.
+            A new password is generated automatically and emailed to {member?.email} — you never
+            see it. If their access is paused or revoked, it is restored at the same time, and
+            they&apos;ll be asked to choose their own password at their next sign-in.
           </DialogDescription>
         </DialogHeader>
-        <div>
-          <Label htmlFor="reset-password" className="text-xs uppercase tracking-wide text-navy-300">
-            New password
-          </Label>
-          <div className="mt-1.5 flex gap-2">
-            <Input
-              id="reset-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="At least 10 characters"
-              className="font-mono"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              className="shrink-0"
-              onClick={() => {
-                const pw = generatePassword()
-                setPassword(pw)
-                navigator.clipboard?.writeText(pw).catch(() => {})
-                toast({ title: 'Password generated and copied' })
-              }}
-            >
-              <Copy className="mr-1.5 h-3.5 w-3.5" /> Generate
-            </Button>
-          </div>
+        <div className="rounded-lg border border-gold-200 bg-gold-50 p-3 text-xs leading-relaxed text-navy">
+          If the email doesn&apos;t arrive within a few minutes, ask them to check their spam or
+          junk folder — invite emails occasionally land there.
         </div>
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => {
-              setPassword('')
-              onClose()
-            }}
-          >
+          <Button variant="outline" onClick={() => onClose()}>
             Cancel
           </Button>
           <Button
-            disabled={password.length < 10 || pending}
-            onClick={() => onSubmit(password)}
+            disabled={pending}
+            onClick={() => onSubmit()}
             className="bg-gold-gradient font-semibold text-[#0A192F] hover:opacity-90"
           >
-            {pending ? 'Resetting…' : 'Reset & email them'}
+            {pending ? 'Sending…' : 'Email new password'}
           </Button>
         </DialogFooter>
       </DialogContent>

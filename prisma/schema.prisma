@@ -32,6 +32,12 @@ model User {
   // customer's value is ignored. Enforced at login (authorize rejects) and
   // on every console API call via the cached live check in src/lib/auth.ts.
   accessStatus  String   @default("ACTIVE")
+  // Phase 32: set when an admin invites a staff member (or resets their
+  // password) — the credentials email is the only place the system password
+  // appears, so the console asks for a personally chosen password at the
+  // next sign-in and clears this flag. Read by /api/users/me (the console
+  // heartbeat) and cleared by POST /api/users/me/password.
+  mustChangePassword Boolean @default(false)
   // Discount tracking
   signupDiscountUsed Boolean @default(false)
   createdAt     DateTime @default(now())
@@ -46,6 +52,8 @@ model User {
   reviews            Review[]
   // Reviews this user has approved (as admin)
   approvedReviews    Review[]            @relation("ReviewApprover")
+  // Order anomalies authored by this user (phase 32 — admin eyes only)
+  anomaliesAuthored  OrderAnomaly[]      @relation("AnomalyActor")
   // Last known GPS position (rider geofencing) — one row per driver
   driverLocation     DriverLocation?
 }
@@ -129,6 +137,8 @@ model Order {
   media             GarmentMedia[]
   payments          Payment[]
   statusEvents      StatusEvent[]
+  // Odd-movement flags (phase 32) — visible to ADMINS only, never staff
+  anomalies         OrderAnomaly[]
   // Customer feedback (one-to-one — one review per order)
   review            Review?
 
@@ -255,6 +265,39 @@ model StatusEvent {
 
   @@index([orderId])
   @@index([actorId])
+}
+
+// =====================================================
+// ORDER ANOMALY (phase 32) — odd movements on the kanban, seen by
+// super admins only. Staff never read this table through any API.
+// =====================================================
+// Raised server-side when a STAFF account moves an order oddly or attempts
+// a blocked/destructive action:
+//   BACKWARD_MOVE    — pipeline regression (e.g. Processing → Requested)
+//   STAGE_SKIP       — forward jump past an intermediate stage
+//   UNPAID_DELIVERY  — order moved to Delivered with no VERIFIED payment
+//   BLOCKED_ACTION   — attempted price override / cancel / verified-payment
+//                      edit / payment-claim deletion (rejected with 403)
+// The point (client directive): staff must not be able to destroy records
+// or hide that money has come in "without approval" — every such attempt,
+// successful or blocked, leaves a flag the OWNER can see and the staff
+// member cannot.
+model OrderAnomaly {
+  id         String    @id @default(cuid())
+  orderId    String
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind       String
+  fromStatus String?
+  toStatus   String?
+  actorId    String?
+  actor      User?     @relation("AnomalyActor", fields: [actorId], references: [id])
+  // Human sentence, e.g. "Amaka moved #KZ-123 Processing → Requested"
+  detail     String?
+  createdAt  DateTime  @default(now())
+
+  @@index([orderId])
+  @@index([actorId])
+  @@index([createdAt])
 }
 
 // =====================================================

@@ -41,6 +41,10 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
       to: [{ email: to }],
       subject,
       htmlContent: html,
+      // Phase 32: tag every send as transactional/operational in the Brevo
+      // console (these are account + order emails, never marketing) — makes
+      // deliverability classification visible at a glance in the dashboard.
+      tags: ['kozy-transactional'],
     }),
   })
 

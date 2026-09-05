@@ -129,12 +129,13 @@ export const UpdatePaymentSchema = z.object({
   status: PaymentStatusSchema,
 })
 
-// ----- Staff schemas (phase 31) -----
-// Super-admin invites: the admin sets the staff member's name, contact and
-// their INITIAL password; the invite email carries the credentials. Staff
-// are trusted at creation (emailVerified = now) — no verification loop —
-// because a real admin vouched for them. Password floor is slightly above
-// the public signup's 8: staff accounts open the operations console.
+// ----- Staff schemas (phase 31 / phase 32) -----
+// Super-admin invites: the admin supplies the staff member's name and
+// contact details; the SYSTEM generates the initial password (never the
+// owner — phase 32 directive), emails it to the staff member, and the
+// console makes them choose their own at first sign-in (mustChangePassword).
+// Staff are trusted at creation (emailVerified = now) — no verification
+// loop — because a real admin vouched for them.
 export const CreateStaffSchema = z.object({
   name: z.string().trim().min(2, 'Name is required').max(100),
   email: z
@@ -144,17 +145,6 @@ export const CreateStaffSchema = z.object({
     .max(255)
     .regex(EMAIL_REGEX, EMAIL_HELP),
   phone: z.string().trim().min(7, 'Phone is required').max(20),
-  password: z
-    .string()
-    .min(10, 'Password must be at least 10 characters')
-    .max(128)
-    // Must contain at least two of: lowercase, uppercase, digit, symbol —
-    // the "generate password" button in the UI always satisfies all four.
-    .refine(
-      (p) =>
-        [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(p)).length >= 2,
-      'Password needs a mix of letters, numbers or symbols'
-    ),
   // Optional personal line the manager can add to the invite email
   // ("You'll be handling the Lekki pickups").
   note: z.string().trim().max(300).optional(),
@@ -164,12 +154,9 @@ export const UpdateStaffSchema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
   phone: z.string().trim().min(7).max(20).optional(),
   accessStatus: AccessStatusSchema.optional(),
-  // New password — re-sends the invite email with the new credentials.
-  password: z
-    .string()
-    .min(10, 'Password must be at least 10 characters')
-    .max(128)
-    .optional(),
+  // Phase 32: the owner no longer types passwords. `resetPassword: true`
+  // makes the server generate a new one, email it, and re-arm access.
+  resetPassword: z.boolean().optional(),
 })
 
 // ----- Review schemas -----
@@ -217,3 +204,26 @@ export type UpdatePaymentInput = z.infer<typeof UpdatePaymentSchema>
 export type CreateReviewInput = z.infer<typeof CreateReviewSchema>
 export type CreateStaffInput = z.infer<typeof CreateStaffSchema>
 export type UpdateStaffInput = z.infer<typeof UpdateStaffSchema>
+
+// ----- Change-password schema (phase 32) -----
+// Used by POST /api/users/me/password — how a staff member (or admin)
+// replaces the system-generated initial password with their own. The
+// current password must be presented (an open browser tab must never be
+// enough to take an account over). Same strength floor as staff passwords.
+export const ChangePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required').max(128),
+  newPassword: z
+    .string()
+    .min(10, 'Password must be at least 10 characters')
+    .max(128)
+    .refine(
+      (p) =>
+        [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(p)).length >= 2,
+      'Password needs a mix of letters, numbers or symbols'
+    )
+    .refine(
+      (p) => p !== 'PENDING' && p !== 'VERIFIED',
+      'Choose a stronger password'
+    ),
+})
+export type ChangePasswordInput = z.infer<typeof ChangePasswordSchema>

@@ -1,13 +1,14 @@
 // =============================================================================
-// /api/staff — staff-account management (phase 31), ADMIN only
+// /api/staff — staff-account management (phase 31, phase 32), ADMIN only
 // =============================================================================
 // GET  : list every staff account (any status) for the Staff tab.
-// POST : invite a staff member — the super admin sets their name, email,
-//        phone and INITIAL password; the account is created ACTIVE and a
-//        branded credentials email goes out immediately. The delivery
-//        outcome is returned in the response so the admin KNOWS the
-//        password reached the staff member (if Brevo failed, the UI says
-//        so and the password can be handed over manually).
+// POST : invite a staff member — the super admin supplies name, email and
+//        phone; the SERVER generates a strong initial password (phase 32:
+//        the owner never sets or sees credentials), creates the account
+//        ACTIVE with mustChangePassword=true, and emails the credentials.
+//        The delivery outcome is returned (not the password) so the admin
+//        KNOWS whether the email landed — if Brevo failed, the UI says so
+//        and offers Reset password to re-send once the address is fixed.
 //
 // RBAC: strictly requireRole('ADMIN') — staff cannot see or manage other
 // staff, and customers can never enumerate console accounts.
@@ -18,6 +19,7 @@ import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { CreateStaffSchema } from '@/lib/schemas'
+import { generatePassword } from '@/lib/passwords'
 import { notifyStaffInvite, logStaffEvent } from '@/lib/notifications'
 
 /** requireRole throws its 401/403 as a Response; some Next 16 builds turn a
@@ -86,7 +88,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const { name, email, phone, password, note } = parsed.data
+  const { name, email, phone, note } = parsed.data
 
   // Existing email? A staff account must not shadow a customer/admin login.
   const existing = await db.user.findUnique({ where: { email } })
@@ -101,6 +103,10 @@ export async function POST(req: Request) {
     )
   }
 
+  // Phase 32: the system owns the password. Generated here, hashed, emailed
+  // to the staff member — and returned NOWHERE. mustChangePassword makes the
+  // console ask them to choose their own at first sign-in.
+  const password = generatePassword()
   const passwordHash = await bcrypt.hash(password, 10)
 
   // Staff are admin-vouched: emailVerified is set at creation so the
@@ -114,13 +120,14 @@ export async function POST(req: Request) {
       passwordHash,
       emailVerified: new Date(),
       accessStatus: 'ACTIVE',
+      mustChangePassword: true,
     },
     select: STAFF_SELECT,
   })
 
   // Deliver the credentials BEFORE responding — the admin must know whether
-  // the email actually landed (if not, they hand the password over in person
-  // or hit "Resend" after fixing the address). One email ≈ one second.
+  // the email actually landed (if not, they can fix the address / retry via
+  // Reset password). One email ≈ one second.
   const managerName = session.user?.name || 'Kozy Care'
   const invite = await notifyStaffInvite({
     to: email,
@@ -135,7 +142,7 @@ export async function POST(req: Request) {
     await logStaffEvent({
       type: 'STAFF_INVITE',
       title: 'Staff account created',
-      body: `${name} (${email}) was invited to the staff console by ${managerName}.${
+      body: `${name} (${email}) was invited to the staff console by ${managerName}. A system-generated password was emailed to them — they will set their own at first sign-in.${
         invite.ok ? ' Credentials email delivered.' : ' Credentials email FAILED — password not delivered.'
       }`,
       staffEmail: email,
@@ -145,7 +152,15 @@ export async function POST(req: Request) {
   })
 
   return NextResponse.json(
-    { staff, invite: { ok: invite.ok, error: invite.error ?? null } },
+    {
+      staff,
+      invite: { ok: invite.ok, error: invite.error ?? null },
+      // Copy the UI can show verbatim — the spam-check hint the client asked
+      // for (invite emails from a shared sender often land in junk).
+      hint: invite.ok
+        ? 'Email sent. If they do not see it within a few minutes, ask them to check their spam or junk folder.'
+        : 'The email could not be sent. The account exists but no password was delivered — use “Reset password” to re-send once the address is confirmed, or pause the account.',
+    },
     { status: 201 }
   )
 }

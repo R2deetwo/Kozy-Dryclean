@@ -28,6 +28,7 @@ import { notifyOrderStatus, notifyInvoiceReady } from '@/lib/notifications'
 import { STAGE_RANK } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
 import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
+import { detectAnomalies, logAnomaly } from '@/lib/anomalies'
 
 // ----- GET /api/orders/[id] -----
 export async function GET(
@@ -78,6 +79,17 @@ export async function GET(
     }
   }
   // ADMIN and STAFF: no restriction
+
+  // Phase 32: odd-movement flags for the kanban card / detail modal — ADMIN
+  // sessions only. Staff payloads never contain them (client directive:
+  // staff must not see the flags).
+  if (session.user?.role === 'ADMIN') {
+    ;(order as any).anomalies = await db.orderAnomaly.findMany({
+      where: { orderId: id },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { id: true, name: true, email: true } } },
+    })
+  }
 
   return NextResponse.json({ order })
 }
@@ -175,19 +187,46 @@ export async function PATCH(
       }
     }
   }
-  // ----- STAFF restrictions (phase 31) -----
+  // ----- STAFF restrictions (phase 31 / phase 32) -----
   // Staff run the pipeline: status moves, driver assignment, and recording
-  // the actual weighed kilos are all operational facts. The ONLY thing they
-  // cannot do is set totalPrice directly — the server prices every KG order
-  // itself from the admin-controlled per-kg rate (and applies the online
-  // discount), so a staff member can never invent or negotiate a price.
+  // the actual weighed kilos are all operational facts. The ONLY things they
+  // cannot do are set totalPrice directly (the server prices every KG order
+  // itself from the admin-controlled per-kg rate + discount) and CANCEL an
+  // order — cancellation wipes revenue off the board, which is a manager
+  // decision (client directive: staff must never destroy records or hide
+  // that money has come in "without approval"). Attempted-but-blocked
+  // actions are still logged as anomalies so the owner sees the attempt.
   if (session.user?.role === 'STAFF') {
     if (parsed.data.totalPrice !== undefined) {
+      await logAnomaly({
+        orderId: id,
+        kind: 'BLOCKED_ACTION',
+        actorId: session.user?.id,
+        detail: `Staff attempted to set the price of order #${order.orderNumber}${parsed.data.totalPrice != null ? ` to ₦${parsed.data.totalPrice.toLocaleString()}` : ''} — blocked, managers only.`,
+      })
       return NextResponse.json(
         {
           error: 'FORBIDDEN_PRICE_OVERRIDE',
           message:
             'Staff accounts cannot set prices directly. Record the weight instead — the price is calculated from the current rates. Ask a manager for price changes.',
+        },
+        { status: 403 }
+      )
+    }
+    if (parsed.data.status === 'CANCELLED' && order.status !== 'CANCELLED') {
+      await logAnomaly({
+        orderId: id,
+        kind: 'BLOCKED_ACTION',
+        actorId: session.user?.id,
+        fromStatus: order.status,
+        toStatus: 'CANCELLED',
+        detail: `Staff attempted to CANCEL order #${order.orderNumber} — blocked, managers only.`,
+      })
+      return NextResponse.json(
+        {
+          error: 'FORBIDDEN_STAFF_CANCEL',
+          message:
+            'Cancelling an order removes it from the pipeline and affects revenue — a manager needs to do this. Ask your manager to cancel the order instead.',
         },
         { status: 403 }
       )
@@ -259,6 +298,17 @@ export async function PATCH(
     },
   })
 
+  // Phase 32: odd-movement flags ride along for ADMIN callers only — staff
+  // must never see them (client directive). Fetched separately so the typed
+  // include above stays intact for the notification helpers.
+  if (session.user?.role === 'ADMIN') {
+    ;(updated as any).anomalies = await db.orderAnomaly.findMany({
+      where: { orderId: id },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { id: true, name: true, email: true } } },
+    })
+  }
+
   // ----- Consistency guard (console status -> PAYMENT_VERIFIED) -----
   // When an admin or staff member moves an order to PAYMENT_VERIFIED via the
   // dropdown or a drag, any PENDING/REJECTED bank-transfer payment on it is
@@ -305,6 +355,38 @@ export async function PATCH(
         actorId: session.user?.id,
       },
     })
+
+    // ----- Odd-movement flags (phase 32, STAFF moves only) -----
+    // Backwards moves, stage skips and unpaid deliveries leave an anomaly
+    // row the ADMIN sees on the kanban (card flag + modal) — staff never
+    // read this data through any API. Owner moves are their own business.
+    if (session.user?.role === 'STAFF' && parsed.data.status !== order.status) {
+      const hasVerifiedPayment = await db.payment.findFirst({
+        where: { orderId: id, status: 'VERIFIED' },
+        select: { id: true },
+      })
+      const kinds = detectAnomalies({
+        orderNumber: order.orderNumber,
+        from: order.status,
+        to: parsed.data.status,
+        hasVerifiedPayment: Boolean(hasVerifiedPayment),
+        amountDue: order.totalPrice,
+      })
+      const actorName = session.user?.name ?? 'A staff member'
+      for (const kind of kinds) {
+        await logAnomaly({
+          orderId: id,
+          kind,
+          actorId: session.user?.id,
+          fromStatus: order.status,
+          toStatus: parsed.data.status,
+          detail:
+            kind === 'UNPAID_DELIVERY'
+              ? `${actorName} moved order #${order.orderNumber} to Delivered with no verified payment (${order.totalPrice != null ? `₦${order.totalPrice.toLocaleString()} due` : 'amount pending weighing'}).`
+              : `${actorName} moved order #${order.orderNumber} ${order.status.replace(/_/g, ' ').toLowerCase()} → ${parsed.data.status.replace(/_/g, ' ').toLowerCase()}.`,
+        })
+      }
+    }
 
     // Email + SMS the customer about the status change — after the response
     // so the admin's dropdown/drag feels instant (email providers take

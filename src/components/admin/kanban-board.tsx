@@ -1,6 +1,5 @@
 'use client'
 
-import { useState } from 'react'
 import {
   DndContext,
   DragOverlay,
@@ -30,7 +29,7 @@ import {
   ChevronRight,
 } from 'lucide-react'
 import { useOrders, useUpdateOrder, ADMIN_POLL } from '@/lib/hooks'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   KANBAN_COLUMNS,
   formatNaira,
@@ -57,7 +56,13 @@ const COLUMN_META: Record<OrderStatus, { label: string; icon: any; tone: string 
   CANCELLED: { label: 'Cancelled', icon: AlertCircle, tone: 'rose' },
 }
 
-export function KanbanBoard() {
+// Phase 32: the active pipeline — everything EXCEPT the terminal Delivered
+// stage. Completed cycles (requested → delivered) are off the board by
+// default (client directive: "get rid of completed cycles"); a toggle brings
+// the Delivered column back when the team wants to see today's finishes.
+const ACTIVE_COLUMNS: OrderStatus[] = KANBAN_COLUMNS.filter((c) => c !== 'DELIVERED')
+
+export function KanbanBoard({ isAdmin = false }: { isAdmin?: boolean }) {
   // Live mode (phase 25): the board polls every few seconds (paused while
   // the tab is hidden) and refetches the moment the tab regains focus —
   // new bookings, payment verifications and status changes made anywhere
@@ -75,14 +80,19 @@ export function KanbanBoard() {
   // but the open modal's progress bar, badges and dropdown never caught up.
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
   const [view, setView] = useState<'kanban' | 'list'>('kanban')
+  // Phase 32: completed (Delivered) orders are hidden until toggled on —
+  // the board shows the LIVE pipeline, not history.
+  const [showCompleted, setShowCompleted] = useState(false)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
   const orders = ordersData ?? []
+  const boardColumns = showCompleted ? KANBAN_COLUMNS : ACTIVE_COLUMNS
+  const completedCount = orders.filter((o: any) => o.status === 'DELIVERED').length
   const visibleOrders = orders.filter((o: any) =>
-    KANBAN_COLUMNS.includes(o.status)
+    boardColumns.includes(o.status)
   )
   // The LIVE order behind the open modal — re-derived on every render, so
   // cache patches from verify/reject/status mutations land here instantly.
@@ -106,8 +116,19 @@ export function KanbanBoard() {
     ? orders.find((o) => o.id === activeId)
     : null
 
+  // Phase 32 (admin only): how many orders on the board carry odd-movement
+  // flags. Staff never receive anomaly data from any API, so this is 0 for
+  // them — but the render is also explicitly role-gated as defence in depth.
+  const flaggedCount = isAdmin
+    ? visibleOrders.filter((o: any) => (o.anomalies ?? []).length > 0).length
+    : 0
+
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col lg:h-[calc(100vh-9rem)]">
+    // Phase 32 layout fix: heights now match the fixed sidebar geometry —
+    // desktop: viewport minus the console header (3.5rem); mobile: viewport
+    // minus the tab bar (~3rem). The old 7/9rem offsets accounted for the
+    // removed site navbar and left dead space.
+    <div className="flex h-[calc(100vh-3rem)] flex-col lg:h-[calc(100vh-3.5rem)]">
       <div className="border-b bg-white px-4 py-3 sm:px-6">
         <div className="flex items-center justify-between">
           <div>
@@ -116,14 +137,37 @@ export function KanbanBoard() {
                 Orders
               </h1>
               <LiveBadge />
+              {isAdmin && flaggedCount > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-800">
+                  <Shield className="h-3 w-3" /> {flaggedCount} flagged
+                </span>
+              )}
             </div>
             <p className="text-xs text-navy-300">
               {view === 'kanban'
-                ? 'Drag order cards between columns to update their pipeline stage — the board updates itself live.'
+                ? showCompleted
+                  ? 'Showing the full pipeline including delivered orders — drag cards to update stages.'
+                  : 'Drag order cards between columns to update their pipeline stage — the board updates itself live. Completed cycles are hidden by default.'
                 : 'Sortable list of all orders. Click any row to view details — the list updates itself live.'}
             </p>
           </div>
           <div className="flex items-center gap-3">
+            {/* Phase 32: completed cycles stay off the active board; this
+                toggle reveals the Delivered column when wanted. */}
+            {view === 'kanban' && (
+              <button
+                onClick={() => setShowCompleted((v) => !v)}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
+                  showCompleted
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-linen-200 text-navy-300 hover:text-navy'
+                )}
+              >
+                <Home className="h-3.5 w-3.5" />
+                {showCompleted ? `Delivered shown (${completedCount})` : `Completed (${completedCount})`}
+              </button>
+            )}
             <div className="flex items-center gap-1 rounded-full bg-linen-200 p-1">
               <button
                 onClick={() => setView('kanban')}
@@ -165,6 +209,7 @@ export function KanbanBoard() {
       {view === 'list' && (
         <OrdersListView
           orders={visibleOrders}
+          isAdmin={isAdmin}
           onOpen={(o) => setSelectedId(o.id)}
         />
       )}
@@ -176,7 +221,7 @@ export function KanbanBoard() {
         onDragEnd={onDragEnd}
       >
         <div className="flex flex-1 gap-3 overflow-x-auto p-3 sm:p-4">
-          {KANBAN_COLUMNS.map((col) => {
+          {boardColumns.map((col) => {
             const meta = COLUMN_META[col]
             const colOrders = visibleOrders.filter((o) => o.status === col)
             return (
@@ -190,7 +235,7 @@ export function KanbanBoard() {
                 onOpen={(o) => setSelectedId(o.id)}
               >
                 {colOrders.map((o) => (
-                  <OrderCard key={o.id} order={o} onOpen={() => setSelectedId(o.id)} />
+                  <OrderCard key={o.id} order={o} isAdmin={isAdmin} onOpen={() => setSelectedId(o.id)} />
                 ))}
               </KanbanColumn>
             )
@@ -199,7 +244,7 @@ export function KanbanBoard() {
         <DragOverlay>
           {activeOrder ? (
             <div className="rotate-2 opacity-90">
-              <OrderCard order={activeOrder} onOpen={() => {}} dragging />
+              <OrderCard order={activeOrder} isAdmin={isAdmin} onOpen={() => {}} dragging />
             </div>
           ) : null}
         </DragOverlay>
@@ -209,6 +254,7 @@ export function KanbanBoard() {
       {selected && (
         <OrderDetailModal
           order={selected}
+          isAdmin={isAdmin}
           onClose={() => setSelectedId(undefined)}
         />
       )}
@@ -265,10 +311,12 @@ function KanbanColumn({
 
 function OrderCard({
   order,
+  isAdmin,
   onOpen,
   dragging,
 }: {
   order: any
+  isAdmin?: boolean
   onOpen: () => void
   dragging?: boolean
 }) {
@@ -283,6 +331,9 @@ function OrderCard({
   const rejectedTransfer = payments.find(
     (p) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER'
   )
+  // Phase 32 — odd-movement flags (ADMIN only; staff data never includes
+  // anomalies from the API, and this render check is defence in depth).
+  const anomalies: any[] = isAdmin ? order.anomalies ?? [] : []
 
   return (
     <Card
@@ -305,9 +356,19 @@ function OrderCard({
       <CardContent className="p-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-xs font-semibold text-navy">
-              #{order.orderNumber}
-            </p>
+            <div className="flex items-center gap-1.5">
+              <p className="font-mono text-xs font-semibold text-navy">
+                #{order.orderNumber}
+              </p>
+              {anomalies.length > 0 && (
+                <span
+                  title={anomalies.map((a) => a.detail || a.kind).join('\n')}
+                  className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700"
+                >
+                  <Shield className="h-2.5 w-2.5" /> {anomalies.length}
+                </span>
+              )}
+            </div>
             <p className="mt-0.5 truncate text-xs text-navy-300">
               {customer?.name ?? '—'}
             </p>
@@ -411,16 +472,25 @@ function toneBg(tone: string): string {
 // =====================================================
 function OrdersListView({
   orders,
+  isAdmin,
   onOpen,
 }: {
   orders: any[]
+  isAdmin?: boolean
   onOpen: (o: any) => void
 }) {
   const [sortBy, setSortBy] = useState<'date' | 'number' | 'amount' | 'status'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [filter, setFilter] = useState<OrderStatus | 'ALL'>('ALL')
+  // Phase 32: 'ACTIVE' (the live pipeline — completed cycles hidden) is the
+  // default, matching the kanban's behaviour. 'ALL' brings history back.
+  const [filter, setFilter] = useState<'ACTIVE' | OrderStatus | 'ALL'>('ACTIVE')
 
-  const filtered = filter === 'ALL' ? orders : orders.filter((o) => o.status === filter)
+  const filtered =
+    filter === 'ALL'
+      ? orders
+      : filter === 'ACTIVE'
+        ? orders.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
+        : orders.filter((o) => o.status === filter)
   const sorted = [...filtered].sort((a, b) => {
     let cmp = 0
     if (sortBy === 'date') cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -439,7 +509,19 @@ function OrdersListView({
     }
   }
 
-  const statusFilters: Array<OrderStatus | 'ALL'> = ['ALL', ...KANBAN_COLUMNS]
+  const statusFilters: Array<'ACTIVE' | OrderStatus | 'ALL'> = [
+    'ACTIVE',
+    ...KANBAN_COLUMNS,
+    'ALL',
+  ]
+  const labelFor = (s: 'ACTIVE' | OrderStatus | 'ALL') =>
+    s === 'ACTIVE' ? 'Active' : s === 'ALL' ? 'All' : COLUMN_META[s as OrderStatus]?.label ?? s
+  const countFor = (s: 'ACTIVE' | OrderStatus | 'ALL') =>
+    s === 'ALL'
+      ? orders.length
+      : s === 'ACTIVE'
+        ? orders.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status)).length
+        : orders.filter((o) => o.status === s).length
 
   return (
     <div className="flex-1 overflow-y-auto bg-linen-200 p-4">
@@ -447,8 +529,8 @@ function OrdersListView({
       <div className="mb-4 flex flex-wrap gap-1.5">
         {statusFilters.map((s) => {
           const active = filter === s
-          const label = s === 'ALL' ? 'All' : COLUMN_META[s as OrderStatus]?.label ?? s
-          const count = s === 'ALL' ? orders.length : orders.filter((o) => o.status === s).length
+          const label = labelFor(s)
+          const count = countFor(s)
           return (
             <button
               key={s}
@@ -513,6 +595,8 @@ function OrdersListView({
               {sorted.map((o) => {
                 const customer = o.user
                 const meta = COLUMN_META[o.status]
+                // Odd-movement flags — admin only (staff payloads carry none)
+                const anomalies: any[] = isAdmin ? o.anomalies ?? [] : []
                 return (
                   <tr
                     key={o.id}
@@ -520,12 +604,22 @@ function OrdersListView({
                     className="cursor-pointer border-b border-navy-50 transition last:border-0 hover:bg-linen-50"
                   >
                     <td className="px-4 py-3">
-                      <span className="font-mono text-xs font-semibold text-navy">
-                        #{o.orderNumber}
+                      <span className="flex items-center gap-1.5">
+                        <span className="font-mono text-xs font-semibold text-navy">
+                          #{o.orderNumber}
+                        </span>
+                        {o.guaranteeActive && (
+                          <Shield className="inline h-3 w-3 text-gold-400" />
+                        )}
+                        {anomalies.length > 0 && (
+                          <span
+                            title={anomalies.map((a) => a.detail || a.kind).join('\n')}
+                            className="inline-flex items-center gap-0.5 rounded-full bg-rose-100 px-1.5 py-0.5 text-[9px] font-bold text-rose-700"
+                          >
+                            <Shield className="h-2.5 w-2.5" /> {anomalies.length}
+                          </span>
+                        )}
                       </span>
-                      {o.guaranteeActive && (
-                        <Shield className="ml-1 inline h-3 w-3 text-gold-400" />
-                      )}
                     </td>
                     <td className="hidden px-4 py-3 md:table-cell">
                       <span className="flex items-center gap-2 text-navy">

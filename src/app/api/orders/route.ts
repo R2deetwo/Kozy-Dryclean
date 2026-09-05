@@ -109,6 +109,26 @@ export async function GET(req: Request) {
   if (hasMore) orders = orders.slice(0, limit)
   const nextCursor = hasMore ? orders[orders.length - 1].id : null
 
+  // Phase 32: odd-movement flags for the kanban (ADMIN only — staff
+  // payloads never carry anomaly rows; the client's directive). One grouped
+  // query per page keeps this cheap.
+  if (session.user?.role === 'ADMIN' && orders.length > 0) {
+    const anomalyRows = await db.orderAnomaly.findMany({
+      where: { orderId: { in: orders.map((o) => o.id) } },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { id: true, name: true, email: true } } },
+    })
+    const byOrder = new Map<string, any[]>()
+    for (const row of anomalyRows) {
+      const list = byOrder.get(row.orderId) ?? []
+      list.push(row)
+      byOrder.set(row.orderId, list)
+    }
+    for (const o of orders as any[]) {
+      o.anomalies = byOrder.get(o.id) ?? []
+    }
+  }
+
   // ----- Rider geofencing (DRIVER only) -----
   // Applied to the current PAGE (the query is already RBAC-filtered and
   // cursor-paginated; visibility is a per-order computation). hiddenCount is

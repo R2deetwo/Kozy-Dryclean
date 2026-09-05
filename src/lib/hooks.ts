@@ -446,10 +446,11 @@ export function useCreateStaff() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: {
+      // Phase 32: the SERVER generates the password — the admin never
+      // types, sees or transmits one.
       name: string
       email: string
       phone: string
-      password: string
       note?: string
     }) => {
       const res = await fetch('/api/staff', {
@@ -464,6 +465,7 @@ export function useCreateStaff() {
       return data as {
         staff: ApiStaff
         invite: { ok: boolean; error: string | null }
+        hint?: string
       }
     },
     onSuccess: () => {
@@ -482,7 +484,9 @@ export function useUpdateStaff() {
       name?: string
       phone?: string
       accessStatus?: 'ACTIVE' | 'PAUSED' | 'REVOKED'
-      password?: string
+      // Phase 32: ask the server to generate + email a new password
+      // (admin-typed passwords are gone by client directive).
+      resetPassword?: boolean
     }) => {
       const { id, ...patch } = input
       const res = await fetch(`/api/staff/${id}`, {
@@ -497,6 +501,7 @@ export function useUpdateStaff() {
       return data as {
         staff: ApiStaff
         email: { ok: boolean; error: string | null } | null
+        hint?: string
       }
     },
     onSuccess: () => {

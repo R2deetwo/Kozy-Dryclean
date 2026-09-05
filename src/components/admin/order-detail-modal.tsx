@@ -65,6 +65,7 @@ import { toast } from '@/hooks/use-toast'
 
 interface Props {
   order: any
+  isAdmin?: boolean
   onClose: () => void
   onViewInvoice?: (o: any) => void
 }
@@ -82,7 +83,7 @@ const STATUS_OPTIONS: OrderStatus[] = [
   'CANCELLED',
 ]
 
-export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
+export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoice }: Props) {
   // `order` is the LIVE object derived from the React Query cache (the board
   // passes selectedId, not a stale snapshot) — so every field below reflects
   // verify/reject/status mutations the moment they land.
@@ -229,6 +230,15 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
     (p: any) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER'
   )
   const busy = verifyPaymentMutation.isPending
+  // Phase 32 — odd-movement flags (ADMIN only; the API never ships anomaly
+  // rows to staff, and this check is defence in depth on top of that).
+  const anomalies: any[] = isAdmin ? order.anomalies ?? [] : []
+  // Staff may drive the pipeline but may NOT cancel an order — cancellation
+  // removes revenue from the board and is a manager decision (client
+  // directive: nothing destructive or revenue-hiding without approval).
+  const statusChoices = STATUS_OPTIONS.filter(
+    (s) => isAdmin || s !== 'CANCELLED'
+  )
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
@@ -236,6 +246,14 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <span className="font-mono">#{order.orderNumber}</span>
+            {anomalies.length > 0 && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700"
+                title="Odd movements recorded on this order — see the flagged activity section"
+              >
+                <Shield className="h-3 w-3" /> {anomalies.length} flag{anomalies.length === 1 ? '' : 's'}
+              </span>
+            )}
             <Badge variant="outline" className="rounded-full text-[10px] text-[#0A192F] border-[#E2E5E9]">
               {order.type === 'ITEM' ? 'Retail' : 'Corporate'}
             </Badge>
@@ -271,23 +289,59 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
         </DialogHeader>
 
         <div className="space-y-5">
+          {/* Phase 32 — odd-movement flags: admin eyes only. Staff payloads
+              never contain anomaly rows, so this section never renders for
+              them even before the role check. */}
+          {anomalies.length > 0 && (
+            <section className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-rose-800">
+                <Shield className="h-4 w-4" /> Flagged activity (manager only)
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                {anomalies.slice(0, 6).map((a: any) => (
+                  <li key={a.id} className="text-xs leading-relaxed text-rose-900">
+                    <span className="font-medium">
+                      {a.detail || a.kind.replace(/_/g, ' ').toLowerCase()}
+                    </span>
+                    <span className="ml-1 text-rose-500">
+                      · {a.actor?.name ?? 'unknown actor'} ·{' '}
+                      {new Date(a.createdAt).toLocaleString('en-NG', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      })}
+                    </span>
+                  </li>
+                ))}
+                {anomalies.length > 6 && (
+                  <li className="text-xs text-rose-500">
+                    …and {anomalies.length - 6} earlier flag{anomalies.length - 6 === 1 ? '' : 's'}
+                  </li>
+                )}
+              </ul>
+            </section>
+          )}
+
           <section>
             <h3 className="mb-2 text-sm font-semibold text-[#0A192F]">Order progress</h3>
             <OrderPipeline order={order} />
             <div className="mt-3 flex items-center gap-2">
-              <Label className="text-xs text-[#6F88A8]">Set status</Label>
+              <Label className="text-xs text-[#0A192F]">Set status</Label>
               <Select value={statusSelect} onValueChange={(v) => handleStatusChange(v as OrderStatus)}>
                 <SelectTrigger className="h-8 w-56 text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map((s) => (
+                  {statusChoices.map((s) => (
                     <SelectItem key={s} value={s} className="text-xs">{s.replace(/_/g, ' ')}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
               {/* The explicit way an order LEAVES the board (other than being
                * delivered): cancelling emails the customer and drops the
-               * tile off every pipeline column. */}
-              {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
+               * tile off every pipeline column. Admin-only (phase 32):
+               * cancellation is destructive + revenue-hiding, so it needs
+               * the owner's hand, not a staff member's. */}
+              {isAdmin && order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
                 <Button
                   size="sm"
                   variant="outline"
@@ -426,8 +480,10 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                 {/* Late-landing money: a rejected transfer can still be
                     approved — banks sometimes deliver minutes or hours after
                     the check. One click, same email + pipeline rules as a
-                    fresh verify. Or remove the claim from the queue for good
-                    when it will never land (phase 25). */}
+                    fresh verify. Staff keep the approve power (verification
+                    is their day job); permanently REMOVING a claim from the
+                    queue is destructive, so that button is admin-only
+                    (phase 32). */}
                 {rejectedBankTransfer && (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-3">
                     <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-800">
@@ -447,17 +503,19 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
                       >
                         <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> {busy ? 'Approving…' : 'Approve payment now'}
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setConfirmRemovePayment(rejectedBankTransfer)}
-                        disabled={deletePaymentMutation.isPending}
-                        className="border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-60"
-                        title="Delete this rejected claim from the verification queue"
-                      >
-                        <Trash2 className="mr-1 h-3.5 w-3.5" />
-                        {deletePaymentMutation.isPending ? 'Removing…' : 'Remove from queue'}
-                      </Button>
+                      {isAdmin && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConfirmRemovePayment(rejectedBankTransfer)}
+                          disabled={deletePaymentMutation.isPending}
+                          className="border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-60"
+                          title="Delete this rejected claim from the verification queue"
+                        >
+                          <Trash2 className="mr-1 h-3.5 w-3.5" />
+                          {deletePaymentMutation.isPending ? 'Removing…' : 'Remove from queue'}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 )}

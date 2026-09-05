@@ -1047,7 +1047,7 @@ export async function notifyStaffInvite(opts: {
             : ''
         }
         <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
-          <strong style="color: #0A192F;">After your first sign-in,</strong> choose your own password — tap “Forgot password?” on the login page and follow the reset link sent to this inbox. Keep this email private: it is the only place your password appears.
+          <strong style="color: #0A192F;">After your first sign-in,</strong> the console will ask you to choose your own password — keep this email private until then, because it is the only place this password appears. This is an operational account message (not marketing).
         </p>`
 
     const { subject, html } = staffEmailChrome({

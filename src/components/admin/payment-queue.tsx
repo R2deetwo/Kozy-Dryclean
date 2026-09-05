@@ -35,7 +35,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
-export function PaymentQueue() {
+export function PaymentQueue({ isAdmin = false }: { isAdmin?: boolean }) {
   // fetchAll: the queue must see every PENDING receipt (a pending payment
   // beyond page 1 would otherwise be invisible), and the orders lookup map
   // needs the full set to resolve any receipt's order.
@@ -372,13 +372,17 @@ export function PaymentQueue() {
                     </Button>
                     <Button
                       onClick={() => setConfirmRemove(selected)}
-                      disabled={deleteMutation.isPending}
+                      disabled={deleteMutation.isPending || !isAdmin}
                       variant="outline"
-                      title="Remove this rejected claim from the list entirely"
+                      title={
+                        isAdmin
+                          ? 'Remove this rejected claim from the list entirely'
+                          : 'Removing claims is manager-only — ask your manager if this claim should be deleted'
+                      }
                       className="border-rose-200 text-rose-600 hover:bg-rose-50 disabled:opacity-60"
                     >
                       <Trash2 className="mr-2 h-4 w-4" />
-                      {deleteMutation.isPending ? 'Removing…' : 'Remove'}
+                      {deleteMutation.isPending ? 'Removing…' : isAdmin ? 'Remove' : 'Remove (manager only)'}
                     </Button>
                   </>
                 )}

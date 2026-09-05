@@ -1,5 +1,5 @@
 // =============================================================================
-// PATCH /api/staff/[id] — manage an existing staff account (phase 31, ADMIN only)
+// PATCH /api/staff/[id] — manage an existing staff account (phase 31/32, ADMIN only)
 // =============================================================================
 // What the super admin can do here (the Staff tab drives all of it):
 //   - PAUSE  : account stays, login + console APIs blocked within ~60s
@@ -8,8 +8,10 @@
 //   - REVOKE : permanently closed. No email (deliberate — the manager
 //              decides how to communicate it). Revoked accounts can still
 //              be re-activated later via the same Resume flow.
-//   - RESET PASSWORD : new hash + re-sent credentials email (delivery
-//              outcome returned to the caller, like the invite).
+//   - RESET PASSWORD (phase 32): the SERVER generates a new password, emails
+//              it to the staff member and re-arms access — the admin never
+//              types or sees a password. mustChangePassword is set so the
+//              console asks for a personally chosen one at next sign-in.
 //   - rename / re-phone.
 //
 // Guardrails:
@@ -24,6 +26,7 @@ import bcrypt from 'bcryptjs'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { UpdateStaffSchema } from '@/lib/schemas'
+import { generatePassword } from '@/lib/passwords'
 import { notifyStaffInvite, notifyStaffAccessRestored, logStaffEvent } from '@/lib/notifications'
 
 /** Same conversion as /api/staff: thrown 401/403 Responses must reach the
@@ -81,20 +84,55 @@ export async function PATCH(
     )
   }
 
-  const { name, phone, accessStatus, password } = parsed.data
+  const { name, phone, accessStatus, resetPassword } = parsed.data
+  const managerName = session.user?.name || 'Kozy Care'
 
   const updateData: Record<string, unknown> = {}
   if (name !== undefined) updateData.name = name
   if (phone !== undefined) updateData.phone = phone
   if (accessStatus !== undefined) updateData.accessStatus = accessStatus
 
-  let newPassword: string | undefined
-  if (password !== undefined) {
-    newPassword = password
-    updateData.passwordHash = await bcrypt.hash(password, 10)
-    // A password reset also re-arms access: a revoked/paused member whose
-    // credentials are being reset is clearly coming back to work.
+  // Phase 32: system-generated reset password. The admin asked for a reset,
+  // not for a password they choose — the generated value is emailed straight
+  // to the staff member and never leaves this handler.
+  //
+  // FAILURE-PROOF ORDERING: the email is sent BEFORE the DB is touched. If
+  // delivery fails, nothing changes (their old password still works, the
+  // admin can simply retry) — there is never an account whose new password
+  // exists but was never delivered to anyone. A reset also re-arms access:
+  // a revoked/paused member whose credentials are being reset is clearly
+  // coming back to work.
+  let plainPassword: string | undefined
+  if (resetPassword) {
+    plainPassword = generatePassword()
+    const delivery = await notifyStaffInvite({
+      to: staff.email,
+      name: staff.name,
+      password: plainPassword,
+      managerName: session.user?.name || 'Kozy Care',
+      isReset: true,
+    })
+    if (!delivery.ok) {
+      return NextResponse.json(
+        {
+          error: `The credentials email to ${staff.email} could not be sent (${delivery.error ?? 'provider error'}). Nothing was changed — their current password still works. Try again in a moment.`,
+        },
+        { status: 502 }
+      )
+    }
+    updateData.passwordHash = await bcrypt.hash(plainPassword, 10)
+    updateData.mustChangePassword = true
     updateData.accessStatus = 'ACTIVE'
+    after(async () => {
+      await logStaffEvent({
+        type: 'STAFF_INVITE',
+        title: 'Staff password reset',
+        body: `A new system-generated password was emailed to ${staff.name} (${staff.email}) by ${managerName} — they will set their own at next sign-in. Credentials email delivered.`,
+        staffEmail: staff.email,
+        emailStatus: 'SENT',
+        detail: { action: 'reset', managerName },
+      })
+    })
   }
 
   const updated = await db.user.update({
@@ -103,36 +141,12 @@ export async function PATCH(
     select: STAFF_SELECT,
   })
 
-  const managerName = session.user?.name || 'Kozy Care'
   let emailResult: { ok: boolean; error?: string } | null = null
 
-  // ----- Password reset: deliver the new credentials immediately -----
-  if (newPassword) {
-    emailResult = await notifyStaffInvite({
-      to: staff.email,
-      name: updated.name,
-      password: newPassword,
-      managerName,
-      isReset: true,
-    })
-    after(async () => {
-      await logStaffEvent({
-        type: 'STAFF_INVITE',
-        title: 'Staff password reset',
-        body: `A new password was set for ${updated.name} (${staff.email}) by ${managerName}.${
-          emailResult && emailResult.ok
-            ? ' Credentials email delivered.'
-            : ' Credentials email FAILED — password not delivered.'
-        }`,
-        staffEmail: staff.email,
-        emailStatus: emailResult && emailResult.ok ? 'SENT' : 'FAILED',
-        detail: { action: 'reset', managerName },
-      })
-    })
-  }
-
   // ----- Access restored (PAUSED/REVOKED -> ACTIVE): tell them they're back -----
-  if (!newPassword && accessStatus === 'ACTIVE' && staff.accessStatus !== 'ACTIVE') {
+  // (Password-reset restores access too, but that email already went out
+  // above with the credentials — this branch is for plain Resume.)
+  if (!plainPassword && accessStatus === 'ACTIVE' && staff.accessStatus !== 'ACTIVE') {
     emailResult = await notifyStaffAccessRestored({
       to: staff.email,
       name: updated.name,
@@ -143,5 +157,9 @@ export async function PATCH(
   return NextResponse.json({
     staff: updated,
     email: emailResult ? { ok: emailResult.ok, error: emailResult.error ?? null } : null,
+    // Spam-check guidance for resets (the client asked for exactly this).
+    hint: plainPassword
+      ? 'New password emailed. If they do not see it within a few minutes, ask them to check their spam or junk folder.'
+      : undefined,
   })
 }

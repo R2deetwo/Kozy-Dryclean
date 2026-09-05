@@ -36,6 +36,7 @@ import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { UpdatePaymentSchema } from '@/lib/schemas'
 import { notifyOrderStatus, notifyPaymentRejected } from '@/lib/notifications'
+import { logAnomaly } from '@/lib/anomalies'
 
 const ORDER_INCLUDE = {
   user: { select: { id: true, name: true, email: true, phone: true, role: true } },
@@ -92,6 +93,36 @@ export async function PATCH(
   }
 
   const { status } = parsed.data
+
+  // ----- Financial-record protection (phase 32) -----
+  // A VERIFIED payment is a financial record — money that came in. Staff
+  // may verify and reject OPEN claims (their day job), but once money is
+  // verified, un-verifying it is a manager-only edit: it changes revenue,
+  // and the client's rule is that staff must never be able to "hide that
+  // money has come in without approval". The attempt itself (rejected
+  // here) is flagged for the owner.
+  if (
+    session.user?.role === 'STAFF' &&
+    payment.status === 'VERIFIED' &&
+    status !== 'VERIFIED'
+  ) {
+    await logAnomaly({
+      orderId: payment.orderId,
+      kind: 'BLOCKED_ACTION',
+      actorId: session.user?.id,
+      fromStatus: payment.status,
+      toStatus: status,
+      detail: `Staff attempted to change a VERIFIED payment (₦${payment.amount.toLocaleString()}) to ${status} — blocked, financial records are manager-only.`,
+    })
+    return NextResponse.json(
+      {
+        error: 'FORBIDDEN_FINANCIAL_RECORD',
+        message:
+          'This payment is already verified — it is a financial record. Only a manager can change or undo a verified payment. Ask your manager to review it.',
+      },
+      { status: 403 }
+    )
+  }
 
   // ----- Duplicate-verify guard -----
   // Clicking Verify on an already-verified payment is a no-op: the DB write
@@ -203,8 +234,12 @@ export async function PATCH(
 // it — but had NO way to clear it off the Rejected list. Rejected claims used
 // to pile up forever (queue hygiene), with no organic way for them to leave.
 //
-// Rules:
-//   - ADMIN and STAFF (phase 31) — queue hygiene is operational work.
+// Rules (phase 32 update):
+//   - ADMIN only. Staff were allowed in phase 31 ("queue hygiene"), but the
+//     client's sharper directive — staff must never do destructive things or
+//     hide money claims — wins: deleting a payment record (even a rejected
+//     one) removes evidence from the system, so it now needs the owner's
+//     hand. A staff attempt is flagged as an anomaly instead.
 //   - Only BANK_TRANSFER claims in REJECTED or PENDING status can be removed.
 //     VERIFIED payments are financial records — they can never be deleted
 //     (revenue reporting / audit trail would silently change).
@@ -237,6 +272,25 @@ export async function DELETE(
   })
   if (!payment) {
     return NextResponse.json({ error: 'Payment not found' }, { status: 404 })
+  }
+
+  // ----- Staff gate (phase 32) -----
+  if (session.user?.role === 'STAFF') {
+    await logAnomaly({
+      orderId: payment.orderId,
+      kind: 'BLOCKED_ACTION',
+      actorId: session.user?.id,
+      fromStatus: payment.status,
+      detail: `Staff attempted to DELETE a ${payment.status.toLowerCase()} payment claim (₦${payment.amount.toLocaleString()}) — blocked, managers only.`,
+    })
+    return NextResponse.json(
+      {
+        error: 'FORBIDDEN_STAFF_DELETE',
+        message:
+          'Removing payment claims is destructive — a manager needs to do it. The claim stays in the queue where it is still auditable.',
+      },
+      { status: 403 }
+    )
   }
 
   if (payment.status === 'VERIFIED') {

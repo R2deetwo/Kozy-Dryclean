@@ -33,8 +33,9 @@ import { FeedbackView } from './feedback-view'
 import { HelpView } from './help-view'
 import { NotificationsView } from './notifications-view'
 import { StaffView } from './staff-view'
+import { ChangePasswordDialog } from './change-password-dialog'
 import { Logo } from '@/components/shell/logo'
-import { Star, MessageSquareHeart } from 'lucide-react'
+import { Star, MessageSquareHeart, KeyRound } from 'lucide-react'
 
 type Tab =
   | 'overview'
@@ -82,12 +83,17 @@ export function AdminDashboard() {
     }
   }, [status, session, isConsoleUser, role, router])
 
-  // ----- Pause/revoke heartbeat (phase 31) -----
+  // ----- Pause/revoke heartbeat (phase 31) + must-change-password (32) -----
   // /api/users/me reads the DATABASE (not the 30-day JWT). Polling it once
   // a minute means a paused or revoked staff member — or a demoted admin —
   // is signed out of the console within ~60 seconds, without waiting for
   // an API call to 403 first. Server-side, every console API ALSO checks
   // live access, so this is UX polish on top of real enforcement.
+  // Phase 32: the same read carries mustChangePassword — set at invite /
+  // password-reset — which opens the non-dismissible set-your-own-password
+  // dialog (the emailed initial password is a shared secret until rotated).
+  const [mustChangePassword, setMustChangePassword] = useState(false)
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
   useEffect(() => {
     if (status !== 'authenticated' || !isConsoleUser) return
     const check = async () => {
@@ -105,6 +111,8 @@ export function AdminDashboard() {
           signOut({ callbackUrl: '/login' })
         } else if (liveStatus !== 'ACTIVE') {
           signOut({ callbackUrl: '/login' })
+        } else {
+          setMustChangePassword(Boolean(data?.user?.mustChangePassword))
         }
       } catch {
         // Network blip — ignore; next poll or the API guard will catch it.
@@ -179,9 +187,17 @@ export function AdminDashboard() {
   const nav = allNav.filter((n) => isAdmin || !n.adminOnly)
 
   return (
-    <div className="flex min-h-[calc(100vh-3.5rem)] bg-linen-200">
-      {/* Sidebar — Kozy midnight navy */}
-      <aside className="sticky top-[3.5rem] hidden h-[calc(100vh-3.5rem)] w-64 shrink-0 bg-navy text-navy-100 lg:block">
+    <div className="flex min-h-screen bg-linen-200">
+      {/* Sidebar — Kozy midnight navy.
+       * Phase 32 layout fix: the old shell reserved 3.5rem of space for a
+       * site navbar that no longer renders on /admin, so the sticky sidebar
+       * floated 56px below the viewport top (a white rectangle above the
+       * blue panel) and its bottom edge — the Live strip — straddled the
+       * boundary between the sidebar and the white page below (exactly
+       * what the client reported). With no header above it, the sidebar
+       * now pins to the very top and spans the full viewport height, at
+         every scroll position. */}
+      <aside className="sticky top-0 hidden h-screen w-64 shrink-0 bg-navy text-navy-100 lg:block">
         <div className="flex h-full flex-col">
           <div className="border-b border-navy-500 px-4 py-4">
             <div className="mb-3">
@@ -243,8 +259,16 @@ export function AdminDashboard() {
             <Button
               variant="ghost"
               size="sm"
+              onClick={() => setChangePasswordOpen(true)}
+              className="w-full justify-start text-xs text-navy-300 hover:bg-navy-500 hover:text-white"
+            >
+              <KeyRound className="mr-2 h-3 w-3" /> Change password
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={() => signOut({ callbackUrl: '/' })}
-              className="w-full justify-start text-xs text-navy-300 hover:bg-rose-600 hover:text-white"
+              className="mt-1 w-full justify-start text-xs text-navy-300 hover:bg-rose-600 hover:text-white"
             >
               <LogOut className="mr-2 h-3 w-3" /> Sign out
             </Button>
@@ -304,12 +328,13 @@ export function AdminDashboard() {
 
         {/* Body — admin-only tabs are doubly gated (nav is filtered above,
             and this render check keeps a stale tab state from ever mounting
-            a restricted view for a staff session). */}
+            a restricted view for a staff session). KanbanBoard gets the role
+            so it can hide the admin-only anomaly flags from staff. */}
         <main className="flex-1 overflow-x-hidden">
           {tab === 'overview' && <Overview onGoto={setTab} isAdmin={isAdmin} />}
           {tab === 'notifications' && <NotificationsView onGoto={(t) => setTab(t as Tab)} />}
-          {tab === 'kanban' && <KanbanBoard />}
-          {tab === 'payments' && <PaymentQueue />}
+          {tab === 'kanban' && <KanbanBoard isAdmin={isAdmin} />}
+          {tab === 'payments' && <PaymentQueue isAdmin={isAdmin} />}
           {tab === 'customers' && <CustomersView />}
           {isAdmin && tab === 'finance' && <FinanceView />}
           {isAdmin && tab === 'reviews' && <ReviewsView />}
@@ -319,6 +344,15 @@ export function AdminDashboard() {
           {tab === 'help' && <HelpView />}
         </main>
       </div>
+
+      {/* Phase 32 — the account still runs on its emailed initial password:
+          non-dismissible dialog until the user picks their own. */}
+      <ChangePasswordDialog
+        open={mustChangePassword || changePasswordOpen}
+        forced={mustChangePassword}
+        onOpenChange={setChangePasswordOpen}
+        onDone={() => setMustChangePassword(false)}
+      />
     </div>
   )
 }

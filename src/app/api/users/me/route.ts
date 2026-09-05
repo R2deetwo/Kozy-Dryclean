@@ -42,6 +42,10 @@ export async function GET() {
       address: true,
       emailVerified: true,
       accessStatus: true,
+      // Phase 32: drives the forced set-your-own-password dialog in the
+      // console (set at invite / password reset, cleared the moment the
+      // user picks their own via POST /api/users/me/password).
+      mustChangePassword: true,
       createdAt: true,
     },
   })
