@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import {
@@ -18,6 +18,7 @@ import {
   LogOut,
   Bell,
   UserCog,
+  ChevronRight,
 } from 'lucide-react'
 import { useOrders, usePayments, useUsers, useNotificationEvents, ADMIN_POLL } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
@@ -150,6 +151,39 @@ export function AdminDashboard() {
   const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
   const unreadNotifications = notifications?.unread ?? 0
 
+  // ----- Mobile tab-row affordance (phase-33) -------------------------------
+  // iOS Safari renders no scrollbar on the horizontal tab row, so the user
+  // has no signal that ~7 more tabs live off the right edge. We track scroll
+  // position to toggle edge fades, and centre the active tab when it changes
+  // so the current view is always visible without swiping.
+  const tabRowRef = useRef<HTMLDivElement | null>(null)
+  const activeTabRef = useRef<HTMLButtonElement | null>(null)
+  const [tabCanScrollRight, setTabCanScrollRight] = useState(true)
+  const [tabScrolled, setTabScrolled] = useState(false)
+
+  const updateTabFades = () => {
+    const el = tabRowRef.current
+    if (!el) return
+    const canRight = el.scrollLeft + el.clientWidth < el.scrollWidth - 4
+    setTabCanScrollRight(canRight)
+    setTabScrolled(el.scrollLeft > 4)
+  }
+
+  useEffect(() => {
+    updateTabFades()
+    // re-check after fonts/content settle (badge counts change row width)
+    const t = setTimeout(updateTabFades, 400)
+    return () => clearTimeout(t)
+  }, [tab, pendingPayments.length, activeOrders.length, unreadNotifications])
+
+  useEffect(() => {
+    activeTabRef.current?.scrollIntoView({
+      behavior: 'smooth',
+      inline: 'center',
+      block: 'nearest',
+    })
+  }, [tab])
+
   // ----- Role-aware navigation (phase 31) -----
   // STAFF gets the operational side only. Money (Finances), marketing
   // (Reviews moderation), business configuration (Settings — pricing + the
@@ -277,33 +311,111 @@ export function AdminDashboard() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile tab bar */}
-        <div className="border-b bg-white lg:hidden">
-          <div className="flex gap-1 overflow-x-auto px-3 py-2">
-            {nav.map((n) => {
-              const Icon = n.icon
-              const active = tab === n.key
-              return (
-                <button
-                  key={n.key}
-                  onClick={() => setTab(n.key)}
-                  className={cn(
-                    'flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition',
-                    active
-                      ? 'bg-navy text-white'
-                      : 'bg-linen-200 text-navy-300'
-                  )}
-                >
-                  <Icon className="h-3 w-3" />
-                  {n.label}
-                  {n.badge ? (
-                    <span className="ml-1 rounded-full bg-white/20 px-1 text-[10px]">
-                      {n.badge}
-                    </span>
-                  ) : null}
-                </button>
-              )
-            })}
+        {/* Mobile console header + tab row (lg:hidden).
+         * Phase-33 fix — the client could not find the console menus on an
+         * iPhone. Diagnosis: the old mobile tab row was a bare horizontal
+         * scroll of pills with no header above it and no scroll affordance —
+         * on a 390px viewport ~7 of 11 tabs sat invisibly off the right edge
+         * (row 390px vs content 1144px), and iOS Safari shows no scrollbar.
+         * On Android the client had swiped by luck; on iPhone nothing hinted
+         * the row moved. Additionally Sign out / Change password existed
+         * only in the desktop sidebar — on phones there was no way out at
+         * all. Now: a sticky header (brand + identity + live dot + sign-out
+         * & change-password icon buttons) plus a taller tab row with a
+         * right-edge fade + chevron that disappears at scroll end, and the
+         * active tab auto-centres so it is always on screen. */}
+        <div className="sticky top-0 z-40 border-b bg-white lg:hidden">
+          <div
+            className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-2"
+            style={{ paddingTop: 'calc(0.5rem + env(safe-area-inset-top, 0px))' }}
+          >
+            <Logo size="sm" subtitle="Atelier Console" />
+            <div className="flex min-w-0 items-center gap-1.5">
+              <span
+                className="hidden items-center gap-1 rounded-full bg-emerald-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700 sm:inline-flex"
+                title="Lists update automatically. No refresh needed."
+              >
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                Live
+              </span>
+              <button
+                onClick={() => setChangePasswordOpen(true)}
+                aria-label="Change password"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-navy-300 transition hover:bg-linen-200 hover:text-navy"
+              >
+                <KeyRound className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => signOut({ callbackUrl: '/' })}
+                aria-label="Sign out"
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-navy-300 transition hover:bg-rose-50 hover:text-rose-600"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-navy text-[10px] font-semibold text-gold-400">
+                  {admin.name.split(' ').map((p) => p[0]).slice(0, 2).join('')}
+                </div>
+                <div className="hidden leading-tight min-[360px]:block">
+                  <p className="max-w-[90px] truncate text-[11px] font-medium text-navy">{admin.name}</p>
+                  <p className="text-[9px] text-navy-300">{isAdmin ? 'Administrator' : 'Staff'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="relative">
+            <div
+              ref={tabRowRef}
+              onScroll={updateTabFades}
+              className="nav-scroll flex gap-1.5 overflow-x-auto px-3 pb-2.5 pt-1"
+            >
+              {nav.map((n) => {
+                const Icon = n.icon
+                const active = tab === n.key
+                return (
+                  <button
+                    key={n.key}
+                    ref={active ? activeTabRef : undefined}
+                    onClick={() => setTab(n.key)}
+                    className={cn(
+                      'flex h-9 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-xs font-medium transition',
+                      active
+                        ? 'bg-navy text-white shadow-sm'
+                        : 'bg-linen-200 text-navy-300'
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {n.label}
+                    {n.badge ? (
+                      <span className="ml-1 rounded-full bg-white/25 px-1.5 text-[10px] leading-4">
+                        {n.badge}
+                      </span>
+                    ) : null}
+                  </button>
+                )
+              })}
+            </div>
+            {/* Scroll affordance — iOS shows no scrollbar on this row; the
+             * fade + chevron tell the user more tabs live to the right. */}
+            <div
+              aria-hidden
+              className={cn(
+                'pointer-events-none absolute inset-y-0 right-0 flex w-9 items-center justify-end bg-gradient-to-l from-white via-white/85 to-transparent pr-0.5 transition-opacity',
+                tabCanScrollRight ? 'opacity-100' : 'opacity-0'
+              )}
+            >
+              <ChevronRight className="h-4 w-4 text-navy-300" />
+            </div>
+            <div
+              aria-hidden
+              className={cn(
+                'pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-white to-transparent transition-opacity',
+                tabScrolled ? 'opacity-100' : 'opacity-0'
+              )}
+            />
           </div>
         </div>
 

@@ -128,7 +128,10 @@ export function KanbanBoard({ isAdmin = false }: { isAdmin?: boolean }) {
     // desktop: viewport minus the console header (3.5rem); mobile: viewport
     // minus the tab bar (~3rem). The old 7/9rem offsets accounted for the
     // removed site navbar and left dead space.
-    <div className="flex h-[calc(100vh-3rem)] flex-col lg:h-[calc(100vh-3.5rem)]">
+    // Phase 33: dvh-board* classes switch the math to 100dvh on iOS Safari
+    // so the board's bottom edge is not hidden behind the collapsed URL
+    // bar (100vh there includes the toolbar area). Falls back to 100vh.
+    <div className="dvh-board flex flex-col lg:dvh-board-lg">
       <div className="border-b bg-white px-4 py-3 sm:px-6">
         <div className="flex items-center justify-between">
           <div>

@@ -7,7 +7,7 @@ pieces you need to reprint after an update. Older versions are NEVER
 deleted — each update lands in its own folder.
 
 ------------------------------------------------------------------
-CURRENT VERSION: v5.1  (29 August 2026)
+CURRENT VERSION: v6  (5 September 2026) — see VERSION HISTORY below
 ------------------------------------------------------------------
 
 WHAT CHANGED IN v5.1 (hotels & corporate wording):
@@ -36,6 +36,50 @@ WHERE THE FILES LIVE:
                       brand-sheet/, logo/)
   To reprint: give your printer the file from the v5.1 folder for the
   three changed pieces; everything else still comes from the v5 folders.
+
+------------------------------------------------------------------
+CURRENT VERSION: v6  (5 September 2026) — NAME ENFORCEMENT + LIGHT
+                                + GOLD CORPORATE SERIES
+------------------------------------------------------------------
+WHAT CHANGED IN v6 (three things):
+
+  1. THE NAME IS FIXED. The old logo pack spelled the wordmark "KOZY"
+     while the website and collateral say "Kozy Care". All lockups are
+     rebuilt as "Kozy Care" (title case, matches the landing page) and
+     "KOZY CARE" (tracked caps, print). The K monogram is unchanged —
+     it is an icon, not the name. Brand Sheet V2 opens with THE NAME
+     rules. Nothing else about the approved navy design changed.
+
+  2. NEW: LIGHT SERIES — the approved services flyer (A5, both sides)
+     and A3 poster re-set on Kozy Cream #F5F1E8, gold text deepened to
+     #B8942C for readability. Same layout, same typography.
+
+  3. NEW: GOLD CORPORATE SERIES — material for institutions and
+     corporate buyers: A4 institutional services sheet (partnership
+     terms, scheduled collection, per-kg pricing, documentation,
+     consolidated invoicing) + A5 institutional flyer + gold business
+     cards. Per the client's direction these pieces do NOT list
+     institution types — they speak the buyers' language instead.
+
+  4. NEW: PERSONAL BUSINESS CARDS for Mr. Orion Akenuwa (CEO,
+     orion@kozycare.ng, +234 808 888 8846) and Ms. Khare Akenuwa
+     (khare@kozycare.ng, same line) in navy / white / gold. Front = the
+     person; back = the company (QR, contacts, addresses). See
+     business-cards/kozy-card-VERSIONS-overview.png.
+
+WHERE THE FILES LIVE:
+  v6 (current) ...... download/kozy-brand/v6-name-and-series-update/
+  client zip ........ download/kozy-brand-kit-v6-complete.zip
+                      (old kit + new kit in one file to send to the
+                      client: 01-current-kit-v5.1/ + 02-new-v6/)
+  v5.1 (previous) ... download/kozy-brand/v5.1-hotel-corporate-update/
+  v5 ................ download/kozy-brand/ (flyer-services-a5/,
+                      flyer-offer-a5/, poster-a3/, business-cards/,
+                      brand-sheet/, logo/)
+
+REPRINT GUIDANCE: the navy v5/v5.1 material is still valid — no forced
+reprint. Reprint whenever natural. New print work: use the corrected
+"Kozy Care" logo files from the v6 logo pack going forward.
 
 ------------------------------------------------------------------
 VERSION HISTORY

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Outfit, Playfair_Display } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
@@ -20,6 +20,20 @@ const playfair = Playfair_Display({
   weight: ["400", "500", "600", "700", "800", "900"],
   style: ["normal", "italic"],
 });
+
+// Phase-33 (cross-device hardening): explicit viewport instead of relying on
+// Next's default — viewportFit:"cover" lets notched iPhones use the safe-area
+// insets (the console's sticky header pads by env(safe-area-inset-top)),
+// and the theme colours match the brand surfaces in mobile browser chrome.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#FFFFFF" },
+    { media: "(prefers-color-scheme: dark)", color: "#0A192F" },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://kozycare.ng"),

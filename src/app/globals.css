@@ -154,6 +154,13 @@
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    /* Phase-33 cross-device hardening: iOS Safari auto-inflates text in
+     * landscape on some sites (text-size-adjust) — pin it so the console
+     * and landing render identically on iPhone, iPad and Android. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "ss01", "cv11";
@@ -162,6 +169,40 @@
   a:focus-visible {
     @apply outline-2 outline-offset-2;
     outline-color: #D4AF37;
+  }
+}
+
+/* Phase-33: horizontal menu rows (console tabs) — momentum scrolling on iOS
+ * and no visible scrollbar on any platform; discoverability comes from the
+ * JS-driven edge fade + chevron in the console header instead. */
+.nav-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Phase-33: iOS Safari's 100vh includes the space behind the collapsed URL
+ * bar, so a 100vh-tall board loses its bottom edge behind the toolbar. dvh
+ * tracks the *visible* height; 100vh stays as the fallback for older
+ * browsers. Used by the admin kanban board. Mobile subtracts the phase-33
+ * mobile console header (~6rem: identity row + tab row) plus the notch
+ * safe-area; desktop subtracts the 3.5rem console header. */
+.dvh-board {
+  height: calc(100vh - 6rem - env(safe-area-inset-top, 0px));
+}
+@supports (height: 100dvh) {
+  .dvh-board {
+    height: calc(100dvh - 6rem - env(safe-area-inset-top, 0px));
+  }
+}
+.dvh-board-lg {
+  height: calc(100vh - 3.5rem);
+}
+@supports (height: 100dvh) {
+  .dvh-board-lg {
+    height: calc(100dvh - 3.5rem);
   }
 }
 
