@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(a) Yes, the \"Requested\" and \"Awaiting\" columns are visible with order cards.\n(b) No, the bottom of the board (the horizontal scroll area) is cut off by the screen edge.\n(c) Yes, the sticky console header with the tab row is visible at the top.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788597926,
+  "id": "2026090516452397f256706ca44e56",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026090516452397f256706ca44e56",
+  "usage": {
+    "completion_tokens": 62,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3767,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 3829
+  }
+}

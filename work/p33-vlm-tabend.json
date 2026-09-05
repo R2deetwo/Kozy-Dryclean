@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) **Yes**, the right-edge chevron/fade hint is **gone** (the scroll container ends cleanly after the \"Help\" tab with no overflow indicator).\n(2) **Yes**, the far-right tabs (**Staff, Settings, Help**) are **fully visible** and accessible.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788597883,
+  "id": "20260905164440c82d1da3c907492d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260905164440c82d1da3c907492d",
+  "usage": {
+    "completion_tokens": 61,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3750,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 3811
+  }
+}

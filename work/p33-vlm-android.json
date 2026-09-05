@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here is the quick check for the **Kozy Care** admin console on a **412px (Pixel 7)** viewport:\n\n**(a) Console Header:**\n*   **Status:** **Visible & Intact.**\n*   The header is fully contained. The \"K\" logo and \"Kozy Care / Atelier Console\" text are on the left. The Key icon, Sign-out (arrow) icon, Language toggle (\"EN\"), and User Identity (\"E2E Nav Audit / Administrator\") are clearly visible on the right. No elements are overlapping or cut off.\n\n**(b) Tab Pills Row:**\n*   **Status:** **Overflow Active.**\n*   The row contains \"Dashboard\", \"Notifications\", and \"Orders\".\n*   Because the combined width of the pills exceeds the 412px screen width, the third pill (\"Orders\") is partially clipped at the right edge.\n*   **Right-edge indicator:** A faint chevron (`>`) or fade effect is visible at the far right of the tab bar, indicating that more options are available via horizontal scroll.\n\n**(c) Clipping or Layout Breakage:**\n*   **Status:** **No Critical Breakage.**\n*   **Header/Main Nav:** No clipping.\n*   **Tabs:** Intentional horizontal overflow (clipping) is present on the tab bar, which is standard mobile behavior for this type of navigation.\n*   **Content Area:** The main dashboard content (Title, Date, Stats Cards) stacks vertically in a single column. The cards (Active Orders, Pending Verifications, etc.) fit perfectly within the 412px width with appropriate padding. There is no horizontal scrolling on the main body, and text is fully legible.\n\n**Verdict:** The layout is mobile-responsive and functional. The only \"clipping\" is the expected overflow on the scrollable tab bar.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788598084,
+  "id": "202609051647563e99965d35314582",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609051647563e99965d35314582",
+  "usage": {
+    "completion_tokens": 383,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3435,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 3818
+  }
+}

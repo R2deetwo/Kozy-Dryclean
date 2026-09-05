@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the visual evidence provided, here is the quick check for the iPhone viewport:\n\n**(a) Booking UI Rendering:**\n*   **Service Items & Prices:** The UI renders correctly. The \"Per-item (Retail)\" and \"Bulk\" options are clearly displayed. Individual items (Shirt, Trousers, etc.) are listed with their specific prices (e.g., ₦600, ₦700) and quantity controls.\n*   **Navigation:** The step indicators at the top (User icon, Camera, Location, Payment) are visible and the first step is clearly active.\n\n**(b) Horizontal Overflow / Clipped Content:**\n*   **No.** There is no horizontal overflow. All content, including long text like \"Long-Sleeve Shirt\" and the pricing details, fits comfortably within the viewport width without being clipped.\n\n**(c) Top Navigation:**\n*   **Yes.** The top navigation is fully visible. It includes the \"<- Back to home\" link and the progress stepper icons.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788598126,
+  "id": "202609051648415e78f2146ae84e70",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609051648415e78f2146ae84e70",
+  "usage": {
+    "completion_tokens": 208,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3739,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 3947
+  }
+}

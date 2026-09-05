@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Yes. The Help view content is showing, and the 'Help' tab is highlighted (dark background) and positioned at the right end of the tab row.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788597899,
+  "id": "2026090516445686e24252f2af4ff7",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026090516445686e24252f2af4ff7",
+  "usage": {
+    "completion_tokens": 33,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3726,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 3759
+  }
+}

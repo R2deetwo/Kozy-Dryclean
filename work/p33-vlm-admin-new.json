@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot provided, here is the precise audit of the Kozy Care admin console on the iPhone viewport:\n\n**(a) Header Status:**\n*   **Logo:** Yes, the \"Kozy Care\" logo (with the gold 'K' monogram) and \"ATELIER CONSOLE\" subtitle are present at the top left.\n*   **LIVE Badge/Status:** **No.** There is no visible \"LIVE\" badge or status indicator in the header. Instead, there is a dark circular badge containing \"**EN**\" (likely for language selection).\n*   **Action Icons:** Yes, the key/change-password icon and the sign-out (arrow-exit) icon are present in the top right area.\n*   **User Avatar:** **No.** There is no user avatar (profile picture). The space where an avatar would typically be is occupied by the text \"**E2E Nav Audit**\" with the subtext \"**Administrator**\".\n\n**(b) Tab Navigation Status:**\n*   **Tabs:** Yes, there is a horizontal row of tab pills (\"Dashboard\", \"Notifications\", \"Orders\").\n*   **Scroll Hint:** **Yes.** There is a clear visual hint at the right edge of the tab container. A light grey gradient fade overlays the end of the \"Orders\" pill, and a small **chevron (>) icon** is visible, indicating that more tabs are available to scroll to.\n\n**(c) Clipping/Overlapping:**\n*   **No.** There are no clipped or overlapping elements. The layout appears clean, with proper padding and margins between the header, navigation, and content cards.\n\n**(d) Main Content Status:**\n*   **Yes, it looks correct.** The main content displays a clean dashboard layout:\n    *   **Header:** \"Atelier Console\" title with the date \"Saturday, 5 September\".\n    *   **Cards:** Four distinct metric cards are stacked vertically:\n        1.  **Active Orders:** Shows \"8\", status text, and an activity icon.\n        2.  **Pending Verifications:** Shows \"1\", highlighted with a yellow border/background to indicate \"Needs attention\".\n        3.  **Revenue:** Shows \"₦97,960\" with pipeline info.\n        4.  **Total Customers:** Shows \"19\".\n    *   **Queue Section:** At the bottom, a \"Payment verification queue\" card is partially visible, indicating the page continues below the fold. The typography, spacing, and iconography all appear intentional and well-rendered for a mobile viewport.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1788597863,
+  "id": "2026090516441485ff16a7f03c4037",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026090516441485ff16a7f03c4037",
+  "usage": {
+    "completion_tokens": 531,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3803,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 4334
+  }
+}
