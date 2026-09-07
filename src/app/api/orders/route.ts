@@ -45,6 +45,11 @@ import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { nearestZone, zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 import { getServiceSpeed, allowsExpress24, GARMENT_CATALOG, GUARANTEE_DISCOUNT } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
+import {
+  checkCouponEligibility,
+  computeCouponAmount,
+  type CouponRecord,
+} from '@/lib/marketing'
 
 // Positive-integer env override with a safe default (phase-29): lets the
 // owner retune the booking rate limits from Vercel's dashboard without a
@@ -387,6 +392,10 @@ export async function POST(req: Request) {
   // Calculate total price for ITEM orders — SERVER-SIDE PRICING ONLY
   let totalPrice: number | undefined
   let appliedDiscounts: string[] = []
+  // Phase 36: the coupon actually applied (if any) — recorded in
+  // DiscountUsage after the order is created. Lives out here because the
+  // usage trail is written after order creation, outside the pricing block.
+  let appliedCoupon: (CouponRecord & { amount: number }) | null = null
   // Phase-14 order attributes (mode of wash, promo code, delivery fee) —
   // filled in by the ITEM pricing block below.
   const orderExtras: { deliveryFee?: number; modeOfWash?: string | null; promoCode?: string | null } = {}
@@ -465,6 +474,25 @@ export async function POST(req: Request) {
       }
     }
 
+    // ----- Handwash surcharge + express premium (hoisted: the coupon rules
+    // and the final total both need the full SERVICE charge) -----
+    // Handwash is per-garment labour-intensive care: +50% of the item
+    // cleaning subtotal (admin-tunable). Machine wash is standard — no fee.
+    // Express surcharge on the item subtotal; percentage discounts apply to
+    // the combined service charge (item cleaning + express premium).
+    const handwashSurcharge =
+      modeOfWash === 'HANDWASH'
+        ? Math.round(subtotal * (appSettings.handwashSurchargePercent / 100))
+        : 0
+    if (handwashSurcharge > 0) {
+      appliedDiscounts.push(`Handwash care (+${appSettings.handwashSurchargePercent}% of cleaning)`)
+    }
+    const expressSurcharge = Math.round(subtotal * speed.surcharge)
+    if (expressSurcharge > 0) {
+      appliedDiscounts.push(`${speed.label} surcharge (+${Math.round(speed.surcharge * 100)}%)`)
+    }
+    const serviceTotal = subtotal + handwashSurcharge + expressSurcharge
+
     let totalDiscount = 0
 
     // Apply guarantee discount if active (5% photo-upload discount — kept
@@ -474,20 +502,30 @@ export async function POST(req: Request) {
       appliedDiscounts.push('Return-as-Received photo discount (5%)')
     }
 
-    // ----- First-order offer: promo code (hotels & corporate clients) or
-    // signup discount -----
-    // A valid offer code REPLACES the standard signup discount — hotels &
-    // corporate clients (15%) get the better first-order deal; everyone else
-    // gets the standard 10%. The picture discount (5%) always stacks on top.
+    // ----- Coupon / offer code (phase 36: unified engine) -----
+    // One code path for every promo code, first order or not:
+    //   - First-order codes (hotel/corporate offer) still REPLACE the
+    //     standard signup discount and consume the first-order benefit.
+    //   - General coupons (ALL/B2C/B2B, any order) now also work.
+    //   - Every coupon is rule-checked (active, dates, segment, minimum
+    //     basket, usage limits) with the SAME functions the live "Apply
+    //     code" preview uses (src/lib/marketing.ts) — preview and checkout
+    //     can never disagree.
+    //   - PERCENTAGE coupons honour the optional ₦ cap; FIXED coupons
+    //     subtract a flat amount. Both are applied to the service charge
+    //     (delivery fees are never discounted) and recorded in
+    //     DiscountUsage for limits + analytics.
     let appliedPromoCode: string | null = null
     const isFirstOrder = owner.signupDiscountUsed === false
-    if (isFirstOrder && promoCode) {
-      const code = promoCode.toUpperCase().trim()
-      let promo = await db.discount.findFirst({ where: { code, active: true } })
+    const promoInput = typeof promoCode === 'string' ? promoCode.toUpperCase().trim() : ''
+
+    if (promoInput) {
+      const code = promoInput
+      let promo = await db.discount.findFirst({ where: { code } })
       // Built-in hotel/corporate offer: the code + percentage live in
       // AppSetting, so it works even before a Discount row exists. Upsert the
-      // row for admin visibility/auditability.
-      if (!promo && code === appSettings.hotelGuestPromoCode.toUpperCase()) {
+      // row for admin visibility/auditability (first order only, as always).
+      if (!promo && isFirstOrder && code === appSettings.hotelGuestPromoCode.toUpperCase()) {
         promo = await db.discount.upsert({
           where: { code },
           update: {
@@ -507,18 +545,51 @@ export async function POST(req: Request) {
           },
         })
       }
-      if (promo && promo.type === 'PERCENTAGE') {
-        appliedPromoCode = code
-        totalDiscount += promo.value / 100
-        appliedDiscounts.push(`Offer code ${code} (${promo.value}% off first order)`)
-        // The promo consumed the first-order benefit (it is strictly better
-        // than the standard signup discount).
-        await db.user.update({
-          where: { id: ownerId },
-          data: { signupDiscountUsed: true },
-        })
-      } else {
+
+      if (!promo) {
         appliedDiscounts.push(`Offer code ${code} not recognised — standard offers applied`)
+      } else {
+        const eligibility = await checkCouponEligibility(
+          promo as CouponRecord,
+          {
+            userRole: owner.role,
+            isFirstOrder,
+            userId: ownerId,
+            userEmail: owner.email,
+          },
+          serviceTotal
+        )
+        if (!eligibility.ok) {
+          // Unknown/ineligible codes are ignored with a notice, never a
+          // dead end (same policy as before, now rule-aware).
+          appliedDiscounts.push(`Offer code ${code} — ${eligibility.message}`)
+        } else {
+          const amount = computeCouponAmount(promo as CouponRecord, serviceTotal)
+          if (amount > 0) {
+            appliedPromoCode = code
+            appliedCoupon = { ...(promo as CouponRecord), amount }
+            if (isFirstOrder) {
+              // A first-order code consumed the first-order benefit (it is
+              // strictly better than the standard signup discount).
+              await db.user.update({
+                where: { id: ownerId },
+                data: { signupDiscountUsed: true },
+              })
+            }
+            if (promo.type === 'PERCENTAGE') {
+              const cap = promo.maxDiscount != null ? `, capped at ${promo.maxDiscount.toLocaleString('en-NG')} naira` : ''
+              appliedDiscounts.push(
+                `Coupon ${code} (${promo.value}% off${cap}) — saved ${amount.toLocaleString('en-NG')} naira`
+              )
+            } else {
+              appliedDiscounts.push(
+                `Coupon ${code} (${amount.toLocaleString('en-NG')} naira off)`
+              )
+            }
+          } else {
+            appliedDiscounts.push(`Offer code ${code} applied but nothing to discount`)
+          }
+        }
       }
     } else if (isFirstOrder) {
       // Standard first-order discount — the percentage ALWAYS comes from
@@ -539,35 +610,6 @@ export async function POST(req: Request) {
       }
     }
 
-    // ----- Permanent online-order discount (phase-30, client directive) -----
-    // 5% (admin-tunable) off EVERY order placed by a signed-in customer —
-    // the standing registration incentive. Guests are deliberately excluded:
-    // the wizard shows them the sign-in offer instead, and eligibility is
-    // computed here server-side anyway (a client flag is never trusted —
-    // same class of fix as guaranteeActive). ADMIN sessions are excluded:
-    // those are phone/walk-in customers placed on their behalf, not online
-    // self-service. Stacks with the guarantee 5% and the first-order/hotel
-    // offers; the combined cap below (95%) still applies.
-    const onlinePct =
-      session && session.user?.role !== 'ADMIN'
-        ? Math.max(0, Math.min(appSettings.onlineOrderDiscountPercent, 50))
-        : 0
-    if (onlinePct > 0) {
-      totalDiscount += onlinePct / 100
-      appliedDiscounts.push(`Online order discount (${onlinePct}%) — for registered customers, every order`)
-    }
-
-    // ----- Handwash surcharge (mode of wash) -----
-    // Handwash is per-garment labour-intensive care: +50% of the item
-    // cleaning subtotal (admin-tunable). Machine wash is standard — no fee.
-    const handwashSurcharge =
-      modeOfWash === 'HANDWASH'
-        ? Math.round(subtotal * (appSettings.handwashSurchargePercent / 100))
-        : 0
-    if (handwashSurcharge > 0) {
-      appliedDiscounts.push(`Handwash care (+${appSettings.handwashSurchargePercent}% of cleaning)`)
-    }
-
     // ----- Delivery fee: first delivery free, then the going rate -----
     // The free delivery is per CUSTOMER (not per browser): count their
     // previous orders. Cancelled orders don't consume the free delivery.
@@ -582,17 +624,32 @@ export async function POST(req: Request) {
       appliedDiscounts.push(`Free first delivery`)
     }
 
-    // Express surcharge on the item subtotal, then percentage discounts apply
-    // to the combined service charge (item cleaning + express premium)
-    const expressSurcharge = Math.round(subtotal * speed.surcharge)
-    if (expressSurcharge > 0) {
-      appliedDiscounts.push(`${speed.label} surcharge (+${Math.round(speed.surcharge * 100)}%)`)
+    // ----- Permanent online-order discount (phase-30, client directive) -----
+    // 5% (admin-tunable) off EVERY order placed by a signed-in customer —
+    // the standing registration incentive. Guests are deliberately excluded:
+    // the wizard shows them the sign-in offer instead, and eligibility is
+    // computed here server-side anyway (a client flag is never trusted —
+    // same class of fix as guaranteeActive). ADMIN sessions are excluded:
+    // those are phone/walk-in customers placed on their behalf, not online
+    // self-service. Stacks with the guarantee 5% and the first-order/hotel
+    // offers; the combined percentage cap below (95%) still applies.
+    const onlinePct =
+      session && session.user?.role !== 'ADMIN'
+        ? Math.max(0, Math.min(appSettings.onlineOrderDiscountPercent, 50))
+        : 0
+    if (onlinePct > 0) {
+      totalDiscount += onlinePct / 100
+      appliedDiscounts.push(`Online order discount (${onlinePct}%) — for registered customers, every order`)
     }
 
-    // Total = (cleaning + handwash + express) − percentage discounts, plus
-    // the flat delivery fee (fees are never discounted).
-    const serviceTotal = subtotal + handwashSurcharge + expressSurcharge
-    totalPrice = Math.round(serviceTotal * (1 - Math.min(totalDiscount, 0.95))) + deliveryFee
+    // Total = (cleaning + handwash + express) − percentage discounts − the
+    // coupon's naira amount, plus the flat delivery fee (fees are never
+    // discounted). The percentage stack stays capped at 95%; the coupon
+    // amount is already capped to the service charge by computeCouponAmount.
+    const couponFlatAmount = appliedCoupon?.amount ?? 0
+    totalPrice =
+      Math.max(0, Math.round(serviceTotal * (1 - Math.min(totalDiscount, 0.95))) - couponFlatAmount) +
+      deliveryFee
     // Record the delivery fee + mode + code on the order for transparency
     orderExtras.deliveryFee = deliveryFee
     orderExtras.modeOfWash = modeOfWash ?? null
@@ -741,6 +798,30 @@ export async function POST(req: Request) {
       media: true,
     },
   })
+
+  // ----- Coupon usage trail (phase 36) — never blocks the booking -----
+  // Records the redemption (per-user limits + "how much did this promo cost
+  // me" analytics) and increments the coupon's live counter. Best-effort:
+  // a tracking failure must never roll back a placed order.
+  if (appliedCoupon) {
+    try {
+      await db.discountUsage.create({
+        data: {
+          discountId: appliedCoupon.id,
+          userId: ownerId,
+          userEmail: owner.email,
+          orderId: order.id,
+          discountAmount: appliedCoupon.amount,
+        },
+      })
+      await db.discount.update({
+        where: { id: appliedCoupon.id },
+        data: { currentUses: { increment: 1 } },
+      })
+    } catch (e) {
+      console.error('Coupon usage recording failed (order still placed):', e)
+    }
+  }
 
   // ----- Notifications (email + SMS) — never block the booking -----
   // Runs AFTER the response is sent (next/server after()): a slow email

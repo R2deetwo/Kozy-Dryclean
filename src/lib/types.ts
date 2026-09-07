@@ -646,6 +646,7 @@ export type NotificationEventType =
   | 'FEEDBACK'
   | 'RIDER_APPLICATION'
   | 'STAFF_INVITE'
+  | 'CAMPAIGN_SENT'
   | 'TEST'
 
 export type NotificationEmailStatus = 'NONE' | 'DISABLED' | 'SENT' | 'PARTIAL' | 'FAILED'

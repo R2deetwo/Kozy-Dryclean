@@ -38,6 +38,13 @@ model User {
   // next sign-in and clears this flag. Read by /api/users/me (the console
   // heartbeat) and cleared by POST /api/users/me/password.
   mustChangePassword Boolean @default(false)
+  // ----- Marketing (phase 36) -----
+  // Master opt-out for marketing/newsletter emails. Every campaign send
+  // excludes users with marketingOptIn=false — the one-click unsubscribe
+  // link in every campaign email clears this flag. Transactional emails
+  // (booking confirmations, payment verification, password resets) are
+  // NEVER affected by this flag.
+  marketingOptIn  Boolean  @default(true)
   // Discount tracking
   signupDiscountUsed Boolean @default(false)
   createdAt     DateTime @default(now())
@@ -141,6 +148,8 @@ model Order {
   anomalies         OrderAnomaly[]
   // Customer feedback (one-to-one — one review per order)
   review            Review?
+  // Coupons redeemed on this order (phase 36 — usually 0 or 1)
+  couponUsages      DiscountUsage[]
 
   @@index([userId])
   @@index([driverId])
@@ -313,8 +322,22 @@ model VerificationToken {
 }
 
 // =====================================================
-// DISCOUNT — admin-managed discounts
+// DISCOUNT — admin-managed discounts & promo coupons
 // =====================================================
+// Phase 36: the discount engine grew coupon powers. The model keeps its
+// original role (percentage policy rows + the HOTEL15-style first-order
+// offer codes) and now also carries full coupon rules. Checkout pricing
+// (src/app/api/orders) remains the single source of truth — the admin
+// console and the public validate endpoint share the same rule checks
+// through src/lib/marketing.ts.
+//
+// appliesTo semantics:
+//   ALL         — any customer, any order (a general coupon)
+//   SIGNUP      — NOT a coupon: an on/off gate row for the standard
+//                 first-order discount (percentage comes from AppSetting)
+//   FIRST_ORDER — valid only on the customer's first order (hotel/corporate
+//                 offer codes)
+//   B2C / B2B   — retail-only / corporate-only coupons
 model Discount {
   id          String   @id @default(cuid())
   name        String   // "Signup Discount", "Weekend Promo", etc.
@@ -322,10 +345,140 @@ model Discount {
   type        String   @default("PERCENTAGE") // PERCENTAGE, FIXED
   value       Float    // 5 = 5% or 500 = ₦500
   active      Boolean  @default(true)
-  appliesTo   String   @default("ALL") // ALL, SIGNUP, FIRST_ORDER
+  appliesTo   String   @default("ALL") // ALL, SIGNUP, FIRST_ORDER, B2C, B2B
   description String?
+  // ----- Coupon rules (phase 36; null/0 = no restriction) -----
+  // Minimum service subtotal (₦) the basket must reach to use the code.
+  minOrderValue  Float?
+  // Cap on the discount amount (₦) for PERCENTAGE coupons.
+  maxDiscount    Float?
+  // Total redemptions allowed across all customers (null = unlimited).
+  maxUsesTotal   Int?
+  // Redemptions allowed per customer (null = unlimited).
+  maxUsesPerUser Int?
+  // Live counter of redemptions (incremented on each successful checkout).
+  currentUses    Int      @default(0)
+  // Validity window (null = unbounded on that side).
+  startDate      DateTime?
+  endDate        DateTime?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+
+  // One row per redemption — the audit trail for usage limits and the
+  // admin's "how much did this promo cost me" analytics.
+  usages      DiscountUsage[]
+
+  @@index([appliesTo])
+  @@index([active])
+}
+
+// =====================================================
+// DISCOUNT_USAGE — per-redemption tracking (phase 36)
+// =====================================================
+// Written at checkout when a coupon is actually applied to an order.
+// Feeds: per-user usage limits, the coupon's currentUses counter and the
+// Marketing tab's redemption analytics.
+model DiscountUsage {
+  id             String   @id @default(cuid())
+  discountId     String
+  discount       Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  userId         String
+  // Snapshot of the customer email at redemption time (survives user deletion)
+  userEmail      String
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Actual ₦ amount saved on this order
+  discountAmount Float
+  createdAt      DateTime @default(now())
+
+  @@unique([discountId, userId, orderId])
+  @@index([discountId])
+  @@index([userId])
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+// =====================================================
+// NEWSLETTER_CAMPAIGN — scheduled marketing emails (phase 36)
+// =====================================================
+// Lifecycle: DRAFT → (schedule) SCHEDULED → (due / Send Now) SENDING → SENT
+// A SENDING campaign that was interrupted can be resumed — recipients are
+// only ever created once per campaign (unique on [campaignId, email]) and
+// only PENDING rows are sent.
+model NewsletterCampaign {
+  id          String   @id @default(cuid())
+  name        String   // internal name: "March Promo", "Detty December"
+  subject     String   // email subject line
+  htmlContent String   @db.Text // email body HTML (wrapped in the Kozy template on send)
+  // Target audience: ALL | B2C | B2B | INACTIVE (no order in the last 60 days
+  // — includes signed-up customers who never booked)
+  segment     String   @default("ALL")
+  status      String   @default("DRAFT") // DRAFT | SCHEDULED | SENDING | SENT | CANCELLED
+  scheduledAt DateTime?
+  sentAt      DateTime?
+  sentCount   Int      @default(0)
+  openCount   Int      @default(0)
+  clickCount  Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipients  NewsletterRecipient[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+}
+
+// =====================================================
+// NEWSLETTER_RECIPIENT — per-email delivery & engagement tracking
+// =====================================================
+// One row per (campaign, email) — email is the natural key so a customer
+// and a footer subscriber with the same address can never be double-sent.
+// userId is a snapshot string (no FK): campaign history must survive
+// customer deletion. The tracking pixel + click redirects update
+// openedAt/clickedAt.
+model NewsletterRecipient {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    NewsletterCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Snapshot — null for footer subscribers who never created an account
+  userId      String?
+  email       String
+  // "customer" = a B2C/B2B account holder; "subscriber" = footer signup
+  source      String   @default("customer")
+  sentAt      DateTime?
+  // Tracking-pixel / link-redirect timestamps (first event only)
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  // PENDING | SENT | FAILED — per-recipient delivery result
+  deliveryStatus String @default("PENDING")
+  createdAt   DateTime @default(now())
+
+  @@unique([campaignId, email])
+  @@index([campaignId])
+  @@index([email])
+  @@index([deliveryStatus])
+}
+
+// =====================================================
+// NEWSLETTER_SUBSCRIBER — footer signup list (phase 36)
+// =====================================================
+// Prospects and past customers who opted in from the landing-page footer
+// WITHOUT creating an account. Campaigns with segment ALL include these
+// addresses. One-click unsubscribe sets optIn=false (row is kept for the
+// audit trail; sends always filter on optIn).
+model NewsletterSubscriber {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String?
+  // Where the signup came from: "footer" | "campaign" | "manual"
+  source      String   @default("footer")
+  optIn       Boolean  @default(true)
+  unsubscribedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([optIn])
 }
 
 // =====================================================

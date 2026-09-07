@@ -8,9 +8,13 @@ interface SendEmailParams {
   to: string
   subject: string
   html: string
+  /** Brevo console tags. Defaults to transactional; marketing sends pass
+   *  ['kozy-marketing'] so the two email classes are distinguishable at a
+   *  glance in the Brevo dashboard (phase 36). */
+  tags?: string[]
 }
 
-export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<void> {
+export async function sendEmail({ to, subject, html, tags }: SendEmailParams): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY
   // The sender MUST be an email verified in the Brevo dashboard (Brevo
   // silently rejects everything else). Today that is the developer's
@@ -44,7 +48,8 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
       // Phase 32: tag every send as transactional/operational in the Brevo
       // console (these are account + order emails, never marketing) — makes
       // deliverability classification visible at a glance in the dashboard.
-      tags: ['kozy-transactional'],
+      // Marketing campaigns (phase 36) pass their own tag.
+      tags: tags ?? ['kozy-transactional'],
     }),
   })
 

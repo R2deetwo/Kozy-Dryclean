@@ -78,3 +78,9 @@ scripts/.pgenv
 
 # vercel CLI local linking
 .vercel/
+
+# Local embedded-postgres data (phase 36 dev DB) — never commit
+work/pgdata-tcp/
+work/pg-tcp.log
+work/initdb.log
+work/.s.PGSQL.*.lock

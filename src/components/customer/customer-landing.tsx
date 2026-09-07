@@ -15,6 +15,7 @@ import {
   Star,
   Phone,
   Mail,
+  MailCheck,
   Building2,
   ShoppingBag,
   Sparkles,
@@ -1106,6 +1107,12 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
             </div>
           </div>
 
+          {/* Newsletter signup (phase 36) — the email list builder. Every
+              visitor can join without creating an account; these addresses
+              receive the "All customers" campaigns from the admin Marketing
+              tab. One-click unsubscribe is in every email. */}
+          <NewsletterSignup />
+
           {/* Driver recruitment banner */}
           <div className="mt-8 rounded-xl bg-gradient-to-r from-navy-600 to-navy-700 p-4 ring-1 ring-gold-400/20">
             <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
@@ -1139,5 +1146,100 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
         </div>
       </footer>
     </div>
+  )
+}
+
+// =============================================================================
+// NewsletterSignup — footer email-list builder (phase 36)
+// =============================================================================
+// POSTs to /api/newsletter/subscribe (rate limited, validated server-side).
+// On success the visitor sees a confirmation; a welcome email follows. This
+// is how prospects who are not ready to book still join the Kozy circle and
+// start hearing about offers — the list the admin's Marketing tab sends to.
+function NewsletterSignup() {
+  const [email, setEmail] = useState('')
+  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [message, setMessage] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    const trimmed = email.trim().toLowerCase()
+    if (!trimmed || state === 'loading') return
+    setState('loading')
+    setMessage('')
+    try {
+      const res = await fetch('/api/newsletter/subscribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: trimmed }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        setState('done')
+        setMessage(data.message || 'You are on the list.')
+      } else {
+        setState('error')
+        setMessage(data.error || 'Please check the email address and try again.')
+      }
+    } catch {
+      setState('error')
+      setMessage('Network hiccup — please try again in a moment.')
+    }
+  }
+
+  if (state === 'done') {
+    return (
+      <div className="mt-8 flex items-center gap-3 rounded-xl bg-gold-400/10 p-4 ring-1 ring-gold-400/30">
+        <MailCheck className="h-5 w-5 shrink-0 text-gold-400" />
+        <div>
+          <p className="text-sm font-semibold text-gold-200">You&apos;re on the list</p>
+          <p className="text-xs text-navy-100/60">
+            {message} A welcome email is on its way — offers and care tips, never spam.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="mt-8 rounded-xl bg-navy-600/40 p-4 ring-1 ring-navy-400/40 sm:p-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-white">
+            Offers &amp; care tips, straight to your inbox
+          </p>
+          <p className="mt-0.5 text-xs text-navy-100/60">
+            Be first to hear about seasonal discounts and coupon codes. No account needed —
+            unsubscribe any time.
+          </p>
+        </div>
+        <div className="flex w-full max-w-md gap-2 sm:w-auto sm:min-w-72">
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={(e) => {
+              setEmail(e.target.value)
+              if (state === 'error') setState('idle')
+            }}
+            placeholder="you@example.com"
+            aria-label="Email address for offers and updates"
+            className="h-10 min-w-0 flex-1 rounded-full border border-navy-400 bg-navy-700/60 px-4 text-sm text-white placeholder:text-navy-100/40 focus:border-gold-400 focus:outline-none"
+          />
+          <button
+            type="submit"
+            disabled={state === 'loading'}
+            className="h-10 shrink-0 rounded-full bg-gold-gradient px-5 text-xs font-bold text-navy transition hover:opacity-90 disabled:opacity-60"
+          >
+            {state === 'loading' ? 'Joining…' : 'Join'}
+          </button>
+        </div>
+      </div>
+      {state === 'error' && (
+        <p className="mt-2 text-xs text-red-300" role="alert">
+          {message}
+        </p>
+      )}
+    </form>
   )
 }

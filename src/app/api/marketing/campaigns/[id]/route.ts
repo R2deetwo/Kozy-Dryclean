@@ -1,0 +1,126 @@
+// =============================================================================
+// GET    /api/marketing/campaigns/[id] — fetch one campaign + recipients
+// PATCH  /api/marketing/campaigns/[id] — update (only DRAFT / SCHEDULED)
+// DELETE /api/marketing/campaigns/[id] — delete (only DRAFT / SCHEDULED)
+// =============================================================================
+
+import { NextRequest, NextResponse } from 'next/server'
+import { z } from 'zod'
+import { db } from '@/lib/db'
+import { requireRole } from '@/lib/auth'
+
+async function guardAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
+  try {
+    return await requireRole('ADMIN')
+  } catch (e) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    throw e
+  }
+}
+
+const UpdateCampaignSchema = z.object({
+  name: z.string().trim().min(1).max(100).optional(),
+  subject: z.string().trim().min(1).max(200).optional(),
+  htmlContent: z.string().trim().min(1).max(200_000).optional(),
+  segment: z.enum(['ALL', 'B2C', 'B2B', 'INACTIVE']).optional(),
+  // null clears the schedule (back to DRAFT); an ISO string schedules it
+  scheduledAt: z.string().datetime().nullable().optional(),
+})
+
+interface Params {
+  params: Promise<{ id: string }>
+}
+
+export async function GET(_req: NextRequest, { params }: Params) {
+  const guard = await guardAdmin()
+  if (guard instanceof NextResponse) return guard
+  const { id } = await params
+
+  const campaign = await db.newsletterCampaign.findUnique({
+    where: { id },
+    include: {
+      recipients: {
+        select: {
+          id: true,
+          email: true,
+          source: true,
+          sentAt: true,
+          openedAt: true,
+          clickedAt: true,
+          deliveryStatus: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 500,
+      },
+    },
+  })
+  if (!campaign) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+  return NextResponse.json({ campaign })
+}
+
+export async function PATCH(req: NextRequest, { params }: Params) {
+  const guard = await guardAdmin()
+  if (guard instanceof NextResponse) return guard
+  const { id } = await params
+
+  let body: unknown
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
+  const parsed = UpdateCampaignSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Invalid campaign update', details: parsed.error.flatten() },
+      { status: 400 }
+    )
+  }
+
+  const existing = await db.newsletterCampaign.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+  if (!['DRAFT', 'SCHEDULED'].includes(existing.status)) {
+    return NextResponse.json(
+      { error: 'A sent campaign cannot be edited (duplicate it instead)' },
+      { status: 400 }
+    )
+  }
+
+  const { scheduledAt, ...rest } = parsed.data
+  const campaign = await db.newsletterCampaign.update({
+    where: { id },
+    data: {
+      ...rest,
+      ...(scheduledAt !== undefined
+        ? {
+            scheduledAt: scheduledAt === null ? null : new Date(scheduledAt),
+            status: scheduledAt === null ? 'DRAFT' : 'SCHEDULED',
+          }
+        : {}),
+    },
+  })
+  return NextResponse.json({ campaign })
+}
+
+export async function DELETE(_req: NextRequest, { params }: Params) {
+  const guard = await guardAdmin()
+  if (guard instanceof NextResponse) return guard
+  const { id } = await params
+
+  const existing = await db.newsletterCampaign.findUnique({ where: { id } })
+  if (!existing) return NextResponse.json({ error: 'Campaign not found' }, { status: 404 })
+  if (!['DRAFT', 'SCHEDULED'].includes(existing.status)) {
+    return NextResponse.json(
+      { error: 'A sent campaign is your delivery record and cannot be deleted' },
+      { status: 400 }
+    )
+  }
+
+  await db.newsletterCampaign.delete({ where: { id } })
+  return NextResponse.json({ success: true })
+}

@@ -682,7 +682,8 @@ export function SettingsView() {
                     checkout. The picture discount is set on the Guarantee tab.
                   </p>
                 </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+                <CardContent className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
                   <div>
                     <Label htmlFor="first-order-pct" className="text-xs uppercase tracking-wide text-navy-300">
                       First-order discount (%)
@@ -749,6 +750,17 @@ export function SettingsView() {
                       retail checkout and bulk invoices alike. Guests are shown a sign-in offer for it instead
                       (the registration incentive). Set 0 to switch it off. Stacks with the first-order and
                       picture discounts; the combined discount stays capped at 95%.
+                    </p>
+                  </div>
+                  </div>
+                  {/* Phase 36 pointer: coupons now live in the Marketing tab */}
+                  <div className="flex items-start gap-2 rounded-lg bg-gold-50 p-3 text-xs leading-relaxed text-navy-300 ring-1 ring-gold-200">
+                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
+                    <p>
+                      <strong className="text-navy">Promo codes &amp; coupons</strong> — including newsletter
+                      coupon codes with expiry dates, usage limits and minimum spend — now live in the{' '}
+                      <strong className="text-navy">Marketing</strong> tab. This page keeps the standing
+                      percentages above; the Marketing tab is where you create and track codes.
                     </p>
                   </div>
                 </CardContent>

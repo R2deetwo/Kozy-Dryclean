@@ -24,6 +24,7 @@ import {
   Bike,
   FlaskConical,
   UserCog,
+  Megaphone,
   MailCheck,
   MailX,
   MailQuestion,
@@ -77,6 +78,12 @@ const TYPE_META: Record<
     icon: UserCog,
     cls: 'bg-indigo-100 text-indigo-800',
     link: { label: 'Open Staff', tab: 'staff' },
+  },
+  CAMPAIGN_SENT: {
+    label: 'Campaign sent',
+    icon: Megaphone,
+    cls: 'bg-gold-100 text-gold-800',
+    link: { label: 'Open Marketing', tab: 'marketing' },
   },
   TEST: {
     label: 'Test',

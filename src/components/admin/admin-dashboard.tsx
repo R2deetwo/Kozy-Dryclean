@@ -17,6 +17,7 @@ import {
   LifeBuoy,
   LogOut,
   Bell,
+  Megaphone,
   UserCog,
   ChevronRight,
 } from 'lucide-react'
@@ -34,6 +35,7 @@ import { FeedbackView } from './feedback-view'
 import { HelpView } from './help-view'
 import { NotificationsView } from './notifications-view'
 import { StaffView } from './staff-view'
+import { MarketingView } from './marketing-view'
 import { ChangePasswordDialog } from './change-password-dialog'
 import { Logo } from '@/components/shell/logo'
 import { Star, MessageSquareHeart, KeyRound } from 'lucide-react'
@@ -44,6 +46,7 @@ type Tab =
   | 'payments'
   | 'customers'
   | 'finance'
+  | 'marketing'
   | 'reviews'
   | 'feedback'
   | 'notifications'
@@ -212,6 +215,9 @@ export function AdminDashboard() {
     },
     { key: 'customers', label: 'Customers', icon: UsersIcon },
     { key: 'finance', label: 'Finances', icon: Wallet, adminOnly: true },
+    // Phase 36: the owner's marketing hub — campaigns, coupons, the email
+    // list and analytics. Admin-only (staff never sees customer outreach).
+    { key: 'marketing', label: 'Marketing', icon: Megaphone, adminOnly: true },
     { key: 'reviews', label: 'Reviews', icon: Star, adminOnly: true },
     { key: 'feedback', label: 'Feedback', icon: MessageSquareHeart },
     { key: 'staff', label: 'Staff', icon: UserCog, adminOnly: true },
@@ -449,6 +455,7 @@ export function AdminDashboard() {
           {tab === 'payments' && <PaymentQueue isAdmin={isAdmin} />}
           {tab === 'customers' && <CustomersView />}
           {isAdmin && tab === 'finance' && <FinanceView />}
+          {isAdmin && tab === 'marketing' && <MarketingView />}
           {isAdmin && tab === 'reviews' && <ReviewsView />}
           {tab === 'feedback' && <FeedbackView />}
           {isAdmin && tab === 'staff' && <StaffView />}

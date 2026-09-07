@@ -51,6 +51,8 @@ import {
   Tag,
   Ruler,
   MailCheck,
+  BadgeCheck,
+  Loader2,
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
@@ -81,7 +83,7 @@ import {
   hasValues,
   type SavedMeasurements,
 } from '@/lib/measurements'
-import { useSession } from 'next-auth/react'
+import { useSession, signIn } from 'next-auth/react'
 import { useQuery } from '@tanstack/react-query'
 import {
   loadDraft,
@@ -173,9 +175,24 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // surcharge. Kept as null until the customer picks, so the choice is
   // genuinely explicit.
   const [modeOfWash, setModeOfWash] = useState<'MACHINE' | 'HANDWASH' | null>(null)
-  // Optional offer code (hotels & corporate clients: HOTEL15 for 15% off
-  // the first order).
+  // Optional offer/coupon code. First order: the classic hotel/corporate
+  // offer (e.g. HOTEL15) — any order: general coupon codes from newsletters
+  // and promos (phase 36).
   const [promoCode, setPromoCode] = useState('')
+  // Live validation of the typed code (phase 36): the customer taps Apply,
+  // the server checks the exact same rules checkout will use, and the
+  // result drives the on-screen estimate + an inline success/error note.
+  // Null until the customer taps Apply; typing resets it.
+  const [couponCheck, setCouponCheck] = useState<{
+    code: string
+    valid: boolean
+    message?: string
+    couponName?: string
+    discountAmount?: number
+    type?: 'PERCENTAGE' | 'FIXED'
+    value?: number
+  } | null>(null)
+  const [couponChecking, setCouponChecking] = useState(false)
   // Alterations note (Phase 17): what the seamstress should change on which
   // garment. Collected via a guided panel whenever alteration items are in
   // the basket — riders never measure at the door; the seamstress works
@@ -218,6 +235,14 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const [guestEmail, setGuestEmail] = useState('')
   const [guestPhone, setGuestPhone] = useState('')
   const [accountExists, setAccountExists] = useState(false)
+  // Phase 36 (bank-transfer "stuck screen" fix): when a returning customer
+  // checks out as a guest with their account email, a MODAL (not a notice
+  // below the fold) asks for their password, signs them in, and re-submits
+  // the exact same booking — so they still land on the "we're verifying your
+  // payment / you'll get an email" page instead of a dead-looking button.
+  const [accountPassword, setAccountPassword] = useState('')
+  const [accountSigningIn, setAccountSigningIn] = useState(false)
+  const [accountError, setAccountError] = useState<string | null>(null)
   /** Persistent, on-screen explanation of the LAST FAILED submit. Toasts
    *  expire after ~5s at the top of the screen and the account-exists
    *  notice lives in the step-3 form — a phone customer who just tapped
@@ -452,11 +477,21 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const trimmedCode = promoCode.trim().toUpperCase()
   const isHotelCode =
     isFirstOrder && trimmedCode === appSettings.hotelGuestPromoCode.toUpperCase()
+  // ----- Phase 36: live-validated coupon -----
+  // Only counts when it was validated against THIS code (typing after Apply
+  // resets the result server-side of the mismatch). A valid coupon replaces
+  // the first-order estimate exactly like the server's checkout rule.
+  const validatedCoupon =
+    couponCheck?.valid && couponCheck.code === trimmedCode ? couponCheck : null
+  const couponPct =
+    type === 'ITEM' && validatedCoupon?.type === 'PERCENTAGE'
+      ? Math.max(0, Math.min(validatedCoupon.value ?? 0, 100))
+      : 0
   const firstOrderPercent = isHotelCode
     ? appSettings.hotelGuestDiscountPercent
     : appSettings.firstOrderDiscountPercent
   const firstOrderDiscountActive =
-    type === 'ITEM' && isFirstOrder && subtotal > 0
+    type === 'ITEM' && isFirstOrder && subtotal > 0 && !validatedCoupon
   // ----- Phase-30: permanent online-order discount (client directive) -----
   // Registered customers get a standing discount on EVERY online order (the
   // registration incentive); guests see a sign-in offer in the summary
@@ -479,13 +514,66 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // Discounts apply to the SERVICE charge (cleaning + handwash + express),
   // never to the delivery fee — mirrors the server's math exactly.
   const serviceSubtotal = subtotal + handwashSurcharge + expressSurcharge
+  // A FIXED coupon subtracts its naira amount (never more than the service
+  // charge) — mirrors computeCouponAmount on the server.
+  const couponFlatAmount =
+    type === 'ITEM' && validatedCoupon?.type === 'FIXED'
+      ? Math.min(validatedCoupon.value ?? 0, serviceSubtotal)
+      : 0
+  // Preview of the coupon's saving for the summary row (PERCENTAGE coupon
+  // savings recompute against the live basket)
+  const couponPreviewAmount =
+    validatedCoupon == null
+      ? 0
+      : validatedCoupon.type === 'PERCENTAGE'
+        ? Math.round(serviceSubtotal * (couponPct / 100))
+        : couponFlatAmount
   const discountPercent =
     (guaranteeActive ? settings.guaranteeDiscountPercent : 0) +
     (firstOrderDiscountActive ? firstOrderPercent : 0) +
-    onlineDiscountPct
+    onlineDiscountPct +
+    couponPct
   const discount = serviceSubtotal * (discountPercent / 100)
   const grossTotal = subtotal + expressSurcharge
-  const total = Math.max(0, Math.round(serviceSubtotal - discount)) + deliveryFeeEstimate
+  const total =
+    Math.max(0, Math.round(serviceSubtotal - discount - couponFlatAmount)) + deliveryFeeEstimate
+
+  // ----- Phase 36: live coupon validation -----
+  // Checks the typed code against the SERVER's exact checkout rules (same
+  // functions, same DB) so what the customer sees is what checkout charges.
+  // Guests pass their email so first-order + per-user rules can be evaluated;
+  // signed-in customers are identified by their session.
+  const applyCoupon = async () => {
+    if (!trimmedCode || couponChecking) return
+    setCouponChecking(true)
+    try {
+      const res = await fetch('/api/marketing/coupons/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code: trimmedCode,
+          serviceSubtotal,
+          ...(isGuest && guestEmailValid
+            ? { email: guestEmail.trim().toLowerCase() }
+            : {}),
+        }),
+      })
+      const data = await res.json().catch(() => ({
+        valid: false,
+        message: 'Could not check that code — it will still be validated when you confirm.',
+      }))
+      setCouponCheck({ code: trimmedCode, ...data })
+    } catch {
+      setCouponCheck({
+        code: trimmedCode,
+        valid: false,
+        message:
+          'Network hiccup — tap Apply again. Codes are always validated at confirmation anyway.',
+      })
+    } finally {
+      setCouponChecking(false)
+    }
+  }
 
   // Defensive guard — auth gate should prevent this, but we don't want to
   // crash. Guest mode (allowGuest) bypasses the session requirement.
@@ -834,6 +922,52 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     setGuestPhone('')
   }
 
+  /** Account-exists modal submit (phase 36): sign the returning customer in
+   *  with their password, then automatically re-submit this exact booking —
+   *  the basket, receipt and pickup details are all still in state. The
+   *  signed-in submit creates the order and lands them on /payment/pending
+   *  (the "we're verifying your payment — you'll get an email" page). */
+  const submitAccountPassword = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!guestEmail.trim() || !accountPassword || accountSigningIn) return
+    setAccountSigningIn(true)
+    setAccountError(null)
+    try {
+      const res = await signIn('credentials', {
+        email: guestEmail.trim().toLowerCase(),
+        password: accountPassword,
+        redirect: false,
+      })
+      if (res?.error) {
+        if (res.error === 'ACCOUNT_PAUSED' || res.error === 'ACCOUNT_REVOKED') {
+          setAccountError(
+            'This account is currently paused. Please contact us on +234 803 175 5230 and we will book for you right away.'
+          )
+        } else if (res.error === 'EMAIL_NOT_VERIFIED' || res.error?.includes('EMAIL_NOT_VERIFIED')) {
+          setAccountError(
+            'Your email address has not been verified yet. Use "Forgot password?" below to get back in, or book with a different email.'
+          )
+        } else {
+          setAccountError(
+            "That password didn't match this account. Try again — or use \u201CForgot password?\u201D below."
+          )
+        }
+        setAccountSigningIn(false)
+        return
+      }
+      // Signed in — close the modal and re-submit the booking. The server
+      // now sees the session cookie; the guest fields in the body are
+      // ignored, the order is placed under their real account, and the
+      // normal bank-transfer redirect takes over.
+      setAccountExists(false)
+      setAccountPassword('')
+      await handleConfirm()
+    } catch {
+      setAccountError('Something went wrong signing you in. Try again — or call us and we will place the order for you.')
+      setAccountSigningIn(false)
+    }
+  }
+
   const handleConfirm = async () => {
     // Alterations (Phase 17): the seamstress works from the customer's note —
     // block checkout until the note describes the work.
@@ -911,29 +1045,20 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
       if (!res.ok) {
         const err = await res.json().catch(() => ({}))
         if (err.error === 'ACCOUNT_EXISTS') {
-          setAccountExists(true)
           // ROOT-CAUSE FIX for the recurring mobile "I've made the transfer
-          // does nothing" report: a returning customer (or the owner
+          // and nothing happened" report: a returning customer (or the owner
           // testing signed-out with their own email) submits the booking as
-          // a guest with an email that already has a password. The old code
-          // only flipped a notice that renders on STEP 3 — the customer was
-          // looking at STEP 4, so the button appeared completely dead: no
-          // navigation, no toast, no order, and therefore no verification
-          // email for anyone. Now: toast + persistent banner with a one-tap
-          // sign-in + jump to the contact step where the inline notice sits
-          // directly under the email field.
-          toast({
-            title: 'You already have an account',
-            description:
-              'An account exists for this email — sign in to book. Your order was NOT placed yet, and no money has moved.',
-            variant: 'destructive',
-          })
-          setSubmitError({
-            title: 'Your order was not placed yet',
-            message: `An account already exists for ${guestEmail.trim()}. Tap below to sign in — it takes seconds, your details are saved, and nothing was charged.`,
-            showSignIn: true,
-          })
-          setStep(3)
+          // a guest with an email that already has a password. No order is
+          // created, so no email can ever fire — the tap looks completely
+          // dead. Phase 36: instead of a notice that renders below the fold
+          // of this long payment step (which the customer never saw — the
+          // "stuck on the upload screen" report), an un-missable MODAL
+          // collects their password, signs them in and re-submits this
+          // exact basket automatically. The customer ends up on the
+          // /payment/pending confirmation page either way.
+          setAccountExists(true)
+          setAccountPassword('')
+          setAccountError(null)
           setLoading(false)
           return
         }
@@ -2003,13 +2128,29 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                           <span>−{formatNaira(Math.round(serviceSubtotal * (firstOrderPercent / 100)))}</span>
                         </li>
                       )}
-                      {isHotelCode && (
+                      {isHotelCode && !validatedCoupon && (
                         <li className="flex items-center justify-between rounded-lg bg-gold-50 px-2 text-navy-300 ring-1 ring-gold-200">
                           <span className="flex items-center gap-1">
                             <Sparkles className="h-3.5 w-3.5 text-gold-500" />
                             Hotel &amp; corporate offer {appSettings.hotelGuestPromoCode} ({firstOrderPercent}%) — applied at confirmation
                           </span>
                           <span>−{formatNaira(Math.round(serviceSubtotal * (firstOrderPercent / 100)))}</span>
+                        </li>
+                      )}
+                      {validatedCoupon && couponPreviewAmount > 0 && (
+                        /* Phase 36: live-validated coupon row — green because
+                         * the server has already confirmed this exact code
+                         * against this basket's rules. */
+                        <li className="flex items-center justify-between rounded-lg bg-emerald-50 px-2 text-emerald-800 ring-1 ring-emerald-200">
+                          <span className="flex items-center gap-1">
+                            <BadgeCheck className="h-3.5 w-3.5 text-emerald-600" />
+                            Coupon {trimmedCode} (
+                            {validatedCoupon.type === 'PERCENTAGE'
+                              ? `${validatedCoupon.value}% off`
+                              : `${formatNaira(validatedCoupon.value ?? 0)} off`}
+                            ) — applied at confirmation
+                          </span>
+                          <span>−{formatNaira(couponPreviewAmount)}</span>
                         </li>
                       )}
                       {onlineDiscountPct > 0 && (
@@ -2113,55 +2254,129 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                 </div>
               ) : type === 'ITEM' && (
                 <div className="mt-5">
-                  {/* Offer code — hotels & corporate clients redeem their 15%
-                      first-order deal here (stacks with the 5% picture discount).
-                      Unknown codes are ignored by the server with a notice,
-                      never a dead end. */}
-                  {isFirstOrder && (
-                    <div className="mb-4 rounded-xl border border-navy-100 bg-linen-50 p-4">
-                      <label
-                        htmlFor="promo-code"
-                        className="flex items-center gap-1.5 text-sm font-semibold text-navy"
+                  {/* Offer / coupon code (phase 36) — first order: the classic
+                      hotel & corporate offer code; any order: general coupon
+                      codes from newsletters and promos. Tap Apply for a live
+                      server check (the exact rules checkout uses), or just
+                      confirm — codes are always validated at checkout and
+                      unknown codes are ignored with a notice, never a dead
+                      end. */}
+                  <div className="mb-4 rounded-xl border border-navy-100 bg-linen-50 p-4">
+                    <label
+                      htmlFor="promo-code"
+                      className="flex items-center gap-1.5 text-sm font-semibold text-navy"
+                    >
+                      <Tag className="h-4 w-4 text-gold-500" />
+                      {isFirstOrder ? 'Have an offer code?' : 'Have a coupon code?'}
+                    </label>
+                    <div className="mt-2 flex gap-2">
+                      <Input
+                        id="promo-code"
+                        value={promoCode}
+                        onChange={(e) => {
+                          setPromoCode(e.target.value.toUpperCase())
+                          // Typing invalidates the previous check
+                          setCouponCheck(null)
+                        }}
+                        placeholder={`e.g. ${appSettings.hotelGuestPromoCode}`}
+                        className="font-mono uppercase"
+                        maxLength={24}
+                        autoComplete="off"
+                      />
+                      <Button
+                        type="button"
+                        className="shrink-0 bg-navy text-white hover:bg-navy/90"
+                        disabled={!trimmedCode || couponChecking}
+                        onClick={applyCoupon}
                       >
-                        <Tag className="h-4 w-4 text-gold-500" /> Have an offer code?
-                      </label>
-                      <div className="mt-2 flex gap-2">
-                        <Input
-                          id="promo-code"
-                          value={promoCode}
-                          onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-                          placeholder={`e.g. ${appSettings.hotelGuestPromoCode}`}
-                          className="font-mono uppercase"
-                          maxLength={24}
-                          autoComplete="off"
-                        />
-                        {promoCode && (
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="shrink-0"
-                            onClick={() => setPromoCode('')}
-                          >
-                            Clear
-                          </Button>
+                        {couponChecking ? (
+                          <>
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Checking…
+                          </>
+                        ) : (
+                          'Apply'
                         )}
-                      </div>
+                      </Button>
+                      {promoCode && !couponChecking && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="shrink-0"
+                          onClick={() => {
+                            setPromoCode('')
+                            setCouponCheck(null)
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+
+                    {/* Validation result — success (green) or the exact reason
+                        the code cannot be used (why it failed, in plain
+                        language) */}
+                    {couponCheck && couponCheck.code === trimmedCode && (
+                      <p
+                        className={cn(
+                          'mt-2 flex items-start gap-1.5 rounded-lg px-3 py-2 text-xs leading-snug',
+                          couponCheck.valid
+                            ? 'bg-emerald-50 text-emerald-800 ring-1 ring-emerald-200'
+                            : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                        )}
+                        role="status"
+                      >
+                        {couponCheck.valid ? (
+                          <BadgeCheck className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+                        ) : (
+                          <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <span>
+                          {couponCheck.valid ? (
+                            <>
+                              <strong>{couponCheck.couponName}</strong> applied —{' '}
+                              {couponCheck.message}{' '}
+                              {isFirstOrder && (
+                                <span className="block text-[11px] text-emerald-700/80">
+                                  Applied INSTEAD of the standard first-order discount (the better
+                                  deal wins). The 5% photo discount still stacks on top.
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            couponCheck.message
+                          )}
+                        </span>
+                      </p>
+                    )}
+
+                    {!couponCheck && (
                       <p className="mt-1.5 text-[11px] leading-snug text-navy-300">
-                        {isHotelCode ? (
-                          <span className="font-semibold text-emerald-700">
-                            {appSettings.hotelGuestPromoCode} recognised — {appSettings.hotelGuestDiscountPercent}% off your first order (+ the 5% photo discount if you upload pictures).
-                          </span>
+                        {isFirstOrder ? (
+                          isHotelCode ? (
+                            <span className="font-semibold text-emerald-700">
+                              {appSettings.hotelGuestPromoCode} recognised —{' '}
+                              {appSettings.hotelGuestDiscountPercent}% off your first order (+ the 5%
+                              photo discount if you upload pictures).
+                            </span>
+                          ) : (
+                            <>
+                              Hotels &amp; corporate clients: use code{' '}
+                              <span className="font-mono font-semibold text-navy">
+                                {appSettings.hotelGuestPromoCode}
+                              </span>{' '}
+                              for {appSettings.hotelGuestDiscountPercent}% off your first order — or
+                              apply any coupon code you received from us.
+                            </>
+                          )
                         ) : (
                           <>
-                            Hotels &amp; corporate clients: use code{' '}
-                            <span className="font-mono font-semibold text-navy">{appSettings.hotelGuestPromoCode}</span>{' '}
-                            for {appSettings.hotelGuestDiscountPercent}% off your first order. Codes are
-                            validated when you confirm.
+                            Coupon codes from our offers and newsletters work here — tap Apply to
+                            check one instantly.
                           </>
                         )}
                       </p>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   <p className="text-sm font-semibold">Choose payment method</p>
                   <RadioGroup
@@ -2515,6 +2730,126 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
               >
                 Skip for now — continue without the guarantee
               </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ====================================================
+          ACCOUNT-EXISTS MODAL (phase 36)
+          A returning customer who checks out as a GUEST with their
+          account email gets a 409 from POST /api/orders — no order,
+          no email, a dead-looking button. This un-missable modal
+          (unlike the old below-the-fold notice — the exact
+          "stuck on the upload screen" report) collects their
+          password, signs them in and re-submits the SAME booking
+          automatically: they still land on the payment-verification
+          page with the "you'll get an email" confirmation.
+      ==================================================== */}
+      <AnimatePresence>
+        {accountExists && (
+          <motion.div
+            key="account-exists"
+            className="fixed inset-0 z-[75] flex items-center justify-center bg-[#0A192F]/75 p-4 backdrop-blur-sm"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97, y: 6 }}
+              transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+              className="max-h-[calc(100dvh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-6 shadow-navy ring-1 ring-navy-100 sm:p-7"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="account-exists-title"
+            >
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-gold-100">
+                <LogIn className="h-6 w-6 text-gold-600" />
+              </div>
+              <h3
+                id="account-exists-title"
+                className="mt-4 text-center font-serif text-xl font-semibold text-navy"
+              >
+                Welcome back — one step to finish
+              </h3>
+              <p className="mt-2 text-center text-sm leading-relaxed text-navy-300">
+                An account already exists for{' '}
+                <strong className="break-all text-navy">{guestEmail.trim()}</strong>. Your order was{' '}
+                <strong className="text-navy">not placed yet</strong> and nothing was charged —
+                enter your password to place this booking with your saved details. Your items,
+                transfer receipt and pickup are all preserved.
+              </p>
+              <form onSubmit={submitAccountPassword} className="mt-5 space-y-3">
+                <div>
+                  <Label
+                    htmlFor="account-password"
+                    className="text-xs uppercase tracking-wide text-navy-300"
+                  >
+                    Your account password
+                  </Label>
+                  <Input
+                    id="account-password"
+                    type="password"
+                    value={accountPassword}
+                    onChange={(e) => setAccountPassword(e.target.value)}
+                    placeholder="Your password"
+                    className="mt-1.5"
+                    autoFocus
+                    required
+                    disabled={accountSigningIn}
+                    autoComplete="current-password"
+                  />
+                </div>
+                {accountError && (
+                  <p className="rounded-lg bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-700 ring-1 ring-red-200" role="alert">
+                    {accountError}
+                  </p>
+                )}
+                <Button
+                  type="submit"
+                  disabled={accountSigningIn || !accountPassword}
+                  className="w-full bg-gold-gradient text-navy hover:opacity-90"
+                >
+                  {accountSigningIn ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Placing your order…
+                    </>
+                  ) : (
+                    'Place my order'
+                  )}
+                </Button>
+              </form>
+              <div className="mt-4 flex flex-col items-center gap-2 text-center">
+                <a
+                  href={`/forgot-password?email=${encodeURIComponent(guestEmail.trim())}`}
+                  className="text-xs font-semibold text-navy-300 underline-offset-2 hover:text-navy hover:underline"
+                >
+                  Forgot password?
+                </a>
+                <button
+                  type="button"
+                  onClick={() => {
+                    // Decline: go back to the contact step with a cleared
+                    // email so they can either use a different address or
+                    // continue as a brand-new guest.
+                    setAccountExists(false)
+                    setAccountPassword('')
+                    setAccountError(null)
+                    setGuestEmail('')
+                    setStep(3)
+                  }}
+                  disabled={accountSigningIn}
+                  className="text-xs font-semibold text-navy-300 hover:text-navy"
+                >
+                  Book with a different email instead
+                </button>
+              </div>
+              <p className="mt-4 text-center text-[11px] leading-relaxed text-navy-300/80">
+                After signing in you&apos;ll go straight to the payment confirmation page — and
+                we email you the moment your transfer is verified.
+              </p>
             </motion.div>
           </motion.div>
         )}

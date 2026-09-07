@@ -25,8 +25,14 @@ function TabsList({
   return (
     <TabsPrimitive.List
       data-slot="tabs-list"
+      // Phase 36 (mobile scrollability): `max-w-full overflow-x-auto` keeps
+      // every tab row swipeable when it is wider than the viewport (e.g. the
+      // Settings sub-tabs on a 390px phone — previously the row was clipped
+      // by the page's overflow-x-hidden and the last tabs were unreachable).
+      // `nav-scroll` gives iOS momentum scrolling and hides the scrollbar;
+      // when the row fits (desktop) nothing changes visually.
       className={cn(
-        "bg-muted text-muted-foreground inline-flex h-9 w-fit items-center justify-center rounded-lg p-[3px]",
+        "bg-muted text-muted-foreground inline-flex h-9 max-w-full items-center justify-center overflow-x-auto rounded-lg p-[3px] nav-scroll",
         className
       )}
       {...props}

@@ -709,3 +709,180 @@ export function useMarkNotificationsRead() {
     },
   })
 }
+
+// =============================================================================
+// Marketing (phase 36) — campaigns, coupons, subscribers, analytics
+// =============================================================================
+// The admin Marketing tab is ADMIN-only; these hooks hit the corresponding
+// guarded endpoints. The lazy scheduler call (processDue) is fired by the
+// Marketing view on mount so scheduled campaigns go out even when the daily
+// cron is delayed.
+
+export interface MarketingCampaign {
+  id: string
+  name: string
+  subject: string
+  htmlContent: string
+  segment: string
+  status: string
+  scheduledAt: string | null
+  sentAt: string | null
+  sentCount: number
+  openCount: number
+  clickCount: number
+  createdAt: string
+  deliveredCount?: number
+}
+
+export interface MarketingCoupon {
+  id: string
+  name: string
+  code: string | null
+  description: string | null
+  type: string
+  value: number
+  active: boolean
+  appliesTo: string
+  minOrderValue: number | null
+  maxDiscount: number | null
+  maxUsesTotal: number | null
+  maxUsesPerUser: number | null
+  currentUses: number
+  startDate: string | null
+  endDate: string | null
+  createdAt: string
+  usageCount?: number
+}
+
+export interface MarketingSubscriber {
+  id: string
+  email: string
+  name: string | null
+  source: string
+  optIn: boolean
+  unsubscribedAt: string | null
+  createdAt: string
+}
+
+export function useMarketingCampaigns() {
+  return useQuery({
+    queryKey: ['marketing-campaigns'],
+    queryFn: async () => {
+      const res = await fetch('/api/marketing/campaigns')
+      if (!res.ok) throw new Error('Failed to fetch campaigns')
+      const data = await res.json()
+      return data.campaigns as MarketingCampaign[]
+    },
+    staleTime: 15_000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function useMarketingCoupons() {
+  return useQuery({
+    queryKey: ['marketing-coupons'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/discounts')
+      if (!res.ok) throw new Error('Failed to fetch coupons')
+      const data = await res.json()
+      return data.discounts as MarketingCoupon[]
+    },
+    staleTime: 15_000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function useMarketingSubscribers(search: string) {
+  return useQuery({
+    queryKey: ['marketing-subscribers', search],
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/marketing/subscribers?q=${encodeURIComponent(search)}`
+      )
+      if (!res.ok) throw new Error('Failed to fetch subscribers')
+      const data = await res.json()
+      return data as {
+        subscribers: MarketingSubscriber[]
+        total: number
+        optedInCustomers: number
+        unsubscribed: number
+      }
+    },
+    staleTime: 30_000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+}
+
+export interface MarketingStats {
+  totalCampaigns: number
+  sentCampaigns: number
+  totalEmailsSent: number
+  totalOpens: number
+  totalClicks: number
+  openRate: number
+  clickRate: number
+  subscribers: number
+  optedInCustomers: number
+  totalCouponUsages: number
+  totalDiscountGiven: number
+  topCoupons: {
+    id: string
+    name: string
+    code: string | null
+    type: string | null
+    value: number | null
+    active: boolean
+    redemptions: number
+    totalDiscount: number
+  }[]
+  recentCampaigns: {
+    id: string
+    name: string
+    subject: string
+    segment: string
+    status: string
+    sentCount: number
+    openCount: number
+    clickCount: number
+    sentAt: string | null
+    createdAt: string
+  }[]
+}
+
+export function useMarketingStats() {
+  return useQuery({
+    queryKey: ['marketing-stats'],
+    queryFn: async () => {
+      const res = await fetch('/api/marketing/analytics')
+      if (!res.ok) throw new Error('Failed to fetch marketing stats')
+      return (await res.json()) as MarketingStats
+    },
+    staleTime: 30_000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+}
+
+/** Lazy scheduler: processes any SCHEDULED campaigns that are due. Called on
+ *  Marketing tab mount — the daily cron is the other trigger. */
+export function useProcessDueCampaigns() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/marketing/campaigns/process-due', {
+        method: 'POST',
+      })
+      if (!res.ok) return null
+      return res.json()
+    },
+    onSuccess: (data) => {
+      if (data && (data as any).processed > 0) {
+        qc.invalidateQueries({ queryKey: ['marketing-campaigns'] })
+        qc.invalidateQueries({ queryKey: ['marketing-stats'] })
+      }
+    },
+  })
+}
