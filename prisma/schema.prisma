@@ -415,6 +415,9 @@ model NewsletterCampaign {
   segment     String   @default("ALL")
   status      String   @default("DRAFT") // DRAFT | SCHEDULED | SENDING | SENT | CANCELLED
   scheduledAt DateTime?
+  // Phase 37: the owner must send himself a test copy before a live blast
+  // (send route refuses live sends until this is set) — accident guard.
+  testSentAt  DateTime?
   sentAt      DateTime?
   sentCount   Int      @default(0)
   openCount   Int      @default(0)

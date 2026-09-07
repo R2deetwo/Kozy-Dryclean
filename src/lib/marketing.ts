@@ -112,6 +112,44 @@ export function rewriteCampaignLinks(html: string, campaignId: string, recipient
   })
 }
 
+// -----------------------------------------------------------------------------
+// Plain-text → email HTML (the owner writes like a normal person)
+// -----------------------------------------------------------------------------
+/** Convert a plain-text message into clean, safe email HTML.
+ *
+ *  The owner types the campaign message the same way he would type a
+ *  WhatsApp message — no HTML knowledge needed:
+ *    - a blank line starts a new paragraph
+ *    - a single line break is kept as a line break
+ *    - **two stars around words** makes them bold
+ *    - a pasted link (https://… or www.…) becomes a clickable link
+ *
+ *  Everything is HTML-escaped FIRST, so pasted text can never break the
+ *  email layout or inject markup into what customers receive. */
+export function plainTextToEmailHtml(text: string): string {
+  const escaped = text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+
+  const autolink = (s: string): string =>
+    s.replace(/(^|[\s(])((?:https?:\/\/|www\.)[^\s<)]+)/g, (_m, pre: string, url: string) => {
+      const href = url.startsWith('www.') ? `https://${url}` : url
+      return `${pre}<a href="${href}" style="color: #0A192F; text-decoration: underline;">${url}</a>`
+    })
+
+  const bold = (s: string): string => s.replace(/\*\*([^*\n]+)\*\*/g, '<strong>$1</strong>')
+  const italic = (s: string): string => s.replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+
+  return escaped
+    .split(/\n{2,}/) // blank line = new paragraph
+    .map((para) => para.trim())
+    .filter((para) => para.length > 0)
+    .map((para) => `<p style="margin: 0 0 16px 0;">${italic(bold(autolink(para))).replace(/\n/g, '<br>')}</p>`)
+    .join('\n')
+}
+
 /** Wrap the admin's body HTML in the Kozy campaign template. Matches the
  *  transactional email look (navy header, gold wordmark) so every email
  *  from the business reads as one brand. */
@@ -125,7 +163,7 @@ export function wrapCampaignHtml(
   const unsubUrl = `${base}/api/marketing/unsubscribe?token=${unsubToken}`
   const trackedBody = rewriteCampaignLinks(bodyHtml, opts.campaignId, opts.recipientId)
   const banner = opts.preview
-    ? `<div style="background:#FEF3C7;color:#92400E;padding:10px 16px;text-align:center;font-size:12px;font-weight:600;">TEST PREVIEW — only you received this copy</div>`
+    ? `<div style="background:#FEF3C7;color:#92400E;padding:10px 16px;text-align:center;font-size:12px;font-weight:600;">Test copy &mdash; this version went only to you, no customer has received it</div>`
     : ''
   return `<!DOCTYPE html>
 <html>
@@ -144,9 +182,10 @@ export function wrapCampaignHtml(
         Kozy Care · Premium Drycleaning &amp; Laundry<br>
         Lekki, Lagos · Customer care +234 803 175 5230
       </p>
-      <p style="color: #9AA7B8; font-size: 11px; margin: 0;">
-        You received this email because you are a Kozy Care customer or subscriber.
-        <a href="${unsubUrl}" style="color: #D4AF37;">Unsubscribe</a> — you will not receive marketing emails again.
+      <p style="color: #9AA7B8; font-size: 11px; margin: 0; line-height: 1.6;">
+        You&rsquo;re getting this because you&rsquo;re a Kozy Care customer or you signed up for our updates.
+        If you&rsquo;d rather not get emails like this, just tap <a href="${unsubUrl}" style="color: #D4AF37; text-decoration: underline;">Unsubscribe</a>
+        &mdash; it takes effect right away, and the emails about your orders will keep coming as normal.
       </p>
     </div>
   </div>
@@ -358,7 +397,9 @@ export async function sendCampaignNow(campaignId: string): Promise<SendCampaignR
   return { campaignId, total: totalRows, sentCount: totalSent, failedCount }
 }
 
-/** Send a test copy of the campaign to a single address (admin preview). */
+/** Send a test copy of the campaign to a single address (admin preview).
+ *  Records testSentAt — a live blast is only allowed after the owner has
+ *  seen the email in his own inbox first (the test-first guard). */
 export async function sendCampaignTest(campaignId: string, to: string): Promise<void> {
   const campaign = await db.newsletterCampaign.findUnique({ where: { id: campaignId } })
   if (!campaign) throw new Error('Campaign not found')
@@ -375,6 +416,23 @@ export async function sendCampaignTest(campaignId: string, to: string): Promise<
     subject: `[TEST] ${campaign.subject}`,
     html,
     tags: ['kozy-marketing', 'kozy-test'],
+  })
+  await db.newsletterCampaign.update({ where: { id: campaignId }, data: { testSentAt: new Date() } })
+}
+
+/** Render the exact HTML a campaign would send — WITHOUT sending anything.
+ *  Powers the in-console preview (composer live preview + the Preview
+ *  button on saved campaigns). The yellow "test copy" banner is always
+ *  included so a preview can never be confused with a real send. */
+export function buildCampaignPreviewHtml(
+  campaign: { id: string; htmlContent: string },
+  viewerEmail: string
+): string {
+  return wrapCampaignHtml(campaign.htmlContent, {
+    campaignId: campaign.id,
+    recipientId: 'preview',
+    email: viewerEmail,
+    preview: true,
   })
 }
 

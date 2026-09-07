@@ -17,7 +17,7 @@
 // an interrupted campaign continues where it stopped.
 // =============================================================================
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Megaphone,
   Tag,
@@ -40,6 +40,9 @@ import {
   AlertCircle,
   X,
   Sparkles,
+  Bold,
+  Italic,
+  Pencil,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { formatNaira } from '@/lib/types'
@@ -61,6 +64,14 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -164,6 +175,18 @@ function CampaignsTab() {
   const { data: campaigns, isLoading } = useMarketingCampaigns()
   const [showCreate, setShowCreate] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  // Saved-campaign preview dialog (the exact email, nothing is sent)
+  const [previewCampaign, setPreviewCampaign] = useState<MarketingCampaign | null>(null)
+  // Safe send dialog: the owner sees HOW MANY people will receive the email
+  // and must type SEND — a live blast can never be a single stray click.
+  const [sendDialog, setSendDialog] = useState<{
+    campaign: MarketingCampaign
+    count: number | null
+    tested: boolean
+    loadingCount: boolean
+    typed: string
+    sending: boolean
+  } | null>(null)
 
   async function refresh() {
     await qc.invalidateQueries({ queryKey: ['marketing-campaigns'] })
@@ -176,7 +199,8 @@ function CampaignsTab() {
     const body = {
       name: fd.get('name'),
       subject: fd.get('subject'),
-      htmlContent: fd.get('htmlContent'),
+      // Plain message — the API turns it into the pretty email HTML
+      bodyText: fd.get('bodyText'),
       segment: fd.get('segment'),
       // datetime-local → ISO (local time, as the admin meant it)
       scheduledAt: scheduledRaw ? new Date(scheduledRaw).toISOString() : undefined,
@@ -191,7 +215,7 @@ function CampaignsTab() {
         title: 'Campaign saved',
         description: scheduledRaw
           ? 'Scheduled — it sends automatically on the day (daily check + when you open this tab).'
-          : 'Saved as a draft. Send a test to yourself, then blast it when ready.',
+          : 'Saved as a draft. Open Preview to see the email, send yourself a Test, then send it to everyone.',
       })
       setShowCreate(false)
       refresh()
@@ -205,41 +229,84 @@ function CampaignsTab() {
     }
   }
 
-  async function handleSend(campaign: MarketingCampaign, test = false) {
-    if (
-      !test &&
-      !confirm(
-        `Send "${campaign.name}" to ${SEGMENT_META[campaign.segment]?.label ?? campaign.segment}?` +
-          (campaign.status === 'SENT'
-            ? '\nThis campaign was already sent — only recipients who missed it (failed sends) will be retried.'
-            : '\nThis cannot be undone.')
-      )
-    ) {
-      return
-    }
+  /** Test copy → the owner's own inbox only. No confirmation needed —
+   *  it can never reach a customer. */
+  async function handleTestSend(campaign: MarketingCampaign) {
     setBusyId(campaign.id)
     try {
       const res = await fetch(`/api/marketing/campaigns/${campaign.id}/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ test }),
+        body: JSON.stringify({ test: true }),
       })
       const data = await res.json().catch(() => ({}))
       if (res.ok) {
         toast({
-          title: test ? 'Test email sent' : 'Campaign sent',
-          description: data.message || 'Check the analytics tab for open and click rates.',
+          title: 'Test email sent',
+          description: data.message || 'Check your own inbox — it went only to you.',
         })
         refresh()
       } else {
         toast({
-          title: test ? 'Test send failed' : 'Send failed',
+          title: 'Test send failed',
           description: data.error || 'Please try again.',
           variant: 'destructive',
         })
       }
     } finally {
       setBusyId(null)
+    }
+  }
+
+  /** Live blast → always through the safe dialog (count + typed SEND). */
+  async function openSendDialog(campaign: MarketingCampaign) {
+    setSendDialog({ campaign, count: null, tested: campaign.testSentAt != null, loadingCount: true, typed: '', sending: false })
+    try {
+      const res = await fetch(`/api/marketing/campaigns/${campaign.id}/audience`)
+      const data = await res.json().catch(() => ({}))
+      setSendDialog((d) =>
+        d && d.campaign.id === campaign.id
+          ? { ...d, count: res.ok ? data.count : null, tested: res.ok ? !!data.tested : d.tested, loadingCount: false }
+          : d
+      )
+    } catch {
+      setSendDialog((d) => (d && d.campaign.id === campaign.id ? { ...d, loadingCount: false } : d))
+    }
+  }
+
+  async function confirmSend() {
+    if (!sendDialog) return
+    const { campaign } = sendDialog
+    setSendDialog({ ...sendDialog, sending: true })
+    try {
+      const res = await fetch(`/api/marketing/campaigns/${campaign.id}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        toast({
+          title: 'Campaign sent',
+          description: data.message || 'Check the analytics tab for open and click rates.',
+        })
+        setSendDialog(null)
+        refresh()
+      } else if (data.code === 'TEST_FIRST') {
+        toast({
+          title: 'One more step — test it first',
+          description: data.error,
+        })
+        setSendDialog(null)
+      } else {
+        toast({
+          title: 'Send failed',
+          description: data.error || 'Please try again.',
+          variant: 'destructive',
+        })
+      }
+    } finally {
+      setSendDialog((d) => (d ? { ...d, sending: false } : null))
     }
   }
 
@@ -288,8 +355,9 @@ function CampaignsTab() {
           <p className="mt-3 font-semibold text-navy">No campaigns yet</p>
           <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-navy-300">
             Your first newsletter could be a simple offer — e.g. &ldquo;12% off every suit this
-            weekend&rdquo; — with a coupon code from the Coupons tab. Create it above, send
-            yourself a test, then blast it.
+            weekend&rdquo; — with a coupon code from the Coupons tab. Create it above, press{' '}
+            <strong>Preview</strong> to see the exact email, send yourself a <strong>Test</strong>,
+            then send it to everyone.
           </p>
         </div>
       ) : (
@@ -305,6 +373,11 @@ function CampaignsTab() {
                       <Badge className="bg-linen-100 text-[10px] text-navy-300">
                         {SEGMENT_META[c.segment]?.label ?? c.segment}
                       </Badge>
+                      {c.testSentAt && (
+                        <Badge className="bg-emerald-50 text-[10px] font-semibold text-emerald-700" title={`Tested ${fmtDateTime(c.testSentAt)}`}>
+                          <Check className="mr-0.5 h-2.5 w-2.5" /> Tested
+                        </Badge>
+                      )}
                     </div>
                     <p className="mt-0.5 truncate text-sm text-navy-300">{c.subject}</p>
                     <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-navy-300">
@@ -335,8 +408,20 @@ function CampaignsTab() {
                         size="sm"
                         variant="ghost"
                         disabled={busyId === c.id}
-                        onClick={() => handleSend(c, true)}
-                        title="Send a test copy to your own inbox"
+                        onClick={() => setPreviewCampaign(c)}
+                        title="See the exact email — nothing is sent"
+                      >
+                        <Eye className="mr-1 h-3 w-3" />
+                        Preview
+                      </Button>
+                    )}
+                    {['DRAFT', 'SCHEDULED', 'SENDING', 'SENT'].includes(c.status) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busyId === c.id}
+                        onClick={() => handleTestSend(c)}
+                        title="Send a test copy to your own inbox only"
                       >
                         {busyId === c.id ? (
                           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -351,7 +436,7 @@ function CampaignsTab() {
                         size="sm"
                         className="bg-navy text-white hover:bg-navy/90"
                         disabled={busyId === c.id}
-                        onClick={() => handleSend(c)}
+                        onClick={() => openSendDialog(c)}
                       >
                         <Send className="mr-1 h-3 w-3" />
                         {c.status === 'SENT' ? 'Retry failed' : c.status === 'SCHEDULED' ? 'Send early' : 'Send now'}
@@ -375,6 +460,103 @@ function CampaignsTab() {
           ))}
         </div>
       )}
+
+      {/* ---- Preview dialog: the exact email, nothing is sent ---- */}
+      <Dialog open={!!previewCampaign} onOpenChange={(o) => !o && setPreviewCampaign(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Email preview — {previewCampaign?.name}</DialogTitle>
+            <DialogDescription>
+              This is exactly what your customers receive. Nothing is sent from this screen — use
+              Test to get a copy in your own inbox, or Send now to deliver it.
+            </DialogDescription>
+          </DialogHeader>
+          {previewCampaign && (
+            <iframe
+              title="Campaign email preview"
+              src={`/api/marketing/campaigns/${previewCampaign.id}/preview`}
+              className="h-[65vh] w-full rounded-lg border border-navy-100 bg-white"
+              sandbox=""
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ---- Safe send dialog: count + typed confirmation ---- */}
+      <Dialog open={!!sendDialog} onOpenChange={(o) => !o && setSendDialog(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send this email to your customers?</DialogTitle>
+            <DialogDescription>
+              {sendDialog?.campaign.status === 'SENT'
+                ? 'This campaign was already sent — this only re-tries the recipients whose copy failed.'
+                : 'This cannot be undone, so it needs a deliberate confirmation.'}
+            </DialogDescription>
+          </DialogHeader>
+          {sendDialog && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-navy-100 bg-linen-50 p-4 text-sm">
+                <p className="font-medium text-navy">
+                  {sendDialog.campaign.subject}
+                </p>
+                <p className="mt-1 text-navy-300">
+                  Goes to:{' '}
+                  <span className="font-medium text-navy">
+                    {SEGMENT_META[sendDialog.campaign.segment]?.label ?? sendDialog.campaign.segment}
+                  </span>
+                </p>
+                <p className="mt-1 text-navy-300">
+                  Recipients:{' '}
+                  <span className="font-semibold text-navy">
+                    {sendDialog.loadingCount ? 'counting…' : sendDialog.count != null ? sendDialog.count : 'unavailable'}
+                  </span>{' '}
+                  {sendDialog.count === 1 ? 'person' : 'people'}
+                </p>
+              </div>
+              {!sendDialog.tested && (
+                <p className="rounded-lg bg-gold-50 p-3 text-xs leading-relaxed text-gold-700">
+                  You haven&rsquo;t tested this campaign yet — the send will be refused until you
+                  click <strong>Test</strong> and check it in your own inbox first.
+                </p>
+              )}
+              <div className="space-y-2">
+                <Label htmlFor="send-confirm">Type SEND to confirm</Label>
+                <Input
+                  id="send-confirm"
+                  autoComplete="off"
+                  placeholder="SEND"
+                  value={sendDialog.typed}
+                  onChange={(e) =>
+                    setSendDialog((d) => (d ? { ...d, typed: e.target.value.toUpperCase() } : d))
+                  }
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setSendDialog(null)}>
+                  Cancel
+                </Button>
+                <Button
+                  className="bg-navy text-white hover:bg-navy/90"
+                  disabled={sendDialog.typed !== 'SEND' || sendDialog.sending || sendDialog.loadingCount}
+                  onClick={confirmSend}
+                >
+                  {sendDialog.sending ? (
+                    <>
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Sending…
+                    </>
+                  ) : (
+                    <>
+                      <Send className="mr-1.5 h-3.5 w-3.5" /> Send to{' '}
+                      {sendDialog.loadingCount ? '…' : sendDialog.count ?? ''}{' '}
+                      {sendDialog.count === 1 ? 'person' : 'people'}
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -397,15 +579,63 @@ function CampaignForm({
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   onCancel: () => void
 }) {
-  const [htmlBody, setHtmlBody] = useState(
-    '<p>Hi there,</p>\n<p>Write your message here. Simple HTML works: <strong>bold</strong>, <em>italic</em>, and links like <a href="https://kozycare.ng/book">Book a pickup</a>.</p>\n<p>— The Kozy Care team</p>'
+  // The message is PLAIN TEXT — typed like a normal email or WhatsApp
+  // message. No HTML knowledge needed; the server converts it (paragraphs,
+  // bold, clickable links) and the Preview tab shows the exact result.
+  const [message, setMessage] = useState(
+    'Hi there,\n\nWrite your message here, exactly like typing a normal email. Leave a blank line between paragraphs, put **two stars** around words you want bold, and any link you paste becomes a button customers can tap.\n\n— The Kozy Care team'
   )
+  const [mode, setMode] = useState<'write' | 'preview'>('write')
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+
+  // Debounced live preview — renders through the SAME wrapper the real
+  // email uses, so what the owner sees is exactly what customers get.
+  // This endpoint never sends anything.
+  useEffect(() => {
+    if (mode !== 'preview') return
+    if (!message.trim()) {
+      setPreviewHtml(null)
+      return
+    }
+    const t = setTimeout(async () => {
+      setPreviewLoading(true)
+      try {
+        const res = await fetch('/api/marketing/preview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bodyText: message }),
+        })
+        setPreviewHtml(res.ok ? await res.text() : null)
+      } catch {
+        setPreviewHtml(null)
+      } finally {
+        setPreviewLoading(false)
+      }
+    }, 350)
+    return () => clearTimeout(t)
+  }, [message, mode])
+
+  /** Wrap the current selection with a marker (e.g. ** for bold). */
+  function wrapSelection(marker: string) {
+    const ta = taRef.current
+    if (!ta) return
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const selected = message.slice(start, end) || 'bold text'
+    setMessage(message.slice(0, start) + marker + selected + marker + message.slice(end))
+    requestAnimationFrame(() => {
+      ta.focus()
+      ta.setSelectionRange(start + marker.length, start + marker.length + selected.length)
+    })
+  }
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label>Campaign name (internal)</Label>
+          <Label>Campaign name (just for you)</Label>
           <Input name="name" placeholder="e.g. September Weekend Offer" required maxLength={100} />
         </div>
         <div className="space-y-2">
@@ -414,7 +644,7 @@ function CampaignForm({
         </div>
       </div>
       <div className="space-y-2">
-        <Label>Audience</Label>
+        <Label>Who should receive it?</Label>
         <select
           name="segment"
           defaultValue="ALL"
@@ -426,22 +656,94 @@ function CampaignForm({
             </option>
           ))}
         </select>
-        <p className="text-xs text-navy-300">Footer subscribers are included in &ldquo;All customers&rdquo; sends.</p>
+        <p className="text-xs text-navy-300">Website sign-ups are included in &ldquo;All customers&rdquo; sends.</p>
       </div>
       <div className="space-y-2">
-        <Label>Email body (HTML)</Label>
-        <Textarea
-          name="htmlContent"
-          rows={8}
-          value={htmlBody}
-          onChange={(e) => setHtmlBody(e.target.value)}
-          required
-          className="font-mono text-xs"
-        />
-        <p className="text-xs leading-relaxed text-navy-300">
-          The Kozy header, footer, unsubscribe link and open-tracking are added automatically —
-          write only the message itself. Keep paragraphs short; most customers read on their phones.
-        </p>
+        <div className="flex items-center justify-between">
+          <Label>Your message</Label>
+          <div className="flex items-center gap-1">
+            {mode === 'write' ? (
+              <>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => wrapSelection('**')}
+                  title="Make the selected text bold"
+                >
+                  <Bold className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => wrapSelection('*')}
+                  title="Make the selected text italic"
+                >
+                  <Italic className="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => setMode('preview')}
+                  title="See exactly what the email looks like"
+                >
+                  <Eye className="mr-1 h-3.5 w-3.5" /> Preview
+                </Button>
+              </>
+            ) : (
+              <Button type="button" size="sm" variant="ghost" onClick={() => setMode('write')}>
+                <Pencil className="mr-1 h-3.5 w-3.5" /> Edit message
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {mode === 'write' ? (
+          <>
+            <Textarea
+              ref={taRef}
+              name="bodyText"
+              rows={10}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              required
+              className="text-sm leading-relaxed"
+              placeholder="Write your message like a normal email…"
+            />
+            <p className="text-xs leading-relaxed text-navy-300">
+              Type it like a normal message — a blank line starts a new paragraph. To make
+              something bold, wrap it in two stars:{' '}
+              <code className="rounded bg-linen-100 px-1 py-0.5">**like this**</code>. Any link you
+              paste (like https://kozycare.ng/book) becomes a clickable button in the email. The
+              Kozy Care header, sign-off and one-click unsubscribe are added automatically.
+            </p>
+          </>
+        ) : (
+          <div className="rounded-lg border border-navy-100 bg-white">
+            {previewLoading ? (
+              <div className="flex h-64 items-center justify-center text-sm text-navy-300">
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Preparing the preview…
+              </div>
+            ) : previewHtml ? (
+              <iframe
+                title="Live email preview"
+                srcDoc={previewHtml}
+                className="h-[420px] w-full rounded-lg"
+                sandbox=""
+              />
+            ) : (
+              <div className="flex h-64 items-center justify-center px-6 text-center text-sm text-navy-300">
+                Write your message first — the preview will appear here.
+              </div>
+            )}
+            <p className="border-t border-navy-100 px-4 py-2 text-xs text-navy-300">
+              This is exactly what customers will receive (the yellow &ldquo;test copy&rdquo; stripe
+              is removed on the real send). Nothing is sent from this screen.
+            </p>
+          </div>
+        )}
       </div>
       <div className="space-y-2">
         <Label>Schedule (optional — leave blank to save as draft)</Label>

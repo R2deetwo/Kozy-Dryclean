@@ -726,6 +726,7 @@ export interface MarketingCampaign {
   segment: string
   status: string
   scheduledAt: string | null
+  testSentAt: string | null
   sentAt: string | null
   sentCount: number
   openCount: number

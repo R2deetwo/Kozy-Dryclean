@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
+import { plainTextToEmailHtml } from '@/lib/marketing'
 
 // Phase 31/36: convert requireRole's thrown 401/403 Response into a real
 // response — the console client must see 403, not an empty 500.
@@ -28,14 +29,30 @@ async function guardAdmin(): Promise<ReturnType<typeof requireRole> | NextRespon
   }
 }
 
-const CreateCampaignSchema = z.object({
-  name: z.string().trim().min(1, 'Campaign name is required').max(100),
-  subject: z.string().trim().min(1, 'Email subject is required').max(200),
-  htmlContent: z.string().trim().min(1, 'Email body is required').max(200_000),
-  segment: z.enum(['ALL', 'B2C', 'B2B', 'INACTIVE']).default('ALL'),
-  // Optional ISO datetime — blank/undefined saves as a DRAFT
-  scheduledAt: z.string().datetime().optional(),
-})
+const CreateCampaignSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Campaign name is required').max(100),
+    subject: z.string().trim().min(1, 'Email subject is required').max(200),
+    // Phase 37: the owner writes a plain message (like a normal email or
+    // WhatsApp text) — converted to safe, pretty HTML server-side. The
+    // htmlContent field stays for any power user who pastes real HTML.
+    bodyText: z.string().trim().min(1, 'Email message is required').max(100_000).optional(),
+    htmlContent: z.string().trim().min(1, 'Email body is required').max(200_000).optional(),
+    segment: z.enum(['ALL', 'B2C', 'B2B', 'INACTIVE']).default('ALL'),
+    // Optional ISO datetime — blank/undefined saves as a DRAFT
+    scheduledAt: z.string().datetime().optional(),
+  })
+  .refine((d) => d.bodyText || d.htmlContent, {
+    message: 'Write the message before saving',
+  })
+
+/** Turn the submitted message into the HTML that gets stored.
+ *  Plain text is auto-formatted (paragraphs, bold, clickable links);
+ *  hand-written HTML from an advanced user is kept as-is. */
+function messageToHtml(bodyText?: string, htmlContent?: string): string {
+  if (bodyText) return plainTextToEmailHtml(bodyText)
+  return htmlContent ?? ''
+}
 
 export async function GET() {
   const guard = await guardAdmin()
@@ -78,12 +95,12 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { name, subject, htmlContent, segment, scheduledAt } = parsed.data
+  const { name, subject, bodyText, htmlContent, segment, scheduledAt } = parsed.data
   const campaign = await db.newsletterCampaign.create({
     data: {
       name,
       subject,
-      htmlContent,
+      htmlContent: messageToHtml(bodyText, htmlContent),
       segment,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       status: scheduledAt ? 'SCHEDULED' : 'DRAFT',

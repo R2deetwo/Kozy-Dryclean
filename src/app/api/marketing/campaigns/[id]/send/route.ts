@@ -7,6 +7,11 @@
 //                are created once per (campaign, email) and only PENDING
 //                rows are sent, so re-running after an interruption
 //                continues instead of duplicating.
+//
+// Phase 37 accident guard: a live blast is REFUSED (409) until the campaign
+// has been test-sent at least once — the owner must have seen the email in
+// his own inbox before it can go to customers. Scheduled campaigns (cron /
+// lazy scheduler) are exempt: scheduling was a deliberate, separate step.
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -66,6 +71,20 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   if (campaign.status === 'CANCELLED') {
     return NextResponse.json({ error: 'This campaign was cancelled' }, { status: 400 })
+  }
+
+  // Accident guard (phase 37): no live blast before the owner has seen a
+  // test copy in his own inbox. Retry-after-failure on an already-SENT
+  // campaign stays allowed (it only re-tries failed recipients).
+  if (!campaign.testSentAt && campaign.status !== 'SENT') {
+    return NextResponse.json(
+      {
+        error:
+          'Send yourself a test first — click “Test” to receive the email in your own inbox, then come back and send it to everyone.',
+        code: 'TEST_FIRST',
+      },
+      { status: 409 }
+    )
   }
 
   try {
