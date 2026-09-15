@@ -178,3 +178,30 @@ Pre-print checks (every print run):
   2. Prices match the live catalog (check kozycare.ng or admin Settings)
   3. Offer percentages match admin Settings → Offers & Delivery
   4. Both addresses correct (Ogombo + Paradise 3 Estate, Chevron)
+
+------------------------------------------------------------------
+CURRENT VERSION: v9.1  (16 September 2026) — BAG SOCIAL BOX + OWAMBE FIX
+------------------------------------------------------------------
+WHAT CHANGED IN v9.1 (two client-directed fixes only):
+
+  1. NYLON BAG ARTWORK — the social section was scattered; it is now
+     ONE neat gold-bordered box with three tight columns: QR + SCAN TO
+     BOOK | FOLLOW US social rows | CALL/WHATSAPP + number + web.
+     Face 450x600mm, print PDF with bleed + crop marks, flat PNG,
+     mockup PNG. Phone on one line; QR ~74mm printed, machine-verified.
+
+  2. OWAMBE A3 POSTER — party photo regenerated: right-hand woman's
+     eyes now natural (no black voids), left-hand woman's fingers
+     well-formed, no hand on the man's shoulder. Close-up QA report of
+     every eye and hand is shipped with the files. Wordmark matches the
+     website exactly; nothing crosses it; gold-arch frame at the photo's
+     exact 3:4 aspect (no crop); consumer offer (10% off first clean).
+
+WHERE THE FILES LIVE:
+  v9.1 ... download/kozy-brand/v9.1-bag-social-and-owambe-fix/
+
+NOTE: the v8/v9 build files from the earlier session were not carried
+into this environment; v9.1 was rebuilt from the v6 kit library plus
+every recorded client rule (website-exact wordmark, QR recipe, one-line
+phone). If you hold v8/v9 prints you want matched piece-for-piece, say
+so and they will be rebuilt on this foundation.

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,500&family=Marcellus&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+
+  html, body { margin:0; padding:0; background:#FFFFFF; }
+  * { box-sizing:border-box; }
+  
+  /* WEBSITE-EXACT lockup (src/components/shell/logo.tsx):
+     K mark left + "Kozy Care" Playfair Display 700, TITLE CASE,
+     tracking-tight (-0.025em), line-height 1.15, with the uppercase
+     "Drycleaning & Laundry" subtitle in Outfit, 0.15em tracking, gold.
+     Proportions follow the site's md size (mark 40 / name 20 / sub 9). */
+  .lockup { display:flex; align-items:center; }
+  .lockup .lt { display:flex; flex-direction:column; justify-content:center;
+                text-align:left; }
+  .lockup .bn { font-family:'Playfair Display', Georgia, serif; font-weight:700;
+                letter-spacing:-0.025em; line-height:1.15; white-space:nowrap; }
+  .lockup .bd { font-family:'Outfit', Arial, sans-serif; font-weight:600;
+                text-transform:uppercase; letter-spacing:0.15em;
+                white-space:nowrap; }
+
+  
+  /* THE NEAT SOCIAL BOX (client fix v9.1): QR + socials + call grouped in
+     ONE bordered box — three tight columns sharing the full width, no
+     dead gaps, nothing scattered. 's' scale factor multiplies sizes. */
+  .socialbox { border:6px solid #D4AF37; border-radius:30px;
+               background:rgba(212,175,55,.07);
+               display:flex; align-items:center; }
+  .sb-col { display:flex; flex-direction:column; justify-content:center;
+            flex-shrink:0; }
+  .sb-qr { display:block; border-radius:8px; }
+  .sb-scan { font-weight:700; letter-spacing:.24em; color:#D4AF37;
+             white-space:nowrap; text-align:center; }
+  .sb-div { width:3px; align-self:stretch; background:rgba(212,175,55,.5);
+            border-radius:2px; flex-shrink:0; }
+  .sb-follow { font-weight:700; color:#D4AF37; letter-spacing:.34em; }
+  .sb-row { display:flex; align-items:center; }
+  .sb-ic { color:#D4AF37; display:flex; align-items:center; flex-shrink:0; }
+  .sb-handle { color:#F2F6FB; font-weight:500; white-space:nowrap; }
+  .sb-lbl { color:#D4AF37; font-weight:700; letter-spacing:.18em;
+            white-space:nowrap; }
+  .sb-tel { color:#F2F6FB; font-weight:600; white-space:nowrap;
+            letter-spacing:.02em; }
+  .sb-web { font-family:'Playfair Display', Georgia, serif; font-style:italic;
+            color:rgba(212,175,55,.92); white-space:nowrap; }
+
+  
+
+  .poster { width:1762.00px; height:2329.00px; position:relative;
+             background:#FFFFFF; }
+  .bleedbox { position:absolute; inset:18.9px; background:#0A192F;
+               overflow:hidden; }
+  .trim { position:absolute; inset:11.34px; }
+  .marks { position:absolute; left:0; top:0; pointer-events:none; }
+
+  .corner { position:absolute; width:132px; height:132px;
+            border:6px solid #D4AF37; pointer-events:none; }
+  .corner.tl { top:56px; left:56px; border-right:none; border-bottom:none;
+               border-radius:18px 0 0 0; }
+  .corner.tr { top:56px; right:56px; border-left:none; border-bottom:none;
+               border-radius:0 18px 0 0; }
+  .corner.bl { bottom:56px; left:56px; border-right:none; border-top:none;
+               border-radius:0 0 0 18px; }
+  .corner.br { bottom:56px; right:56px; border-left:none; border-top:none;
+               border-radius:0 0 18px 0; }
+
+  .ghost { position:absolute; right:-120px; bottom:130px; pointer-events:none; }
+  .content { position:absolute; inset:0; padding:118px 120px;
+             display:flex; flex-direction:column; align-items:center;
+             font-family:'Outfit', Arial, sans-serif; color:#E7EDF5; }
+  .lock { position:relative; z-index:2; }
+  .tagline { font-family:'Playfair Display', Georgia, serif; font-style:italic;
+             font-weight:500; font-size:66px; color:#F2F6FB; margin-top:96px;
+             text-align:center; white-space:nowrap; }
+  .svc { margin-top:92px; text-align:center; position:relative; z-index:2; }
+  .svc .sl { font-size:44px; font-weight:500; letter-spacing:9px;
+             color:#C9D5E6; line-height:1.55; white-space:nowrap; }
+  .svc .price { font-size:30px; font-weight:600; letter-spacing:6px;
+                color:#D4AF37; margin-top:26px; white-space:nowrap; }
+  .band { margin-top:96px; background:#D4AF37; border-radius:14px;
+          padding:44px 54px; font-weight:800; font-size:54px;
+          letter-spacing:3px; color:#0A192F; white-space:nowrap;
+          position:relative; z-index:2; }
+  .socialbox { margin-top:104px; width:100%; position:relative; z-index:2; }
+  .legal { margin-top:auto; font-size:30px; font-weight:300;
+           letter-spacing:3px; color:rgba(201,213,230,.62);
+           white-space:nowrap; position:relative; z-index:2; }
+
+</style></head>
+<body>
+<div class="poster">
+  <div class="bleedbox"><div class="trim">
+    <div class="corner tl"></div><div class="corner tr"></div>
+    <div class="corner bl"></div><div class="corner br"></div>
+
+      <div class="ghost"><svg viewBox="-24 -838 861 896" style="height:940px;width:905.78px;display:block;opacity:.045" xmlns="http://www.w3.org/2000/svg"><g transform="scale(1,-1)"><path d="M689 708V689Q657 682 620.5 661.0Q584 640 544 593L356 369L414 452L652 81Q666 58 682.0 44.0Q698 30 724 20V0Q689 2 646.0 2.5Q603 3 568 3Q547 3 517.0 2.5Q487 2 441 0V20Q482 22 490.5 31.5Q499 41 483 65L338 300Q324 323 313.0 334.5Q302 346 291.0 350.5Q280 355 262 356V377Q306 378 340.5 401.0Q375 424 416 471L475 542Q513 587 519.5 619.5Q526 652 506.5 670.0Q487 688 447 689V708Q472 707 494.5 706.5Q517 706 541.5 705.5Q566 705 595 705Q624 705 647.5 706.0Q671 707 689 708ZM343 708V688Q311 687 294.5 680.5Q278 674 273.0 656.5Q268 639 268 602V106Q268 70 273.5 52.0Q279 34 295.0 28.0Q311 22 343 20V0Q316 2 275.0 2.5Q234 3 192 3Q144 3 101.5 2.5Q59 2 34 0V20Q66 22 82.0 28.0Q98 34 103.5 52.0Q109 70 109 106V602Q109 639 103.5 656.5Q98 674 81.5 680.5Q65 687 34 688V708Q59 707 101.5 706.0Q144 705 192 705Q234 705 275.0 706.0Q316 707 343 708Z" fill="#D4AF37"/><path d="M 92.1 709.1 L 95.9 710.0 L 100.3 711.4 L 105.6 713.1 L 111.5 715.1 L 118.1 717.2 L 125.3 719.5 L 133.1 721.8 L 141.3 724.1 L 150.0 726.3 L 159.1 728.2 L 168.6 730.0 L 178.5 731.5 L 189.0 733.0 L 200.2 734.5 L 211.9 735.9 L 224.0 737.2 L 236.4 738.4 L 249.0 739.6 L 261.7 740.6 L 274.4 741.6 L 287.1 742.5 L 299.5 743.2 L 312.0 743.9 L 324.8 744.4 L 337.7 744.9 L 350.8 745.3 L 363.9 745.5 L 377.0 745.7 L 390.1 745.8 L 403.0 745.9 L 415.6 745.8 L 428.0 745.7 L 440.1 745.5 L 452.0 745.1 L 463.8 744.7 L 475.5 744.2 L 487.1 743.5 L 498.5 742.8 L 509.7 742.1 L 520.6 741.2 L 531.2 740.4 L 541.4 739.5 L 551.2 738.6 L 560.5 737.7 L 569.4 736.8 L 577.8 735.8 L 585.8 734.8 L 593.4 733.8 L 600.7 732.7 L 607.7 731.6 L 614.5 730.4 L 621.2 729.3 L 627.7 728.2 L 634.2 727.1 L 640.8 726.0 L 647.3 725.0 L 653.8 724.1 L 660.2 723.2 L 666.6 722.3 L 672.8 721.4 L 678.9 720.4 L 684.8 719.4 L 690.6 718.4 L 696.1 717.1 L 701.4 715.8 L 706.4 714.3 L 711.1 712.6 L 715.5 710.8 L 719.8 708.8 L 723.8 706.8 L 727.6 704.7 L 731.1 702.5 L 734.4 700.2 L 737.4 697.8 L 740.2 695.4 L 742.7 693.0 L 744.9 690.5 L 746.9 687.9 L 748.6 685.1 L 750.0 682.3 L 751.1 679.4 L 751.9 676.4 L 752.5 673.5 L 752.7 670.6 L 752.7 667.7 L 752.4 665.0 L 751.9 662.4 L 751.1 659.8 L 749.9 657.3 L 748.3 654.9 L 746.4 652.7 L 744.2 650.5 L 741.9 648.4 L 739.4 646.5 L 736.8 644.8 L 734.2 643.3 L 731.6 642.0 L 729.1 641.0 L 726.6 640.3 L 724.0 640.0 L 721.4 640.2 L 718.8 640.7 L 716.2 641.6 L 713.8 642.5 L 711.5 643.6 L 709.3 644.7 L 707.3 645.8 L 705.6 646.7 L 704.2 647.4 L 703.2 647.9 L 704.8 652.1 L 706.1 651.6 L 707.7 650.9 L 709.5 650.1 L 711.5 649.1 L 713.6 648.1 L 715.7 647.2 L 717.9 646.4 L 720.0 645.9 L 722.0 645.5 L 723.8 645.5 L 725.4 645.7 L 727.1 646.3 L 729.1 647.2 L 731.3 648.4 L 733.6 649.8 L 735.8 651.4 L 737.9 653.2 L 739.9 655.0 L 741.6 656.9 L 743.1 658.7 L 744.2 660.5 L 744.9 662.2 L 745.3 663.9 L 745.6 665.9 L 745.7 668.0 L 745.7 670.2 L 745.4 672.4 L 744.9 674.7 L 744.2 677.0 L 743.2 679.2 L 742.1 681.4 L 740.7 683.5 L 739.1 685.5 L 737.1 687.4 L 734.9 689.5 L 732.4 691.5 L 729.6 693.5 L 726.6 695.5 L 723.4 697.4 L 719.9 699.2 L 716.1 701.0 L 712.2 702.7 L 708.0 704.3 L 703.6 705.7 L 699.0 707.0 L 694.1 708.2 L 688.8 709.2 L 683.3 710.2 L 677.5 711.0 L 671.5 711.9 L 665.3 712.6 L 658.9 713.4 L 652.4 714.2 L 645.9 715.0 L 639.2 716.0 L 632.6 716.9 L 626.1 717.9 L 619.5 718.9 L 612.9 719.9 L 606.1 720.9 L 599.1 721.9 L 591.9 722.8 L 584.4 723.8 L 576.5 724.6 L 568.3 725.5 L 559.5 726.3 L 550.2 727.0 L 540.4 727.8 L 530.2 728.5 L 519.7 729.3 L 508.9 730.0 L 497.8 730.6 L 486.5 731.2 L 475.0 731.7 L 463.4 732.1 L 451.6 732.4 L 439.9 732.5 L 427.9 732.6 L 415.6 732.6 L 403.0 732.5 L 390.2 732.4 L 377.3 732.1 L 364.2 731.8 L 351.2 731.4 L 338.3 730.9 L 325.4 730.3 L 312.8 729.6 L 300.5 728.8 L 288.1 727.9 L 275.6 726.9 L 263.0 725.8 L 250.4 724.6 L 237.9 723.3 L 225.7 721.9 L 213.7 720.4 L 202.2 718.9 L 191.3 717.3 L 181.0 715.7 L 171.4 714.0 L 162.5 712.2 L 154.0 710.1 L 145.8 707.9 L 138.0 705.5 L 130.6 703.1 L 123.7 700.7 L 117.4 698.4 L 111.6 696.2 L 106.3 694.2 L 101.7 692.4 L 97.9 690.9 Z" fill="#D4AF37"/><circle cx="95" cy="700" r="10.0" fill="#D4AF37"/></g></svg></div>
+      <div class="content">
+
+        <div class="lock"><div class="lockup" style="gap:66.0px"><svg viewBox="-24 -838 861 896" style="height:264.0px;width:254.39px;display:block;" xmlns="http://www.w3.org/2000/svg"><g transform="scale(1,-1)"><path d="M689 708V689Q657 682 620.5 661.0Q584 640 544 593L356 369L414 452L652 81Q666 58 682.0 44.0Q698 30 724 20V0Q689 2 646.0 2.5Q603 3 568 3Q547 3 517.0 2.5Q487 2 441 0V20Q482 22 490.5 31.5Q499 41 483 65L338 300Q324 323 313.0 334.5Q302 346 291.0 350.5Q280 355 262 356V377Q306 378 340.5 401.0Q375 424 416 471L475 542Q513 587 519.5 619.5Q526 652 506.5 670.0Q487 688 447 689V708Q472 707 494.5 706.5Q517 706 541.5 705.5Q566 705 595 705Q624 705 647.5 706.0Q671 707 689 708ZM343 708V688Q311 687 294.5 680.5Q278 674 273.0 656.5Q268 639 268 602V106Q268 70 273.5 52.0Q279 34 295.0 28.0Q311 22 343 20V0Q316 2 275.0 2.5Q234 3 192 3Q144 3 101.5 2.5Q59 2 34 0V20Q66 22 82.0 28.0Q98 34 103.5 52.0Q109 70 109 106V602Q109 639 103.5 656.5Q98 674 81.5 680.5Q65 687 34 688V708Q59 707 101.5 706.0Q144 705 192 705Q234 705 275.0 706.0Q316 707 343 708Z" fill="#D4AF37"/><path d="M 92.1 709.1 L 95.9 710.0 L 100.3 711.4 L 105.6 713.1 L 111.5 715.1 L 118.1 717.2 L 125.3 719.5 L 133.1 721.8 L 141.3 724.1 L 150.0 726.3 L 159.1 728.2 L 168.6 730.0 L 178.5 731.5 L 189.0 733.0 L 200.2 734.5 L 211.9 735.9 L 224.0 737.2 L 236.4 738.4 L 249.0 739.6 L 261.7 740.6 L 274.4 741.6 L 287.1 742.5 L 299.5 743.2 L 312.0 743.9 L 324.8 744.4 L 337.7 744.9 L 350.8 745.3 L 363.9 745.5 L 377.0 745.7 L 390.1 745.8 L 403.0 745.9 L 415.6 745.8 L 428.0 745.7 L 440.1 745.5 L 452.0 745.1 L 463.8 744.7 L 475.5 744.2 L 487.1 743.5 L 498.5 742.8 L 509.7 742.1 L 520.6 741.2 L 531.2 740.4 L 541.4 739.5 L 551.2 738.6 L 560.5 737.7 L 569.4 736.8 L 577.8 735.8 L 585.8 734.8 L 593.4 733.8 L 600.7 732.7 L 607.7 731.6 L 614.5 730.4 L 621.2 729.3 L 627.7 728.2 L 634.2 727.1 L 640.8 726.0 L 647.3 725.0 L 653.8 724.1 L 660.2 723.2 L 666.6 722.3 L 672.8 721.4 L 678.9 720.4 L 684.8 719.4 L 690.6 718.4 L 696.1 717.1 L 701.4 715.8 L 706.4 714.3 L 711.1 712.6 L 715.5 710.8 L 719.8 708.8 L 723.8 706.8 L 727.6 704.7 L 731.1 702.5 L 734.4 700.2 L 737.4 697.8 L 740.2 695.4 L 742.7 693.0 L 744.9 690.5 L 746.9 687.9 L 748.6 685.1 L 750.0 682.3 L 751.1 679.4 L 751.9 676.4 L 752.5 673.5 L 752.7 670.6 L 752.7 667.7 L 752.4 665.0 L 751.9 662.4 L 751.1 659.8 L 749.9 657.3 L 748.3 654.9 L 746.4 652.7 L 744.2 650.5 L 741.9 648.4 L 739.4 646.5 L 736.8 644.8 L 734.2 643.3 L 731.6 642.0 L 729.1 641.0 L 726.6 640.3 L 724.0 640.0 L 721.4 640.2 L 718.8 640.7 L 716.2 641.6 L 713.8 642.5 L 711.5 643.6 L 709.3 644.7 L 707.3 645.8 L 705.6 646.7 L 704.2 647.4 L 703.2 647.9 L 704.8 652.1 L 706.1 651.6 L 707.7 650.9 L 709.5 650.1 L 711.5 649.1 L 713.6 648.1 L 715.7 647.2 L 717.9 646.4 L 720.0 645.9 L 722.0 645.5 L 723.8 645.5 L 725.4 645.7 L 727.1 646.3 L 729.1 647.2 L 731.3 648.4 L 733.6 649.8 L 735.8 651.4 L 737.9 653.2 L 739.9 655.0 L 741.6 656.9 L 743.1 658.7 L 744.2 660.5 L 744.9 662.2 L 745.3 663.9 L 745.6 665.9 L 745.7 668.0 L 745.7 670.2 L 745.4 672.4 L 744.9 674.7 L 744.2 677.0 L 743.2 679.2 L 742.1 681.4 L 740.7 683.5 L 739.1 685.5 L 737.1 687.4 L 734.9 689.5 L 732.4 691.5 L 729.6 693.5 L 726.6 695.5 L 723.4 697.4 L 719.9 699.2 L 716.1 701.0 L 712.2 702.7 L 708.0 704.3 L 703.6 705.7 L 699.0 707.0 L 694.1 708.2 L 688.8 709.2 L 683.3 710.2 L 677.5 711.0 L 671.5 711.9 L 665.3 712.6 L 658.9 713.4 L 652.4 714.2 L 645.9 715.0 L 639.2 716.0 L 632.6 716.9 L 626.1 717.9 L 619.5 718.9 L 612.9 719.9 L 606.1 720.9 L 599.1 721.9 L 591.9 722.8 L 584.4 723.8 L 576.5 724.6 L 568.3 725.5 L 559.5 726.3 L 550.2 727.0 L 540.4 727.8 L 530.2 728.5 L 519.7 729.3 L 508.9 730.0 L 497.8 730.6 L 486.5 731.2 L 475.0 731.7 L 463.4 732.1 L 451.6 732.4 L 439.9 732.5 L 427.9 732.6 L 415.6 732.6 L 403.0 732.5 L 390.2 732.4 L 377.3 732.1 L 364.2 731.8 L 351.2 731.4 L 338.3 730.9 L 325.4 730.3 L 312.8 729.6 L 300.5 728.8 L 288.1 727.9 L 275.6 726.9 L 263.0 725.8 L 250.4 724.6 L 237.9 723.3 L 225.7 721.9 L 213.7 720.4 L 202.2 718.9 L 191.3 717.3 L 181.0 715.7 L 171.4 714.0 L 162.5 712.2 L 154.0 710.1 L 145.8 707.9 L 138.0 705.5 L 130.6 703.1 L 123.7 700.7 L 117.4 698.4 L 111.6 696.2 L 106.3 694.2 L 101.7 692.4 L 97.9 690.9 Z" fill="#D4AF37"/><circle cx="95" cy="700" r="10.0" fill="#D4AF37"/></g></svg><div class="lt"><div class="bn" style="font-size:132px;color:#FFFFFF">Kozy Care</div><div class="bd" style="font-size:59.4px;color:#D4AF37;margin-top:26.4px">Drycleaning &amp; Laundry</div></div></div></div>
+
+        <div class="tagline">Uncompromising care. Exceptional convenience.</div>
+
+        <div class="svc">
+          <div class="sl">SHIRTS &amp; TOPS · TROUSERS · SUITS &amp; JACKETS</div>
+          <div class="sl">TRADITIONAL · HOUSEHOLD · SHOES &amp; CARE</div>
+          <div class="price">WASH &amp; FOLD FROM ₦800/KG · FULL MENU AT KOZYCARE.NG</div>
+        </div>
+
+        <div class="band">FREE PICKUP &amp; DELIVERY · EXPRESS FROM 24 HOURS</div>
+
+        
+    <div class="socialbox" style="padding:50px 54px;gap:46px">
+      <div class="sb-col" style="align-items:center">
+        <img class="sb-qr" src="data:image/png;base64,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" alt="QR — scan to book" style="width:280px;height:280px">
+        <div class="sb-scan" style="font-size:26px;margin-top:24px">SCAN TO BOOK</div>
+      </div>
+      <div class="sb-div"></div>
+      <div class="sb-col">
+        <div class="sb-follow" style="font-size:30px;margin-bottom:30px">FOLLOW US</div>
+        <div class="sb-row" style="gap:26px;margin-bottom:22px"><span class="sb-ic"><svg viewBox="0 0 24 24" style="width:52px;height:52px;fill:currentColor;display:block" xmlns="http://www.w3.org/2000/svg"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324zM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881z"/></svg></span><span class="sb-handle" style="font-size:42px">@kozycare.ng</span></div>
+        <div class="sb-row" style="gap:26px;margin-bottom:22px"><span class="sb-ic"><svg viewBox="0 0 24 24" style="width:52px;height:52px;fill:currentColor;display:block" xmlns="http://www.w3.org/2000/svg"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg></span><span class="sb-handle" style="font-size:42px">Kozy Care</span></div>
+        <div class="sb-row" style="gap:26px;margin-bottom:22px"><span class="sb-ic"><svg viewBox="0 0 24 24" style="width:52px;height:52px;fill:currentColor;display:block" xmlns="http://www.w3.org/2000/svg"><path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z"/></svg></span><span class="sb-handle" style="font-size:42px">@kozycare.ng</span></div>
+      </div>
+      <div class="sb-div"></div>
+      <div class="sb-col" style="flex:1">
+        <div class="sb-row" style="gap:28px">
+          <span class="sb-ic"><svg viewBox="0 0 24 24" style="width:58px;height:58px;fill:currentColor;display:block" xmlns="http://www.w3.org/2000/svg"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z"/></svg></span>
+          <span class="sb-lbl" style="font-size:24px">CALL / WHATSAPP</span>
+        </div>
+        <div class="sb-tel" style="font-size:46px;margin-top:14px">+234 803 175 5230</div>
+        <div class="sb-web" style="font-size:28px;margin-top:12px">kozycare.ng</div>
+      </div>
+    </div>
+
+        <div class="legal">Kozy Care Drycleaning &amp; Laundry Services</div>
+
+      </div>
+  </div></div>
+  <svg class="marks" width="1762" height="2329" viewBox="0 0 1762 2329"><g stroke="#111827" stroke-width="0.35" opacity="0.9"><line x1="15.12" y1="30.24" x2="22.68" y2="30.24"/><line x1="1739.32" y1="30.24" x2="1746.88" y2="30.24"/><line x1="15.12" y1="2297.95" x2="22.68" y2="2297.95"/><line x1="1739.32" y1="2297.95" x2="1746.88" y2="2297.95"/><line x1="30.24" y1="15.12" x2="30.24" y2="22.68"/><line x1="30.24" y1="2306.32" x2="30.24" y2="2313.88"/><line x1="1731.02" y1="15.12" x2="1731.02" y2="22.68"/><line x1="1731.02" y1="2306.32" x2="1731.02" y2="2313.88"/></g><text x="881.00" y="2313.30" text-anchor="middle" font-family="Outfit, Arial, sans-serif" font-size="8.5" fill="#6B7280" letter-spacing="1.5">KOZY CARE · NYLON BAG ARTWORK · 450 × 600 MM · V9.1</text></svg>
+</div>
+</body></html>

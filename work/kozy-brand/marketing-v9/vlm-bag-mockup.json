@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Here is the precise QA review of the artwork:\n\n1.  **WORDMARK:** The brand name is **\"Kozy Care\"** in title case, rendered in a clean serif font (resembling Playfair). To its **LEFT** is a large gold \"K\" monogram. Below it is the small gold uppercase subtitle **\"DRYCLEANING & LAUNDRY\"**. There are **NO** lines or decorations crossing over the wordmark itself (the decorative corner brackets frame the entire bag, not the wordmark).\n\n2.  **THE SOCIAL BOX:** **YES**, there is ONE clearly bordered gold box containing all requested elements:\n    *   (a) A QR code with a caption (\"SCAN TO BOOK\").\n    *   (b) Social media rows with icons and handles (\"FOLLOW US\").\n    *   (c) A CALL/WHATSAPP phone row.\n    The internal alignment is neat; rows are flush left within their respective columns, and spacing is consistent. Nothing looks scattered or floating outside the box.\n\n3.  **QR:** The QR code is crisp, sits on a white pad with a clear white quiet zone, and features a small **gold \"K\" monogram** in its centre.\n\n4.  **PHONE:** The phone number is **+234 803 175 5230**. It is on **ONE unbroken line**.\n\n5.  **TEXT ISSUES:** No text appears clipped, overlapping, or crowded. All text elements are well-centred horizontally within their respective zones.\n\n6.  **BALANCE:** The bag reads **premium and uncluttered**. The hierarchy is clear (Brand -> Value Prop -> CTA -> Contact). The only area that might feel slightly \"empty\" is the bottom section below the social box, but this is balanced by the subtle background watermark and the footer text, preventing it from looking unfinished.\n\n7.  **VERDICT:** **PASS**. The artwork successfully meets the client's #1 request for a single, neatly aligned social media box while maintaining a premium aesthetic.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789493895,
+  "id": "20260916013745c85a39b35cb047f5",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260916013745c85a39b35cb047f5",
+  "usage": {
+    "completion_tokens": 431,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2201,
+    "prompt_tokens_details": {
+      "cached_tokens": 2
+    },
+    "total_tokens": 2632
+  }
+}

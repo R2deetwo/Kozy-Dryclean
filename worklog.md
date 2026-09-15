@@ -816,3 +816,24 @@ Stage Summary:
 - Live blasts are triple-guarded: test-first (server-enforced 409), audience count + typed SEND (UI), and the procedural rule that verification never touches the live send path.
 - Live on production (kozycare.ng); schema additive (testSentAt); prod had zero campaigns at deploy time so no email could possibly have gone out.
 - Follow-ups for the owner unchanged: verify kozygarmentcare@gmail.com as the Brevo sender so marketing emails stop coming from the developer's personal address (today they still do — customers see "Kozy Care <chigozieubahesq@gmail.com>", which reads as suspicious); send a proper first campaign soon so the stray phase-36 test email isn't the last thing customers saw; rotate the Vercel token + paste a fresh GitHub PAT when convenient.
+
+---
+Task ID: 38
+Agent: Super Z (main agent)
+Task: v9.1 — two client-directed fixes: (1) nylon bag social section rebuilt as a neat box (was scattered/misaligned); (2) Owambe poster ladies fixed (right woman's black disturbing eyes; left woman's ill-formed fingers on the man's shoulder).
+
+Work Log:
+- DISCOVERED the v8/v9 marketing-package files from the previous session were NOT persisted in this environment (scripts/, download/, worklog contain nothing past v6.2 / Task 37). Rebuilt the two requested deliverables from the v6 kit library + every recorded client rule rather than re-asking the client.
+- Extracted the WEBSITE-EXACT wordmark recipe from the live repo (src/components/shell/logo.tsx + layout.tsx): K mark LEFT + "Kozy Care" Playfair Display 700 TITLE CASE tracking-tight + "DRYCLEANING & LAUNDRY" Outfit caps 0.15em gold, proportions mark=2x name. Encoded as lockup_website() in the new shared lib scripts/kozy-brand/kozy_v91_lib.py.
+- Rebuilt the K-monogram QR (scripts/kozy-brand/build_qr_k_v91.py): https://kozycare.ng, EC-H, navy modules, 6-module white K-pad with deep-gold K, 2-module baked quiet zone, 528px frame. Machine-verified with cv2.QRCodeDetector standalone AND pasted on navy, and again from the final rendered bag + poster PNGs.
+- NEW OWAMBE ASSET: z-ai image 864x1152 with defects engineered out (bright natural eyes w/ white sclera; hands holding clutch/glass, no hand on anyone's shoulder, "five well-formed fingers"). Strict VLM QA passed: every eye and every hand itemised, PASS (scripts/kozy-brand/vlm_owambe_qa.mjs).
+- NYLON BAG (450x600mm face, navy+gold): website lockup top (nothing crosses it — corner brackets only), tagline, services, FREE PICKUP & DELIVERY gold band, THE NEAT SOCIAL BOX (bordered, three tight columns: QR+SCAN TO BOOK | FOLLOW US icon rows | CALL/WHATSAPP + phone + kozycare.ng), legal foot. First VLM pass flagged the right-aligned platform labels' dead gap -> rebuilt as 3-column no-gap layout -> PASS. Overflow + full-element fit checks clean; ghost-K watermark clipped as in the approved v5 poster.
+- OWAMBE A3 POSTER: website lockup, "Every Owambe, Immaculate." headline, gold-arch image at the asset's EXACT 3:4 aspect (zero crop — answers the v8 cropping complaint), gold confetti in the flanks (never near the wordmark), 10%-off consumer offer band, footer QR + SCAN·BOOK·RELAX + phone nowrap + addresses. VLM QA: all 7 checks PASS incl. eyes/hands/wordmark/crop.
+- FIXED a render bug found in QA: fractional .poster height (2328.14px) rounded DOWN in scrollHeight -> html2poster emitted a 2-page PDF with a sub-pixel sliver on page 2. Both print masters now use ceil() integer page px; all PDFs verified single-page at correct sizes (bag 466x616mm page, poster 313x436mm page = trim+3mm bleed+5mm marks).
+- Rendered + packaged via scripts/kozy-brand/render_package_v91.sh: RGB + ghostscript-CMYK print PDFs with pdf.py metadata, flat PNG, CSS garment-bag MOCKUP PNG, html-source, source asset + QA json.
+- Updated download/kozy-brand/VERSIONS.txt with the v9.1 entry (including an honest note that v8/v9 files were not carried into this environment and v9.1 was rebuilt on the recorded rules).
+
+Stage Summary:
+- Deliverables in download/kozy-brand/v9.1-bag-social-and-owambe-fix/: nylon-bag/ (print CMYK+RGB, FLAT png, MOCKUP png, html-source), poster-owambe/ (print CMYK+RGB, DIGITAL png, html-source, source-asset + VLM eye/hand QA report), kozy-qr-scan-to-book.png, README-FIRST.txt.
+- Client rule now encoded for good: the wordmark is the website lockup (title-case Playfair "Kozy Care"); nothing decorative may cross it; social sections use the neat-box pattern; phone never wraps.
+- Open follow-up flagged in README: confirm the actual Instagram/TikTok handles (assumed @kozycare.ng matching the domain; one-line change if different). If the client wants the other v8/v9 pieces (Christmas, Independence, corporate/family flyers, Bag B) re-issued on this foundation, rebuild from kozy_v91_lib.py.

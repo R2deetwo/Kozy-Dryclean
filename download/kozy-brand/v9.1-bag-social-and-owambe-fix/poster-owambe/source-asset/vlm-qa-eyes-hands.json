@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**1. EYES**\n*   **Woman (Left):** Eyes are natural. Clear white sclera visible, normal pupils, symmetrical, and well-defined. No defects.\n*   **Man (Center):** Eyes are natural. Clear white sclera visible, normal pupils, symmetrical \"smiling\" eyes. No defects.\n*   **Woman (Right):** Eyes are natural. Clear white sclera clearly visible (not black voids or glazed), normal-sized pupils, symmetrical. No unsettling or demonic appearance.\n\n**2. HANDS**\n*   **Woman (Left) - Right Hand:** Holding a champagne flute. Five distinct, well-formed fingers. Anatomically correct.\n*   **Woman (Left) - Left Hand:** Holding a gold clutch purse. Five distinct, well-formed fingers supporting the bottom of the clutch. Anatomically correct.\n*   **Man (Center) - Left Hand:** Partially visible behind the woman's clutch. Appears to have four visible fingers in a natural grip position; no obvious fusion or extra digits.\n*   **Woman (Right) - Right Hand:** Holding a champagne flute. Five distinct, well-formed fingers. Anatomically correct.\n*   **Woman (Right) - Left Hand:** Resting on her own waist/hip area. It is **not** resting on the man's shoulder. Five distinct, well-formed fingers are visible (thumb and four fingers curled around her side). Anatomically correct.\n*   **Contact Check:** No hand is resting on the man's shoulder or inappropriately fused with another person's body.\n\n**3. FACES**\n*   No facial distortions detected. Mouths are symmetrical and natural. Jewelry (necklaces and earrings) is properly rendered without melting or warping. Facial symmetry is excellent for all three subjects.\n\n**4. CULTURE**\n*   The outfits read as highly authentic Nigerian *Owambe* attire. The man wears a classic cream *Agbada* (or long *Buba/Sokoto* set) with a matching *Fila* (cap). Both women wear elaborate lace/Aso-oke style gowns with perfectly tied *Gele* headwraps (one green, one gold). The styling, jewelry, and celebratory context (champagne glasses) fit the cultural brief perfectly.\n\n**5. OVERALL**\n*   The image is dignified, vibrant, and premium. The lighting is professional, the skin tones are rich and realistic, and the composition is balanced. It is absolutely suitable for a luxury brand's A3 marketing poster.\n\nVERDICT: **PASS — no eye or hand defects**",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789492722,
+  "id": "202609160118085ff038bdec3d4a1a",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609160118085ff038bdec3d4a1a",
+  "usage": {
+    "completion_tokens": 546,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1630,
+    "prompt_tokens_details": {
+      "cached_tokens": 1
+    },
+    "total_tokens": 2176
+  }
+}
