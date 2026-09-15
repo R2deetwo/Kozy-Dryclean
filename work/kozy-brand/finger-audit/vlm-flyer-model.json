@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**HAND AUDIT**\n\n*   **Hand 1 (Subject’s Right Hand):**\n    *   **Owner/Action:** Belongs to the Nigerian woman; resting on the top-right edge of the blue garment bag.\n    *   **Finger Count:** 4 fingers visible (thumb is obscured behind the bag).\n    *   **Anatomy:** Fingers appear well-formed with natural knuckles and proportions. No fusion, melting, or extra digits detected. Nails are cleanly defined.\n    *   **Thumb:** Not visible in this frame.\n\n*   **Hand 2 (Subject’s Left Hand):**\n    *   **Owner/Action:** Belongs to the Nigerian woman; supporting the bottom-left corner of the blue garment bag.\n    *   **Finger Count:** 4 fingers visible (thumb is on the far left edge of the bag).\n    *   **Anatomy:** Fingers are well-formed and naturally proportioned. The thumb is clearly opposable and positioned on the correct lateral side of the hand. No anatomical defects observed.\n\n**SYSTEMIC CHECKLIST**\n\n1.  **EYES:** Natural appearance. White sclera is visible, pupils are centered and normal. No \"black voids\" or demonic asymmetry.\n2.  **FACES/TEETH/JEWELRY:** Smile is symmetrical. Teeth are individual, white, and properly aligned (no melting or \"single-tooth\" syndrome). Earrings are simple studs and correctly placed.\n3.  **LIMBS:** Arms are of natural length. Shoulders and elbows (where visible) show correct joint structure. No limbs are merging into the background or the garment bag.\n4.  **OVERALL:** The image is high-resolution and clean. A demanding art director would likely approve this for A3 print as it lacks the common AI artifacts that plague generated human anatomy.\n\nVERDICT: **PASS — all hands and fingers anatomically correct, eyes natural**",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1789495170,
+  "id": "20260916015917612c7bfd0a194ca9",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260916015917612c7bfd0a194ca9",
+  "usage": {
+    "completion_tokens": 400,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1112,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1512
+  }
+}

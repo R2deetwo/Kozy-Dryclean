@@ -1,0 +1,180 @@
+KOZY CARE — MARKETING KIT VERSIONS
+==================================
+
+This file tracks every version of the marketing / brand kit so you always
+know which files are current, what changed between versions, and which
+pieces you need to reprint after an update. Older versions are NEVER
+deleted — each update lands in its own folder.
+
+------------------------------------------------------------------
+CURRENT VERSION: v6.2  (5 September 2026) — see VERSION HISTORY below
+------------------------------------------------------------------
+
+WHAT CHANGED IN v5.1 (hotels & corporate wording):
+  The HOTEL15 offer line now addresses HOTELS & CORPORATE CLIENTS
+  (businesses) instead of "HOTEL GUESTS". This matches the corrected
+  reading of the client's instruction and the website wording
+  ("Hotels & corporate clients: 15% off + 5%").
+
+  Only THREE pieces changed — reprint only these:
+    1. Services flyer (A5, double-sided) — front offer band line
+       now reads: "HOTELS & CORPORATE: 15% OFF + 5% WITH CODE HOTEL15"
+    2. Offer flyer (A5, model with KOZY garment bag) — offer strip
+       headline now reads: "HOTELS & CORPORATE CLIENTS: 15% OFF"
+    3. A3 poster — offer band line now reads:
+       "HOTELS & CORPORATE CLIENTS: 15% OFF + 5% WITH CODE HOTEL15"
+
+  UNCHANGED in v5.1 (no reprint needed):
+    - Services flyer BACK (price panel) — identical to v5
+    - Business cards (navy + white)
+    - Brand sheet, logo pack
+
+WHERE THE FILES LIVE:
+  v5.1 (current) .... download/kozy-brand/v5.1-hotel-corporate-update/
+  v5   (previous) ... download/kozy-brand/ (flyer-services-a5/,
+                      flyer-offer-a5/, poster-a3/, business-cards/,
+                      brand-sheet/, logo/)
+  To reprint: give your printer the file from the v5.1 folder for the
+  three changed pieces; everything else still comes from the v5 folders.
+
+------------------------------------------------------------------
+CURRENT VERSION: v6  (5 September 2026) — NAME ENFORCEMENT + LIGHT
+                                + GOLD CORPORATE SERIES
+------------------------------------------------------------------
+WHAT CHANGED IN v6 (three things):
+
+  1. THE NAME IS FIXED. The old logo pack spelled the wordmark "KOZY"
+     while the website and collateral say "Kozy Care". All lockups are
+     rebuilt as "Kozy Care" (title case, matches the landing page) and
+     "KOZY CARE" (tracked caps, print). The K monogram is unchanged —
+     it is an icon, not the name. Brand Sheet V2 opens with THE NAME
+     rules. Nothing else about the approved navy design changed.
+
+  2. NEW: LIGHT SERIES — the approved services flyer (A5, both sides)
+     and A3 poster re-set on Kozy Cream #F5F1E8, gold text deepened to
+     #B8942C for readability. Same layout, same typography.
+
+  3. NEW: GOLD CORPORATE SERIES — material for institutions and
+     corporate buyers: A4 institutional services sheet (partnership
+     terms, scheduled collection, per-kg pricing, documentation,
+     consolidated invoicing) + A5 institutional flyer + gold business
+     cards. Per the client's direction these pieces do NOT list
+     institution types — they speak the buyers' language instead.
+
+  4. NEW: PERSONAL BUSINESS CARDS for Mr. Orion Akenuwa (CEO,
+     orion@kozycare.ng, +234 808 888 8846) and Ms. Khare Akenuwa
+     (khare@kozycare.ng, same line) in navy / white / gold. Front = the
+     person; back = the company (QR, contacts, addresses). See
+     business-cards/kozy-card-VERSIONS-overview.png.
+
+WHERE THE FILES LIVE:
+  v6 (current) ...... download/kozy-brand/v6-name-and-series-update/
+  client zip ........ download/kozy-brand-kit-v6-complete.zip
+                      (old kit + new kit in one file to send to the
+                      client: 01-current-kit-v5.1/ + 02-new-v6/)
+  v5.1 (previous) ... download/kozy-brand/v5.1-hotel-corporate-update/
+  v5 ................ download/kozy-brand/ (flyer-services-a5/,
+                      flyer-offer-a5/, poster-a3/, business-cards/,
+                      brand-sheet/, logo/)
+
+REPRINT GUIDANCE: the navy v5/v5.1 material is still valid — no forced
+reprint. Reprint whenever natural. New print work: use the corrected
+"Kozy Care" logo files from the v6 logo pack going forward.
+
+------------------------------------------------------------------
+CURRENT VERSION: v6.2  (5 September 2026) — BRAND LOCKUP + DESCRIPTOR
+                                CORRECTION
+------------------------------------------------------------------
+WHAT CHANGED IN v6.2 (client brand review):
+
+  1. BUSINESS CARDS — the logo lockup moved from the top RIGHT to the
+     TOP LEFT and now matches the website header exactly: K mark on the
+     left, "Kozy Care" in title case (Playfair), small tracked-caps
+     descriptor beneath, all left-aligned. Everything else on the
+     v6.1 cards is unchanged (centered name/title/rule, contacts at the
+     bottom, turn-over back with QR/web/customer-care/addresses).
+
+  2. GOLD CORPORATE SERIES — the descriptor line under "KOZY CARE" on
+     the A5 institutional flyer (front) and the A4 corporate sheet now
+     reads "PREMIUM DRYCLEANING & LAUNDRY", the standard brand line
+     used on every other piece in the kit. The invented
+     "INSTITUTIONAL & CORPORATE GARMENT CARE" wording has been removed —
+     the brand presentation stays identical everywhere; only the body
+     copy speaks to the institutional audience.
+
+  3. All affected pieces re-measured against their trim boxes (safe
+     margins confirmed) and re-verified on the final print PDFs.
+
+WHERE THE FILES LIVE:
+  v6.2 (current) .... download/kozy-brand/v6-name-and-series-update/
+  client zip ........ download/kozy-brand-kit-v6-complete.zip
+  v5.1 (previous) ... download/kozy-brand/v5.1-hotel-corporate-update/
+
+------------------------------------------------------------------
+CURRENT VERSION: v6.1  (5 September 2026) — PRINT-FIT FIX + CARD
+                                REDESIGN
+------------------------------------------------------------------
+WHAT CHANGED IN v6.1 (client print review):
+
+  1. EVERYTHING NOW FITS THE PAGE. The first v6 printouts let bottom
+     sections drift past the trim line — on the institutional A5 flyer
+     the QR code and the PREFERRED PARTNER RATES band were being sliced
+     by the cutter, and on the corporate A4 sheet the COMMERCIAL TERMS
+     box, the contact band and the legal foot ran off the page. Every
+     v6 piece was re-measured against its trim box and re-set so all
+     content sits safely inside the cut lines. The gold edge bands now
+     bleed properly (they run past the trim into the bleed area, so no
+     cream sliver can appear at the cut edge).
+
+  2. BUSINESS CARDS REDESIGNED (client direction):
+     FRONT — the person, centered and classier: Kozy Care lockup small
+     at the top right; "Mr./Ms. + Name" centered (smaller, refined) with
+     the title and the gold rule beneath; contacts at the bottom:
+     kozygarmentcare@gmail.com + the direct line +234 808 888 8846.
+     No web address on the front.
+     BACK — turn-over information only (no repeated logo/name block):
+     the scan-to-book QR, kozycare.ng, CUSTOMER CARE +234 803 175 5230,
+     and both addresses.
+     The personal orion@/khare@kozycare.ng addresses are retired from
+     print — kozygarmentcare@gmail.com (the address on the flyer) is
+     now the standard on both cards.
+
+  3. Full set regenerated: print PDFs (CMYK + RGB), digital PDFs, PNG
+     previews and the card versions overview sheet.
+
+------------------------------------------------------------------
+VERSION HISTORY
+------------------------------------------------------------------
+v6.2  5 Sep 2026   Brand review: card lockup moved to top-left in the
+                   website style; gold-corporate descriptor standardized
+                   to PREMIUM DRYCLEANING & LAUNDRY.
+
+v6.1  5 Sep 2026   Print-fit fix (QR, partner-rates band, terms box now
+                   safely inside trim; true full-bleed gold bands) +
+                   business card redesign (centered person side, turn-over
+                   back, standard email kozygarmentcare@gmail.com).
+
+v6    5 Sep 2026   Name enforcement ("Kozy Care" everywhere) + Light
+                   series (cream) + Gold Corporate series (institutional
+                   B2B material) + personal cards + Brand Sheet V2.
+
+v5.1  29 Aug 2026  HOTEL15 wording targets hotels & corporate clients
+                   (3 pieces updated, all others unchanged). Folder:
+                   v5.1-hotel-corporate-update/
+
+v5    Aug 2026     10% first-order offer everywhere (was 15%), HOTEL15
+                   hotel offer added to all pieces, flyer model now
+                   holds the KOZY CARE garment bag (Christmas presents
+                   removed), prices synced to live catalog.
+
+v4.2  Aug 2026     First-order fine print ("Free pickup and delivery for
+                   first order only"), second address added, duplicate
+                   title removed, 24-hour/3-5 day turnaround wording.
+
+v4.1  Aug 2026     (superseded — original flyer with gift bundle)
+
+Pre-print checks (every print run):
+  1. Phone numbers current  (+234 803 175 5230)
+  2. Prices match the live catalog (check kozycare.ng or admin Settings)
+  3. Offer percentages match admin Settings → Offers & Delivery
+  4. Both addresses correct (Ogombo + Paradise 3 Estate, Chevron)
