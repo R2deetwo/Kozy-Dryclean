@@ -726,6 +726,9 @@ export interface MarketingCampaign {
   segment: string
   status: string
   scheduledAt: string | null
+  source?: string
+  slotDate?: string | null
+  bannerSlug?: string | null
   testSentAt: string | null
   sentAt: string | null
   sentCount: number
@@ -887,3 +890,177 @@ export function useProcessDueCampaigns() {
     },
   })
 }
+
+// =============================================================================
+// Newsletter automation (phase 40) — the engine that drafts campaigns from
+// the 52-week content library on the owner's cadence. It drafts; the owner
+// previews, edits and approves. Nothing is ever auto-sent.
+// =============================================================================
+
+export interface MarketingAutomationState {
+  schedule: {
+    enabled: boolean
+    cadenceWeeks: number
+    dayOfWeek: number
+    sendTime: string
+    currentWeekIndex: number
+    nextSlotDate: string | null
+  }
+  pending: {
+    id: string
+    name: string
+    subject: string
+    status: string
+    slotDate: string | null
+    scheduledAt: string | null
+    testSentAt: string | null
+    bannerSlug: string | null
+  } | null
+  lastSent: {
+    id: string
+    name: string
+    subject: string
+    sentAt: string | null
+    sentCount: number
+  } | null
+  nextUp: {
+    week: number
+    title: string
+    subject: string
+    season: string
+    category: string
+  }
+  libraryTotal: number
+}
+
+export interface NewsletterLibraryEntry {
+  week: number
+  season: string
+  category: string
+  title: string
+  subject: string
+  banner: string
+  bodyText: string
+}
+
+export interface NewsletterBannerInfo {
+  slug: string
+  label: string
+}
+
+export function useMarketingAutomation() {
+  return useQuery({
+    queryKey: ['marketing-automation'],
+    queryFn: async () => {
+      const res = await fetch('/api/marketing/automation')
+      if (!res.ok) throw new Error('Failed to fetch the newsletter engine state')
+      return (await res.json()) as MarketingAutomationState
+    },
+    staleTime: 10_000,
+    retry: 1,
+    refetchOnWindowFocus: false,
+  })
+}
+
+export function useUpdateMarketingAutomation() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (settings: {
+      enabled?: boolean
+      cadenceWeeks?: 1 | 2 | 4
+      dayOfWeek?: number
+      sendTime?: string
+      currentWeekIndex?: number
+    }) => {
+      const res = await fetch('/api/marketing/automation', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save the engine settings')
+      return data as MarketingAutomationState
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketing-automation'] })
+      qc.invalidateQueries({ queryKey: ['marketing-campaigns'] })
+    },
+  })
+}
+
+export function usePrepareAutomationDraft() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/marketing/automation/prepare', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not prepare the next newsletter')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketing-automation'] })
+      qc.invalidateQueries({ queryKey: ['marketing-campaigns'] })
+    },
+  })
+}
+
+export function useSkipAutomationDraft() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (campaignId: string) => {
+      const res = await fetch('/api/marketing/automation/skip', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ campaignId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not skip this draft')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketing-automation'] })
+      qc.invalidateQueries({ queryKey: ['marketing-campaigns'] })
+    },
+  })
+}
+
+export function useNewsletterLibrary() {
+  return useQuery({
+    queryKey: ['newsletter-library'],
+    queryFn: async () => {
+      const res = await fetch('/api/marketing/content-library')
+      if (!res.ok) throw new Error('Failed to fetch the content plan')
+      return (await res.json()) as {
+        entries: NewsletterLibraryEntry[]
+        banners: NewsletterBannerInfo[]
+        total: number
+      }
+    },
+    staleTime: 5 * 60_000,
+    retry: 1,
+  })
+}
+
+export function useApproveAutomationCampaign() {
+  const qc = useQueryClient()
+  return useMutation({
+    // Approve = schedule the draft for its slot date (the engine already
+    // pre-filled it). The daily cron / lazy scheduler delivers it on the day.
+    mutationFn: async (campaign: { id: string; slotDate: string | null }) => {
+      const sendAt = campaign.slotDate ?? new Date(Date.now() + 60_000).toISOString()
+      const res = await fetch(`/api/marketing/campaigns/${campaign.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scheduledAt: sendAt }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not approve this newsletter')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['marketing-automation'] })
+      qc.invalidateQueries({ queryKey: ['marketing-campaigns'] })
+    },
+  })
+}
+

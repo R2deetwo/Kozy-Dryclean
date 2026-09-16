@@ -12,6 +12,7 @@ import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { plainTextToEmailHtml } from '@/lib/marketing'
+import { NEWSLETTER_BANNERS } from '@/lib/newsletter-content'
 
 // Phase 31/36: convert requireRole's thrown 401/403 Response into a real
 // response — the console client must see 403, not an empty 500.
@@ -41,6 +42,13 @@ const CreateCampaignSchema = z
     segment: z.enum(['ALL', 'B2C', 'B2B', 'INACTIVE']).default('ALL'),
     // Optional ISO datetime — blank/undefined saves as a DRAFT
     scheduledAt: z.string().datetime().optional(),
+    // Phase 40: optional email header banner slug (validated against the
+    // banner pack; null/omitted = no image)
+    bannerSlug: z
+      .string()
+      .refine((s) => NEWSLETTER_BANNERS.some((b) => b.slug === s), 'Unknown banner')
+      .nullable()
+      .optional(),
   })
   .refine((d) => d.bodyText || d.htmlContent, {
     message: 'Write the message before saving',
@@ -95,15 +103,18 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  const { name, subject, bodyText, htmlContent, segment, scheduledAt } = parsed.data
+  const { name, subject, bodyText, htmlContent, segment, scheduledAt, bannerSlug } = parsed.data
   const campaign = await db.newsletterCampaign.create({
     data: {
       name,
       subject,
       htmlContent: messageToHtml(bodyText, htmlContent),
+      // keep the plain-text source so the draft stays editable later
+      bodyText: bodyText ?? null,
       segment,
       scheduledAt: scheduledAt ? new Date(scheduledAt) : null,
       status: scheduledAt ? 'SCHEDULED' : 'DRAFT',
+      bannerSlug: bannerSlug ?? null,
       createdById: (guard as any).user?.id ?? null,
     },
   })

@@ -26,6 +26,7 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 import { formatNaira } from '@/lib/types'
+import { getNewsletterEntry, NEWSLETTER_BANNERS, NEWSLETTER_LIBRARY_TOTAL } from '@/lib/newsletter-content'
 
 // -----------------------------------------------------------------------------
 // Base URL
@@ -152,28 +153,47 @@ export function plainTextToEmailHtml(text: string): string {
 
 /** Wrap the admin's body HTML in the Kozy campaign template. Matches the
  *  transactional email look (navy header, gold wordmark) so every email
- *  from the business reads as one brand. */
+ *  from the business reads as one brand.
+ *
+ *  bannerSlug (phase 40): optional header image from /marketing/banners/ —
+ *  the newsletter engine fills it from the 52-week library; the composer
+ *  lets the owner pick one. Rendered as a plain <img> so every email client
+ *  shows it; missing slug → no image, layout unaffected. */
 export function wrapCampaignHtml(
   bodyHtml: string,
-  opts: { campaignId: string; recipientId: string; email: string; preview?: boolean }
+  opts: {
+    campaignId: string
+    recipientId: string
+    email: string
+    preview?: boolean
+    bannerSlug?: string | null
+  }
 ): string {
   const base = marketingBaseUrl()
   const pixel = `<img src="${base}/api/marketing/track/open?c=${opts.campaignId}&r=${opts.recipientId}" width="1" height="1" alt="" style="display:none;" />`
   const unsubToken = signUnsubscribeToken(opts.email)
   const unsubUrl = `${base}/api/marketing/unsubscribe?token=${unsubToken}`
   const trackedBody = rewriteCampaignLinks(bodyHtml, opts.campaignId, opts.recipientId)
-  const banner = opts.preview
+  const validBanner =
+    opts.bannerSlug && NEWSLETTER_BANNERS.some((b) => b.slug === opts.bannerSlug)
+      ? opts.bannerSlug
+      : null
+  const bannerImg = validBanner
+    ? `<img src="${base}/marketing/banners/banner-${validBanner}.jpg" width="600" alt="" style="display:block; width:100%; max-width:600px; height:auto; border:0;" />`
+    : ''
+  const testBanner = opts.preview
     ? `<div style="background:#FEF3C7;color:#92400E;padding:10px 16px;text-align:center;font-size:12px;font-weight:600;">Test copy &mdash; this version went only to you, no customer has received it</div>`
     : ''
   return `<!DOCTYPE html>
 <html>
 <body style="font-family: Georgia, serif; background: #F8F9FA; margin: 0; padding: 40px 12px;">
   <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
-    ${banner}
+    ${testBanner}
     <div style="background: linear-gradient(135deg, #0A192F, #102740); padding: 32px 40px; text-align: center;">
       <h1 style="color: #D4AF37; font-family: Georgia, serif; font-size: 28px; font-weight: 700; margin: 0;">Kozy Care</h1>
       <p style="color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0 0 0;">Premium Drycleaning &amp; Laundry</p>
     </div>
+    ${bannerImg}
     <div style="padding: 36px 40px; color: #1E2A3A; font-size: 15px; line-height: 1.7;">
       ${trackedBody}
     </div>
@@ -340,6 +360,7 @@ export async function sendCampaignNow(campaignId: string): Promise<SendCampaignR
             campaignId,
             recipientId: r.id,
             email: r.email,
+            bannerSlug: campaign.bannerSlug,
           })
           await sendEmail({
             to: r.email,
@@ -410,6 +431,7 @@ export async function sendCampaignTest(campaignId: string, to: string): Promise<
     recipientId: 'test',
     email: to,
     preview: true,
+    bannerSlug: campaign.bannerSlug,
   })
   await sendEmail({
     to,
@@ -425,7 +447,7 @@ export async function sendCampaignTest(campaignId: string, to: string): Promise<
  *  button on saved campaigns). The yellow "test copy" banner is always
  *  included so a preview can never be confused with a real send. */
 export function buildCampaignPreviewHtml(
-  campaign: { id: string; htmlContent: string },
+  campaign: { id: string; htmlContent: string; bannerSlug?: string | null },
   viewerEmail: string
 ): string {
   return wrapCampaignHtml(campaign.htmlContent, {
@@ -433,14 +455,25 @@ export function buildCampaignPreviewHtml(
     recipientId: 'preview',
     email: viewerEmail,
     preview: true,
+    bannerSlug: campaign.bannerSlug,
   })
 }
 
 /** Process every SCHEDULED campaign whose time has come. Used by the cron
  *  endpoint AND the lazy scheduler (the marketing view calls it on mount,
  *  so scheduled sends still go out on the days the owner checks the console
- *  even if the cron is delayed). */
+ *  even if the cron is delayed).
+ *
+ *  Phase 40: also nudges the newsletter engine — if the owner's cadence slot
+ *  is close and no draft exists yet, the next 52-week-library draft is
+ *  created (a DRAFT, never auto-sent). */
 export async function processDueCampaigns(): Promise<{ processed: string[]; failed: { id: string; error: string }[] }> {
+  // Auto-draft first (never throws into the send loop)
+  try {
+    await ensureNextAutoDraft()
+  } catch (e) {
+    console.error('ensureNextAutoDraft failed:', e)
+  }
   const due = await db.newsletterCampaign.findMany({
     where: { status: 'SCHEDULED', scheduledAt: { lte: new Date() } },
     select: { id: true },
@@ -456,6 +489,198 @@ export async function processDueCampaigns(): Promise<{ processed: string[]; fail
     }
   }
   return { processed, failed }
+}
+
+// -----------------------------------------------------------------------------
+// Newsletter automation engine (phase 40)
+// -----------------------------------------------------------------------------
+// The owner's cadence, the 52-week content library, and the one rule that
+// makes it accident-proof: the engine DRAFTS, the owner APPROVES.
+//
+//   ensureNextAutoDraft()  — called by processDueCampaigns (cron + lazy) and
+//                            by the explicit "Prepare now" button. Creates
+//                            at most ONE pending automation campaign at a
+//                            time, ~3 days before the slot (DRAFT_LEAD_DAYS).
+//   approve → the UI PATCHes the campaign to SCHEDULED (slot date) — the
+//             existing cron/lazy scheduler then delivers it, identical to
+//             any hand-scheduled campaign. Nothing is ever auto-sent.
+//   skip → deletes the DRAFT (only drafts) and moves the engine to the next
+//          slot. The rhythm holds; the content pointer advances.
+//
+// Lagos is UTC+1 with no DST, so wall-clock math is a fixed offset.
+const LAGOS_OFFSET_MIN = 60
+const DRAFT_LEAD_DAYS = 3 // drafts appear this many days before the slot
+const MIN_SLOT_LEAD_MIN = 60 * 24 // never target a slot less than ~24h out
+
+export interface MarketingScheduleView {
+  enabled: boolean
+  cadenceWeeks: number
+  dayOfWeek: number
+  sendTime: string
+  currentWeekIndex: number
+  nextSlotDate: Date | null
+}
+
+export async function getOrCreateSchedule() {
+  const existing = await db.marketingSchedule.findUnique({ where: { id: 'main' } })
+  if (existing) return existing
+  return db.marketingSchedule.create({ data: { id: 'main' } }).catch(async () => {
+    // racing create (two requests, same singleton) — the row exists now
+    return (await db.marketingSchedule.findUnique({ where: { id: 'main' } }))!
+  })
+}
+
+/** Next occurrence of dayOfWeek+sendTime (Africa/Lagos) at least ~24h out. */
+export function nextOccurrenceLagos(
+  dayOfWeek: number,
+  sendTime: string,
+  from: Date = new Date()
+): Date {
+  const [h, m] = sendTime.split(':').map((x) => parseInt(x, 10))
+  const hour = Number.isFinite(h) ? Math.min(Math.max(h || 0, 0), 23) : 9
+  const minute = Number.isFinite(m) ? Math.min(Math.max(m || 0, 0), 59) : 0
+  const lagosNow = new Date(from.getTime() + LAGOS_OFFSET_MIN * 60_000)
+  for (let add = 0; add <= 8; add++) {
+    const candidate = new Date(
+      Date.UTC(
+        lagosNow.getUTCFullYear(),
+        lagosNow.getUTCMonth(),
+        lagosNow.getUTCDate() + add,
+        hour,
+        minute,
+        0,
+        0
+      )
+    )
+    if (
+      candidate.getUTCDay() === dayOfWeek &&
+      candidate.getTime() >= lagosNow.getTime() + MIN_SLOT_LEAD_MIN * 60_000
+    ) {
+      return new Date(candidate.getTime() - LAGOS_OFFSET_MIN * 60_000)
+    }
+  }
+  // unreachable for valid dayOfWeek, but keep types honest
+  return new Date(from.getTime() + MIN_SLOT_LEAD_MIN * 60_000 + 7 * 86_400_000)
+}
+
+/** The pending automation campaign, if one exists (DRAFT or SCHEDULED). */
+export async function getPendingAutomationCampaign() {
+  return db.newsletterCampaign.findFirst({
+    where: { source: 'automation', status: { in: ['DRAFT', 'SCHEDULED'] } },
+    orderBy: { createdAt: 'desc' },
+  })
+}
+
+/** Create the next automation draft if the slot is close (or force=true).
+ *  Returns the created campaign, or null when there is nothing to do:
+ *  disabled engine, a draft already waiting, or a slot still far away. */
+export async function ensureNextAutoDraft(force = false) {
+  const sched = await getOrCreateSchedule()
+  if (!sched.enabled) return null
+  if (await getPendingAutomationCampaign()) return null
+
+  // Resolve the slot: the stored one if it is still sensibly in the future,
+  // otherwise the next occurrence of the owner's day/time.
+  let slot = sched.nextSlotDate
+  if (!slot || slot.getTime() < Date.now() + MIN_SLOT_LEAD_MIN * 60_000) {
+    slot = nextOccurrenceLagos(sched.dayOfWeek, sched.sendTime)
+    await db.marketingSchedule.update({
+      where: { id: 'main' },
+      data: { nextSlotDate: slot },
+    })
+  }
+  if (!force && slot.getTime() - Date.now() > DRAFT_LEAD_DAYS * 86_400_000) {
+    return null // not close enough — nothing to prepare yet
+  }
+
+  const entry = getNewsletterEntry(sched.currentWeekIndex)
+  const campaign = await db.newsletterCampaign.create({
+    data: {
+      name: `Week ${entry.week} — ${entry.title}`,
+      subject: entry.subject,
+      htmlContent: plainTextToEmailHtml(entry.bodyText),
+      bodyText: entry.bodyText,
+      segment: 'ALL',
+      status: 'DRAFT',
+      source: 'automation',
+      slotDate: slot,
+      // pre-fill the schedule so "Approve" is one click; status stays DRAFT
+      // so processDueCampaigns will never pick it up before approval.
+      scheduledAt: slot,
+      bannerSlug: entry.banner,
+    },
+  })
+  // Advance: content pointer +1, next slot +cadence (rhythm holds even if
+  // this draft is skipped — the engine never stacks a second one).
+  await db.marketingSchedule.update({
+    where: { id: 'main' },
+    data: {
+      currentWeekIndex: (sched.currentWeekIndex + 1) % NEWSLETTER_LIBRARY_TOTAL,
+      nextSlotDate: new Date(slot.getTime() + sched.cadenceWeeks * 7 * 86_400_000),
+    },
+  })
+  return campaign
+}
+
+/** Skip the pending automation DRAFT: delete it and prepare the next one.
+ *  SCHEDULED campaigns cannot be skipped (already approved — delete it from
+ *  the campaign list instead if the plan changed). */
+export async function skipAutoDraft(campaignId: string) {
+  const campaign = await db.newsletterCampaign.findUnique({ where: { id: campaignId } })
+  if (!campaign || campaign.source !== 'automation') {
+    throw new Error('Campaign not found')
+  }
+  if (campaign.status !== 'DRAFT') {
+    throw new Error('Only a draft can be skipped — this one is already approved')
+  }
+  await db.newsletterCampaign.delete({ where: { id: campaignId } })
+  const next = await ensureNextAutoDraft(true)
+  return next
+}
+
+/** Everything the automation panel needs in one call. */
+export async function getAutomationState() {
+  const sched = await getOrCreateSchedule()
+  const [pending, lastSent] = await Promise.all([
+    getPendingAutomationCampaign(),
+    db.newsletterCampaign.findFirst({
+      where: { source: 'automation', status: 'SENT' },
+      orderBy: { sentAt: 'desc' },
+      select: { id: true, name: true, subject: true, sentAt: true, sentCount: true },
+    }),
+  ])
+  const upcoming = getNewsletterEntry(sched.currentWeekIndex)
+  return {
+    schedule: {
+      enabled: sched.enabled,
+      cadenceWeeks: sched.cadenceWeeks,
+      dayOfWeek: sched.dayOfWeek,
+      sendTime: sched.sendTime,
+      currentWeekIndex: sched.currentWeekIndex,
+      nextSlotDate: sched.nextSlotDate,
+    } satisfies MarketingScheduleView,
+    pending: pending
+      ? {
+          id: pending.id,
+          name: pending.name,
+          subject: pending.subject,
+          status: pending.status,
+          slotDate: pending.slotDate,
+          scheduledAt: pending.scheduledAt,
+          testSentAt: pending.testSentAt,
+          bannerSlug: pending.bannerSlug,
+        }
+      : null,
+    lastSent,
+    nextUp: {
+      week: upcoming.week,
+      title: upcoming.title,
+      subject: upcoming.subject,
+      season: upcoming.season,
+      category: upcoming.category,
+    },
+    libraryTotal: NEWSLETTER_LIBRARY_TOTAL,
+  }
 }
 
 // -----------------------------------------------------------------------------

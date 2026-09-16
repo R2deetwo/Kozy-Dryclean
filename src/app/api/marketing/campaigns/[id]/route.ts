@@ -8,6 +8,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
+import { plainTextToEmailHtml } from '@/lib/marketing'
+import { NEWSLETTER_BANNERS } from '@/lib/newsletter-content'
 
 async function guardAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
   try {
@@ -26,10 +28,18 @@ async function guardAdmin(): Promise<ReturnType<typeof requireRole> | NextRespon
 const UpdateCampaignSchema = z.object({
   name: z.string().trim().min(1).max(100).optional(),
   subject: z.string().trim().min(1).max(200).optional(),
+  // Phase 40: the automation DRAFTS are edited as plain text too (the
+  // generated library body lands here for the owner's tweaks).
+  bodyText: z.string().trim().min(1).max(100_000).optional(),
   htmlContent: z.string().trim().min(1).max(200_000).optional(),
   segment: z.enum(['ALL', 'B2C', 'B2B', 'INACTIVE']).optional(),
   // null clears the schedule (back to DRAFT); an ISO string schedules it
   scheduledAt: z.string().datetime().nullable().optional(),
+  bannerSlug: z
+    .string()
+    .refine((s) => NEWSLETTER_BANNERS.some((b) => b.slug === s), 'Unknown banner')
+    .nullable()
+    .optional(),
 })
 
 interface Params {
@@ -91,11 +101,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     )
   }
 
-  const { scheduledAt, ...rest } = parsed.data
+  const { scheduledAt, bodyText, ...rest } = parsed.data
   const campaign = await db.newsletterCampaign.update({
     where: { id },
     data: {
       ...rest,
+      ...(bodyText ? { htmlContent: plainTextToEmailHtml(bodyText), bodyText } : {}),
       ...(scheduledAt !== undefined
         ? {
             scheduledAt: scheduledAt === null ? null : new Date(scheduledAt),

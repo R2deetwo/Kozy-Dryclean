@@ -43,6 +43,7 @@ import {
   Bold,
   Italic,
   Pencil,
+  Wand2,
 } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import { formatNaira } from '@/lib/types'
@@ -74,6 +75,11 @@ import {
 } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import {
+  NewsletterEnginePanel,
+  EditCampaignDialog,
+  BannerPicker,
+} from '@/components/admin/newsletter-engine'
 
 type SubTab = 'campaigns' | 'coupons' | 'subscribers' | 'analytics'
 
@@ -177,6 +183,8 @@ function CampaignsTab() {
   const [busyId, setBusyId] = useState<string | null>(null)
   // Saved-campaign preview dialog (the exact email, nothing is sent)
   const [previewCampaign, setPreviewCampaign] = useState<MarketingCampaign | null>(null)
+  // Phase 40: review-and-change editor for drafts (engine + hand-written)
+  const [editingCampaign, setEditingCampaign] = useState<MarketingCampaign | null>(null)
   // Safe send dialog: the owner sees HOW MANY people will receive the email
   // and must type SEND — a live blast can never be a single stray click.
   const [sendDialog, setSendDialog] = useState<{
@@ -196,12 +204,14 @@ function CampaignsTab() {
     e.preventDefault()
     const fd = new FormData(e.currentTarget)
     const scheduledRaw = (fd.get('scheduledAt') as string) || ''
+    const bannerRaw = (fd.get('bannerSlug') as string) || ''
     const body = {
       name: fd.get('name'),
       subject: fd.get('subject'),
       // Plain message — the API turns it into the pretty email HTML
       bodyText: fd.get('bodyText'),
       segment: fd.get('segment'),
+      bannerSlug: bannerRaw || null,
       // datetime-local → ISO (local time, as the admin meant it)
       scheduledAt: scheduledRaw ? new Date(scheduledRaw).toISOString() : undefined,
     }
@@ -333,6 +343,9 @@ function CampaignsTab() {
 
   return (
     <div className="space-y-4">
+      {/* The newsletter engine — drafts from the 52-week plan, owner approves */}
+      <NewsletterEnginePanel />
+
       <div className="flex justify-end">
         <Button onClick={() => setShowCreate((v) => !v)} className="bg-navy text-white hover:bg-navy/90">
           <Plus className="mr-1.5 h-4 w-4" /> New campaign
@@ -370,6 +383,11 @@ function CampaignsTab() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-navy">{c.name}</h3>
                       <StatusBadge status={c.status} />
+                      {c.source === 'automation' && (
+                        <Badge className="bg-gold-50 text-[10px] font-semibold text-gold-700" title="Drafted automatically from the 52-week plan">
+                          <Wand2 className="mr-0.5 h-2.5 w-2.5" /> Auto
+                        </Badge>
+                      )}
                       <Badge className="bg-linen-100 text-[10px] text-navy-300">
                         {SEGMENT_META[c.segment]?.label ?? c.segment}
                       </Badge>
@@ -403,6 +421,18 @@ function CampaignsTab() {
                     </div>
                   </div>
                   <div className="flex flex-wrap items-center gap-1.5">
+                    {['DRAFT', 'SCHEDULED'].includes(c.status) && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={busyId === c.id}
+                        onClick={() => setEditingCampaign(c)}
+                        title="Change anything before it goes out"
+                      >
+                        <Pencil className="mr-1 h-3 w-3" />
+                        Edit
+                      </Button>
+                    )}
                     {['DRAFT', 'SCHEDULED', 'SENDING', 'SENT'].includes(c.status) && (
                       <Button
                         size="sm"
@@ -481,6 +511,13 @@ function CampaignsTab() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ---- Phase 40: review-and-change editor for drafts ---- */}
+      <EditCampaignDialog
+        campaign={editingCampaign}
+        onClose={() => setEditingCampaign(null)}
+        onSaved={() => refresh()}
+      />
 
       {/* ---- Safe send dialog: count + typed confirmation ---- */}
       <Dialog open={!!sendDialog} onOpenChange={(o) => !o && setSendDialog(null)}>
@@ -588,6 +625,7 @@ function CampaignForm({
   const [mode, setMode] = useState<'write' | 'preview'>('write')
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+  const [banner, setBanner] = useState<string | null>(null)
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   // Debounced live preview — renders through the SAME wrapper the real
@@ -605,7 +643,7 @@ function CampaignForm({
         const res = await fetch('/api/marketing/preview', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bodyText: message }),
+          body: JSON.stringify({ bodyText: message, bannerSlug: banner }),
         })
         setPreviewHtml(res.ok ? await res.text() : null)
       } catch {
@@ -615,7 +653,7 @@ function CampaignForm({
       }
     }, 350)
     return () => clearTimeout(t)
-  }, [message, mode])
+  }, [message, mode, banner])
 
   /** Wrap the current selection with a marker (e.g. ** for bold). */
   function wrapSelection(marker: string) {
@@ -658,6 +696,8 @@ function CampaignForm({
         </select>
         <p className="text-xs text-navy-300">Website sign-ups are included in &ldquo;All customers&rdquo; sends.</p>
       </div>
+      <BannerPicker value={banner} onChange={setBanner} />
+      <input type="hidden" name="bannerSlug" value={banner ?? ''} />
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <Label>Your message</Label>
@@ -1050,7 +1090,19 @@ function CouponForm({
 // =============================================================================
 function SubscribersTab() {
   const [search, setSearch] = useState('')
+  // Phase 40: opt-in filter — the client wanted unsubscribe behaviour to be
+  // visible and manageable: unsubscribed people stay in the list, just
+  // filtered out of every send.
+  const [optFilter, setOptFilter] = useState<'all' | 'in' | 'out'>('all')
   const { data, isLoading } = useMarketingSubscribers(search)
+
+  const shown = useMemo(
+    () =>
+      (data?.subscribers ?? []).filter((s) =>
+        optFilter === 'all' ? true : optFilter === 'in' ? s.optIn : !s.optIn
+      ),
+    [data, optFilter]
+  )
 
   const exportCsv = useMemo(
     () => () => {
@@ -1091,6 +1143,25 @@ function SubscribersTab() {
             className="pl-9"
           />
         </div>
+        <div className="flex rounded-lg border border-navy-100 p-0.5">
+          {([
+            ['all', 'All'],
+            ['in', 'Subscribed'],
+            ['out', 'Unsubscribed'],
+          ] as const).map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setOptFilter(key)}
+              className={cn(
+                'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                optFilter === key ? 'bg-navy text-white' : 'text-navy-300 hover:text-navy'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
         <Button variant="outline" onClick={exportCsv} disabled={(data?.subscribers ?? []).length === 0}>
           <Download className="mr-1.5 h-4 w-4" /> Export CSV
         </Button>
@@ -1098,11 +1169,17 @@ function SubscribersTab() {
 
       {isLoading ? (
         <p className="py-8 text-center text-sm text-navy-300">Loading subscribers…</p>
-      ) : (data?.subscribers ?? []).length === 0 ? (
+      ) : shown.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-navy-100 p-10 text-center">
           <Users className="mx-auto h-8 w-8 text-gold-400" />
           <p className="mt-3 font-semibold text-navy">
-            {search ? 'No subscribers match that search' : 'No subscribers yet'}
+            {search
+              ? 'No subscribers match that search'
+              : optFilter === 'out'
+                ? 'Nobody has unsubscribed yet'
+                : optFilter === 'in'
+                  ? 'No subscribed emails yet'
+                  : 'No subscribers yet'}
           </p>
           <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-navy-300">
             The signup form lives in the website footer — every visitor can join the list
@@ -1113,7 +1190,7 @@ function SubscribersTab() {
         <Card className="border-navy-100 shadow-navy">
           <CardContent className="p-0">
             <div className="divide-y divide-navy-50">
-              {(data?.subscribers ?? []).map((s: MarketingSubscriber) => (
+              {shown.map((s: MarketingSubscriber) => (
                 <div key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                   <div className="min-w-0">
                     <p className="truncate text-sm font-medium text-navy">{s.email}</p>

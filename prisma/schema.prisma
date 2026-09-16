@@ -415,6 +415,19 @@ model NewsletterCampaign {
   segment     String   @default("ALL")
   status      String   @default("DRAFT") // DRAFT | SCHEDULED | SENDING | SENT | CANCELLED
   scheduledAt DateTime?
+  // Phase 40: newsletter automation — 'manual' campaigns were written by
+  // hand; 'automation' campaigns were drafted by the engine from the 52-week
+  // content library and wait for the owner's approval (never auto-sent).
+  source      String   @default("manual") // manual | automation
+  // The cadence slot this automation draft belongs to (next occurrence of
+  // dayOfWeek + sendTime). Approving sets status SCHEDULED for this date.
+  slotDate    DateTime?
+  // Email header banner (see /marketing/banners/ + src/lib/newsletter-content.ts)
+  bannerSlug  String?
+  // Phase 40: the plain-text source of the message (what the composer or
+  // the content library produced) — kept alongside the converted HTML so
+  // any DRAFT/SCHEDULED campaign stays editable in the plain-text editor.
+  bodyText    String? @db.Text
   // Phase 37: the owner must send himself a test copy before a live blast
   // (send route refuses live sends until this is set) — accident guard.
   testSentAt  DateTime?
@@ -431,6 +444,37 @@ model NewsletterCampaign {
   @@index([status])
   @@index([scheduledAt])
   @@index([createdAt])
+  @@index([source, status])
+}
+
+// =====================================================
+// MARKETING_SCHEDULE — the newsletter engine settings (phase 40)
+// =====================================================
+// Singleton row (id='main') holding the owner's automation preferences:
+// cadence, send day/time (Africa/Lagos), which week of the 52-week content
+// library is next, and the slot date the engine is working towards.
+// The engine DRAFTS campaigns on this rhythm — it never sends without the
+// owner approving each one (approve → SCHEDULED → the daily cron/lazy
+// scheduler delivers it, exactly like any hand-scheduled campaign).
+model MarketingSchedule {
+  id       String @id @default("main")
+  enabled  Boolean @default(false)
+  // Weeks between newsletters: 1 = weekly, 2 = every 2 weeks (default),
+  // 4 = monthly. Switchable any time (promo seasons → weekly).
+  cadenceWeeks Int @default(2)
+  // 0 = Sunday … 6 = Saturday (default 4 = Thursday)
+  dayOfWeek Int @default(4)
+  // Send time in Africa/Lagos, 'HH:mm' 24h (default 09:00)
+  sendTime  String @default("09:00")
+  // Index (0-51) into NEWSLETTER_LIBRARY — the entry the next automation
+  // draft will use. Advances by one each time a draft is created.
+  currentWeekIndex Int @default(0)
+  // The slot the engine is currently working towards. Advanced by the
+  // cadence each time a draft is created (so the rhythm holds even if the
+  // owner skips a week).
+  nextSlotDate DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // =====================================================
