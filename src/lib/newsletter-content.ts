@@ -5,7 +5,10 @@
 // written for a Lagos audience and sequenced to the Nigerian year:
 // harmattan whites, Valentine, Easter, rainy season, Children's Day,
 // back-to-school, Independence, the Oct–Dec wedding/Owambe circuit and
-// Detty December.
+// Detty December. Timing rule (per the client): DETTY DECEMBER STARTS ON
+// DECEMBER 15 and runs into the new year — prep emails before the 15th must
+// say the start date explicitly, and nothing before Week 50 (the week that
+// contains December 15) may claim the season has already opened.
 //
 // The engine (Marketing tab → "Your newsletter engine") turns these into
 // draft campaigns on the owner's cadence — the owner previews, edits if
@@ -441,10 +444,10 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
     season: 'Late September',
     category: 'PROMO',
     title: 'September promo push',
-    subject: 'One month till Detty December. Start now.',
+    subject: 'The end-of-year circuit starts in October. Start now.',
     banner: 'promo-gold',
     bodyText:
-      'We are being honest with you: October through December is our busiest season. Weddings, owambes, end-of-year events, Detty December itself.\n\nThe people who enjoy that season most are the ones who prepared their wardrobe in late September.\n\n**This week is that week.** One pickup: the suit, the dresses, the traditional wear — all refreshed and waiting in your wardrobe before the invitations even start.\n\nhttps://kozycare.ng\n\nFuture you says thank you.',
+      'We are being honest with you: October through December is our busiest season. The weddings and owambes start rolling in October, the end-of-year events follow — and it all builds to Detty December, which runs from **December 15** into the new year.\n\nThe people who enjoy that season most are the ones who prepared their wardrobe in late September.\n\n**This week is that week.** One pickup: the suit, the dresses, the traditional wear — all refreshed and waiting in your wardrobe before the invitations even start.\n\nhttps://kozycare.ng\n\nFuture you says thank you.',
   },
   // ------------------------------------------------------------------- OCTOBER
   {
@@ -513,10 +516,10 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
     season: 'Mid November',
     category: 'TIP',
     title: 'Detty December wardrobe prep',
-    subject: 'Detty December is loading…',
+    subject: 'Detty December starts December 15. One month to prepare.',
     banner: 'promo-gold',
     bodyText:
-      'It is the month before the month — and December is already assembling its calendar. Every weekend will want an outfit.\n\nThe calm way to prepare:\n\n1. **List the outfits** you know December will demand — parties, events, church, outings\n2. **Send them all now** — one pickup, everything refreshed before the season starts\n3. **Save Express for December itself** — when the calendar moves faster than you do\n\nThe people who enjoy Detty December most are never the ones ironing on Friday evening.\n\nhttps://kozycare.ng',
+      'Detty December starts on **December 15** — one month from now — and the calendar is already assembling itself. Every weekend from the 15th will want an outfit.\n\nThe calm way to prepare:\n\n1. **List the outfits** you know Detty December will demand — parties, events, church, outings\n2. **Send them all now** — one pickup, everything refreshed before the season starts\n3. **Save Express for the season itself** — from the 15th, the calendar moves faster than you do\n\nThe people who enjoy Detty December most are never the ones ironing on Friday evening.\n\nhttps://kozycare.ng',
   },
   {
     week: 46,
@@ -551,23 +554,23 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   },
   {
     week: 49,
+    season: 'Early December',
+    category: 'STORY',
+    title: 'A thank-you from the whole team',
+    subject: 'A short thank-you (from actual humans)',
+    banner: 'seasonal-christmas',
+    bodyText:
+      'Before the year closes, a short note from the people behind your pickups.\n\nEvery garment that comes through our doors is handled by someone who takes it personally — the driver who guards your bag, the inspector who finds the stain you forgot, the presser who makes the collar sit right.\n\nThis year, you trusted us with weddings, first days at work, church Sundays, school terms and the quiet weekly shirts that hold everything together.\n\nThank you. And when Detty December opens on **December 15**, we will be right in it with you — same care, same free pickup.\n\nhttps://kozycare.ng\n\n— The Kozy Care team',
+  },
+  {
+    week: 50,
     season: 'Mid December',
     category: 'SERVICE',
     title: 'Express during Detty December',
     subject: 'Detty December: event tonight, outfit ready tomorrow',
     banner: 'service-express',
     bodyText:
-      'It is officially Detty December — the month where plans change at 4pm and the event is tonight.\n\nThis is what **Express, from 24 hours** was built for:\n\n- Book before noon → collected today → back tomorrow, pressed and ready\n- Perfect for the outfit that "will be fine" and then was not\n- Same premium finishing — Express changes the clock, never the quality\n\nKeep this email saved. December will make you use it.\n\nhttps://kozycare.ng\n\nParty responsibly. Dress immaculately.',
-  },
-  {
-    week: 50,
-    season: 'Mid December',
-    category: 'STORY',
-    title: 'A thank-you from the whole team',
-    subject: 'A short thank-you (from actual humans)',
-    banner: 'seasonal-christmas',
-    bodyText:
-      'Before the year closes, a short note from the people behind your pickups.\n\nEvery garment that comes through our doors is handled by someone who takes it personally — the driver who guards your bag, the inspector who finds the stain you forgot, the presser who makes the collar sit right.\n\nThis year, you trusted us with weddings, first days at work, church Sundays, school terms, Detty December outfits and the quiet weekly shirts that hold everything together.\n\nThank you. See you in the new year — same care, same free pickup.\n\nhttps://kozycare.ng\n\n— The Kozy Care team',
+      'Detty December is officially open — from **December 15** into the new year, the season where plans change at 4pm and the event is tonight.\n\nThis is what **Express, from 24 hours** was built for:\n\n- Book before noon → collected today → back tomorrow, pressed and ready\n- Perfect for the outfit that "will be fine" and then was not\n- Same premium finishing — Express changes the clock, never the quality\n\nKeep this email saved. The season will make you use it.\n\nhttps://kozycare.ng\n\nParty responsibly. Dress immaculately.',
   },
   {
     week: 51,
