@@ -48,6 +48,11 @@ import {
 import { useQueryClient } from '@tanstack/react-query'
 import { formatNaira } from '@/lib/types'
 import {
+  getUpcomingPromoPlan,
+  getPromoPlanStatus,
+  type PromoPlanEntry,
+} from '@/lib/promo-calendar'
+import {
   useMarketingCampaigns,
   useMarketingCoupons,
   useMarketingSubscribers,
@@ -106,6 +111,20 @@ function fmtDateTime(iso: string | null | undefined): string {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+/** "Dec 15 – Jan 5, 2027" — promo windows in Lagos terms, year shown when it isn't the current one. */
+function fmtPromoWindow(p: PromoPlanEntry): string {
+  const fmt = (d: Date, withYear = false) =>
+    d.toLocaleDateString('en-NG', {
+      timeZone: 'Africa/Lagos',
+      day: 'numeric',
+      month: 'short',
+      ...(withYear ? { year: 'numeric' } : {}),
+    })
+  const endYear = p.end.toLocaleDateString('en-NG', { timeZone: 'Africa/Lagos', year: 'numeric' })
+  const nowYear = new Date().toLocaleDateString('en-NG', { timeZone: 'Africa/Lagos', year: 'numeric' })
+  return `${fmt(p.start)} – ${fmt(p.end, endYear !== nowYear)}`
 }
 
 export function MarketingView() {
@@ -812,8 +831,29 @@ function CouponsTab() {
   const qc = useQueryClient()
   const { data: coupons, isLoading } = useMarketingCoupons()
   const [showCreate, setShowCreate] = useState(false)
+  // Prefill from the seasonal promo plan ("Create this coupon") — the plan
+  // only pre-fills; nothing is created until the owner presses Create.
+  const [prefill, setPrefill] = useState<CouponFormInitial | null>(null)
   const [copiedCode, setCopiedCode] = useState<string | null>(null)
   const [togglingId, setTogglingId] = useState<string | null>(null)
+  const promoPlan = useMemo(() => getUpcomingPromoPlan(), [])
+
+  function startPrefilled(entry: PromoPlanEntry) {
+    setPrefill({
+      name: entry.name,
+      code: entry.code,
+      description: entry.description,
+      type: entry.type,
+      value: entry.value,
+      appliesTo: entry.appliesTo,
+      minOrderValue: entry.minOrderValue,
+      maxDiscount: entry.maxDiscount,
+      maxUsesPerUser: entry.maxUsesPerUser,
+      startDate: entry.startLocal,
+      endDate: entry.endLocal,
+    })
+    setShowCreate(true)
+  }
 
   async function refresh() {
     await qc.invalidateQueries({ queryKey: ['marketing-coupons'] })
@@ -892,8 +932,76 @@ function CouponsTab() {
 
   return (
     <div className="space-y-4">
+      {/* The seasonal promo plan — recommended windows for the Nigerian year.
+          Guidance + prefill only: the owner reviews and presses Create. */}
+      <Card className="border-gold-200 shadow-navy">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-4 w-4 text-gold-500" />
+            <h3 className="font-serif text-lg font-semibold text-navy">The seasonal promo plan</h3>
+          </div>
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-navy-300">
+            Recommended coupon windows, sequenced with the 52-week newsletter plan — so a code
+            goes live the same week the matching email goes out.{' '}
+            <span className="font-medium text-navy">Detty December starts December 15</span>, so
+            its window opens on the 15th and runs into the new year — never December 1. Press
+            &ldquo;Create&rdquo; to prefill the form; nothing is created until you confirm.
+          </p>
+          <div className="mt-4 divide-y divide-navy-50">
+            {promoPlan.map((p) => {
+              const status = getPromoPlanStatus(p)
+              return (
+                <div key={p.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-sm font-semibold text-navy">{p.season}</span>
+                      <Badge
+                        className={cn(
+                          status === 'LIVE'
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : status === 'UPCOMING'
+                              ? 'bg-gold-100 text-gold-700'
+                              : 'bg-slate-100 text-slate-500'
+                        )}
+                      >
+                        {status === 'LIVE' ? 'Live now' : status === 'UPCOMING' ? 'Upcoming' : 'Ended'}
+                      </Badge>
+                      <code className="font-mono text-xs font-bold tracking-wider text-navy">{p.code}</code>
+                      <span className="text-xs text-navy-300">
+                        {p.type === 'PERCENTAGE' ? `${p.value}% off` : `${formatNaira(p.value)} off`}
+                        {p.appliesTo === 'B2C' && ' · retail'}
+                        {p.appliesTo === 'B2B' && ' · corporate'}
+                        {p.appliesTo === 'ALL' && ' · everyone'}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-navy-300">
+                      {fmtPromoWindow(p)} · {p.note}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-navy-300/80">Announce with: {p.announceWith}</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => startPrefilled(p)}
+                    disabled={showCreate && prefill?.code === p.code}
+                  >
+                    {showCreate && prefill?.code === p.code ? 'In the form' : 'Create this coupon'}
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="flex justify-end">
-        <Button onClick={() => setShowCreate((v) => !v)} className="bg-navy text-white hover:bg-navy/90">
+        <Button
+          onClick={() => {
+            setPrefill(null)
+            setShowCreate((v) => !v)
+          }}
+          className="bg-navy text-white hover:bg-navy/90"
+        >
           <Plus className="mr-1.5 h-4 w-4" /> New coupon
         </Button>
       </div>
@@ -901,7 +1009,15 @@ function CouponsTab() {
       {showCreate && (
         <Card className="border-gold-200 shadow-navy">
           <CardContent className="p-6">
-            <CouponForm onSubmit={handleCreate} onCancel={() => setShowCreate(false)} />
+            <CouponForm
+              key={prefill?.code ?? 'blank'}
+              initial={prefill ?? undefined}
+              onSubmit={handleCreate}
+              onCancel={() => {
+                setShowCreate(false)
+                setPrefill(null)
+              }}
+            />
           </CardContent>
         </Card>
       )}
@@ -914,8 +1030,8 @@ function CouponsTab() {
           <p className="mt-3 font-semibold text-navy">No coupons yet</p>
           <p className="mx-auto mt-1 max-w-md text-sm leading-relaxed text-navy-300">
             Create a code like <span className="font-mono font-semibold">WEEKEND12</span> — 12%
-            off any order this weekend — then announce it in a campaign. Rules (expiry, usage
-            limits, minimum spend) are all optional.
+            off any order this weekend — or pick a season from the plan above. Then announce it in
+            a campaign. Rules (expiry, usage limits, minimum spend) are all optional.
           </p>
         </div>
       ) : (
@@ -988,29 +1104,57 @@ function CouponsTab() {
   )
 }
 
+/** Prefill shape for the coupon form — used by the seasonal promo plan. */
+export interface CouponFormInitial {
+  name?: string
+  code?: string
+  description?: string
+  type?: 'PERCENTAGE' | 'FIXED'
+  value?: number
+  appliesTo?: string
+  minOrderValue?: number
+  maxDiscount?: number
+  maxUsesPerUser?: number
+  /** datetime-local string, e.g. "2026-12-15T00:00" */
+  startDate?: string
+  endDate?: string
+}
+
 function CouponForm({
   onSubmit,
   onCancel,
+  initial,
 }: {
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
   onCancel: () => void
+  initial?: CouponFormInitial
 }) {
-  const [type, setType] = useState<'PERCENTAGE' | 'FIXED'>('PERCENTAGE')
+  const [type, setType] = useState<'PERCENTAGE' | 'FIXED'>(initial?.type ?? 'PERCENTAGE')
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      {initial && (
+        <div className="flex items-start gap-2 rounded-lg bg-gold-50 p-3 text-xs text-navy-300">
+          <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
+          <p>
+            Prefilled from the seasonal promo plan — change anything, then press Create. The dates
+            below are the code&rsquo;s live window: it is rejected at checkout before the start and
+            after the end.
+          </p>
+        </div>
+      )}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Name</Label>
-          <Input name="name" placeholder="e.g. Weekend Special" required maxLength={60} />
+          <Input name="name" placeholder="e.g. Weekend Special" required maxLength={60} defaultValue={initial?.name} />
         </div>
         <div className="space-y-2">
           <Label>Code (leave blank to auto-generate)</Label>
-          <Input name="code" placeholder="e.g. WEEKEND12" className="font-mono uppercase" maxLength={20} />
+          <Input name="code" placeholder="e.g. WEEKEND12" className="font-mono uppercase" maxLength={20} defaultValue={initial?.code} />
         </div>
       </div>
       <div className="space-y-2">
         <Label>Description (shown to admins — customers only see the code working)</Label>
-        <Input name="description" placeholder="e.g. 12% off everything, September weekends" maxLength={300} />
+        <Input name="description" placeholder="e.g. 12% off everything, September weekends" maxLength={300} defaultValue={initial?.description} />
       </div>
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="space-y-2">
@@ -1027,13 +1171,13 @@ function CouponForm({
         </div>
         <div className="space-y-2">
           <Label>{type === 'PERCENTAGE' ? 'Percentage off' : 'Amount off (₦)'}</Label>
-          <Input name="value" type="number" min="1" step={type === 'PERCENTAGE' ? '1' : '50'} placeholder={type === 'PERCENTAGE' ? '12' : '1000'} required />
+          <Input name="value" type="number" min="1" step={type === 'PERCENTAGE' ? '1' : '50'} placeholder={type === 'PERCENTAGE' ? '12' : '1000'} required defaultValue={initial?.value} />
         </div>
         <div className="space-y-2">
           <Label>Applies to</Label>
           <select
             name="appliesTo"
-            defaultValue="ALL"
+            defaultValue={initial?.appliesTo ?? 'ALL'}
             className="flex h-10 w-full rounded-lg border border-navy-100 bg-white px-3 py-2 text-sm text-navy shadow-sm focus:border-gold-400 focus:outline-none"
           >
             <option value="ALL">Any customer, any order</option>
@@ -1046,12 +1190,12 @@ function CouponForm({
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div className="space-y-2">
           <Label>Min spend (₦)</Label>
-          <Input name="minOrderValue" type="number" min="0" step="50" placeholder="0" />
+          <Input name="minOrderValue" type="number" min="0" step="50" placeholder="0" defaultValue={initial?.minOrderValue} />
         </div>
         {type === 'PERCENTAGE' && (
           <div className="space-y-2">
             <Label>Max discount (₦)</Label>
-            <Input name="maxDiscount" type="number" min="50" step="50" placeholder="No cap" />
+            <Input name="maxDiscount" type="number" min="50" step="50" placeholder="No cap" defaultValue={initial?.maxDiscount} />
           </div>
         )}
         <div className="space-y-2">
@@ -1060,17 +1204,17 @@ function CouponForm({
         </div>
         <div className="space-y-2">
           <Label>Uses per customer</Label>
-          <Input name="maxUsesPerUser" type="number" min="1" placeholder="Unlimited" />
+          <Input name="maxUsesPerUser" type="number" min="1" placeholder="Unlimited" defaultValue={initial?.maxUsesPerUser} />
         </div>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="space-y-2">
           <Label>Start date (optional)</Label>
-          <Input name="startDate" type="datetime-local" />
+          <Input name="startDate" type="datetime-local" defaultValue={initial?.startDate} />
         </div>
         <div className="space-y-2">
           <Label>End date (optional)</Label>
-          <Input name="endDate" type="datetime-local" />
+          <Input name="endDate" type="datetime-local" defaultValue={initial?.endDate} />
         </div>
       </div>
       <div className="flex gap-2">
