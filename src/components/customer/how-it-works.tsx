@@ -239,6 +239,8 @@ function StepCard({ step, index }: { step: StepConfig; index: number }) {
               src={step.image}
               alt={step.title}
               draggable={false}
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
             />
           </motion.div>
@@ -437,6 +439,8 @@ function TrackerCard() {
                 <img
                   src={stage.icon}
                   alt=""
+                  loading="lazy"
+                  decoding="async"
                   className={`h-3.5 w-3.5 ${stage.state === 'pending' ? 'opacity-35' : ''}`}
                 />
               </motion.div>

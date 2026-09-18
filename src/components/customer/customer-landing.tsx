@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import { motion } from 'framer-motion'
 import {
   Clock,
@@ -107,12 +108,11 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
         </div>
 
         <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:py-24">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="text-white"
-          >
+          {/* Phase 42: hero entrance runs on CSS (animate-fade-up) instead of
+              framer-motion initial opacity:0 — the old way shipped the hero
+              invisible in the server HTML and stayed blank on slow phones
+              until hydration finished. CSS animation starts at first paint. */}
+          <div className="animate-fade-up text-white">
             <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30 backdrop-blur">
               <Sparkles className="h-3 w-3 text-gold-400" />
               Kozy drycleaning &amp; laundry · Serving Ikoyi to Lekki
@@ -161,20 +161,24 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 <Truck className="h-3.5 w-3.5 text-gold-400" /> Complimentary island-wide pickup*
               </span>
             </div>
-          </motion.div>
+          </div>
 
-          {/* Hero image card */}
-          <motion.div
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.15 }}
-            className="relative"
-          >
-            <div className="relative overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl shadow-navy-900/40">
-              <img
+          {/* Hero image card — CSS entrance (see note above) */}
+          <div className="animate-fade-up-delay-1 relative">
+            <div className="relative h-[480px] overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl shadow-navy-900/40 sm:h-[560px]">
+              {/* next/image priority: single controlled preload + AVIF/WebP
+                  negotiation instead of the raw 80KB PNG competing with 38
+                  other images for bandwidth (phase 42 mobile fix). */}
+              <Image
                 src="/brand/images/hero-pressed-shirts.png"
                 alt="Pristine freshly pressed white shirts on premium wooden hangers"
-                className="h-[480px] w-full object-cover sm:h-[560px]"
+                fill
+                priority
+                quality={85}
+                sizes="(min-width: 1024px) 50vw, 100vw"
+                placeholder="blur"
+                blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjEwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMxNTMwNTAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwQTE5MkYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSIxMCIgZmlsbD0idXJsKCNnKSIvPjwvc3ZnPg=="
+                className="object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-navy-900/60 via-transparent to-transparent" />
               <div className="absolute bottom-4 left-4 right-4 flex items-end justify-between">
@@ -208,7 +212,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               </p>
               <p className="text-[10px] font-medium text-navy">— Adebola, Ikoyi</p>
             </div>
-          </motion.div>
+          </div>
         </div>
       </section>
 
@@ -362,6 +366,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                                 <img
                                   src={g.icon}
                                   alt=""
+                                  loading="lazy"
+                                  decoding="async"
                                   className="h-5 w-5 text-navy"
                                   style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
                                 />
@@ -398,6 +404,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                                   <img
                                     src={g.icon}
                                     alt=""
+                                    loading="lazy"
+                                    decoding="async"
                                     className="h-5 w-5 text-navy"
                                     style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
                                   />
@@ -530,6 +538,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   <img
                     src="/brand/images/b2b-linens.png"
                     alt="Neatly folded stacks of pristine white hotel linens tied with gold ribbon"
+                    loading="lazy"
+                    decoding="async"
                     className="h-64 w-full object-cover"
                   />
                   <CardContent className="p-6">
@@ -771,6 +781,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
             <img
               src="/brand/images/atelier-craftsman.png"
               alt="Kozy master presser finishing a premium garment at the steam station"
+              loading="lazy"
+              decoding="async"
               className="h-full w-full object-cover"
             />
           </div>
@@ -835,7 +847,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               </Button>
             </motion.div>
             <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
-              <img src="/brand/images/shoe-care.png" alt="Restored luxury shoes" className="h-full w-full object-cover" />
+              <img src="/brand/images/shoe-care.png" alt="Restored luxury shoes" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             </div>
           </div>
         </div>
@@ -934,6 +946,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 <img
                   src="/brand/images/seamstress.png"
                   alt="Young Kozy in-house seamstress sewing at her machine in a bright white-walled studio"
+                  loading="lazy"
+                  decoding="async"
                   className="h-full w-full object-cover"
                 />
               </div>
@@ -958,7 +972,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid gap-10 lg:grid-cols-2 items-center">
             <div className="overflow-hidden rounded-2xl ring-1 ring-navy-100 shadow-2xl order-2 lg:order-1">
-              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy suit carrier garment bag with the gold Kozy K monogram to a smiling customer on her veranda" className="h-full w-full object-cover" />
+              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy suit carrier garment bag with the gold Kozy K monogram to a smiling customer on her veranda" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             </div>
             <motion.div
               initial={{ opacity: 0, x: 16 }}
