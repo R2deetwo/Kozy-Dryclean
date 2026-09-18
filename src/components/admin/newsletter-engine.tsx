@@ -24,7 +24,9 @@
 import { useEffect, useState } from 'react'
 import {
   CalendarClock,
+  CalendarIcon,
   Check,
+  ChevronDown,
   Eye,
   Loader2,
   Pencil,
@@ -62,6 +64,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover'
+import { Calendar } from '@/components/ui/calendar'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 
@@ -90,6 +98,13 @@ function fmtDay(iso: string | null | undefined): string {
     hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+/** 'YYYY-MM-DD' for a calendar pick, in the admin's own calendar day. */
+function toDateStr(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(
+    d.getDate()
+  ).padStart(2, '0')}`
 }
 
 // -----------------------------------------------------------------------------
@@ -165,6 +180,7 @@ export function NewsletterEnginePanel() {
   const [confirmApprove, setConfirmApprove] = useState(false)
   const [confirmSkip, setConfirmSkip] = useState(false)
   const [timeDraft, setTimeDraft] = useState<string | null>(null)
+  const [showStartCal, setShowStartCal] = useState(false)
 
   useEffect(() => {
     if (state?.schedule) setTimeDraft(state.schedule.sendTime)
@@ -216,6 +232,40 @@ export function NewsletterEnginePanel() {
     } catch {
       toast({ title: 'Test send failed', variant: 'destructive' })
     }
+  }
+
+  /** Phase 44 — the owner pins the EXACT first-send day from the calendar. */
+  function handlePickStartDate(d: Date | undefined) {
+    if (!d) return
+    const dateStr = toDateStr(d)
+    const pretty = d.toLocaleDateString('en-NG', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    })
+    setShowStartCal(false)
+    update.mutate(
+      { startDate: dateStr },
+      {
+        onSuccess: (s: any) => {
+          // The engine may have prepared the draft immediately (slot within
+          // 3 days) — say so, so the owner knows to look below.
+          const prepared = !!s?.pending
+          toast({
+            title: 'Start date saved',
+            description: prepared
+              ? `First newsletter: ${pretty} at ${schedule.sendTime} (Lagos). It\u2019s already prepared below — waiting for your approval.`
+              : `First newsletter: ${pretty} at ${schedule.sendTime} (Lagos). It\u2019ll be prepared a few days before, then waits for your approval.`,
+          })
+        },
+        onError: (e) =>
+          toast({
+            title: 'Could not set the start date',
+            description: e.message,
+            variant: 'destructive',
+          }),
+      }
+    )
   }
 
   return (
@@ -285,8 +335,8 @@ export function NewsletterEnginePanel() {
 
           {enabled && (
             <>
-              {/* Cadence / day / time */}
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
+              {/* Cadence / day / time / exact start date */}
+              <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                 <div className="space-y-1.5">
                   <Label className="text-xs">How often</Label>
                   <div className="flex flex-wrap gap-1.5">
@@ -313,7 +363,7 @@ export function NewsletterEnginePanel() {
                   </p>
                 </div>
                 <div className="space-y-1.5">
-                  <Label className="text-xs">Send day</Label>
+                  <Label className="text-xs">Send day (after the first)</Label>
                   <select
                     value={schedule.dayOfWeek}
                     disabled={update.isPending}
@@ -326,6 +376,9 @@ export function NewsletterEnginePanel() {
                       </option>
                     ))}
                   </select>
+                  <p className="text-[11px] text-navy-300">
+                    Pick a start date and this follows that day of the week.
+                  </p>
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs">Send time (Lagos)</Label>
@@ -341,6 +394,62 @@ export function NewsletterEnginePanel() {
                       }
                     }}
                   />
+                  <p className="text-[11px] text-navy-300">Morning sends get the best opens.</p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Start on a specific date (optional)</Label>
+                  <Popover open={showStartCal} onOpenChange={setShowStartCal}>
+                    <PopoverTrigger asChild>
+                      <button
+                        type="button"
+                        disabled={update.isPending || !!pending}
+                        className={cn(
+                          'flex h-9 w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-sm shadow-sm transition-colors',
+                          schedule.slotPinned
+                            ? 'border-gold-400 text-navy'
+                            : 'border-navy-100 text-navy-300 hover:border-navy-300'
+                        )}
+                      >
+                        <span className="flex min-w-0 items-center gap-2">
+                          <CalendarIcon className="h-4 w-4 shrink-0 text-gold-500" />
+                          <span className="truncate text-navy">
+                            {schedule.slotPinned && schedule.nextSlotDate
+                              ? new Date(schedule.nextSlotDate).toLocaleDateString('en-NG', {
+                                  weekday: 'short',
+                                  day: 'numeric',
+                                  month: 'short',
+                                })
+                              : 'Pick a date'}
+                          </span>
+                        </span>
+                        <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={
+                          schedule.slotPinned && schedule.nextSlotDate
+                            ? new Date(schedule.nextSlotDate)
+                            : undefined
+                        }
+                        onSelect={handlePickStartDate}
+                        disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                        initialFocus
+                      />
+                      <div className="border-t border-navy-50 px-3 py-2 text-center text-[11px] leading-relaxed text-navy-300">
+                        The first newsletter goes out on the exact day you pick, at your send
+                        time. Later ones follow the rhythm above.
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                  <p className="text-[11px] text-navy-300">
+                    {pending
+                      ? 'A newsletter is already waiting — approve or skip it first.'
+                      : schedule.slotPinned
+                        ? 'Your chosen date. Change the send time and the date stays.'
+                        : 'Leave this alone and the engine simply uses the next send day.'}
+                  </p>
                 </div>
               </div>
 

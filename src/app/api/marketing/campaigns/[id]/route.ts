@@ -102,6 +102,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   const { scheduledAt, bodyText, ...rest } = parsed.data
+
+  // Phase 44 guard — same rule as create: a schedule in the past fires on
+  // the next tick, which is never what an edit intends. (The automation
+  // "Approve" flow always schedules in the future, so it is unaffected.)
+  if (
+    scheduledAt !== undefined &&
+    scheduledAt !== null &&
+    new Date(scheduledAt).getTime() <= Date.now()
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          'That schedule date is already in the past — a past-dated newsletter would send immediately on the next check. Pick a future date, or save it as a draft and press "Send now".',
+      },
+      { status: 400 }
+    )
+  }
+
   const campaign = await db.newsletterCampaign.update({
     where: { id },
     data: {

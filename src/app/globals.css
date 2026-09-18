@@ -271,7 +271,8 @@
   animation: kozy-fade-up 0.5s ease-out 0.24s both;
 }
 
-/* Route-loading skeletons (book/admin loading.tsx) */
+/* Route-loading skeletons (book/admin/portal/login/signup/review
+   loading.tsx — the dark driver app uses Tailwind animate-pulse instead) */
 @keyframes kozy-shimmer {
   from {
     background-position: 200% 0;
@@ -305,5 +306,8 @@
   }
   .kozy-skeleton {
     animation: none;
+  }
+  .kozy-sticky-cta {
+    transition: none;
   }
 }

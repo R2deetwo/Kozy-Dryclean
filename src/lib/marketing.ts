@@ -519,6 +519,7 @@ export interface MarketingScheduleView {
   sendTime: string
   currentWeekIndex: number
   nextSlotDate: Date | null
+  slotPinned: boolean
 }
 
 export async function getOrCreateSchedule() {
@@ -528,6 +529,36 @@ export async function getOrCreateSchedule() {
     // racing create (two requests, same singleton) — the row exists now
     return (await db.marketingSchedule.findUnique({ where: { id: 'main' } }))!
   })
+}
+
+/** Build the exact send slot for an owner-picked calendar date at a send
+ *  time (Africa/Lagos). Returns the UTC instant plus the weekday the date
+ *  falls on — the weekly rhythm follows the chosen start date. */
+export function slotFromStartDateLagos(
+  startDate: string, // 'YYYY-MM-DD'
+  sendTime: string // 'HH:mm'
+): { slot: Date; dayOfWeek: number } {
+  const [h, m] = sendTime.split(':').map((x) => parseInt(x, 10))
+  const hour = Number.isFinite(h) ? Math.min(Math.max(h || 0, 0), 23) : 9
+  const minute = Number.isFinite(m) ? Math.min(Math.max(m || 0, 0), 59) : 0
+  const [y, mo, d] = startDate.split('-').map((x) => parseInt(x, 10))
+  // Lagos wall-clock expressed as UTC — calendar date and weekday are then
+  // identical to Lagos; subtract the offset at the very end.
+  const wall = new Date(
+    Date.UTC(
+      Number.isFinite(y) ? y : new Date().getUTCFullYear(),
+      (Number.isFinite(mo) ? mo : 1) - 1,
+      Number.isFinite(d) ? d : 1,
+      hour,
+      minute,
+      0,
+      0
+    )
+  )
+  return {
+    slot: new Date(wall.getTime() - LAGOS_OFFSET_MIN * 60_000),
+    dayOfWeek: wall.getUTCDay(),
+  }
 }
 
 /** Next occurrence of dayOfWeek+sendTime (Africa/Lagos) at least ~24h out. */
@@ -580,15 +611,23 @@ export async function ensureNextAutoDraft(force = false) {
   if (await getPendingAutomationCampaign()) return null
 
   // Resolve the slot: the stored one if it is still sensibly in the future,
-  // otherwise the next occurrence of the owner's day/time.
+  // otherwise the next occurrence of the owner's day/time. An owner-pinned
+  // slot (calendar start date) counts as usable while it is still ahead at
+  // all — even inside the 24h lead window — because the owner chose it.
   let slot = sched.nextSlotDate
-  if (!slot || slot.getTime() < Date.now() + MIN_SLOT_LEAD_MIN * 60_000) {
+  const slotUsable =
+    slot !== null &&
+    (sched.slotPinned
+      ? slot.getTime() > Date.now()
+      : slot.getTime() >= Date.now() + MIN_SLOT_LEAD_MIN * 60_000)
+  if (!slotUsable) {
     slot = nextOccurrenceLagos(sched.dayOfWeek, sched.sendTime)
     await db.marketingSchedule.update({
       where: { id: 'main' },
-      data: { nextSlotDate: slot },
+      data: { nextSlotDate: slot, slotPinned: false },
     })
   }
+  if (!slot) return null // unreachable for a resolved slot — keeps types honest
   if (!force && slot.getTime() - Date.now() > DRAFT_LEAD_DAYS * 86_400_000) {
     return null // not close enough — nothing to prepare yet
   }
@@ -611,12 +650,14 @@ export async function ensureNextAutoDraft(force = false) {
     },
   })
   // Advance: content pointer +1, next slot +cadence (rhythm holds even if
-  // this draft is skipped — the engine never stacks a second one).
+  // this draft is skipped — the engine never stacks a second one). The
+  // pin only ever applied to the owner's chosen first slot — clear it.
   await db.marketingSchedule.update({
     where: { id: 'main' },
     data: {
       currentWeekIndex: (sched.currentWeekIndex + 1) % NEWSLETTER_LIBRARY_TOTAL,
       nextSlotDate: new Date(slot.getTime() + sched.cadenceWeeks * 7 * 86_400_000),
+      slotPinned: false,
     },
   })
   return campaign
@@ -658,6 +699,7 @@ export async function getAutomationState() {
       sendTime: sched.sendTime,
       currentWeekIndex: sched.currentWeekIndex,
       nextSlotDate: sched.nextSlotDate,
+      slotPinned: sched.slotPinned,
     } satisfies MarketingScheduleView,
     pending: pending
       ? {

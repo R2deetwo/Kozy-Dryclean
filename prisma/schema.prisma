@@ -473,6 +473,11 @@ model MarketingSchedule {
   // cadence each time a draft is created (so the rhythm holds even if the
   // owner skips a week).
   nextSlotDate DateTime?
+  // True when nextSlotDate was hand-picked from the calendar ("start on a
+  // specific date"): a still-future pinned slot is kept even inside the
+  // 24h minimum-lead window, send-time edits re-time it (same date), and
+  // the pin is cleared once the engine advances past that first slot.
+  slotPinned Boolean @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

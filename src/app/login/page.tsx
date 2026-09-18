@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, Suspense, useEffect } from 'react'
+import { useState, Suspense, useEffect, useRef } from 'react'
 import { signIn, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle, Send } from 'lucide-react'
@@ -35,8 +35,15 @@ function LoginForm() {
   // login form again (the old behaviour) makes customers think the sign-in
   // failed (audit finding). Role-aware so this never fights the submit
   // handler's own redirect (ADMIN → /admin, DRIVER → /driver).
+  // Phase 44 fix: the submit handler's push and this effect's replace used
+  // to race (plus a redundant router.refresh()), the aborts stranding
+  // DRIVERS on a stuck "Signing in…" button — admins only survived because
+  // the middleware hard-redirects them. The flag hands the wheel to whichever
+  // path starts navigating first.
+  const submitNavigating = useRef(false)
   useEffect(() => {
     if (status === 'authenticated') {
+      if (submitNavigating.current) return
       const role = (session?.user as any)?.role
       if (role === 'ADMIN' || role === 'STAFF') router.replace('/admin')
       else if (role === 'DRIVER') router.replace('/driver')
@@ -94,6 +101,10 @@ function LoginForm() {
       // Consume any stored post-auth destination (set by the booking wizard's
       // member gate) regardless of role, so stale entries never linger.
       const storedRedirect = consumeAuthRedirect()
+      // Phase 44 fix: ONE navigation, no router.refresh() — the refresh used
+      // to abort this very push mid-flight (stuck "Signing in…" for drivers).
+      // A fresh route load already pulls current server data.
+      submitNavigating.current = true
       if (role === 'ADMIN' || role === 'STAFF') router.push('/admin')
       else if (role === 'DRIVER') router.push('/driver')
       else {
@@ -101,7 +112,6 @@ function LoginForm() {
         // saved booking), then the stored redirect, then the portal.
         router.push(callbackUrl || storedRedirect || '/portal')
       }
-      router.refresh()
     }
   }
 

@@ -104,6 +104,20 @@ export async function POST(req: NextRequest) {
   }
 
   const { name, subject, bodyText, htmlContent, segment, scheduledAt, bannerSlug } = parsed.data
+
+  // Phase 44 guard: a scheduled date in the past would fire on the very next
+  // cron/lazy tick without warning — almost always an accident (wrong year,
+  // wrong month). "Send now" is the deliberate path for immediate sends.
+  if (scheduledAt && new Date(scheduledAt).getTime() <= Date.now()) {
+    return NextResponse.json(
+      {
+        error:
+          'That schedule date is already in the past — a past-dated newsletter would send immediately on the next check. Pick a future date, or save it as a draft and press "Send now".',
+      },
+      { status: 400 }
+    )
+  }
+
   const campaign = await db.newsletterCampaign.create({
     data: {
       name,

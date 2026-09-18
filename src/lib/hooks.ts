@@ -905,6 +905,7 @@ export interface MarketingAutomationState {
     sendTime: string
     currentWeekIndex: number
     nextSlotDate: string | null
+    slotPinned: boolean
   }
   pending: {
     id: string
@@ -971,6 +972,8 @@ export function useUpdateMarketingAutomation() {
       dayOfWeek?: number
       sendTime?: string
       currentWeekIndex?: number
+      // 'YYYY-MM-DD' — pin the EXACT first-send day (calendar picker)
+      startDate?: string
     }) => {
       const res = await fetch('/api/marketing/automation', {
         method: 'PUT',
@@ -1046,8 +1049,13 @@ export function useApproveAutomationCampaign() {
   return useMutation({
     // Approve = schedule the draft for its slot date (the engine already
     // pre-filled it). The daily cron / lazy scheduler delivers it on the day.
+    // Slot already passed (owner approved late)? Schedule a minute out —
+    // "approve" must never fail, and the server now rejects past dates.
     mutationFn: async (campaign: { id: string; slotDate: string | null }) => {
-      const sendAt = campaign.slotDate ?? new Date(Date.now() + 60_000).toISOString()
+      const sendAt =
+        campaign.slotDate && new Date(campaign.slotDate).getTime() > Date.now()
+          ? campaign.slotDate
+          : new Date(Date.now() + 60_000).toISOString()
       const res = await fetch(`/api/marketing/campaigns/${campaign.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

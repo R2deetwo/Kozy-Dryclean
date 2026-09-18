@@ -7,12 +7,29 @@
 // pending draft, last sent, next library entry). PUT updates cadence / send
 // day / send time / content starting point, and — when the timing settings
 // change while nothing is pending — recomputes the next slot from now.
+//
+// Phase 44 adds `startDate` ('YYYY-MM-DD'): the owner picks the EXACT day
+// the first newsletter goes out from a calendar. Rules, in plain words:
+//   * Pinning needs a clean slate — if a newsletter is already waiting for
+//     approval, PUT returns 409 and the panel tells the owner to approve or
+//     skip it first.
+//   * The weekly rhythm follows the chosen date: dayOfWeek is synced to the
+//     weekday the owner picked (future sends stay on that day).
+//   * A send-time change later re-times the pinned slot (same date); a
+//     send-DAY change takes the rhythm back over (pin cleared).
+//   * The pin is consumed when the engine advances past the first slot.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
-import { getOrCreateSchedule, getAutomationState, ensureNextAutoDraft, nextOccurrenceLagos } from '@/lib/marketing'
+import {
+  getOrCreateSchedule,
+  getAutomationState,
+  ensureNextAutoDraft,
+  nextOccurrenceLagos,
+  slotFromStartDateLagos,
+} from '@/lib/marketing'
 
 async function guardAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
   try {
@@ -45,7 +62,23 @@ const UpdateSchema = z.object({
     .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Send time must be HH:mm (24-hour)')
     .optional(),
   currentWeekIndex: z.int().min(0).max(51).optional(),
+  // Phase 44 — pick the exact first-send day from the calendar.
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Start date must be YYYY-MM-DD')
+    .optional(),
 })
+
+// At least this far ahead for a hand-picked slot, so the daily cron / lazy
+// scheduler reliably gets a chance to see it before it is due.
+const MIN_PINNED_LEAD_MS = 60 * 60_000
+
+function lagosDateStr(d: Date): string {
+  const lagos = new Date(d.getTime() + 60 * 60_000) // Africa/Lagos, UTC+1, no DST
+  return `${lagos.getUTCFullYear()}-${String(lagos.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    lagos.getUTCDate()
+  ).padStart(2, '0')}`
+}
 
 export async function PUT(req: NextRequest) {
   const guard = await guardAdmin()
@@ -65,39 +98,111 @@ export async function PUT(req: NextRequest) {
     )
   }
 
+  const { startDate, ...rest } = parsed.data // rest = Prisma-safe fields
   const current = await getOrCreateSchedule()
-  const timingChanged =
-    (parsed.data.cadenceWeeks !== undefined && parsed.data.cadenceWeeks !== current.cadenceWeeks) ||
-    (parsed.data.dayOfWeek !== undefined && parsed.data.dayOfWeek !== current.dayOfWeek) ||
-    (parsed.data.sendTime !== undefined && parsed.data.sendTime !== current.sendTime)
 
-  // If timing changed and nothing is pending, the next slot is recomputed
-  // from now — the old slot belonged to the old rhythm.
+  // ---- Rule 1: an explicit start date pins the first send -----------------
+  if (startDate) {
+    // Date sanity first — a past date is wrong no matter what is pending,
+    // and this message is the one the owner needs to see.
+    const { slot, dayOfWeek } = slotFromStartDateLagos(startDate, rest.sendTime ?? current.sendTime)
+    if (slot.getTime() <= Date.now() + MIN_PINNED_LEAD_MS) {
+      return NextResponse.json(
+        {
+          error:
+            'That day has already passed (or is less than an hour away) at your current send time. Pick a day that is still ahead.',
+        },
+        { status: 400 }
+      )
+    }
+
+    const pending = await db.newsletterCampaign.findFirst({
+      where: { source: 'automation', status: { in: ['DRAFT', 'SCHEDULED'] } },
+      select: { id: true, status: true },
+    })
+    if (pending) {
+      return NextResponse.json(
+        {
+          error:
+            'A newsletter is already waiting. Approve it (or skip it) first — then pick your next start date.',
+        },
+        { status: 409 }
+      )
+    }
+
+    await db.marketingSchedule.update({
+      where: { id: 'main' },
+      data: {
+        ...rest,
+        nextSlotDate: slot,
+        slotPinned: true,
+        // The rhythm follows the picked date's weekday from now on.
+        dayOfWeek: rest.dayOfWeek ?? dayOfWeek,
+      },
+    })
+
+    // Slot close enough? Prepare the draft right away so the owner sees it.
+    try {
+      await ensureNextAutoDraft()
+    } catch (e) {
+      console.error('ensureNextAutoDraft after start-date pin failed:', e)
+    }
+    const state = await getAutomationState()
+    return NextResponse.json(state)
+  }
+
+  // ---- Rule 2: timing changes while nothing is pending --------------------
+  const dowChanged = rest.dayOfWeek !== undefined && rest.dayOfWeek !== current.dayOfWeek
+  const timeChanged = rest.sendTime !== undefined && rest.sendTime !== current.sendTime
+
   let nextSlotDate: Date | null | undefined
-  if (timingChanged) {
+  let slotPinned: boolean | undefined
+  if (timeChanged || dowChanged) {
     const pending = await db.newsletterCampaign.findFirst({
       where: { source: 'automation', status: { in: ['DRAFT', 'SCHEDULED'] } },
       select: { id: true },
     })
     if (!pending) {
-      nextSlotDate = nextOccurrenceLagos(
-        parsed.data.dayOfWeek ?? current.dayOfWeek,
-        parsed.data.sendTime ?? current.sendTime
-      )
+      if (timeChanged && !dowChanged && current.slotPinned && current.nextSlotDate) {
+        // Keep the owner's chosen DATE, move only the time on it.
+        const { slot } = slotFromStartDateLagos(
+          lagosDateStr(current.nextSlotDate),
+          rest.sendTime ?? current.sendTime
+        )
+        if (slot.getTime() <= Date.now() + MIN_PINNED_LEAD_MS) {
+          return NextResponse.json(
+            {
+              error:
+                'That send time has already passed for your chosen start date. Pick a later time or a later start date.',
+            },
+            { status: 400 }
+          )
+        }
+        nextSlotDate = slot
+        slotPinned = true
+      } else {
+        // A new send DAY takes the rhythm back over — recompute from now.
+        nextSlotDate = nextOccurrenceLagos(
+          rest.dayOfWeek ?? current.dayOfWeek,
+          rest.sendTime ?? current.sendTime
+        )
+        slotPinned = false
+      }
     }
   }
 
   await db.marketingSchedule.update({
     where: { id: 'main' },
     data: {
-      ...parsed.data,
+      ...rest,
       ...(nextSlotDate !== undefined ? { nextSlotDate } : {}),
+      ...(slotPinned !== undefined ? { slotPinned } : {}),
     },
   })
 
   // Turning the engine on (or timing moved closer) — give it the chance to
   // prepare the first draft immediately if the slot is close.
-  if (parsed.data.enabled === true || timingChanged) {
+  if (rest.enabled === true || timeChanged || dowChanged) {
     try {
       await ensureNextAutoDraft()
     } catch (e) {

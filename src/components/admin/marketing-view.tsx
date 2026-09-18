@@ -113,6 +113,16 @@ function fmtDateTime(iso: string | null | undefined): string {
   })
 }
 
+/** Min value for the datetime-local schedule input: one minute ahead,
+ *  formatted in the ADMIN's local time (the format the input expects).
+ *  Past dates are also rejected server-side — this is just the friendly
+ *  first line of defence (phase 44). */
+function scheduleMin(): string {
+  const d = new Date(Date.now() + 60_000)
+  const p = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`
+}
+
 /** "Dec 15 – Jan 5, 2027" — promo windows in Lagos terms, year shown when it isn't the current one. */
 function fmtPromoWindow(p: PromoPlanEntry): string {
   const fmt = (d: Date, withYear = false) =>
@@ -806,10 +816,10 @@ function CampaignForm({
       </div>
       <div className="space-y-2">
         <Label>Schedule (optional — leave blank to save as draft)</Label>
-        <Input name="scheduledAt" type="datetime-local" />
+        <Input name="scheduledAt" type="datetime-local" min={scheduleMin()} />
         <p className="text-xs text-navy-300">
           Scheduled campaigns are checked daily at 8am and whenever you open this tab — so they
-          also go out as soon as you next check Marketing.
+          also go out as soon as you next check Marketing. The date must be in the future.
         </p>
       </div>
       <div className="flex gap-2">
