@@ -109,13 +109,13 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           />
         </div>
 
-        <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:py-24">
+        <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-4 py-10 sm:px-6 lg:grid-cols-[1.1fr_1fr] lg:gap-12 lg:py-14">
           {/* Phase 42: hero entrance runs on CSS (animate-fade-up) instead of
               framer-motion initial opacity:0 — the old way shipped the hero
               invisible in the server HTML and stayed blank on slow phones
               until hydration finished. CSS animation starts at first paint. */}
           <div className="animate-fade-up text-white">
-            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30 backdrop-blur">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30 backdrop-blur">
               <Sparkles className="h-3 w-3 text-gold-400" />
               Kozy drycleaning &amp; laundry · Serving Ikoyi to Lekki
             </div>
@@ -126,13 +126,13 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               <span className="text-gold-gradient">Exceptional convenience.</span>
             </h1>
 
-            <p className="mt-5 max-w-xl text-base leading-relaxed text-navy-100/90 sm:text-lg">
+            <p className="mt-4 max-w-xl text-base leading-relaxed text-navy-100/90 sm:text-lg">
               Kozy is Lagos&apos; premium atelier for everything from designer personal wear
               to corporate linen programs. We collect, treat, and return — with the
               discretion your wardrobe deserves.
             </p>
 
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-6 flex flex-wrap gap-3">
               <Button
                 size="lg"
                 onClick={onBook}
@@ -152,7 +152,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               </Button>
             </div>
 
-            <div className="mt-10 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs text-navy-100/80">
+            <div className="mt-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-xs text-navy-100/80">
               <span className="flex items-center gap-1.5">
                 <Shield className="h-3.5 w-3.5 text-gold-400" /> Return-as-Received Guarantee
               </span>
@@ -167,7 +167,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
 
           {/* Hero image card — CSS entrance (see note above) */}
           <div className="animate-fade-up-delay-1 relative">
-            <div className="relative h-[480px] overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl shadow-navy-900/40 sm:h-[560px]">
+            <div className="relative h-[360px] overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl shadow-navy-900/40 sm:h-[420px] lg:h-[420px]">
               {/* next/image priority: single controlled preload + AVIF/WebP
                   negotiation instead of the raw 80KB PNG competing with 38
                   other images for bandwidth (phase 42 mobile fix). */}
@@ -222,7 +222,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           TRUST BAR
       ============================================================ */}
       <section className="border-b border-navy-100 bg-white">
-        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-around gap-4 px-4 py-5 sm:px-6">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-around gap-3 px-4 py-4 sm:px-6">
           {[
             { icon: Building2, label: 'Corporate Partners', value: '24 Hotels & Estates' },
             { icon: Shield, label: 'Items Returned', value: '12,400+ Pieces' },
@@ -253,9 +253,9 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           clients, 5% for uploading pictures with each order)
       ============================================================ */}
       <section className="border-b border-gold-200 bg-linen-50">
-        <div className="mx-auto grid max-w-7xl gap-3 px-4 py-6 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
-          <div className="flex items-center gap-3 rounded-xl bg-navy p-4 text-white shadow-sm ring-1 ring-gold-400/30">
-            <Sparkles className="h-6 w-6 shrink-0 text-gold-400" />
+        <div className="mx-auto grid max-w-7xl grid-cols-2 gap-2.5 px-4 py-4 sm:px-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="flex items-center gap-3 rounded-xl bg-navy p-3 text-white shadow-sm ring-1 ring-gold-400/30">
+            <Sparkles className="h-5 w-5 shrink-0 text-gold-400" />
             <div>
               <p className="text-sm font-bold text-gold-100">
                 {appSettings.onlineOrderDiscountPercent}% off every online order
@@ -265,8 +265,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
-            <Sparkles className="h-6 w-6 shrink-0 text-gold-500" />
+          <div className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-gold-200">
+            <Sparkles className="h-5 w-5 shrink-0 text-gold-500" />
             <div>
               <p className="text-sm font-bold text-navy">
                 {appSettings.firstOrderDiscountPercent}% off your first order
@@ -274,8 +274,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               <p className="text-xs text-navy-300">For every new customer — applied automatically at checkout.</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
-            <Building2 className="h-6 w-6 shrink-0 text-gold-400" />
+          <div className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-gold-200">
+            <Building2 className="h-5 w-5 shrink-0 text-gold-400" />
             <div>
               <p className="text-sm font-bold text-navy">
                 Hotels &amp; corporate clients: {appSettings.hotelGuestDiscountPercent}% off + 5%
@@ -286,8 +286,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-3 rounded-xl bg-white p-4 shadow-sm ring-1 ring-gold-200">
-            <Shield className="h-6 w-6 shrink-0 text-gold-500" />
+          <div className="flex items-center gap-3 rounded-xl bg-white p-3 shadow-sm ring-1 ring-gold-200">
+            <Shield className="h-5 w-5 shrink-0 text-gold-500" />
             <div>
               <p className="text-sm font-bold text-navy">5% off every order with pictures</p>
               <p className="text-xs text-navy-300">
@@ -311,17 +311,17 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           keeps this summary: six cards, honest "from" prices (live from the
           server catalog), one click to the detail.
       ============================================================ */}
-      <section id="services" className="bg-white py-20 scroll-mt-20">
+      <section id="services" className="bg-white py-12 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
+          <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-end">
             <div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
                 What we do
               </p>
-              <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+              <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy sm:text-3xl">
                 Six services. One pickup.
               </h2>
-              <p className="mt-2 max-w-xl text-navy-300">
+              <p className="mt-2 max-w-xl text-sm text-navy-300">
                 Everything rides the same free island-wide pickup — dry cleaning, household
                 linens, sneakers, even alterations. First delivery is on us.
               </p>
@@ -338,7 +338,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
             </Button>
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
             {[
               {
                 href: '/services',
@@ -394,18 +394,22 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                   className="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300"
                 >
                   <Card className="h-full border-navy-100 shadow-navy transition-shadow duration-200 group-hover:shadow-lg group-hover:ring-1 group-hover:ring-gold-200">
-                    <CardContent className="p-5">
-                      <div className="flex items-center justify-between">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linen-50">
-                          <Icon className="h-5 w-5 text-gold-500" />
+                    <CardContent className="flex h-full flex-col p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2.5">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linen-50">
+                            <Icon className="h-4.5 w-4.5 text-gold-500" />
+                          </div>
+                          <h3 className="font-serif text-sm font-semibold leading-tight text-navy sm:text-base">
+                            {c.title}
+                          </h3>
                         </div>
-                        <ArrowRight className="h-4 w-4 text-navy-200 transition-all group-hover:translate-x-0.5 group-hover:text-gold-500" />
+                        <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-navy-200 transition-all group-hover:translate-x-0.5 group-hover:text-gold-500" />
                       </div>
-                      <h3 className="mt-3 font-serif text-lg font-semibold text-navy">
-                        {c.title}
-                      </h3>
-                      <p className="mt-1 text-sm leading-relaxed text-navy-300">{c.blurb}</p>
-                      <p className="mt-3 text-sm font-semibold text-navy">{c.price}</p>
+                      <p className="mt-2 hidden flex-1 text-sm leading-snug text-navy-300 sm:line-clamp-2 sm:block">
+                        {c.blurb}
+                      </p>
+                      <p className="mt-2 text-xs font-semibold text-navy sm:text-sm">{c.price}</p>
                     </CardContent>
                   </Card>
                 </Link>
@@ -426,31 +430,31 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       {/* ============================================================
           GUARANTEE — Kozy Care Promise
       ============================================================ */}
-      <section id="guarantee" className="bg-linen py-20 scroll-mt-20">
+      <section id="guarantee" className="bg-linen py-12 scroll-mt-20">
         <div className="mx-auto max-w-6xl px-4 sm:px-6">
           <Card className="overflow-hidden border-navy-100 shadow-navy">
             <CardContent className="grid gap-0 p-0 md:grid-cols-[1fr_1.4fr]">
-              <div className="bg-navy-gradient p-8 text-white">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gold-400 text-navy">
-                  <Shield className="h-6 w-6" />
+              <div className="bg-navy-gradient p-6 text-white">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gold-400 text-navy">
+                  <Shield className="h-5 w-5" />
                 </div>
-                <h3 className="mt-4 font-serif text-2xl font-semibold">
+                <h3 className="mt-3 font-serif text-xl font-semibold">
                   Return-as-Received Guarantee
                 </h3>
                 <p className="mt-2 text-sm text-navy-100">
                   The Kozy Care Promise — capture, document, return. Your garments come
                   back in the exact condition recorded at pickup, or we make it right.
                 </p>
-                <Badge className="mt-4 w-fit bg-gold-400 text-navy hover:bg-gold-400">
+                <Badge className="mt-3 w-fit bg-gold-400 text-navy hover:bg-gold-400">
                   Activates 5% discount on eligible orders
                 </Badge>
               </div>
 
-              <div className="p-8">
+              <div className="p-6">
                 <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
                   How the guarantee works
                 </p>
-                <p className="mt-3 text-sm leading-relaxed text-navy-300">
+                <p className="mt-2 text-sm leading-relaxed text-navy-300">
                   During the retail booking flow, you&apos;ll see an optional photo uploader.
                   Use it to capture the current condition of your garments. Orders with
                   uploaded photos are automatically tagged &quot;Guarantee Activated&quot;
@@ -461,7 +465,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                     directive: "what is considered eligible orders… a certain
                     number garments or amount of total order"). The thresholds
                     are admin-tunable and served from the DB. */}
-                <div className="mt-4 rounded-lg border border-navy-100 bg-linen-50 p-4">
+                <div className="mt-3 rounded-lg border border-navy-100 bg-linen-50 p-3">
                   <p className="font-serif text-sm font-semibold text-navy">
                     What counts as an eligible order?
                   </p>
@@ -475,29 +479,31 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                       {formatNaira(appSettings.guaranteeMinOrderValue)}+ total
                     </span>{' '}
                     — whichever comes first — with condition photos uploaded at booking and
-                    the guarantee terms acknowledged. Orders below both thresholds can still
-                    be booked and cleaned; they simply don&apos;t carry the damage-cover
-                    guarantee. In short: two shirts or one suit and you&apos;re covered.
+                    the guarantee terms acknowledged. In short: two shirts or one suit and
+                    you&apos;re covered.
                   </p>
                 </div>
 
-                <div className="mt-4 rounded-lg border border-gold-200 bg-gold-50 p-4 text-xs leading-relaxed text-navy-300">
-                  <p className="font-serif text-sm font-semibold text-navy">
-                    Terms of Service
-                  </p>
-                  <p className="mt-1">
-                    Return-as-Received Guarantee: By utilizing our Condition Capture
-                    feature, we guarantee your garments will be returned clean and in
-                    the exact structural condition documented at pickup. Covers physical
-                    damage in our care; does not cover pre-existing wear or inherent
-                    fabric degradation. Claims must be made within 24 hours of delivery.
-                  </p>
+                {/* Terms in one tight line on the home page — the full legal
+                    wording lives on /terms#guarantee (section 5), where it has
+                    always been published. */}
+                <div className="mt-3 rounded-lg border border-gold-200 bg-gold-50 p-3 text-xs leading-relaxed text-navy-300">
+                  <span className="font-serif text-sm font-semibold text-navy">Terms:</span>{' '}
+                  covers physical damage in our care; not pre-existing wear or inherent
+                  fabric degradation. Claims within 24 hours of delivery.{' '}
+                  <Link
+                    href="/terms#guarantee"
+                    className="font-semibold text-navy underline decoration-gold-400 decoration-2 underline-offset-2 hover:text-gold-600"
+                  >
+                    Read the full guarantee terms
+                  </Link>
+                  .
                 </div>
 
-                <p className="mt-4 text-xs text-navy-300">
+                <p className="mt-3 text-xs text-navy-300">
                   <span className="font-semibold text-navy">Corporate note:</span> For
                   corporate bulk orders, condition capture is hidden by default to
-                  streamline booking. It can be enabled per-order on request.
+                  streamline booking — it can be enabled per-order on request.
                 </p>
               </div>
             </CardContent>
@@ -506,48 +512,65 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       </section>
 
       {/* ============================================================
-          FEMALE LIFESTYLE — representing all customers
+          LIFESTYLE CLOSER — compact full-bleed band (phase 46). Was a
+          tall two-column section; now the handover photo works as the
+          backdrop for one final pitch + stat chips + CTA, keeping the
+          human warmth without the scroll cost.
       ============================================================ */}
-      <section className="bg-linen py-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="grid gap-10 lg:grid-cols-2 items-center">
-            <div className="overflow-hidden rounded-2xl ring-1 ring-navy-100 shadow-2xl order-2 lg:order-1">
-              <img src="/brand/images/laundry-handover.png" alt="Kozy rider handing a navy suit carrier garment bag with the gold Kozy K monogram to a smiling customer on her veranda" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-            </div>
+      <section className="relative overflow-hidden bg-navy">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/brand/images/laundry-handover.png"
+          alt=""
+          role="presentation"
+          loading="lazy"
+          decoding="async"
+          className="absolute inset-0 h-full w-full object-cover object-[70%_center]"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-navy-900/95 via-navy-900/85 to-navy-900/55" />
+
+        <div className="relative mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:py-14">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <motion.div
-              initial={{ opacity: 0, x: 16 }}
-              whileInView={{ opacity: 1, x: 0 }}
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
-              className="order-1 lg:order-2"
+              className="max-w-xl"
             >
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
                 Trusted by thousands
               </p>
-              <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+              <h2 className="font-serif text-2xl font-semibold tracking-tight text-white sm:text-3xl">
                 Care for everything you wear.
               </h2>
-              <p className="mt-4 max-w-xl text-navy-300">
-                From your favourite Ankara gown to that designer blazer you save for special
-                occasions — we treat every garment with the same level of attention. Every
-                order returns within 3–5 days, or as fast as 24 hours with Express.
+              <p className="mt-2 text-sm leading-relaxed text-navy-100/85">
+                From your favourite Ankara gown to that designer blazer you save for
+                special occasions — every garment gets the same attention, back within
+                3–5 days, or 24 hours with Express.
               </p>
-              <div className="mt-6 grid gap-4 sm:grid-cols-3">
-                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
-                  <p className="font-serif text-2xl font-bold text-navy">24h</p>
-                  <p className="text-xs text-navy-300">Express turnaround from</p>
-                </div>
-                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
-                  <p className="font-serif text-2xl font-bold text-navy">₦500+</p>
-                  <p className="text-xs text-navy-300">Per item, starting at</p>
-                </div>
-                <div className="rounded-xl bg-white p-4 shadow-sm ring-1 ring-navy-100">
-                  <p className="font-serif text-2xl font-bold text-navy">{appSettings.firstOrderDiscountPercent}%</p>
-                  <p className="text-xs text-navy-300">Off first order</p>
-                </div>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.1 }}
+              className="flex flex-col items-start gap-4 lg:items-end"
+            >
+              <div className="flex flex-wrap gap-2.5">
+                <span className="rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-gold-100 ring-1 ring-gold-400/30 backdrop-blur">
+                  24h Express
+                </span>
+                <span className="rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-gold-100 ring-1 ring-gold-400/30 backdrop-blur">
+                  Items from ₦500
+                </span>
+                <span className="rounded-full bg-white/10 px-3.5 py-1.5 text-xs font-semibold text-gold-100 ring-1 ring-gold-400/30 backdrop-blur">
+                  {appSettings.firstOrderDiscountPercent}% off first order
+                </span>
               </div>
               <Button
                 onClick={onBook}
-                className="mt-6 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+                className="rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
               >
                 Book your pickup <ArrowRight className="ml-2 h-4 w-4" />
               </Button>

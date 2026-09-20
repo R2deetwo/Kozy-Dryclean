@@ -57,14 +57,14 @@ export function TestimonialsCarousel() {
   return (
     <section
       id="testimonials"
-      className="bg-navy-gradient py-20 text-white scroll-mt-20"
+      className="bg-navy-gradient py-12 text-white scroll-mt-20"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
       <div className="mx-auto max-w-5xl px-4 sm:px-6">
         {/* Header */}
         <div className="text-center">
-          <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30">
+          <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30">
             <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
             <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
             <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
@@ -72,15 +72,15 @@ export function TestimonialsCarousel() {
             <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
             <span className="ml-1.5 tracking-wide">Verified Lagos customers</span>
           </div>
-          <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+          <h2 className="font-serif text-2xl font-semibold tracking-tight sm:text-3xl">
             Loved by Lagos.
           </h2>
-          <p className="mt-2 max-w-xl mx-auto text-navy-100/80">
+          <p className="mt-2 max-w-xl mx-auto text-sm text-navy-100/80">
             Real feedback from customers who trusted us with their garments.
           </p>
           <Link
             href="/feedback"
-            className="mt-5 inline-flex items-center gap-2 rounded-full bg-gold-400 px-5 py-2 text-sm font-semibold text-navy shadow-sm transition hover:bg-gold-300"
+            className="mt-3 inline-flex items-center gap-2 rounded-full bg-gold-400 px-4 py-1.5 text-sm font-semibold text-navy shadow-sm transition hover:bg-gold-300"
           >
             <PenLine className="h-4 w-4" />
             Leave a review
@@ -88,7 +88,7 @@ export function TestimonialsCarousel() {
         </div>
 
         {/* Carousel */}
-        <div className="relative mt-12">
+        <div className="relative mt-8">
           {/* Background quote icon */}
           <Quote className="pointer-events-none absolute -top-6 left-1/2 -z-0 h-16 w-16 -translate-x-1/2 text-gold-400/10" />
 
@@ -103,12 +103,12 @@ export function TestimonialsCarousel() {
               className="relative mx-auto max-w-3xl text-center"
             >
               {/* Stars */}
-              <div className="mb-5 flex justify-center gap-0.5">
+              <div className="mb-3 flex justify-center gap-0.5">
                 {[1, 2, 3, 4, 5].map((star) => (
                   <Star
                     key={star}
                     className={cn(
-                      'h-5 w-5',
+                      'h-4 w-4',
                       current.rating >= star
                         ? 'fill-gold-400 text-gold-400'
                         : 'fill-transparent text-gold-400/30'
@@ -118,12 +118,12 @@ export function TestimonialsCarousel() {
               </div>
 
               {/* Comment */}
-              <blockquote className="font-serif text-xl leading-relaxed text-white/95 sm:text-2xl sm:leading-relaxed">
+              <blockquote className="font-serif text-lg leading-relaxed text-white/95 sm:text-xl">
                 &ldquo;{current.comment}&rdquo;
               </blockquote>
 
               {/* Author */}
-              <div className="mt-6 flex flex-col items-center gap-1">
+              <div className="mt-4 flex flex-col items-center gap-1">
                 <p className="text-base font-semibold tracking-wide text-gold-200">
                   {current.displayName}
                 </p>
@@ -164,7 +164,7 @@ export function TestimonialsCarousel() {
 
           {/* Dots */}
           {count > 1 && (
-            <div className="mt-10 flex justify-center gap-1.5">
+            <div className="mt-6 flex justify-center gap-1.5">
               {testimonials!.map((t, i) => (
                 <button
                   key={t.id}

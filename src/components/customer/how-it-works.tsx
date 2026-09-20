@@ -220,7 +220,7 @@ function StepCard({ step, index }: { step: StepConfig; index: number }) {
         <div
           ref={winRef}
           data-phase={phase}
-          className="relative h-44 cursor-pointer select-none overflow-hidden bg-linen-100"
+          className="relative h-36 cursor-pointer select-none overflow-hidden bg-linen-100"
           onMouseEnter={run}
           onMouseLeave={stop}
           onClick={() => {
@@ -293,11 +293,11 @@ function StepCard({ step, index }: { step: StepConfig; index: number }) {
             <Icon className="h-5 w-5" />
           </motion.div>
         </div>
-        <CardContent className="p-6">
-          <h3 className="font-serif text-lg font-semibold text-navy">
+        <CardContent className="p-5">
+          <h3 className="font-serif text-base font-semibold text-navy">
             {step.title}
           </h3>
-          <p className="mt-2 text-sm leading-relaxed text-navy-300">
+          <p className="mt-1.5 text-sm leading-relaxed text-navy-300">
             {step.body}
           </p>
         </CardContent>
@@ -614,7 +614,7 @@ const STEPS: StepConfig[] = [
     icon: CheckCircle2,
     image: '/brand/images/how-3-return.png',
     title: '03 · Pristine return',
-    body: 'Your garments are folded, packaged, and delivered within 3–5 days (retail) — or as fast as 24 hours with Express — sealed in protective Kozy garment bags, ready for your wardrobe.',
+    body: 'Folded, packaged, and delivered within 3–5 days — or as fast as 24 hours with Express — sealed in protective Kozy garment bags.',
     focus: { x: 64, y: 50, scale: 1.9 },
     overlay: 'delivery',
   },
@@ -622,22 +622,22 @@ const STEPS: StepConfig[] = [
 
 export function HowItWorksSection() {
   return (
-    <section className="bg-linen py-20">
+    <section className="bg-linen py-12">
       <div className="mx-auto max-w-7xl px-4 sm:px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
             The Kozy Method
           </p>
-          <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
+          <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy sm:text-3xl">
             Three steps. Zero fuss.
           </h2>
-          <p className="mt-3 text-navy-300">
+          <p className="mt-2 text-sm text-navy-300">
             From your dressing room to our atelier and back — with every stage
             visible in your dashboard.
           </p>
         </div>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="mt-8 grid gap-4 md:grid-cols-3">
           {STEPS.map((step, i) => (
             <StepCard key={step.title} step={step} index={i} />
           ))}

@@ -62,7 +62,7 @@ function NewsletterSignup() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="mt-8 rounded-xl bg-navy-600/40 p-4 ring-1 ring-navy-400/40 sm:p-5">
+    <form onSubmit={handleSubmit} className="mt-6 rounded-xl bg-navy-600/40 p-4 ring-1 ring-navy-400/40">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm font-semibold text-white">
@@ -107,8 +107,8 @@ function NewsletterSignup() {
 export function SiteFooter() {
   return (
     <footer className="bg-navy text-navy-100">
-      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
-        <div className="grid gap-8 md:grid-cols-3">
+      <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6">
+        <div className="grid gap-6 md:grid-cols-3">
           <div>
             <div className="flex items-center gap-2.5">
               {/* v4 Kozy K mark — same asset as the header (gold K with
@@ -165,7 +165,7 @@ export function SiteFooter() {
             <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">
               Quick links
             </p>
-            <ul className="mt-3 space-y-2 text-sm">
+            <ul className="mt-3 grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
               <li>
                 <Link href="/book" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
                   Book a pickup
@@ -217,7 +217,7 @@ export function SiteFooter() {
         <NewsletterSignup />
 
         {/* Driver recruitment banner */}
-        <div className="mt-8 rounded-xl bg-gradient-to-r from-navy-600 to-navy-700 p-4 ring-1 ring-gold-400/20">
+        <div className="mt-6 rounded-xl bg-gradient-to-r from-navy-600 to-navy-700 p-4 ring-1 ring-gold-400/20">
           <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🚚</span>
@@ -236,7 +236,7 @@ export function SiteFooter() {
           *Free pickup and delivery for first order only.
         </p>
 
-        <div className="mt-2 flex flex-col items-center justify-between gap-3 border-t border-navy-500 pt-6 text-xs sm:flex-row">
+        <div className="mt-2 flex flex-col items-center justify-between gap-3 border-t border-navy-500 pt-4 text-xs sm:flex-row">
           <p className="text-navy-100/40">© 2026 Kozy Care. All rights reserved.</p>
           <div className="flex flex-wrap gap-4">
             <a href="/terms" className="text-navy-100/40 transition hover:text-gold-300">Terms of Service</a>
