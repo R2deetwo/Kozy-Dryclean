@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { cn } from '@/lib/utils'
 
 interface LogoProps {
@@ -8,6 +9,11 @@ interface LogoProps {
   subtitle?: string
   className?: string
   onClick?: () => void
+  /** Render as a Next.js Link (navigation) instead of a <button> (action). */
+  href?: string
+  /** Native hover tooltip, e.g. "Back to the home page". Also used as the
+      accessible label so screen readers announce the destination. */
+  title?: string
   variant?: 'light' | 'dark'
 }
 
@@ -19,17 +25,22 @@ const SIZES = {
 
 const DEFAULT_SUBTITLE = 'Drycleaning & Laundry'
 
-export function Logo({ size = 'md', showText = true, subtitle, className, onClick, variant = 'light' }: LogoProps) {
+export function Logo({
+  size = 'md',
+  showText = true,
+  subtitle,
+  className,
+  onClick,
+  href,
+  title,
+  variant = 'light',
+}: LogoProps) {
   const s = SIZES[size]
   const textColor = variant === 'dark' ? 'text-white' : 'text-[#0A192F]'
   const subtitleColor = variant === 'dark' ? 'text-[#D4AF37]' : 'text-[#6F88A8]'
 
-  return (
-    <button
-      onClick={onClick}
-      className={cn('flex items-center', s.gap, className)}
-      disabled={!onClick}
-    >
+  const content = (
+    <>
       {/* Kozy Care brand mark — v4 stylized K with tapered hanger-wire (vector,
           transparent background; gold reads on both light and navy surfaces). */}
       <img
@@ -52,6 +63,36 @@ export function Logo({ size = 'md', showText = true, subtitle, className, onClic
           )}
         </div>
       )}
+    </>
+  )
+
+  // Navigation usage: a real anchor. Anchors show the finger pointer on hover
+  // (a <button> never does — the client's exact complaint) and support
+  // middle-click / "open in new tab", which buttons don't.
+  if (href) {
+    return (
+      <Link
+        href={href}
+        title={title}
+        aria-label={title}
+        className={cn('flex items-center', s.gap, className)}
+      >
+        {content}
+      </Link>
+    )
+  }
+
+  return (
+    <button
+      onClick={onClick}
+      title={title}
+      aria-label={title}
+      // cursor-pointer only when the button actually does something —
+      // decorative logos keep the default arrow and stay disabled.
+      className={cn('flex items-center', s.gap, onClick && 'cursor-pointer', className)}
+      disabled={!onClick}
+    >
+      {content}
     </button>
   )
 }

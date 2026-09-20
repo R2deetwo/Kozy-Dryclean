@@ -216,9 +216,7 @@ export function FeedbackPage() {
     <div className="min-h-screen bg-linen pb-20">
       <div className="mx-auto max-w-2xl px-4 py-12 sm:py-16">
         <div className="flex justify-center">
-          <Link href="/" aria-label="Back to Kozy Care home">
-            <Logo size="md" />
-          </Link>
+          <Logo size="md" href="/" title="Back to Kozy Care home" />
         </div>
 
         <motion.div

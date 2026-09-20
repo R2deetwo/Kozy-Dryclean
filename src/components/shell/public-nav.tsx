@@ -16,12 +16,15 @@ export function PublicNav() {
     <div className="sticky top-0 z-50 w-full border-b border-navy-100 bg-white shadow-sm">
       <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6">
         <div className="flex items-center gap-5 lg:gap-7">
+          {/* Logo = "back to home". Rendered as a real link: finger pointer on
+              hover, middle-click/new-tab support, smooth client-side nav (no
+              full-page reload), and a tooltip that teaches laptop users it
+              goes home. */}
           <Logo
             size="md"
             subtitle="Drycleaning & Laundry"
-            onClick={() => {
-              window.location.href = '/'
-            }}
+            href="/"
+            title="Back to the home page"
           />
           <Link
             href="/services"

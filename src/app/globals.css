@@ -170,6 +170,18 @@
     @apply outline-2 outline-offset-2;
     outline-color: #D4AF37;
   }
+
+  /* Phase 47: Tailwind v4's preflight gives <button> the native arrow
+   * cursor. Web users expect the finger pointer over anything clickable —
+   * the client flagged the header logo ("users may not know it goes back
+   * to the home page"), and the same confusion applied to every button
+   * site-wide (hero CTAs, Sign in/up, wizard, console). Restore the
+   * pointer for every ENABLED button; disabled controls keep their own
+   * cursor (utilities still win over this base-layer rule). */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
 }
 
 /* Phase-33: horizontal menu rows (console tabs) — momentum scrolling on iOS
