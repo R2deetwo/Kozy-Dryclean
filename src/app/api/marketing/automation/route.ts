@@ -10,9 +10,11 @@
 //
 // Phase 44 adds `startDate` ('YYYY-MM-DD'): the owner picks the EXACT day
 // the first newsletter goes out from a calendar. Rules, in plain words:
-//   * Pinning needs a clean slate — if a newsletter is already waiting for
-//     approval, PUT returns 409 and the panel tells the owner to approve or
-//     skip it first.
+//   * A newsletter already waiting (draft or approved)? The owner can still
+//     pick a start date — as long as it is AFTER the waiting one's day. The
+//     pin then applies to the next cycle (phase 45: the old blanket 409 made
+//     the calendar button useless in the most common state — a draft waiting
+//     is exactly when the engine is "running").
 //   * The weekly rhythm follows the chosen date: dayOfWeek is synced to the
 //     weekday the owner picked (future sends stay on that day).
 //   * A send-time change later re-times the pinned slot (same date); a
@@ -116,18 +118,27 @@ export async function PUT(req: NextRequest) {
       )
     }
 
+    // A newsletter already waiting? The pin simply has to land AFTER it —
+    // the waiting one keeps its own day, the pin takes the NEXT cycle.
     const pending = await db.newsletterCampaign.findFirst({
       where: { source: 'automation', status: { in: ['DRAFT', 'SCHEDULED'] } },
-      select: { id: true, status: true },
+      select: { id: true, status: true, slotDate: true, scheduledAt: true, subject: true },
     })
     if (pending) {
-      return NextResponse.json(
-        {
-          error:
-            'A newsletter is already waiting. Approve it (or skip it) first — then pick your next start date.',
-        },
-        { status: 409 }
-      )
+      const pendingAt = pending.slotDate ?? pending.scheduledAt
+      if (pendingAt && slot.getTime() <= new Date(pendingAt).getTime()) {
+        const pendingDay = new Date(pendingAt).toLocaleDateString('en-NG', {
+          weekday: 'long',
+          day: 'numeric',
+          month: 'long',
+        })
+        return NextResponse.json(
+          {
+            error: `That day is on or before the newsletter already waiting (${pendingDay}). Pick a later day — it will become the start of the next one.`,
+          },
+          { status: 400 }
+        )
+      }
     }
 
     await db.marketingSchedule.update({

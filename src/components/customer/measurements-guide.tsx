@@ -139,7 +139,7 @@ export function MeasurementsGuide() {
         <div className="flex flex-col items-center text-center">
           <Logo />
           <Link
-            href="/#alterations"
+            href="/services#alterations"
             className="mt-6 inline-flex items-center gap-1.5 text-sm font-medium text-navy-300 transition hover:text-navy"
           >
             <ArrowLeft className="h-4 w-4" /> Back to alterations
@@ -627,7 +627,7 @@ export function MeasurementsGuide() {
                 Book pickup with alterations <ArrowRight className="ml-1 h-4 w-4" />
               </Button>
             </Link>
-            <Link href="/#alterations">
+            <Link href="/services#alterations">
               <Button
                 variant="outline"
                 className="rounded-full border-white/25 bg-transparent text-white hover:bg-white/10 hover:text-white"

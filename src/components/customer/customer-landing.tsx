@@ -1,6 +1,5 @@
 'use client'
 
-import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
@@ -23,8 +22,6 @@ import {
   Zap,
   Scissors,
   BedDouble,
-  Droplets,
-  Ruler,
 } from 'lucide-react'
 import {
   formatNaira,
@@ -35,15 +32,17 @@ import {
   WOMEN_CATALOG_GROUPS,
   LANDING_SHARED_GROUPS,
   itemsForGroup,
+  type CatalogDisplayGroup,
 } from '@/lib/pricing-groups'
 import { useServerPrices, useAppSettings } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { TestimonialsCarousel } from '@/components/customer/testimonials-carousel'
 import { HowItWorksSection } from '@/components/customer/how-it-works'
+import { SiteFooter } from '@/components/customer/site-footer'
+import { StickyMobileCta } from '@/components/customer/sticky-mobile-cta'
 
 interface Props {
   onBook: () => void
@@ -64,17 +63,6 @@ interface Props {
 // so the two surfaces can never drift apart.
 
 export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
-  const [pricing, setPricing] = useState<'men' | 'women' | 'corporate'>('men')
-  // Phase 44 — mobile sticky CTA: appears once the visitor scrolls past the
-  // hero (its own buttons have left the screen by then, so it never stares
-  // at a duplicate). Desktop keeps the sticky top nav — the bar is mobile-only.
-  const [showStickyCta, setShowStickyCta] = useState(false)
-  useEffect(() => {
-    const onScroll = () => setShowStickyCta(window.scrollY > 520)
-    onScroll()
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => window.removeEventListener('scroll', onScroll)
-  }, [])
   // Server-managed commercial terms (offers, delivery fee, guarantee rules,
   // alterations pricing, per-kg terms) — admin edits reach every visitor
   // instantly. The localStorage store is no longer consulted for anything
@@ -86,16 +74,20 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
   const serverPrices = useServerPrices()
   const priceOf = (id: string, fallback: number) =>
     serverPrices?.[id] ?? fallback
-  // Price cell for the pricing cards — quote-mode items (wedding dress,
-  // couture) read "Quoted"; from-mode items (restoration) read "From ₦X".
-  const priceCell = (g: GarmentCatalogItem) =>
-    g.pricingMode === 'quote' ? (
-      <span className="font-semibold text-gold-600">Quoted</span>
-    ) : g.pricingMode === 'from' ? (
-      <span className="font-semibold text-navy">From {formatNaira(priceOf(g.id, g.price))}</span>
-    ) : (
-      <span className="font-semibold text-navy">{formatNaira(priceOf(g.id, g.price))}</span>
-    )
+
+  // Phase 45 — services-at-a-glance: the cheapest standard per-item price in
+  // each retail category, so the home page can show honest "from" numbers
+  // without the full tables (those moved to /services).
+  const minStandardPrice = (groups: CatalogDisplayGroup[]): number | null => {
+    const prices = groups
+      .flatMap((group) => itemsForGroup(group))
+      .filter((g: GarmentCatalogItem) => g.pricingMode !== 'quote' && g.pricingMode !== 'from')
+      .map((g: GarmentCatalogItem) => priceOf(g.id, g.price))
+    return prices.length ? Math.min(...prices) : null
+  }
+  const menFrom = minStandardPrice(MEN_CATALOG_GROUPS)
+  const womenFrom = minStandardPrice(WOMEN_CATALOG_GROUPS)
+  const homeFrom = minStandardPrice(LANDING_SHARED_GROUPS)
 
   return (
     <div className="bg-linen">
@@ -312,344 +304,114 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       <HowItWorksSection />
 
       {/* ============================================================
-          PRICING & SERVICES
+          SERVICES AT A GLANCE — compact pointer to /services (phase 45).
+          The client's customer found the home page a very long scroll, so
+          the full per-item pricing tables, atelier story, sneaker
+          restoration and alterations moved to their own page. The home page
+          keeps this summary: six cards, honest "from" prices (live from the
+          server catalog), one click to the detail.
       ============================================================ */}
-      <section id="pricing" className="bg-white py-20 scroll-mt-20">
+      <section id="services" className="bg-white py-20 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
             <div>
               <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
-                Transparent pricing
+                What we do
               </p>
               <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
-                Per-item or per-kilogram.
+                Six services. One pickup.
               </h2>
               <p className="mt-2 max-w-xl text-navy-300">
-                Pay by bank transfer{appSettings.paystackAvailable ? ' or card' : ''}. Corporate clients receive a dedicated
-                account manager and itemised monthly statements.
+                Everything rides the same free island-wide pickup — dry cleaning, household
+                linens, sneakers, even alterations. First delivery is on us.
               </p>
             </div>
-            <Tabs
-              value={pricing}
-              onValueChange={(v) => setPricing(v as 'men' | 'women' | 'corporate')}
+            <Button
+              asChild
+              variant="outline"
+              className="rounded-full border-gold-300 bg-white text-navy hover:bg-gold-50"
             >
-              <TabsList className="bg-linen-200">
-                <TabsTrigger
-                  value="men"
-                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
-                >
-                  Men
-                </TabsTrigger>
-                <TabsTrigger
-                  value="women"
-                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
-                >
-                  Women
-                </TabsTrigger>
-                <TabsTrigger
-                  value="corporate"
-                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
-                >
-                  <Building2 className="mr-1 h-3 w-3" /> Corporate
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+              <Link href="/services">
+                See all services &amp; pricing{' '}
+                <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+              </Link>
+            </Button>
           </div>
 
-          <Tabs value={pricing} onValueChange={(v) => setPricing(v as 'men' | 'women' | 'corporate')}>
-            {(['men', 'women'] as const).map((tab) => (
-              <TabsContent key={tab} value={tab} className="mt-8">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {(tab === 'men' ? MEN_CATALOG_GROUPS : WOMEN_CATALOG_GROUPS).map((group) => (
-                    <Card key={group.title} className="border-navy-100 shadow-navy">
-                      <CardContent className="p-5">
-                        <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
-                          {group.title}
-                        </h3>
-                        <ul className="space-y-2">
-                          {itemsForGroup(group).map((g) => (
-                            <li
-                              key={g.id}
-                              className="flex items-center justify-between text-sm"
-                            >
-                              <span className="flex items-center gap-2.5 text-navy/80">
-                                <img
-                                  src={g.icon}
-                                  alt=""
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="h-5 w-5 text-navy"
-                                  style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
-                                />
-                                {g.name}
-                              </span>
-                              {priceCell(g)}
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                {/* Shared categories — home, shoes and extras serve everyone */}
-                <div className="mt-8">
-                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
-                    For the home &amp; everything else
-                  </p>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {LANDING_SHARED_GROUPS.map((group) => (
-                      <Card key={group.title} className="border-navy-100 shadow-navy">
-                        <CardContent className="p-5">
-                          <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
-                            {group.title}
-                          </h3>
-                          <ul className="space-y-2">
-                            {itemsForGroup(group).map((g) => (
-                              <li
-                                key={g.id}
-                                className="flex items-center justify-between text-sm"
-                              >
-                                <span className="flex items-center gap-2.5 text-navy/80">
-                                  <img
-                                    src={g.icon}
-                                    alt=""
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="h-5 w-5 text-navy"
-                                    style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
-                                  />
-                                  {g.name}
-                                </span>
-                                {priceCell(g)}
-                              </li>
-                            ))}
-                          </ul>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-
-                {/* OTHER — wedding dress, couture & bespoke (owner directive):
-                    there was no category for these, so a full-width banner lets
-                    customers know a quote is available. Data comes from the same
-                    OTHER_COUTURE_GROUP the wizard uses — content can't drift. */}
-                <div className="mt-6 overflow-hidden rounded-2xl border border-gold-200 bg-linen-50 shadow-navy">
-                  <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-100">
-                        <Sparkles className="h-5 w-5 text-gold-600" />
-                      </div>
-                      <div>
-                        <p className="font-serif text-lg font-semibold text-navy">
-                          Something not on the menu?
-                        </p>
-                        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-300">
-                          Wedding dresses, couture and bespoke pieces are{' '}
-                          <span className="font-medium text-navy">quoted, not priced</span> —
-                          beading, fabric and detail change the work. Book a pickup, we
-                          assess your piece free of charge, and send a quote for your
-                          approval before any work begins.
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      onClick={onBook}
-                      variant="outline"
-                      className="shrink-0 rounded-full border-gold-300 bg-white text-navy hover:bg-gold-50"
-                    >
-                      Get a quote <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Express upsell */}
-                <div className="mt-6 flex flex-col items-start justify-between gap-3 rounded-xl bg-navy p-4 text-white ring-1 ring-gold-400/25 sm:flex-row sm:items-center">
-                  <div className="flex items-start gap-3">
-                    <Zap className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
-                    <div>
-                      <p className="text-sm font-semibold">
-                        In a hurry? Express turnaround at checkout.
-                      </p>
-                      <p className="mt-0.5 text-xs text-navy-100/70">
-                        Standard care returns in 3–5 days. Express 48 (+50%) or Express 24
-                        (+100%) jumps the cleaning queue — ideal for last-minute events.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={onBook}
-                    className="shrink-0 rounded-full bg-gold-gradient px-4 text-navy hover:opacity-90"
-                  >
-                    Book express <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </Button>
-                </div>
-
-                {/* Mode of wash pricing — visibility requested by the
-                    client (handwash is the LABOUR premium: every piece is
-                    washed and finished by hand, so it costs MORE than
-                    machine wash, not less). Percent comes live from
-                    AppSetting so admin tuning reflects here instantly. */}
-                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
-                  <div className="flex items-start gap-3">
-                    <Droplets className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
-                    <div>
-                      <p className="text-sm font-semibold text-navy">
-                        Machine or handwash — you choose at checkout.
-                      </p>
-                      <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
-                        Every price above is standard machine wash. Handwash adds{' '}
-                        <span className="font-semibold text-navy">
-                          +{appSettings.handwashSurchargePercent}%
-                        </span>{' '}
-                        to your cleaning subtotal — each piece is washed and finished
-                        by hand, which takes more time and expert care, so it carries
-                        a premium.
-                      </p>
-                    </div>
-                  </div>
-                  <Badge className="shrink-0 bg-gold-100 text-gold-800 hover:bg-gold-100">
-                    Handwash +{appSettings.handwashSurchargePercent}%
-                  </Badge>
-                </div>
-
-                {/* Pickup & delivery pricing — transparency requested by the
-                    client ("I see first delivery is free but I don't see
-                    pricing for deliveries afterwards"). First delivery is
-                    free; every delivery after that is a flat island-wide rate
-                    that admin can tune in Settings. */}
-                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
-                  <div className="flex items-start gap-3">
-                    <Truck className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
-                    <div>
-                      <p className="text-sm font-semibold text-navy">
-                        Pickup &amp; delivery — first one&apos;s on us.
-                      </p>
-                      <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
-                        Your first pickup and delivery is <span className="font-semibold text-navy">FREE</span>.
-                        After that, every delivery is a flat{' '}
-                        <span className="font-semibold text-navy">{formatNaira(appSettings.deliveryFee)}</span>{' '}
-                        island-wide (Ikoyi to Lekki) — no distance surprises, added at checkout.
-                        Express orders keep the same rate.
-                      </p>
-                    </div>
-                  </div>
-                  <Badge className="shrink-0 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-                    First delivery FREE
-                  </Badge>
-                </div>
-              </TabsContent>
-            ))}
-
-            <TabsContent value="corporate" className="mt-8">
-              <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-                <Card className="overflow-hidden border-navy-100 shadow-navy">
-                  <img
-                    src="/brand/images/b2b-linens.png"
-                    alt="Neatly folded stacks of pristine white hotel linens tied with gold ribbon"
-                    loading="lazy"
-                    decoding="async"
-                    className="h-64 w-full object-cover"
-                  />
-                  <CardContent className="p-6">
-                    <h3 className="font-serif text-xl font-semibold text-navy">
-                      Weight-based corporate program
-                    </h3>
-                    <p className="mt-2 text-sm text-navy-300">
-                      Hotels, estates, gyms, and restaurants rely on Kozy for predictable,
-                      per-kilogram pricing. We weigh at the station, send you a digital
-                      invoice, and route the next delivery.
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <div className="space-y-4">
-                  <Card className="border-navy bg-navy-gradient text-white shadow-navy">
-                    <CardContent className="p-6">
-                      <p className="text-xs uppercase tracking-wider text-gold-200">
-                        Per kilogram
-                      </p>
-                      <p className="mt-1 font-serif text-4xl font-bold text-gold-100">
-                        {formatNaira(appSettings.pricePerKg)}
-                      </p>
-                      <div className="mt-3 divider-gold" />
-                      <p className="mt-3 text-xs text-navy-100">
-                        Minimum charge{' '}
-                        <span className="font-semibold text-white">
-                          {formatNaira(appSettings.pricePerKg * appSettings.minimumKg)}
-                        </span>{' '}
-                        ({appSettings.minimumKg}kg minimum billable weight)
-                      </p>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-navy-100 shadow-navy">
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[
+              {
+                href: '/services',
+                icon: ShoppingBag,
+                title: "Men's dry cleaning",
+                blurb: 'Suits, shirts, agbada and native wear — pressed to atelier standard.',
+                price: menFrom != null ? `From ${formatNaira(menFrom)}` : 'Per item',
+              },
+              {
+                href: '/services',
+                icon: Sparkles,
+                title: "Women's dry cleaning",
+                blurb: 'Dresses, skirts, iro & buba — delicate fabrics get dedicated care zones.',
+                price: womenFrom != null ? `From ${formatNaira(womenFrom)}` : 'Per item',
+              },
+              {
+                href: '/services',
+                icon: BedDouble,
+                title: 'Home & linens',
+                blurb: 'Bedsheets, duvets, curtains — fresh, folded, sealed for delivery.',
+                price: homeFrom != null ? `From ${formatNaira(homeFrom)}` : 'Per item',
+              },
+              {
+                href: '/services#shoe-care',
+                icon: Zap,
+                title: 'Shoe care & restoration',
+                blurb: 'Sneakers and trainers brought back to box-fresh condition.',
+                price: 'From \u20a65,000',
+              },
+              {
+                href: '/services#alterations',
+                icon: Scissors,
+                title: 'Alterations & repairs',
+                blurb: 'In-house tailor — same rider, same delivery as your laundry.',
+                price:
+                  appSettings.alterationsFromPrice > 0
+                    ? `From ${formatNaira(appSettings.alterationsFromPrice)}`
+                    : 'Quoted before we sew',
+              },
+              {
+                href: '/services#pricing',
+                icon: Building2,
+                title: 'Corporate & hotels',
+                blurb: 'Weight-based programs with monthly statements and Net-15 terms.',
+                price: `${formatNaira(appSettings.pricePerKg)} per kg`,
+              },
+            ].map((c) => {
+              const Icon = c.icon
+              return (
+                <Link
+                  key={c.title}
+                  href={c.href}
+                  className="group rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-300"
+                >
+                  <Card className="h-full border-navy-100 shadow-navy transition-shadow duration-200 group-hover:shadow-lg group-hover:ring-1 group-hover:ring-gold-200">
                     <CardContent className="p-5">
-                      <ul className="space-y-3 text-sm">
-                        {[
-                          'Dedicated account manager & priority routing',
-                          'Itemised monthly statements for finance teams',
-                          'Item-level tagging for chain-of-custody tracking',
-                          'Net-15 invoice terms for verified partners',
-                        ].map((t) => (
-                          <li key={t} className="flex items-start gap-2">
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
-                            <span className="text-navy-300">{t}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <Button
-                        onClick={onBook}
-                        className="mt-5 w-full rounded-full bg-gold-gradient text-navy hover:opacity-90"
-                      >
-                        Request bulk pickup <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-between">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-linen-50">
+                          <Icon className="h-5 w-5 text-gold-500" />
+                        </div>
+                        <ArrowRight className="h-4 w-4 text-navy-200 transition-all group-hover:translate-x-0.5 group-hover:text-gold-500" />
+                      </div>
+                      <h3 className="mt-3 font-serif text-lg font-semibold text-navy">
+                        {c.title}
+                      </h3>
+                      <p className="mt-1 text-sm leading-relaxed text-navy-300">{c.blurb}</p>
+                      <p className="mt-3 text-sm font-semibold text-navy">{c.price}</p>
                     </CardContent>
                   </Card>
-                </div>
-              </div>
-
-              {/* HOTEL & CORPORATE OFFER — Phase 14. Client directive via PM:
-                  hotels (corporate clients) are already high-value customers
-                  who bring volume, so they earn the better first-order deal:
-                  15% + the 5% picture discount. Wording deliberately targets
-                  the hotel as the business client, not individual guests.
-                  The code is redeemed at checkout in the booking wizard. */}
-              <div className="mt-6 overflow-hidden rounded-2xl bg-navy-gradient p-6 text-white ring-1 ring-gold-400/30">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-400 text-navy">
-                      <Building2 className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="font-serif text-lg font-semibold">
-                        Hotels &amp; corporate clients — your first order is{' '}
-                        <span className="text-gold-300">{appSettings.hotelGuestDiscountPercent}% off.</span>
-                      </p>
-                      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-100/85">
-                        Our hotel and corporate partners earn the better deal — you already trust Kozy with your
-                        volumes. Use code{' '}
-                        <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono font-bold text-gold-300 ring-1 ring-gold-400/40">
-                          {appSettings.hotelGuestPromoCode}
-                        </span>{' '}
-                        at checkout for {appSettings.hotelGuestDiscountPercent}% off your first order,{' '}
-                        <span className="font-semibold text-white">plus</span> the 5% picture discount
-                        when you upload photos with the order — that&apos;s up to{' '}
-                        {appSettings.hotelGuestDiscountPercent + 5}% back on your first clean.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={onBook}
-                    className="shrink-0 rounded-full bg-gold-gradient px-5 text-navy hover:opacity-90"
-                  >
-                    Claim your offer <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
+                </Link>
+              )
+            })}
+          </div>
         </div>
       </section>
 
@@ -744,238 +506,6 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       </section>
 
       {/* ============================================================
-          LIFESTYLE / ATELIER
-      ============================================================ */}
-      <section className="bg-navy-gradient py-20 text-white">
-        <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
-          <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-          >
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
-              Inside the atelier
-            </p>
-            <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
-              A workspace engineered for fabric care.
-            </h2>
-            <p className="mt-4 max-w-xl text-navy-100">
-              Every Kozy atelier features commercial-grade equipment, dedicated zones for
-              silks, wools, and traditional fabrics, and a finishing station staffed by
-              trained pressers. Nothing leaves the floor untagged.
-            </p>
-
-            <ul className="mt-6 space-y-3 text-sm">
-              {[
-                'Per-fabric detergent protocols (silk, wool, ankara, agbada)',
-                'Stain bar with pre-treatment consultation',
-                'Steam-only finishing for delicate structures',
-                'Sealed garment bags for return delivery',
-              ].map((t) => (
-                <li key={t} className="flex items-start gap-3">
-                  <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
-                  <span className="text-navy-100">{t}</span>
-                </li>
-              ))}
-            </ul>
-
-            <Button
-              onClick={onBook}
-              className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
-            >
-              Book your first pickup <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </motion.div>
-
-          <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
-            <img
-              src="/brand/images/atelier-craftsman.png"
-              alt="Kozy master presser finishing a premium garment at the steam station"
-              loading="lazy"
-              decoding="async"
-              className="h-full w-full object-cover"
-            />
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================
-          SHOE CLEANING & RESTORATION — new service section
-      ============================================================ */}
-      <section id="shoe-care" className="bg-navy py-20 text-white">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="grid gap-10 lg:grid-cols-2 items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -16 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
-                Beyond Laundry
-              </p>
-              <h2 className="font-serif text-3xl font-semibold tracking-tight text-white sm:text-4xl">
-                Sneaker &amp; Trainer Restoration
-              </h2>
-              <p className="mt-4 max-w-xl text-white">
-                Got beat-up Jordans? Muddy Sambas? Yellowed Air Force soles? Our sneaker
-                restoration specialists bring your favourite kicks back to box-fresh condition.
-                From deep cleans to sole whitening to full restorations — we treat your
-                sneakers like collectibles.
-              </p>
-              <ul className="mt-6 space-y-3 text-sm">
-                {[
-                  'Deep clean & stain removal for sneakers, trainers, and canvas shoes',
-                  'Sole whitening & midsole restoration (yellowing reversal)',
-                  'Suede & nubuck revival for premium sneakers',
-                  'Insole & lace replacement options',
-                  'Repainting & colour restoration for scuffed uppers',
-                  'Protective coating to keep them fresh longer',
-                  'Free assessment — we confirm your pair can be saved before you commit',
-                ].map((t) => (
-                  <li key={t} className="flex items-start gap-3">
-                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
-                    <span className="text-white">{t}</span>
-                  </li>
-                ))}
-              </ul>
-              {/* Restoration consultation (owner directive): assessment-first,
-                  exactly like a wedding-dress wash — a pair that is beyond
-                  restoration should be declined BEFORE the trip, not after. */}
-              <p className="mt-6 rounded-xl border border-gold-400/30 bg-white/5 p-4 text-sm leading-relaxed text-white/90">
-                <span className="font-semibold text-gold-300">Restorations from ₦5,000</span> —
-                priced by the extent of work after a free assessment. Every restoration
-                starts with a consultation: our specialist inspects the pair, tells you
-                honestly whether it can be saved, and sends the final quote for your
-                approval before any work begins. If it&apos;s beyond restoration, we say so
-                upfront — no charge, no wasted collection.
-              </p>
-              <Button
-                onClick={onBookShoes ?? onBook}
-                className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
-              >
-                Book shoe care <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </motion.div>
-            <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
-              <img src="/brand/images/shoe-care.png" alt="Restored luxury shoes" loading="lazy" decoding="async" className="h-full w-full object-cover" />
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================
-          ALTERATIONS — Exclusive to Kozy Care (Phase 14, client directive)
-          In-house tailoring: hems, tapering, zips, waist adjustments.
-          Pricing is confirmed with the tailor and published the moment it is
-          set — until then every piece is measured and quoted for approval
-          before any work begins (assessment-first, like wedding dresses).
-      ============================================================ */}
-      <section id="alterations" className="bg-linen py-20 scroll-mt-20">
-        <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="grid gap-10 lg:grid-cols-[1.2fr_1fr] lg:items-center">
-            <motion.div
-              initial={{ opacity: 0, x: -16 }}
-              whileInView={{ opacity: 1, x: 0 }}
-              viewport={{ once: true }}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
-                  Alterations &amp; Repairs
-                </p>
-                <Badge className="bg-gold-400 text-navy hover:bg-gold-400">
-                  Exclusive to Kozy Care
-                </Badge>
-              </div>
-              <h2 className="mt-3 font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
-                Cleaned, pressed — and made to fit.
-              </h2>
-              <p className="mt-4 max-w-xl leading-relaxed text-navy-300">
-                Our in-house tailor works alongside the cleaning team, so alterations ride
-                the same pickup and delivery as your laundry. No separate trips, no
-                tailoring shop queues — hand your pieces to your Kozy rider and collect
-                them fitting the way they should. Available exclusively to Kozy Care
-                customers; you won&apos;t find this service anywhere else on the island.
-              </p>
-              <ul className="mt-6 grid gap-3 text-sm sm:grid-cols-2">
-                {[
-                  'Trousers & jeans — hems, tapering, waist adjustments',
-                  'Shirts & dresses — take-in, sleeve shortening, re-hemming',
-                  'Zips, buttons & linings replaced with matching materials',
-                  'Traditional wear — agbada, kaftan and iro & buba adjustments',
-                  'Blazers & suits — sleeve and body alterations by a suit tailor',
-                  'You describe, she assesses — you approve the quote before we sew',
-                ].map((t) => (
-                  <li key={t} className="flex items-start gap-3">
-                    <Scissors className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
-                    <span className="text-navy-300">{t}</span>
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-6 rounded-xl border border-gold-200 bg-gold-50 p-4 text-sm leading-relaxed text-navy-300">
-                <span className="font-semibold text-navy">
-                  {appSettings.alterationsFromPrice > 0
-                    ? `Alterations from ${formatNaira(appSettings.alterationsFromPrice)}`
-                    : 'Simple, honest pricing — quoted before we sew'}
-                </span>{' '}
-                — tell us what needs changing when you book: "waist too loose", "sleeves
-                too long", "zip needs replacing". No one measures you at the door —
-                our seamstress assesses every piece at the studio, calls you to confirm
-                the details, then sends your quote. Nothing is sewn until you approve
-                it.
-              </p>
-              <div className="mt-7 flex flex-wrap items-center gap-3">
-                <Button
-                  onClick={onBook}
-                  className="rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
-                >
-                  Book pickup with alterations <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-                {/* Free measurement tutorial (Phase 18, client directive:
-                    "besides 'book pickup with alterations', we could also have
-                    'How do I take measurements?'... it should take them to a
-                    separate page... in one of our brand colors, probably the
-                    royal blue"). Royal-blue pill in the brand navy family. */}
-                <Button
-                  asChild
-                  className="rounded-full border border-navy-600 bg-navy-500 px-6 text-white hover:bg-navy-600"
-                >
-                  <Link href="/measurements">
-                    <Ruler className="mr-2 h-4 w-4" /> How do I take measurements?
-                  </Link>
-                </Button>
-              </div>
-            </motion.div>
-
-            {/* Visual column — a seamstress at her workstation keeps this
-                section about the craft of alterations (client directive:
-                "have a seamstress working at her workstation in terms of
-                alterations and repairs — be professional about it"). Style
-                matches the marketing materials: photoreal, navy/gold. */}
-            <div className="relative">
-              <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
-                <img
-                  src="/brand/images/seamstress.png"
-                  alt="Young Kozy in-house seamstress sewing at her machine in a bright white-walled studio"
-                  loading="lazy"
-                  decoding="async"
-                  className="h-full w-full object-cover"
-                />
-              </div>
-              <div className="absolute -bottom-4 -right-4 hidden rounded-xl bg-white p-4 shadow-lg ring-1 ring-gold-200 sm:block">
-                <div className="flex items-center gap-2">
-                  <Scissors className="h-5 w-5 text-gold-500" />
-                  <div>
-                    <p className="text-xs font-bold text-navy">In-house tailor</p>
-                    <p className="text-[10px] text-navy-300">Same rider, same delivery</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ============================================================
           FEMALE LIFESTYLE — representing all customers
       ============================================================ */}
       <section className="bg-linen py-20">
@@ -1026,272 +556,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
         </div>
       </section>
 
-      {/* ============================================================
-          FOOTER
-      ============================================================ */}
-      <footer className="bg-navy text-navy-100">
-        <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
-          <div className="grid gap-8 md:grid-cols-3">
-            <div>
-              <div className="flex items-center gap-2.5">
-                {/* v4 Kozy K mark — same asset as the header (gold K with
-                    tapered hanger-wire flourish, transparent background). */}
-                <img
-                  src="/brand/kozy-mark.svg"
-                  alt="Kozy Care mark"
-                  width={36}
-                  height={36}
-                  className="shrink-0"
-                  style={{ width: 36, height: 36 }}
-                />
-                <div className="leading-none">
-                  <p className="font-serif text-lg font-bold text-white">Kozy Care</p>
-                  <p className="text-[8px] uppercase tracking-[0.15em] text-gold-300 font-medium mt-0.5">DRYCLEANING &amp; LAUNDRY</p>
-                </div>
-              </div>
-              <p className="mt-3 text-sm leading-relaxed text-navy-100/70">
-                Kozy drycleaning &amp; laundry care for individuals and corporate
-                partners across Lagos Island.
-              </p>
-              <p className="mt-3 font-serif text-sm italic text-gold-200">
-                Uncompromising care. Exceptional convenience.
-              </p>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">
-                Contact Us
-              </p>
-              <ul className="mt-3 space-y-2 text-sm">
-                <li className="flex items-center gap-2 transition">
-                  <Phone className="h-4 w-4 text-gold-400 shrink-0" />
-                  <a href="tel:+2348031755230" className="text-navy-100/70 hover:text-gold-300 transition">+234 803 175 5230</a>
-                </li>
-                <li className="flex items-center gap-2 transition">
-                  <Mail className="h-4 w-4 text-gold-400 shrink-0" />
-                  <a href="mailto:kozygarmentcare@gmail.com" className="text-navy-100/70 hover:text-gold-300 transition">kozygarmentcare@gmail.com</a>
-                </li>
-                <li className="flex items-start gap-2 transition">
-                  <MapPin className="h-4 w-4 text-gold-400 shrink-0 mt-0.5" />
-                  <span className="text-navy-100/70">No 20. Westsyde Drive, Ogombo, Lagos State</span>
-                </li>
-                <li className="flex items-start gap-2 transition">
-                  <MapPin className="h-4 w-4 text-gold-400 shrink-0 mt-0.5" />
-                  <span className="text-navy-100/70">Paradise 3 Estate, Road 5/3, Chevron, Lagos State</span>
-                </li>
-              </ul>
-            </div>
-
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-gold-300">
-                Quick links
-              </p>
-              <ul className="mt-3 space-y-2 text-sm">
-                <li>
-                  <button onClick={onBook} className="cursor-pointer text-navy-100/70 hover:text-gold-300 transition">
-                    Book a pickup
-                  </button>
-                </li>
-                <li>
-                  <button onClick={onPortal} className="cursor-pointer text-navy-100/70 hover:text-gold-300 transition">
-                    Track an order
-                  </button>
-                </li>
-                <li>
-                  <a href="#pricing" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
-                    Pricing &amp; services
-                  </a>
-                </li>
-                <li>
-                  <a href="#guarantee" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
-                    Return-as-Received Guarantee
-                  </a>
-                </li>
-                <li>
-                  <a href="#shoe-care" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
-                    Shoe Cleaning &amp; Restoration
-                  </a>
-                </li>
-                <li>
-                  <a href="#alterations" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
-                    Alterations — Exclusive to Kozy
-                  </a>
-                </li>
-                <li>
-                  <a href="/feedback" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
-                    Leave a review / feedback
-                  </a>
-                </li>
-                <li>
-                  <a href="#pricing" className="text-navy-100/70 hover:text-gold-300 transition cursor-pointer">
-                    Corporate programs
-                  </a>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          {/* Newsletter signup (phase 36) — the email list builder. Every
-              visitor can join without creating an account; these addresses
-              receive the "All customers" campaigns from the admin Marketing
-              tab. One-click unsubscribe is in every email. */}
-          <NewsletterSignup />
-
-          {/* Driver recruitment banner */}
-          <div className="mt-8 rounded-xl bg-gradient-to-r from-navy-600 to-navy-700 p-4 ring-1 ring-gold-400/20">
-            <div className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">🚚</span>
-                <div>
-                  <p className="text-sm font-semibold text-white">Join our rider team</p>
-                  <p className="text-xs text-navy-100/60">Flexible contract work across Lagos. Earn while you move.</p>
-                </div>
-              </div>
-              <a href="/join-riders" className="shrink-0 rounded-full bg-gold-gradient px-4 py-2 text-xs font-bold text-navy hover:opacity-90 transition">
-                Apply now →
-              </a>
-            </div>
-          </div>
-
-          <p className="mt-6 text-[10px] leading-relaxed text-navy-100/40">
-            *Free pickup and delivery for first order only.
-          </p>
-
-          <div className="mt-2 flex flex-col items-center justify-between gap-3 border-t border-navy-500 pt-6 text-xs sm:flex-row">
-            <p className="text-navy-100/40">© 2026 Kozy Care. All rights reserved.</p>
-            <div className="flex flex-wrap gap-4">
-              <a href="/terms" className="text-navy-100/40 hover:text-gold-300 transition">Terms of Service</a>
-              <a href="/privacy" className="text-navy-100/40 hover:text-gold-300 transition">Privacy Policy</a>
-              <a href="/refunds" className="text-navy-100/40 hover:text-gold-300 transition">Refunds</a>
-              <a href="/cookies" className="text-navy-100/40 hover:text-gold-300 transition">Cookies</a>
-            </div>
-            <p>Built for Lagos, with care.</p>
-          </div>
-        </div>
-      </footer>
-
-      {/* Phase 44 — thumb-reach booking bar for phones. The spacer keeps the
-          fixed bar from covering the footer's last lines at page bottom, and
-          env(safe-area-inset-bottom) respects iPhone home indicators. */}
-      <div className="h-20 md:hidden" aria-hidden="true" />
-      <div
-        className={cn(
-          'kozy-sticky-cta fixed inset-x-0 bottom-0 z-40 border-t border-navy-100 bg-white/95 shadow-[0_-4px_20px_rgba(15,35,64,0.08)] backdrop-blur transition-transform duration-300 md:hidden',
-          'pb-[env(safe-area-inset-bottom)]',
-          showStickyCta ? 'translate-y-0' : 'translate-y-full'
-        )}
-      >
-        <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-3">
-          <a
-            href="tel:+2348031755230"
-            aria-label="Call Kozy Care"
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-navy-200 text-navy transition-colors hover:border-gold-400"
-          >
-            <Phone className="h-4 w-4" />
-          </a>
-          <button
-            onClick={onBook}
-            className="flex h-11 flex-1 items-center justify-center gap-2 rounded-full bg-gold-gradient text-sm font-bold text-navy transition hover:opacity-90"
-          >
-            Book a pickup <ArrowRight className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
+      <SiteFooter />
+      <StickyMobileCta onBook={onBook} />
     </div>
-  )
-}
-
-// =============================================================================
-// NewsletterSignup — footer email-list builder (phase 36)
-// =============================================================================
-// POSTs to /api/newsletter/subscribe (rate limited, validated server-side).
-// On success the visitor sees a confirmation; a welcome email follows. This
-// is how prospects who are not ready to book still join the Kozy circle and
-// start hearing about offers — the list the admin's Marketing tab sends to.
-function NewsletterSignup() {
-  const [email, setEmail] = useState('')
-  const [state, setState] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
-  const [message, setMessage] = useState('')
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault()
-    const trimmed = email.trim().toLowerCase()
-    if (!trimmed || state === 'loading') return
-    setState('loading')
-    setMessage('')
-    try {
-      const res = await fetch('/api/newsletter/subscribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: trimmed }),
-      })
-      const data = await res.json().catch(() => ({}))
-      if (res.ok) {
-        setState('done')
-        setMessage(data.message || 'You are on the list.')
-      } else {
-        setState('error')
-        setMessage(data.error || 'Please check the email address and try again.')
-      }
-    } catch {
-      setState('error')
-      setMessage('Network hiccup — please try again in a moment.')
-    }
-  }
-
-  if (state === 'done') {
-    return (
-      <div className="mt-8 flex items-center gap-3 rounded-xl bg-gold-400/10 p-4 ring-1 ring-gold-400/30">
-        <MailCheck className="h-5 w-5 shrink-0 text-gold-400" />
-        <div>
-          <p className="text-sm font-semibold text-gold-200">You&apos;re on the list</p>
-          <p className="text-xs text-navy-100/60">
-            {message} A welcome email is on its way — offers and care tips, never spam.
-          </p>
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="mt-8 rounded-xl bg-navy-600/40 p-4 ring-1 ring-navy-400/40 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-sm font-semibold text-white">
-            Offers &amp; care tips, straight to your inbox
-          </p>
-          <p className="mt-0.5 text-xs text-navy-100/60">
-            Be first to hear about seasonal discounts and coupon codes. No account needed —
-            unsubscribe any time.
-          </p>
-        </div>
-        <div className="flex w-full max-w-md gap-2 sm:w-auto sm:min-w-72">
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => {
-              setEmail(e.target.value)
-              if (state === 'error') setState('idle')
-            }}
-            placeholder="you@example.com"
-            aria-label="Email address for offers and updates"
-            className="h-10 min-w-0 flex-1 rounded-full border border-navy-400 bg-navy-700/60 px-4 text-sm text-white placeholder:text-navy-100/40 focus:border-gold-400 focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={state === 'loading'}
-            className="h-10 shrink-0 rounded-full bg-gold-gradient px-5 text-xs font-bold text-navy transition hover:opacity-90 disabled:opacity-60"
-          >
-            {state === 'loading' ? 'Joining…' : 'Join'}
-          </button>
-        </div>
-      </div>
-      {state === 'error' && (
-        <p className="mt-2 text-xs text-red-300" role="alert">
-          {message}
-        </p>
-      )}
-    </form>
   )
 }

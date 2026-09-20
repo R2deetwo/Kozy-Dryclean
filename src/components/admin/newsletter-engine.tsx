@@ -21,10 +21,11 @@
 // EditCampaignDialog (review-and-change any draft before it goes out).
 // =============================================================================
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   CalendarClock,
   CalendarIcon,
+  CalendarRange,
   Check,
   ChevronDown,
   Eye,
@@ -107,6 +108,20 @@ function toDateStr(d: Date): string {
   ).padStart(2, '0')}`
 }
 
+/** Short slot label for the continuum timeline — always Lagos wall-clock so
+ *  the day shown is the day the email leaves, whatever the admin's browser
+ *  timezone is (slots are stored as UTC instants of Lagos local time). */
+function fmtSlotShort(d: Date): string {
+  return d.toLocaleString('en-NG', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZone: 'Africa/Lagos',
+  })
+}
+
 // -----------------------------------------------------------------------------
 // Banner picker — shared by the composer and the campaign editor
 // -----------------------------------------------------------------------------
@@ -173,6 +188,9 @@ export function NewsletterEnginePanel() {
   const prepare = usePrepareAutomationDraft()
   const skip = useSkipAutomationDraft()
   const approve = useApproveAutomationCampaign()
+  // Phase 45 — the 52-week plan, so the continuum timeline can name the
+  // newsletters that are coming after the one currently waiting.
+  const { data: libraryData } = useNewsletterLibrary()
 
   const [previewHtml, setPreviewHtml] = useState<string | null>(null)
   const [previewLoading, setPreviewLoading] = useState(false)
@@ -186,6 +204,84 @@ export function NewsletterEnginePanel() {
     if (state?.schedule) setTimeDraft(state.schedule.sendTime)
   }, [state?.schedule?.sendTime])
 
+  // ---- Phase 45: the continuum — "what's coming up next" -----------------
+  // Once the engine starts it is a rolling series, not a one-off: after the
+  // newsletter currently waiting, the rhythm (day + cadence) keeps producing
+  // slots and the 52-week plan keeps producing content. This timeline makes
+  // that sequence visible at a glance — the client asked for exactly that.
+  const upcoming = useMemo(() => {
+    if (!state) return []
+    const { schedule, pending, nextUp } = state
+    const cadenceMs = schedule.cadenceWeeks * 7 * 86_400_000
+    type Row = {
+      key: string
+      date: Date
+      subject: string
+      meta: string | null
+      badge: string | null
+      badgeClass: string | null
+    }
+    const rows: Row[] = []
+    if (pending) {
+      rows.push({
+        key: `pending-${pending.id}`,
+        date: new Date(pending.slotDate ?? pending.scheduledAt ?? Date.now()),
+        subject: pending.subject,
+        meta: null,
+        badge: pending.status === 'SCHEDULED' ? 'Approved' : 'Draft',
+        badgeClass:
+          pending.status === 'SCHEDULED'
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-amber-100 text-amber-700',
+      })
+    }
+    // The next slot the engine will draft for (already advanced past the
+    // pending one when a draft is waiting).
+    let slot = schedule.nextSlotDate ? new Date(schedule.nextSlotDate) : null
+    if (!pending && (!slot || slot.getTime() <= Date.now())) {
+      // Stale or absent slot — compute the next occurrence of the rhythm
+      // locally (Lagos wall-clock, UTC+1, no DST).
+      const [h, m] = schedule.sendTime.split(':').map((x) => parseInt(x, 10))
+      const lagosNow = new Date(Date.now() + 60 * 60_000)
+      for (let add = 1; add <= 8; add++) {
+        const cand = new Date(
+          Date.UTC(
+            lagosNow.getUTCFullYear(),
+            lagosNow.getUTCMonth(),
+            lagosNow.getUTCDate() + add,
+            Number.isFinite(h) ? h : 9,
+            Number.isFinite(m) ? m : 0
+          )
+        )
+        if (cand.getUTCDay() === schedule.dayOfWeek && cand.getTime() > lagosNow.getTime()) {
+          slot = new Date(cand.getTime() - 60 * 60_000)
+          break
+        }
+      }
+    }
+    if (slot) {
+      const entries = libraryData?.entries ?? null
+      const wanted = Math.max(0, 4 - rows.length)
+      for (let k = 0; k < wanted; k++) {
+        const date = new Date(slot.getTime() + k * cadenceMs)
+        const entry = entries
+          ? entries[(schedule.currentWeekIndex + k) % (libraryData?.total ?? 52)]
+          : k === 0
+            ? { week: nextUp.week, season: nextUp.season, subject: nextUp.subject, category: nextUp.category }
+            : null
+        rows.push({
+          key: `slot-${k}-${date.getTime()}`,
+          date,
+          subject: entry ? entry.subject : 'From the 52-week plan',
+          meta: entry ? `Week ${entry.week} · ${entry.season} · ${entry.category}` : null,
+          badge: k === 0 && !pending ? 'Next to be drafted' : null,
+          badgeClass: 'bg-navy-100 text-navy-600',
+        })
+      }
+    }
+    return rows.slice(0, 4)
+  }, [state, libraryData])
+
   if (isLoading || !state) {
     return (
       <Card className="border-navy-100 shadow-navy">
@@ -197,6 +293,8 @@ export function NewsletterEnginePanel() {
   }
 
   const { schedule, pending, nextUp, lastSent } = state
+
+
   const enabled = schedule.enabled
 
   async function openPreview() {
@@ -234,7 +332,9 @@ export function NewsletterEnginePanel() {
     }
   }
 
-  /** Phase 44 — the owner pins the EXACT first-send day from the calendar. */
+  /** Phase 44 — the owner pins the EXACT first-send day from the calendar.
+   *  Phase 45: works even while a newsletter is waiting — a later date pins
+   *  the cycle after it (the waiting one keeps its own day). */
   function handlePickStartDate(d: Date | undefined) {
     if (!d) return
     const dateStr = toDateStr(d)
@@ -243,11 +343,20 @@ export function NewsletterEnginePanel() {
       day: 'numeric',
       month: 'long',
     })
+    const hadPending = !!pending
     setShowStartCal(false)
     update.mutate(
       { startDate: dateStr },
       {
         onSuccess: (s: any) => {
+          if (hadPending) {
+            // The waiting newsletter keeps its day; the pin takes the next one.
+            toast({
+              title: 'Next start date saved',
+              description: `After the newsletter already waiting goes out, the next one starts ${pretty} at ${schedule.sendTime} (Lagos) — and the rhythm follows from there.`,
+            })
+            return
+          }
           // The engine may have prepared the draft immediately (slot within
           // 3 days) — say so, so the owner knows to look below.
           const prepared = !!s?.pending
@@ -402,7 +511,8 @@ export function NewsletterEnginePanel() {
                     <PopoverTrigger asChild>
                       <button
                         type="button"
-                        disabled={update.isPending || !!pending}
+                        disabled={update.isPending}
+                        title={pending ? 'Sets when the newsletter AFTER the waiting one goes out' : 'Pick the exact first-send day'}
                         className={cn(
                           'flex h-9 w-full items-center justify-between gap-2 rounded-lg border bg-white px-3 text-sm shadow-sm transition-colors',
                           schedule.slotPinned
@@ -434,18 +544,33 @@ export function NewsletterEnginePanel() {
                             : undefined
                         }
                         onSelect={handlePickStartDate}
-                        disabled={{ before: new Date(new Date().setHours(0, 0, 0, 0)) }}
+                        disabled={
+                          pending && (pending.slotDate ?? pending.scheduledAt)
+                            ? // While a newsletter waits, only days AFTER its
+                              // send day make sense as the next start.
+                              {
+                                  before: new Date(
+                                    Math.max(
+                                      new Date(new Date().setHours(0, 0, 0, 0)).getTime(),
+                                      new Date(pending.slotDate ?? pending.scheduledAt!).getTime() +
+                                        86_400_000 // strictly after the waiting day
+                                    )
+                                  ),
+                                }
+                            : { before: new Date(new Date().setHours(0, 0, 0, 0)) }
+                        }
                         initialFocus
                       />
                       <div className="border-t border-navy-50 px-3 py-2 text-center text-[11px] leading-relaxed text-navy-300">
-                        The first newsletter goes out on the exact day you pick, at your send
-                        time. Later ones follow the rhythm above.
+                        {pending
+                          ? `The waiting newsletter keeps its day — the day you pick starts the next one.`
+                          : `The first newsletter goes out on the exact day you pick, at your send time. Later ones follow the rhythm above.`}
                       </div>
                     </PopoverContent>
                   </Popover>
                   <p className="text-[11px] text-navy-300">
                     {pending
-                      ? 'A newsletter is already waiting — approve or skip it first.'
+                      ? 'A newsletter is already waiting — a date you pick here starts the one after it.'
                       : schedule.slotPinned
                         ? 'Your chosen date. Change the send time and the date stays.'
                         : 'Leave this alone and the engine simply uses the next send day.'}
@@ -551,6 +676,58 @@ export function NewsletterEnginePanel() {
                     </Button>
                   </div>
                 )}
+              </div>
+
+              {/* Phase 45 — the continuum: once the engine starts, this is the
+                  sequence that keeps coming. Visible whether a newsletter is
+                  waiting or not, so "what's next" is never a guess. */}
+              <div className="mt-4 rounded-xl border border-navy-100 bg-white p-4">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-navy">
+                    <CalendarRange className="h-3.5 w-3.5 text-gold-500" />
+                    What&rsquo;s coming up next
+                  </div>
+                  <span className="text-[11px] text-navy-300">
+                    Every {schedule.cadenceWeeks === 1 ? 'week' : `${schedule.cadenceWeeks} weeks`} on{' '}
+                    {DAYS[schedule.dayOfWeek]} at {schedule.sendTime} (Lagos)
+                  </span>
+                </div>
+                <ol className="mt-3">
+                  {upcoming.map((r, i) => (
+                    <li key={r.key} className="relative flex gap-3 pb-3 last:pb-0">
+                      <div className="flex flex-col items-center">
+                        <span
+                          className={cn(
+                            'mt-1 h-2.5 w-2.5 shrink-0 rounded-full',
+                            i === 0 ? 'bg-gold-500 ring-4 ring-gold-100' : 'bg-navy-200'
+                          )}
+                        />
+                        {i < upcoming.length - 1 && <span className="w-px flex-1 bg-navy-100" />}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-navy">
+                          {fmtSlotShort(r.date)}
+                          {r.badge && (
+                            <span
+                              className={cn(
+                                'ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold',
+                                r.badgeClass
+                              )}
+                            >
+                              {r.badge}
+                            </span>
+                          )}
+                        </p>
+                        <p className="mt-0.5 truncate text-sm text-navy">&ldquo;{r.subject}&rdquo;</p>
+                        {r.meta && <p className="mt-0.5 text-[11px] text-navy-300">{r.meta}</p>}
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                <p className="mt-2 border-t border-navy-50 pt-2 text-[11px] leading-relaxed text-navy-300">
+                  &hellip;and it keeps rolling. Each one is drafted a few days before its day and
+                  always waits for your approval first — nothing sends on its own.
+                </p>
               </div>
 
               {/* Content plan + last sent */}

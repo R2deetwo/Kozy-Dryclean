@@ -20,6 +20,13 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 1,
     },
     {
+      // Phase 45 — the services detail split out of the home page.
+      url: `${base}/services`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
       url: `${base}/book`,
       lastModified: now,
       changeFrequency: 'monthly',
