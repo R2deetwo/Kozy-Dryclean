@@ -7,7 +7,7 @@
 // =============================================================================
 
 import Link from 'next/link'
-import { LogIn, UserPlus } from 'lucide-react'
+import { LogIn, Tag, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Logo } from '@/components/shell/logo'
 
@@ -31,6 +31,21 @@ export function PublicNav() {
             className="hidden text-sm font-medium text-navy-300 transition-colors hover:text-navy sm:inline"
           >
             Services &amp; pricing
+          </Link>
+          {/* Phase 48 (owner): the services/pricing entry vanished on phones
+              (the text link above is sm:inline). Mobile gets the SAME
+              destination as a pill matching the Sign in / Sign up family —
+              pricing is the strongest sign-up funnel, so it must not
+              disappear below sm. Same slot as the desktop link; desktop is
+              unchanged. */}
+          <Link href="/services" className="sm:hidden">
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+            >
+              <Tag className="mr-1.5 h-3.5 w-3.5" /> Pricing
+            </Button>
           </Link>
         </div>
         <div className="flex items-center gap-2">

@@ -201,19 +201,6 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 </Link>
               </div>
             </div>
-
-            {/* Floating quote card */}
-            <div className="absolute -bottom-4 -left-4 hidden max-w-[200px] rounded-xl bg-white px-3 py-2 shadow-lg ring-1 ring-gold-200 sm:block">
-              <div className="flex items-center gap-1">
-                {[0, 1, 2, 3, 4].map((i) => (
-                  <Star key={i} className="h-3 w-3 fill-gold-400 text-gold-400" />
-                ))}
-              </div>
-              <p className="mt-1 text-[10px] leading-snug text-navy-300">
-                &ldquo;My suits have never looked better.&rdquo;
-              </p>
-              <p className="text-[10px] font-medium text-navy">— Adebola, Ikoyi</p>
-            </div>
           </div>
         </div>
       </section>
