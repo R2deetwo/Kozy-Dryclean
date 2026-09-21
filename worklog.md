@@ -1086,3 +1086,25 @@ Stage Summary:
 - Desktop's old "Services & pricing" text link was replaced by the same navy pill (single entry point; revert is a one-line git pick if the owner ever wants the quiet text link back).
 - Validation artifacts: scripts/p49_qa.js, scripts/p49_live_check.js, scripts/vlm_p49_qa.mjs, work/p49-*.png, work/p49-*.log.
 - Remaining recommendations (unchanged): rotate the Vercel token + paste a fresh GitHub PAT; ForwardEmail inbound unblock parked until the domain turns ~1 month old; Brevo DNS re-check for concierge@kozycare.ng pending.
+
+---
+Task ID: 50
+Agent: Super Z (main agent)
+Task: Owner: "ensure the site is search optimized properly... do all that is necessary to help us rank better in the Lekki Ikoyi area" — full local-SEO pass.
+
+Work Log:
+- AUDIT: better starting point than feared — metadataBase, OG/Twitter cards, keywords (incl. "Ikoyi laundry"/"Lekki laundry"), robots.txt (proper disallows + sitemap ref) and an 11-page sitemap already existed. The real gaps: (1) ZERO structured data (no LocalBusiness JSON-LD — the strongest local signal a page can emit); (2) the home page was 'use client' so it CANNOT export metadata — the highest-value page inherited the generic root title with no Lekki/Ikoyi; (3) titles brand-first, keyword-last; (4) /book is sitemapped at priority 0.9 but had NO metadata at all; (5) /review/[orderId] and /payment/* crawlable+indexable.
+- HOME RESTRUCTURE: app/page.tsx became a server component (full local metadata + JSON-LD) rendering a new HomeClient ('use client') that carries the old interactive body. New title: "Dry Cleaning & Laundry Services in Ikoyi & Lekki, Lagos | Kozy Care" (67 chars, keyword-first, brand-last); description 158 chars with Ikoyi/Lekki/Lagos Island + pickup + 24-hour express + free first pickup; OG + Twitter overrides with the same local wording.
+- STRUCTURED DATA (home): @graph with DryCleaner (@id #business: name, phone +2348031755230, priceRange, image, logo, city-level Lagos address, areaServed = Ikoyi/Lekki/Lagos Island) + WebSite (publisher link). Deliberately HONEST: no fake street address or geo coordinates (service-area business), no invented openingHours, and NO aggregateRating markup — the 4.9/5.0 trust stat is marketing copy and carousel reviews are unaggregated; marking them up risks a structured-data spam flag (ratings belong on a verified Google Business Profile).
+- /SERVICES: title "Dry Cleaning & Laundry Prices in Ikoyi & Lekki | Kozy Care" + description now names Ikoyi/Lekki/Lagos Island + BreadcrumbList JSON-LD (Home > Services & pricing).
+- /BOOK: new layout.tsx with metadata ("Book a Laundry Pickup in Ikoyi or Lekki | Kozy Care") — the sitemap's 0.9-priority page finally has a title/description.
+- NOINDEX: new layouts for /review/[orderId] and /payment (noindex,nofollow) — transactional app pages, no discovery value. forgot/reset/verify-email already had noindex from earlier phases.
+- VERIFICATION: scripts/p50_seo_qa.js 48/48 PASS (dev) and scripts/p50_live_check.js 48/48 PASS (live kozycare.ng): titles/descriptions with local keywords at correct lengths, canonicals, OG/Twitter local, JSON-LD parses with every DryCleaner field asserted (incl. absence of aggregateRating/openingHours), html lang, sitemap contents, robots.txt sitemap ref, noindex coverage, and a full home+services content regression (hero h1, navy pill, all key sections — the route restructure changed nothing visible).
+- ENVIRONMENT LESSON (documented for future sessions): dev Turbopack cache corrupted by pkill-mid-compile made /services hang forever ("Compiling /services..." never finishing, curl 000); fix = rm -rf .next. Also dev-mode networkidle never settles (HMR websocket) — use domcontentloaded + sleep. Both fixes applied to the QA script.
+- PRODUCTION: deployed to kozy-dryclean (project link checked first — intact; kozy-dryclean-d741oxaru, READY in 1m). Live 48/48. Committed locally (GitHub push still blocked by the expired PAT).
+
+Stage Summary:
+- On-page local SEO is now complete and honest: keyword-first titles with Ikoyi/Lekki on every public entry page, local descriptions, LocalBusiness (DryCleaner) + WebSite + Breadcrumb structured data, canonical/OG/Twitter consistency, sitemap + robots correct, transactional pages deindexed — all verified live.
+- What code CANNOT do (owner's 15 minutes, highest ROI for "dry cleaning near me" in Lekki/Ikoyi): (1) create the Google Business Profile — the #1 local-pack ranking factor — with phone +234 803 175 5230 exactly as shown on the site (NAP consistency) and service area Ikoyi→Lekki; (2) verify kozycare.ng in Google Search Console and submit the sitemap; (3) collect GBP reviews (the site's own review system feeds marketing but GBP reviews drive the map pack). Domain is ~1 month old — expect rankings to build over weeks.
+- Validation artifacts: scripts/p50_seo_qa.js, scripts/p50_live_check.js, work/p50-*.log.
+- Remaining recommendations (unchanged): rotate the Vercel token + paste a fresh GitHub PAT; ForwardEmail inbound unblock parked until the domain turns ~1 month old (imminent — worth rechecking); Brevo DNS re-check for concierge@kozycare.ng still pending.
