@@ -2,8 +2,11 @@
 
 // =============================================================================
 // PublicNav — the sticky top bar shared by the public pages (home, /services).
-// Phase 45: gained the "Services & pricing" link so the split-out services
-// page is one click away from anywhere. Logo click always goes home.
+// Phase 49 (owner): the services/pricing entry is a BRAND-NAVY pill with white
+// text in the account cluster (Pricing -> Sign in -> Sign up), aligned with
+// the other pills and shown on EVERY breakpoint (the earlier desktop text
+// link is replaced by the same pill — one entry point, consistent).
+// Logo click always goes home.
 // =============================================================================
 
 import Link from 'next/link'
@@ -26,29 +29,20 @@ export function PublicNav() {
             href="/"
             title="Back to the home page"
           />
-          <Link
-            href="/services"
-            className="hidden text-sm font-medium text-navy-300 transition-colors hover:text-navy sm:inline"
-          >
-            Services &amp; pricing
-          </Link>
-          {/* Phase 48 (owner): the services/pricing entry vanished on phones
-              (the text link above is sm:inline). Mobile gets the SAME
-              destination as a pill matching the Sign in / Sign up family —
-              pricing is the strongest sign-up funnel, so it must not
-              disappear below sm. Same slot as the desktop link; desktop is
-              unchanged. */}
-          <Link href="/services" className="sm:hidden">
+        </div>
+        {/* Account cluster — one aligned pill family, mobile and desktop.
+            Order is the owner's funnel: browse pricing -> sign up (gold,
+            terminal). */}
+        <div className="flex items-center gap-2">
+          <Link href="/services">
             <Button
               variant="outline"
               size="sm"
-              className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+              className="rounded-full border-navy bg-navy text-white hover:bg-navy-600 hover:text-white"
             >
               <Tag className="mr-1.5 h-3.5 w-3.5" /> Pricing
             </Button>
           </Link>
-        </div>
-        <div className="flex items-center gap-2">
           <Link href="/login">
             <Button
               variant="outline"
