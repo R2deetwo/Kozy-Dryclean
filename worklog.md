@@ -1070,3 +1070,19 @@ Stage Summary:
 - The hero image corner is clean: the floating hardcoded testimonial card is gone; the atelier caption reads unobstructed; real social proof (trust bar + testimonials carousel) still carries the proof job.
 - Validation artifacts: scripts/p48_measure_before.js, scripts/p48_qa.js, scripts/p48_live_check.js, scripts/vlm_p48_qa.mjs, work/p48-*.png, work/p48-*.log.
 - Remaining recommendations (unchanged): rotate the Vercel token + paste a fresh GitHub PAT when convenient; ForwardEmail inbound unblock parked until the domain turns ~1 month old (client's decision); Brevo DNS re-check for concierge@kozycare.ng still pending. NEW: after any sandbox reset, verify .vercel/project.json AND the embedded Postgres before deploying/testing.
+
+---
+Task ID: 49
+Agent: Super Z (main agent)
+Task: Client feedback on the phase-48 mobile Pricing pill: (1) it is not aligned with the Sign in / Sign up pills; (2) it should be BRAND NAVY with white text (was white like Sign in); (3) the owner wants it on the web app (desktop) as well.
+
+Work Log:
+- CHANGE (public-nav.tsx): the Pricing pill moved from the left group (desktop-link slot, row 1 on phones) into the ACCOUNT CLUSTER with Sign in / Sign up — now the group is Pricing (navy) -> Sign in (outline) -> Sign up (gold, terminal) in the owner's funnel order, aligned on one row at every breakpoint (phones wrap to: row 1 logo, row 2 the three pills). Styling: rounded-full border-navy bg-navy (#0A192F) text-white, hover darkens to bg-navy-600 (#102740), Tag icon kept. The old desktop "Services & pricing" text link is REPLACED by the same pill — one entry point, consistent across devices (kept this over showing both: two nav items to the same page would be redundant clutter).
+- VERIFICATION: scripts/p49_qa.js 80/80 PASS across 360/375/390/640/768/1024/1440 — pill visible everywhere; computed bg exactly rgb(10,25,47) and text rgb(255,255,255); aligned with Sign in AND Sign up (same row by vertical range; same parent cluster); hover bg flips to rgb(16,39,64); old text link count 0; no horizontal overflow; cursor pointer (phase-47 regression check); click lands on /services; /services shows the pill too; zero page errors. VLM QA (scripts/vlm_p49_qa.mjs) on mobile+desktop crops: "tops and bottoms line up perfectly... one consistent button family... nothing cramped, clipped, overlapping or misaligned", pill described exactly as "dark navy blue with white text and a small tag icon".
+- PRODUCTION: deployed to kozy-dryclean (project link verified BEFORE deploy — the phase-48 lesson; it was intact this time, kozy-dryclean-qabtesw83, READY in 1m). scripts/p49_live_check.js 11/11 PASS live on kozycare.ng: navy/white computed styles exact at 375 and 1440, aligned (pillY=siY), click works, old text link gone from live HTML. Committed locally (GitHub push still blocked by the expired PAT).
+
+Stage Summary:
+- The Pricing pill is now one consistent nav element site-wide: brand navy with white text and a tag icon, sitting first in the pill cluster (Pricing -> Sign in -> Sign up), perfectly aligned with the other two pills on phones, tablets and desktop.
+- Desktop's old "Services & pricing" text link was replaced by the same navy pill (single entry point; revert is a one-line git pick if the owner ever wants the quiet text link back).
+- Validation artifacts: scripts/p49_qa.js, scripts/p49_live_check.js, scripts/vlm_p49_qa.mjs, work/p49-*.png, work/p49-*.log.
+- Remaining recommendations (unchanged): rotate the Vercel token + paste a fresh GitHub PAT; ForwardEmail inbound unblock parked until the domain turns ~1 month old; Brevo DNS re-check for concierge@kozycare.ng pending.
