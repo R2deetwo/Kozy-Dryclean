@@ -52,7 +52,7 @@ export async function POST(req: Request) {
   try {
     await sendEmail({
       to: user.email,
-      subject: 'Reset your Kozy Care password',
+      subject: '[Kozy Care · Account] Reset your password',
       html: `
         <!DOCTYPE html><html><body style="font-family: Georgia, serif; background: #F8F9FA; padding: 40px 0; margin: 0;">
           <div style="max-width: 480px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">

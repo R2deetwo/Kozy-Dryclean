@@ -86,7 +86,8 @@ export async function sendVerificationEmail(email: string, name: string, token: 
 
   await sendEmail({
     to: email,
-    subject: 'Verify your Kozy Care account',
+    // Phase 56 category taxonomy — brand + category lead every subject line
+    subject: '[Kozy Care · Account] Verify your account',
     html: `
       <!DOCTYPE html>
       <html>

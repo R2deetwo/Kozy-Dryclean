@@ -1,0 +1,443 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Woosh Email Testing API",
+    "version": "1.5.0",
+    "description": "Create disposable inboxes on woosh.dpdns.org, receive real mail, and read it programmatically. Receive-only. Every inbox creation returns a secret bearer token that gates reads; an optional X-API-Key header raises the inbox-creation rate limit for the owner’s test rigs. CORS is open, so browser apps can call the API directly."
+  },
+  "servers": [
+    {
+      "url": "https://woosh.dpdns.org"
+    }
+  ],
+  "tags": [
+    {
+      "name": "inboxes"
+    },
+    {
+      "name": "messages"
+    },
+    {
+      "name": "meta"
+    }
+  ],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "tags": [
+          "meta"
+        ],
+        "summary": "Liveness check and configured mail domain",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service is up"
+          }
+        }
+      }
+    },
+    "/api/inbox": {
+      "post": {
+        "tags": [
+          "inboxes"
+        ],
+        "summary": "Create an inbox",
+        "description": "Creates an inbox and returns its address plus the secret token that guards it. Random local parts are private; a custom localPart makes a public, name-claimable inbox. Body fields are optional.",
+        "security": [
+          {
+            "apiKeyAuth": []
+          },
+          {}
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "localPart": {
+                    "type": "string",
+                    "description": "Custom local part (3-32 chars: a-z0-9 then a-z0-9._-). Omit for a random private address."
+                  },
+                  "ttl": {
+                    "type": "integer",
+                    "enum": [
+                      60,
+                      720,
+                      1440,
+                      4320
+                    ],
+                    "description": "Message lifetime in minutes. Default 1440."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Inbox created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxCreated"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid custom name"
+          },
+          "401": {
+            "description": "Invalid API key"
+          },
+          "409": {
+            "description": "Custom name already claimed"
+          },
+          "429": {
+            "description": "Rate limited: 15/hour per IP anonymous, 500/hour with a valid API key"
+          }
+        }
+      }
+    },
+    "/api/inbox/{address}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Address"
+        }
+      ],
+      "get": {
+        "tags": [
+          "inboxes"
+        ],
+        "summary": "List messages, optionally long-polling until mail arrives",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "wait_for",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 25
+            },
+            "description": "Hold the request open until at least one matching message exists. Default: return immediately."
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "Epoch milliseconds; only messages received strictly after this instant are returned."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Message list (empty if the wait timed out)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InboxListing"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid inbox token"
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "inboxes"
+        ],
+        "summary": "Change the message lifetime for future mail",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "ttl"
+                ],
+                "properties": {
+                  "ttl": {
+                    "type": "integer",
+                    "enum": [
+                      60,
+                      720,
+                      1440,
+                      4320
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated"
+          },
+          "401": {
+            "description": "Invalid inbox token"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "inboxes"
+        ],
+        "summary": "Delete every message in the inbox",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Inbox emptied"
+          },
+          "401": {
+            "description": "Invalid inbox token"
+          }
+        }
+      }
+    },
+    "/api/message/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MessageId"
+        }
+      ],
+      "get": {
+        "tags": [
+          "messages"
+        ],
+        "summary": "Read one message in full",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Full message including bodies",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid inbox token"
+          },
+          "404": {
+            "description": "Message not found or expired"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "messages"
+        ],
+        "summary": "Delete one message",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Invalid inbox token"
+          },
+          "404": {
+            "description": "Message not found or expired"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Per-inbox capability token returned by POST /api/inbox"
+      },
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Optional site-owner key; raises the inbox-creation rate limit to 500/hour"
+      }
+    },
+    "parameters": {
+      "Address": {
+        "name": "address",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "Full inbox address, URL-encoded"
+      },
+      "MessageId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "description": "Message UUID"
+      }
+    },
+    "schemas": {
+      "InboxCreated": {
+        "type": "object",
+        "required": [
+          "address",
+          "token"
+        ],
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "token": {
+            "type": "string",
+            "description": "43-char base64url secret; required as Bearer credential for all reads"
+          },
+          "ttlMinutes": {
+            "type": "integer"
+          }
+        }
+      },
+      "InboxListing": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageSummary"
+            }
+          },
+          "ttlMinutes": {
+            "type": "integer"
+          },
+          "waitedMs": {
+            "type": "integer",
+            "description": "Present only when wait_for was used"
+          }
+        }
+      },
+      "MessageSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "sender": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "receivedAt": {
+            "type": "integer",
+            "description": "Epoch ms"
+          },
+          "expiresAt": {
+            "type": "integer",
+            "description": "Epoch ms"
+          },
+          "hasHtml": {
+            "type": "boolean"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recipient": {
+            "type": "string"
+          },
+          "sender": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "bodyHtml": {
+            "type": "string",
+            "description": "Sanitize before rendering in a browser"
+          },
+          "bodyText": {
+            "type": "string"
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "receivedAt": {
+            "type": "integer"
+          },
+          "expiresAt": {
+            "type": "integer"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "type": "integer"
+              },
+              "message": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

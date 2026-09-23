@@ -157,6 +157,7 @@ function fmtDate(d: Date | string): string {
 // (previously every template hardcoded +234 803 175 5230 and silently
 // contradicted an edited setting).
 async function brandedEmail(opts: {
+  category: string
   heading: string
   intro: string
   order: NotifiableOrder
@@ -164,7 +165,7 @@ async function brandedEmail(opts: {
   cta?: { label: string; url: string }
   footer?: string
 }): Promise<{ subject: string; html: string }> {
-  const { heading, intro, order, extraRows = [], cta, footer } = opts
+  const { category, heading, intro, order, extraRows = [], cta, footer } = opts
   const { contactPhone } = await getAppSettings()
   const rows: { label: string; value: string }[] = [
     { label: 'Order', value: `#${order.orderNumber}` },
@@ -181,7 +182,9 @@ async function brandedEmail(opts: {
   }
   rows.push(...extraRows)
 
-  const subject = `${heading} — Order #${order.orderNumber} · Kozy Care`
+  // Phase 56: brand + category lead the subject so an inbox list is
+  //  triageable at a glance (the order number tail already identifies it).
+  const subject = `[Kozy Care · ${categoryTag(category)}] ${heading} — Order #${order.orderNumber}`
 
   const html = `
   <!DOCTYPE html>
@@ -269,6 +272,7 @@ export async function notifyTransferPendingVerification(
   try {
     const amount = order.totalPrice ?? 0
     const { subject, html } = await brandedEmail({
+      category: 'payment',
       heading: 'We’re verifying your transfer',
       intro:
         'Thank you for booking with Kozy Care. Your order is in and our team is verifying your bank transfer right now — usually within minutes during business hours (Mon–Sat, 8am–6pm). You’ll get another email the moment it’s confirmed. Please don’t send the transfer again or re-book: if you completed it, we have it, and your rider is dispatched as soon as payment is verified.',
@@ -300,6 +304,7 @@ export async function notifyOrderCreated(order: NotifiableOrder): Promise<void> 
     // the confirmation must say so plainly instead of showing a bare ₦0.
     const complimentary = order.loyaltyFree === true
     const { subject, html } = await brandedEmail({
+      category: 'booking',
       heading: complimentary
         ? 'Your booking is confirmed — with our compliments'
         : 'Your booking is confirmed',
@@ -337,6 +342,7 @@ export async function notifyGuestAccountCreated(
   try {
     const transferPending = opts?.transferPending === true
     const { subject, html } = await brandedEmail({
+      category: 'account',
       heading: transferPending ? 'We’re verifying your transfer' : 'Your booking is confirmed',
       intro: transferPending
         ? 'Thank you for booking with Kozy Care. Your order is in and our team is verifying your bank transfer right now — usually within minutes during business hours (Mon–Sat, 8am–6pm). You’ll get another email the moment it’s confirmed, so please don’t send the transfer again or re-book. We also created an account with this email so you can track this order and book again faster — just set a password with the button below.'
@@ -411,8 +417,21 @@ export async function notifyOrderStatus(
         }`
       : copy.body
 
-    // Email — every status change
+    // Phase 56 category per stage — the customer inbox can be triaged
+    // without opening anything: Payment while money moves, Delivery while
+    // garments travel, Feedback at the rating moment, Order otherwise.
+    const STATUS_CATEGORY: Record<string, string> = {
+      PAYMENT_PENDING_VERIFICATION: 'payment',
+      PAYMENT_VERIFIED: 'payment',
+      FINISHING: 'order',
+      OUT_FOR_DELIVERY: 'delivery',
+      DELIVERED: 'feedback',
+      CANCELLED: 'order',
+    }
+
+    // Email — every (non-quiet) status change
     const { subject, html } = await brandedEmail({
+      category: STATUS_CATEGORY[newStatus] ?? 'order',
       heading,
       intro,
       order,
@@ -452,6 +471,7 @@ export async function notifyCustomerQuestion(
     const { contactPhone } = await getAppSettings()
     const firstName = order.user?.name ? order.user.name.split(' ')[0] : 'there'
     const { subject, html } = await brandedEmail({
+      category: 'question',
       heading: 'A quick question about your order',
       intro: `${firstName}, our team needs one quick detail from you to keep order #${order.orderNumber} moving smoothly. Could you help us with this?`,
       order,
@@ -481,6 +501,7 @@ export async function notifyCustomerQuestion(
 export async function notifyPaymentVerified(order: NotifiableOrder): Promise<void> {
   try {
     const { subject, html } = await brandedEmail({
+      category: 'payment',
       heading: 'Payment confirmed',
       intro:
         'Your online payment was received and confirmed automatically. Your pickup is now scheduled.',
@@ -501,6 +522,7 @@ export async function notifyPaymentRejected(order: NotifiableOrder): Promise<voi
   try {
     const { contactPhone } = await getAppSettings()
     const { subject, html } = await brandedEmail({
+      category: 'payment',
       heading: 'We couldn’t match your transfer',
       intro:
         `Our team checked but couldn’t match a transfer to this order yet. Please check in your banking app that the transfer went through to the correct account. If you were debited, don’t pay again — call us on ${contactPhone} with your order number and we’ll sort it out the same day. If the transfer never left your account, simply send it with your order number as the narration and we’ll verify it right away.`,
@@ -565,17 +587,55 @@ async function adminAlertConfig(): Promise<{
   }
 }
 
+/**
+ * Subject-line taxonomy (phase 56): EVERY email Kozy Care sends carries a
+ * category token right after the brand so an inbox can be triaged at a
+ * glance — the owner reads a mail list, not a mail body.
+ *
+ *   [Kozy Care Ops · Incident]  Damage reported on order #KZ-1001
+ *   [Kozy Care Ops · Order]     New order #KZ-1002
+ *   [Kozy Care · Booking]       Your booking is confirmed — Order #KZ-1002
+ *   [Kozy Care · Rider]         Welcome to the rider team, Ada!
+ *
+ * "Ops" marks the INTERNAL emails (they go to admin inboxes); the plain
+ * "Kozy Care · <Category>" form marks customer-facing mail. The dot keeps
+ * the brand readable; the category is always one short word.
+ */
+const CATEGORY_TEXT: Record<string, string> = {
+  booking: 'Booking',
+  payment: 'Payment',
+  order: 'Order',
+  delivery: 'Delivery',
+  question: 'Question',
+  invoice: 'Invoice',
+  loyalty: 'Loyalty',
+  account: 'Account',
+  rider: 'Rider',
+  team: 'Team',
+  signup: 'Signup',
+  feedback: 'Feedback',
+  review: 'Review',
+  referral: 'Referral',
+  incident: 'Incident',
+  test: 'Test',
+}
+
+function categoryTag(key: string): string {
+  return CATEGORY_TEXT[key] ?? key
+}
+
 /** Compact operational email wrapper for admin alerts (scannable, not marketing-pretty). */
 function adminEmail(opts: {
+  category: string
   badge: string
   heading: string
   intro: string
   rows: { label: string; value: string }[]
   cta: { label: string; url: string }
 }): { subject: string; html: string } {
-  const { badge, heading, intro, rows, cta } = opts
+  const { category, badge, heading, intro, rows, cta } = opts
   return {
-    subject: `[Kozy Care] ${heading}`,
+    subject: `[Kozy Care Ops · ${categoryTag(category)}] ${heading}`,
     html: `
     <!DOCTYPE html>
     <html>
@@ -734,6 +794,7 @@ export async function notifyAdminNewCustomer(user: {
     const accountType =
       user.role === 'B2B' ? `Corporate${user.company ? ` — ${user.company}` : ''}` : 'Personal'
     const { subject, html } = adminEmail({
+      category: 'signup',
       badge: 'New customer',
       heading: `${user.name} just signed up`,
       intro:
@@ -776,6 +837,7 @@ export async function notifyAdminNewOrder(order: NotifiableOrder): Promise<void>
       (order as any).payments?.some?.((p: any) => p.status === 'PENDING') ||
       order.status === 'PAYMENT_PENDING_VERIFICATION'
     const { subject, html } = adminEmail({
+      category: 'order',
       badge: 'New order',
       heading: `New order #${order.orderNumber}`,
       intro:
@@ -836,6 +898,7 @@ export async function notifyAdminTransferPending(order: NotifiableOrder): Promis
   try {
     const cfg = await adminAlertConfig()
     const { subject, html } = adminEmail({
+      category: 'payment',
       badge: 'Payment to verify',
       heading: `Verify payment — order #${order.orderNumber}`,
       intro:
@@ -887,6 +950,7 @@ export async function notifyInvoiceReady(
     const settings = await getAppSettings()
     const gross = Math.round(billableKg * settings.pricePerKg)
     const { subject, html } = await brandedEmail({
+      category: 'invoice',
       heading: 'Your bulk invoice is ready',
       intro:
         `We weighed your items and your invoice is ready: ${billableKg}kg billable at ${formatNaira(settings.pricePerKg)}/kg${
@@ -941,6 +1005,7 @@ export async function notifyAdminNewFeedback(feedback: {
     const typeLabel =
       feedback.type === 'COMPLAINT' ? 'Complaint' : feedback.type === 'QUESTION' ? 'Question' : 'Feedback'
     const { subject, html } = adminEmail({
+      category: 'feedback',
       badge: typeLabel,
       heading: `New ${typeLabel.toLowerCase()} from ${feedback.name}`,
       intro:
@@ -997,6 +1062,7 @@ export async function notifyAdminNewReview(review: {
     const cfg = await adminAlertConfig()
     const stars = '★'.repeat(Math.round(review.rating)) + '☆'.repeat(Math.max(0, 5 - Math.round(review.rating)))
     const { subject, html } = adminEmail({
+      category: 'review',
       badge: 'Review',
       heading: `New review — ${stars} from ${review.customerName}`,
       intro: review.isApproved
@@ -1049,6 +1115,7 @@ export async function notifyAdminReferralRedeemed(opts: {
   try {
     const cfg = await adminAlertConfig()
     const { subject, html } = adminEmail({
+      category: 'referral',
       badge: 'Referral',
       heading: `Referral code ${opts.code} redeemed`,
       intro:
@@ -1097,7 +1164,7 @@ export async function notifyMilestoneReached(opts: {
     const first = opts.name.split(' ')[0] || 'there'
     const countWord = opts.paidWashes === 10 ? 'Ten' : String(opts.paidWashes)
     const milestoneUrl = `${baseUrl()}/milestone?token=${encodeURIComponent(opts.token)}`
-    const subject = `${countWord} services with Kozy Care — your next one is on us`
+    const subject = `[Kozy Care · Loyalty] ${countWord} services — your next one is on us`
     const html = `
       <!DOCTYPE html>
       <html>
@@ -1153,7 +1220,7 @@ export async function notifyReferralRewardGranted(opts: {
   try {
     const first = opts.referrerName.split(' ')[0] || 'there'
     const friendFirst = opts.friendName.split(' ')[0] || 'a friend'
-    const subject = 'A thank-you is on your Kozy Care account'
+    const subject = '[Kozy Care · Loyalty] A thank-you is on your account'
     const html = `
       <!DOCTYPE html>
       <html>
@@ -1204,6 +1271,7 @@ export async function notifyAdminRiderApplication(app: {
   try {
     const cfg = await adminAlertConfig()
     const { subject, html } = adminEmail({
+      category: 'rider',
       badge: 'Rider application',
       heading: `${app.fullName} applied to ride for Kozy`,
       intro:
@@ -1297,6 +1365,7 @@ export async function notifyRiderApplicationReceived(app: {
         </p>`
 
       const { subject, html } = staffEmailChrome({
+        category: 'rider',
         heading: `Application received — ${firstName}`,
         bodyHtml,
         cta: undefined,
@@ -1371,6 +1440,7 @@ export async function notifyRiderApproved(opts: {
         </p>`
 
     const { subject, html } = staffEmailChrome({
+      category: 'rider',
       heading: `Welcome to the rider team, ${firstName}!`,
       bodyHtml,
       cta: { label: 'Open the rider app', url: loginUrl },
@@ -1420,13 +1490,18 @@ export async function notifyRiderIncident(incident: {
   try {
     const cfg = await adminAlertConfig()
     const kindLabel: Record<string, string> = {
-      DAMAGE: 'Damaged garment(s)',
-      LOSS: 'Lost / missing item(s)',
+      // Phase 56 wording: what the ADMIN needs to know at a glance is that
+      // something was REPORTED (and what class of problem it is) — the
+      // specifics of what was affected live in the report body. "Damaged
+      // garment(s)" read awkwardly and aged badly; these read as actions.
+      DAMAGE: 'Damage reported',
+      LOSS: 'Loss reported',
       THEFT: 'Theft reported',
-      ACCIDENT: 'Accident / fall',
-      OTHER: 'Other problem',
+      ACCIDENT: 'Accident reported',
+      OTHER: 'Problem reported',
     }
     const { subject, html } = adminEmail({
+      category: 'incident',
       badge: 'Rider incident — action needed',
       heading: `${kindLabel[incident.kind] ?? 'Incident'} on order #${incident.orderNumber}`,
       intro:
@@ -1471,6 +1546,7 @@ export async function notifyAdminTestEmails(): Promise<{
 }> {
   const cfg = await adminAlertConfig()
   const { subject, html } = adminEmail({
+    category: 'test',
     badge: 'Test alert',
     heading: 'This is a test alert — delivery check',
     intro:
@@ -1541,13 +1617,14 @@ export async function notifyAdminTestEmails(): Promise<{
 
 /** Shared brand chrome for staff emails (same look as the customer emails). */
 function staffEmailChrome(opts: {
+  category: string
   heading: string
   bodyHtml: string
   cta?: { label: string; url: string }
   footer?: string
 }): { subject: string; html: string } {
-  const { heading, bodyHtml, cta, footer } = opts
-  const subject = `${heading} — Kozy Care`
+  const { category, heading, bodyHtml, cta, footer } = opts
+  const subject = `[Kozy Care · ${categoryTag(category)}] ${heading}`
   const html = `
   <!DOCTYPE html>
   <html>
@@ -1625,6 +1702,7 @@ export async function notifyStaffInvite(opts: {
         </p>`
 
     const { subject, html } = staffEmailChrome({
+      category: 'team',
       heading: isReset ? `New password, ${firstName}` : `Welcome to the team, ${firstName}!`,
       bodyHtml,
       cta: { label: 'Open the staff console', url: loginUrl },
@@ -1653,6 +1731,7 @@ export async function notifyStaffAccessRestored(opts: {
           Your access to the Kozy Care operations console has been restored by <strong style="color:#0A192F;">${managerName}</strong>. You can sign in and pick up where you left off — your password is unchanged.
         </p>`
     const { subject, html } = staffEmailChrome({
+      category: 'team',
       heading: `Your access is back on, ${firstName}`,
       bodyHtml,
       cta: { label: 'Sign in', url: loginUrl },

@@ -1,0 +1,116 @@
+# Kozy Care — Full E2E Test Kit
+ Generated 2026-09-24 · production (kozycare.ng) · all emails below are REAL and already delivered
+
+---
+
+## 1. Your four personas (woosh.dpdns.org inboxes)
+
+| Persona  | Email                     | Password                | Where the password lives |
+|----------|---------------------------|-------------------------|--------------------------|
+| CUSTOMER | wpcfvk76gd@woosh.dpdns.org | KozyE2ECustomer!56     | Set at signup (known)    |
+| STAFF    | awhr8npwm9@woosh.dpdns.org | (emailed to the inbox)  | "[Kozy Care · Team] Welcome to the team, Test!" |
+| RIDER    | d8cne7n6mu@woosh.dpdns.org | (emailed to the inbox)  | "[Kozy Care · Rider] Welcome to the rider team, Test!" |
+| ADMIN    | vk5m2w8t4a@woosh.dpdns.org | KozyE2EAdmin!56        | Set by the test rig (known) |
+
+- Staff/rider passwords are system-generated (never visible to anyone else) —
+  open those two emails in your mail app and use the password shown.
+- On FIRST sign-in, staff and rider are forced to choose their own password
+  ("Set your own password" dialog) — that is the intended onboarding flow.
+- Your admin inbox also now receives every admin alert (Settings →
+  Notifications): kozygarmentcare@gmail.com, practiceprosystems@gmail.com,
+  vk5m2w8t4a@woosh.dpdns.org.
+
+## 2. What is already sitting in each inbox (sent during the battery)
+
+CUSTOMER inbox (wpcfvk76gd):
+  1. [Kozy Care · Account]   Verify your account            (signup)
+  2. [Kozy Care · Payment]   We're verifying your transfer  (booking, bank transfer)
+  3. [Kozy Care · Payment]   Payment confirmed              (admin verified)
+  4. [Kozy Care · Order]     Finishing touches              (quiet-safe stage)
+  5. [Kozy Care · Delivery]  Out for delivery
+  6. [Kozy Care · Feedback]  Your order was delivered — how did we do?  (rating link)
+  7. [Kozy Care · Question]  A quick question about your order        (staff ask)
+  8-10. The same Payment x2 for the second order (see §4)
+
+STAFF inbox (awhr8npwm9):
+  1. [Kozy Care · Team] Welcome to the team, Test!          (carries the password)
+
+RIDER inbox (d8cne7n6mu):
+  1. [Kozy Care · Rider] Application received — Test        (reference KZR-X7CD)
+  2. [Kozy Care · Rider] Welcome to the rider team, Test!   (carries the password)
+
+ADMIN inbox (vk5m2w8t4a):
+  1. [Kozy Care Ops · Rider]   Test Rider applied to ride for Kozy
+  2. [Kozy Care Ops · Signup]  Test Customer just signed up
+  3. [Kozy Care Ops · Payment] Verify payment — order #KZ-73951437
+  4. [Kozy Care Ops · Review]  New review — ★★★★☆ from Test Customer
+  5. [Kozy Care Ops · Payment] Verify payment — order #KZ-75691751
+  (+ every future alert — including the incident email when you report one, see §4)
+
+## 3. Email categories at a glance (new — phase 56)
+
+Internal / admin inbox (Ops marks them at a glance):
+  [Kozy Care Ops · Signup] [Kozy Care Ops · Order] [Kozy Care Ops · Payment]
+  [Kozy Care Ops · Rider]  [Kozy Care Ops · Feedback] [Kozy Care Ops · Review]
+  [Kozy Care Ops · Referral] [Kozy Care Ops · Incident] [Kozy Care Ops · Test]
+
+Customer-facing:
+  [Kozy Care · Booking] [Kozy Care · Payment] [Kozy Care · Order]
+  [Kozy Care · Delivery] [Kozy Care · Feedback] [Kozy Care · Question]
+  [Kozy Care · Invoice] [Kozy Care · Loyalty] [Kozy Care · Account]
+  [Kozy Care · Rider] [Kozy Care · Team]
+
+The old "[Kozy Care] Damaged garment(s) on order #…" wording is retired —
+rider incidents now read, for example:
+  [Kozy Care Ops · Incident] Damage reported on order #KZ-55650112
+  (Loss reported / Theft reported / Accident reported / Problem reported)
+
+## 4. Your play checklist (the part only you can do — needs your phone/laptop)
+
+ORDER 1 — #KZ-73951437 — already walked to DELIVERED by the battery
+  - The customer inbox holds the complete email journey (see §2).
+  - The 4-star review is waiting in console → Reviews (held for moderation —
+    it never touches the public wall unless you approve it).
+
+ORDER 2 — #KZ-75691751 — parked at READY TO PICK UP, assigned to Test Rider
+  1. Open the rider email, grab the password, sign in at kozycare.ng
+     → you land in the rider app with "Set your own password".
+  2. Your live stop appears: #KZ-75691751, 14 Admiralty Way, Lekki Phase 1.
+  3. Tap Navigate (Google Maps directions), Call (customer line).
+  4. Swipe to confirm the pickup — your real GPS decides: inside ~15 km of
+     Lekki it confirms; further away it refuses with the distance (the
+     liability system working as designed).
+  5. Tap "Report a problem with this stop" → Damage → describe it → submit.
+     Within seconds your ADMIN inbox receives:
+       [Kozy Care Ops · Incident] Damage reported on order #KZ-75691751
+     (This is exactly how that email you asked about is generated — a rider
+     reporting mid-route; nothing else creates it.)
+  6. In the console → Riders tab → Incident ledger → "Record the outcome".
+     The resolution is written to the order timeline.
+
+ADMIN console
+  - Sign in as vk5m2w8t4a@woosh.dpdns.org / KozyE2EAdmin!56
+  - Kanban: the two test orders are labelled Test Customer / Test Rider.
+  - Notifications feed: every event from the battery is recorded there too.
+
+## 5. Repeatable battery (for future regression runs)
+
+  PASS=A  npx tsx scripts/p56_e2e_battery.ts   # full assertions, my inboxes (34/34 PASS)
+  PASS=B  npx tsx scripts/p56_e2e_battery.ts   # your four inboxes (19/19 PASS)
+
+Auto personas (Pass A, all passwords known — use them for re-testing):
+  customer kozy-a-customer@woosh.dpdns.org / KozyAutoCust!56
+  staff    kozy-a-staff@woosh.dpdns.org    / KozyAutoStaff!56
+  rider    kozy-a-rider@woosh.dpdns.org    / KozyAutoRider!56
+  admin    kozy-a-admin@woosh.dpdns.org    / KozyAutoAdmin!56
+  (their woosh inboxes live for 3 days; re-run the battery to refresh)
+
+Notes
+  - Emails in your app's inboxes expire per your app's TTL — read them soon.
+  - All test data is clearly named (Test …) so it never mixes with real ops.
+  - Bank-transfer bookings email "We're verifying your transfer" INSTEAD of
+    the plain booking confirmation (anti-double-payment design), and admin
+    gets the actionable "Verify payment" alert instead of a generic new-order
+    one. PAYSTACK/card orders produce the "[Kozy Care · Booking]" email.
+  - Quiet stages (picked up / at station / processing) deliberately send the
+    customer nothing — verified live during the run.
