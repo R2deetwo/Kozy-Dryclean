@@ -21,6 +21,8 @@ import {
   ShoppingBag,
   Receipt,
   MessageSquareHeart,
+  Star,
+  Users,
   Bike,
   FlaskConical,
   UserCog,
@@ -67,6 +69,18 @@ const TYPE_META: Record<
     icon: MessageSquareHeart,
     cls: 'bg-purple-100 text-purple-800',
     link: { label: 'Open Feedback inbox', tab: 'feedback' },
+  },
+  REVIEW: {
+    label: 'Review',
+    icon: Star,
+    cls: 'bg-amber-100 text-amber-800',
+    link: { label: 'Open Reviews', tab: 'reviews' },
+  },
+  REFERRAL_REDEEMED: {
+    label: 'Referral redeemed',
+    icon: Users,
+    cls: 'bg-teal-100 text-teal-800',
+    link: { label: 'Open Orders board', tab: 'kanban' },
   },
   RIDER_APPLICATION: {
     label: 'Rider application',

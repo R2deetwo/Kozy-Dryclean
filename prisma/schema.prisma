@@ -47,6 +47,19 @@ model User {
   marketingOptIn  Boolean  @default(true)
   // Discount tracking
   signupDiscountUsed Boolean @default(false)
+  // ----- Milestones & referrals (phase 52) -----
+  // Highest service milestone the customer has already been emailed about
+  // (0 = none yet, 1 = the 10-delivered-orders milestone). Advances at the
+  // moment the milestone email is sent, in the same flow — so a dragged-back
+  // and re-delivered order can never re-trigger it, and loyal customers who
+  // already crossed the line before the feature existed get their moment on
+  // the NEXT delivery instead of never.
+  lastMilestoneSent Int     @default(0)
+  // Referral thank-you credit balance (naira). Granted when a friend's
+  // first referred order is DELIVERED; applied automatically (and only) to
+  // this customer's next retail order at checkout. The remainder survives
+  // if the order was smaller than the balance.
+  referralCredit    Float   @default(0)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -63,6 +76,10 @@ model User {
   anomaliesAuthored  OrderAnomaly[]      @relation("AnomalyActor")
   // Last known GPS position (rider geofencing) — one row per driver
   driverLocation     DriverLocation?
+  // ----- Referrals (phase 52) -----
+  // This customer's personal referral code (one max — created when they
+  // reach the 10-order service milestone).
+  referralCode      ReferralCode?
 }
 
 enum Role {
@@ -148,6 +165,9 @@ model Order {
   anomalies         OrderAnomaly[]
   // Customer feedback (one-to-one — one review per order)
   review            Review?
+  // Phase 52: set when this order was placed with a friend's referral code
+  // (first order only) — the thank-you credit grant hangs off this row.
+  referralRedemption ReferralRedemption?
   // Coupons redeemed on this order (phase 36 — usually 0 or 1)
   couponUsages      DiscountUsage[]
 
@@ -613,6 +633,64 @@ model AppSetting {
   key       String   @id // e.g. "bank_name", "delivery_fee"
   value     String // JSON-encoded value
   updatedAt DateTime @updatedAt
+}
+
+// =====================================================
+// REFERRAL_CODE (phase 52) — a customer's personal sharing code
+// =====================================================
+// The referral system is deliberately SILENT and premium: nothing on the
+// public site advertises it. A code is minted only when a customer reaches
+// the 10-delivered-orders service milestone, and it surfaces exactly three
+// places — the milestone email, the private /milestone page, and a quiet
+// card in their portal (never shown below the milestone).
+// Mechanics: the friend enters the code in the booking wizard's offer-code
+// field on their FIRST order and receives the friend courtesy percentage
+// (AppSetting referral_friend_discount_percent, default 10). When that
+// order is DELIVERED, the referrer's thank-you credit (AppSetting
+// referral_reward_amount, default ₦2,000) lands on their account and is
+// applied automatically to their next retail order. No points, no tiers,
+// no public leaderboard — gratitude, not commission.
+model ReferralCode {
+  id        String   @id @default(cuid())
+  // One code per customer (the referrer)
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Uppercase, e.g. "AMAKA-742" — first name plus 3 digits (readable,
+  // personal, not guessable at scale). Uniqueness enforced; generation
+  // retries on the (unlikely) collision.
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  redemptions ReferralRedemption[]
+
+  @@index([code])
+}
+
+// =====================================================
+// REFERRAL_REDEMPTION (phase 52) — one row per referred first order
+// =====================================================
+// Written when a friend's first order is placed with a referral code; the
+// thank-you credit is granted exactly once when that order is DELIVERED
+// (rewardGrantedAt set). Kept separate from DiscountUsage so referral
+// activity never clutters the admin discount console — this table is the
+// referral audit trail (who referred whom, how much was given and granted).
+model ReferralRedemption {
+  id       String   @id @default(cuid())
+  codeId   String
+  code     ReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  orderId  String   @unique
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  friendEmail String
+  friendName  String?
+  // ₦ the friend actually saved on this order (the courtesy applied)
+  friendDiscountAmount Float @default(0)
+  // Set when the friend's order was DELIVERED and the referrer's credit
+  // was granted — the once-only guard for the reward.
+  rewardGrantedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([codeId])
+  @@index([createdAt])
 }
 
 // =====================================================

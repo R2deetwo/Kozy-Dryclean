@@ -31,11 +31,13 @@
 // =============================================================================
 
 import { NextRequest, NextResponse } from 'next/server'
+import { after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { CreateReviewSchema } from '@/lib/schemas'
 import { moderatePublicText } from '@/lib/content-filter'
+import { notifyAdminNewReview } from '@/lib/notifications'
 import { Testimonial } from '@/lib/types'
 import {
   STARTER_TESTIMONIALS,
@@ -245,9 +247,40 @@ export async function POST(req: NextRequest) {
         displayLocation: displayLocation?.trim() || null,
         isApproved,
         approvedAt: isApproved ? now : null,
-        approvedById: isApproved ? 'auto' : null,
+        // NOTE: deliberately NULL for auto-approvals — approvedById is an FK
+        // to User, and the historical 'auto' marker violated it, making
+        // every 4.5+ star submission 500 AFTER the insert (the review was
+        // never saved). approvedAt being set with no approver IS the
+        // auto-approval signal; a human approval records the admin's id.
+        approvedById: null,
       },
     })
+
+    // ----- Phase 52: every review reaches the admins by email -----
+    // The owner's directive: "the main admins get emails of ALL feedback
+    // given by customers." Order reviews previously landed silently — the
+    // owner only saw them when a 5-star review happened to go public. Runs
+    // post-response (email must never slow the submit) and never throws.
+    const reviewOrder = await db.order.findUnique({
+      where: { id: order.id },
+      select: { orderNumber: true, user: { select: { name: true, email: true } } },
+    })
+    if (reviewOrder?.user) {
+      after(async () => {
+        try {
+          await notifyAdminNewReview({
+            rating: snappedRating,
+            comment: comment.trim(),
+            customerName: reviewOrder.user.name,
+            customerEmail: reviewOrder.user.email,
+            orderNumber: reviewOrder.orderNumber,
+            isApproved,
+          })
+        } catch (e) {
+          console.error('Review admin notification failed:', e)
+        }
+      })
+    }
 
     return NextResponse.json({ review }, { status: 201 })
   } catch (err) {

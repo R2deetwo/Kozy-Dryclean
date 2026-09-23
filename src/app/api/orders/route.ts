@@ -51,6 +51,7 @@ import {
   computeCouponAmount,
   type CouponRecord,
 } from '@/lib/marketing'
+import { checkReferralEligibility, recordReferralRedemption } from '@/lib/referrals'
 
 // Positive-integer env override with a safe default (phase-29): lets the
 // owner retune the booking rate limits from Vercel's dashboard without a
@@ -440,6 +441,16 @@ export async function POST(req: Request) {
   // DiscountUsage after the order is created. Lives out here because the
   // usage trail is written after order creation, outside the pricing block.
   let appliedCoupon: (CouponRecord & { amount: number }) | null = null
+  // Phase 52: the referral code actually applied (if any) — a friend's
+  // FIRST order redeemed with another customer's personal code. Recorded in
+  // ReferralRedemption after the order is created (own table — never the
+  // admin discount console, never DiscountUsage).
+  let appliedReferral: { codeId: string; amount: number; referrerName: string } | null = null
+  // Phase 52: the referrer's thank-you credit being spent on THIS order.
+  // Computed during pricing, but only decremented after the order is
+  // actually created (the duplicate-submission guard returns early and must
+  // never double-spend the balance).
+  let pendingReferralCredit = 0
   // Phase-14 order attributes (mode of wash, promo code, delivery fee) —
   // filled in by the ITEM pricing block below.
   const orderExtras: { deliveryFee?: number; modeOfWash?: string | null; promoCode?: string | null } = {}
@@ -565,6 +576,43 @@ export async function POST(req: Request) {
 
     if (promoInput) {
       const code = promoInput
+      // ----- Phase 52: referral codes — the silent program -----
+      // A customer's personal code lives in its own table (never the admin
+      // discount console). Friend courtesy on their FIRST order only; it
+      // REPLACES the standard first-order discount exactly like the hotel
+      // offer code, and the same eligibility function powers the wizard's
+      // live "Apply code" preview — the two can never disagree.
+      const referralCheck = await checkReferralEligibility(code, {
+        userId: ownerId,
+        isFirstOrder,
+      })
+      if (referralCheck.ok) {
+        const amount = referralCheck.previewAmount(serviceTotal)
+        if (amount > 0) {
+          appliedPromoCode = code
+          appliedReferral = {
+            codeId: referralCheck.codeId,
+            amount,
+            referrerName: referralCheck.referrerName,
+          }
+          // The referral consumed the first-order benefit (it replaces the
+          // standard signup discount, same policy as first-order offer codes).
+          await db.user.update({
+            where: { id: ownerId },
+            data: { signupDiscountUsed: true },
+          })
+          appliedDiscounts.push(
+            `Referral from ${referralCheck.referrerName.split(' ')[0]} (${referralCheck.discountPercent}% off) — saved ${amount.toLocaleString('en-NG')} naira`
+          )
+        } else {
+          appliedDiscounts.push(`Referral code ${code} applied but nothing to discount`)
+        }
+      } else if (referralCheck.reason !== 'NOT_FOUND') {
+        // A REAL referral code that does not fit here (their own code, or not
+        // a first order) — say so plainly; no need to also run the discount
+        // lookup (it is definitely not a coupon).
+        appliedDiscounts.push(`Referral code ${code} — ${referralCheck.message}`)
+      } else {
       let promo = await db.discount.findFirst({ where: { code } })
       // Built-in hotel/corporate offer: the code + percentage live in
       // AppSetting, so it works even before a Discount row exists. Upsert the
@@ -635,6 +683,7 @@ export async function POST(req: Request) {
           }
         }
       }
+      } // end phase-52 else: not a referral code → standard coupon path
     } else if (isFirstOrder) {
       // Standard first-order discount — the percentage ALWAYS comes from
       // AppSetting (default 10%, admin-tunable). A legacy SIGNUP Discount row
@@ -687,13 +736,38 @@ export async function POST(req: Request) {
     }
 
     // Total = (cleaning + handwash + express) − percentage discounts − the
-    // coupon's naira amount, plus the flat delivery fee (fees are never
-    // discounted). The percentage stack stays capped at 95%; the coupon
-    // amount is already capped to the service charge by computeCouponAmount.
+    // coupon's naira amount − the referral courtesy, plus the flat delivery
+    // fee (fees are never discounted). The percentage stack stays capped at
+    // 95%; the coupon amount is already capped to the service charge by
+    // computeCouponAmount, and the referral amount likewise derives from the
+    // service charge only.
     const couponFlatAmount = appliedCoupon?.amount ?? 0
+    const referralFlatAmount = appliedReferral?.amount ?? 0
     totalPrice =
-      Math.max(0, Math.round(serviceTotal * (1 - Math.min(totalDiscount, 0.95))) - couponFlatAmount) +
-      deliveryFee
+      Math.max(
+        0,
+        Math.round(serviceTotal * (1 - Math.min(totalDiscount, 0.95))) -
+          couponFlatAmount -
+          referralFlatAmount
+      ) + deliveryFee
+
+    // ----- Phase 52: the referrer's thank-you credit, applied automatically -----
+    // Their earned balance against THIS retail order, after every other
+    // discount. Retail only — KG/corporate orders are priced later when the
+    // admin weighs them, so the credit simply waits for their next basket.
+    // The balance is decremented only AFTER the order is actually created
+    // (the duplicate-submission guard below returns early and must never
+    // double-spend it).
+    if (owner.referralCredit > 0 && totalPrice > 0) {
+      const creditApplied = Math.min(owner.referralCredit, totalPrice)
+      if (creditApplied > 0) {
+        totalPrice = Math.max(0, Math.round(totalPrice - creditApplied))
+        appliedDiscounts.push(
+          `Referral thank-you credit (${creditApplied.toLocaleString('en-NG')} naira applied)`
+        )
+        pendingReferralCredit = creditApplied
+      }
+    }
     // Record the delivery fee + mode + code on the order for transparency
     orderExtras.deliveryFee = deliveryFee
     orderExtras.modeOfWash = modeOfWash ?? null
@@ -885,6 +959,21 @@ export async function POST(req: Request) {
     }
   }
 
+  // ----- Phase 52: spend the referral thank-you credit -----
+  // Runs only now — after the duplicate guard and the order write — so a
+  // replayed submission can never double-spend the balance. The conditional
+  // decrement (gte guard) keeps concurrent bookings from overdrafting it.
+  if (pendingReferralCredit > 0) {
+    try {
+      await db.user.updateMany({
+        where: { id: ownerId, referralCredit: { gte: pendingReferralCredit } },
+        data: { referralCredit: { decrement: pendingReferralCredit } },
+      })
+    } catch (e) {
+      console.error('Referral credit decrement failed (order still placed):', e)
+    }
+  }
+
   // ----- Notifications (email + SMS) — never block the booking -----
   // Runs AFTER the response is sent (next/server after()): a slow email
   // provider must not make checkout feel broken. Bank-transfer orders get a
@@ -910,6 +999,21 @@ export async function POST(req: Request) {
         await notifyAdminTransferPending(order)
       } else {
         await notifyAdminNewOrder(order)
+      }
+
+      // ----- Phase 52: referral redemption trail -----
+      // A friend's first order was placed with a customer's personal code —
+      // record it (the thank-you credit grant hangs off this row when the
+      // order is delivered) and ping the admins quietly.
+      if (appliedReferral) {
+        await recordReferralRedemption({
+          codeId: appliedReferral.codeId,
+          orderId: order.id,
+          friendEmail: owner.email,
+          friendName: owner.name,
+          friendDiscountAmount: appliedReferral.amount,
+          orderNumber: order.orderNumber,
+        })
       }
     } catch (e) {
       console.error('Post-booking notifications failed:', e)

@@ -22,6 +22,7 @@ import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { getAppSettings } from '@/lib/app-settings'
+import { checkReferralEligibility } from '@/lib/referrals'
 import {
   checkCouponEligibility,
   computeCouponAmount,
@@ -90,6 +91,35 @@ export async function POST(req: NextRequest) {
       userId = u.id
       isFirstOrder = u.signupDiscountUsed === false
     }
+  }
+
+  // ----- Phase 52: referral codes first — the silent program -----
+  // A customer's personal code lives in its own table, not the discount
+  // console. The SAME eligibility function powers the authoritative pricing
+  // in POST /api/orders, so the preview and checkout can never disagree.
+  const referralCheck = await checkReferralEligibility(normalizedCode, {
+    userId,
+    isFirstOrder,
+  })
+  if (referralCheck.ok) {
+    const discountAmount = referralCheck.previewAmount(serviceSubtotal)
+    const referrerFirst = referralCheck.referrerName.split(' ')[0] || 'a friend'
+    return NextResponse.json({
+      valid: true,
+      couponName: `Referral from ${referrerFirst}`,
+      discountAmount,
+      type: 'PERCENTAGE',
+      value: referralCheck.discountPercent,
+      message:
+        referralCheck.discountPercent > 0
+          ? `${referrerFirst}'s referral — ${referralCheck.discountPercent}% off your first order. You save ${'₦' + discountAmount.toLocaleString('en-NG')}.`
+          : `That is ${referrerFirst}'s referral code — there is currently no courtesy attached to it.`,
+    })
+  }
+  if (referralCheck.reason !== 'NOT_FOUND') {
+    // A REAL referral code that does not fit here — its own message beats
+    // the generic "not recognised" line.
+    return NextResponse.json({ valid: false, message: referralCheck.message })
   }
 
   // ----- Find the coupon -----

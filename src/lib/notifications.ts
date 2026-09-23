@@ -854,6 +854,224 @@ export async function notifyAdminNewFeedback(feedback: {
   }
 }
 
+// =============================================================================
+// Phase 52 — service milestone, silent referrals, review alerts
+// =============================================================================
+
+/** A customer submitted an ORDER review (star rating + comment). The owner
+ *  asked to see ALL customer feedback by email — order reviews previously
+ *  reached the database silently and the owner only discovered them when a
+ *  5-star review happened to go public. Fires for every rating; the intro
+ *  tells the owner whether it is already on the wall or waiting. */
+export async function notifyAdminNewReview(review: {
+  rating: number
+  comment: string
+  customerName: string
+  customerEmail: string
+  orderNumber: string
+  isApproved: boolean
+}): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    const stars = '★'.repeat(Math.round(review.rating)) + '☆'.repeat(Math.max(0, 5 - Math.round(review.rating)))
+    const { subject, html } = adminEmail({
+      badge: 'Review',
+      heading: `New review — ${stars} from ${review.customerName}`,
+      intro: review.isApproved
+        ? 'A delivered-order review came in at 4.5 stars or above, so it is already live on the testimonial wall (it passed the content screen automatically).'
+        : 'A delivered-order review came in below 4.5 stars, so it is held for your moderation before anything shows publicly. Worth reading soon — a quiet complaint left unanswered is how premium clients slip away.',
+      rows: [
+        { label: 'From', value: `${review.customerName} (${review.customerEmail})` },
+        { label: 'Rating', value: `${review.rating}/5` },
+        { label: 'Order', value: `#${review.orderNumber}` },
+        {
+          label: 'Publicly visible',
+          value: review.isApproved ? 'Yes — auto-approved' : 'No — awaiting moderation',
+        },
+        { label: 'Comment', value: review.comment },
+      ],
+      cta: { label: 'Open the Reviews console', url: `${baseUrl()}/admin` },
+    })
+    await deliverAdminAlert({
+      type: 'REVIEW',
+      title: `New review (${review.rating}/5) from ${review.customerName}`,
+      body: review.comment.slice(0, 300),
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: true,
+      data: {
+        rating: review.rating,
+        from: review.customerName,
+        fromEmail: review.customerEmail,
+        orderNumber: review.orderNumber,
+        approved: review.isApproved,
+      },
+      linkTab: 'reviews',
+    })
+  } catch (e) {
+    console.error('notifyAdminNewReview failed:', e)
+  }
+}
+
+/** A friend booked their first order with a customer's referral code —
+ *  quiet operations alert so the owner sees the silent program working. */
+export async function notifyAdminReferralRedeemed(opts: {
+  code: string
+  referrerName: string
+  referrerEmail: string
+  friendName: string
+  friendEmail: string
+  orderNumber: string
+  friendDiscountAmount: number
+}): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    const { subject, html } = adminEmail({
+      badge: 'Referral',
+      heading: `Referral code ${opts.code} redeemed`,
+      intro:
+        'A new customer booked their first order with a personal referral code. The thank-you credit lands on the referrer\u2019s account automatically when this order is delivered — nothing for you to do, this is just so you can see it working.',
+      rows: [
+        { label: 'Code', value: opts.code },
+        { label: 'Friend', value: `${opts.friendName} (${opts.friendEmail})` },
+        { label: 'Order', value: `#${opts.orderNumber}` },
+        { label: 'Courtesy given', value: formatNaira(opts.friendDiscountAmount) },
+        { label: 'Referred by', value: `${opts.referrerName} (${opts.referrerEmail})` },
+      ],
+      cta: { label: 'Open the Orders board', url: `${baseUrl()}/admin` },
+    })
+    await deliverAdminAlert({
+      type: 'REFERRAL_REDEEMED',
+      title: `Referral ${opts.code} redeemed by ${opts.friendName}`,
+      body: `${opts.friendName} booked a first order with ${opts.referrerName}'s code (${opts.code}) — courtesy ${formatNaira(opts.friendDiscountAmount)}.`,
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: true,
+      data: {
+        code: opts.code,
+        friend: opts.friendName,
+        referrer: opts.referrerName,
+        orderNumber: opts.orderNumber,
+      },
+      linkTab: 'kanban',
+    })
+  } catch (e) {
+    console.error('notifyAdminReferralRedeemed failed:', e)
+  }
+}
+
+/** The 10-order service milestone email — appreciation + a general
+ *  (relationship-level) feedback ask + the quiet referral reveal. Premium
+ *  tone throughout; the reasoning behind the timing stays internal. */
+export async function notifyMilestoneReached(opts: {
+  to: string
+  name: string
+  deliveredCount: number
+  code: string
+  friendDiscountPercent: number
+  rewardAmount: number
+  token: string
+}): Promise<void> {
+  try {
+    const first = opts.name.split(' ')[0] || 'there'
+    const countWord = opts.deliveredCount === 10 ? 'Ten' : String(opts.deliveredCount)
+    const milestoneUrl = `${baseUrl()}/milestone?token=${encodeURIComponent(opts.token)}`
+    const subject = `${countWord} orders with Kozy Care — thank you, ${first}`
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <body style="font-family: Georgia, serif; background: #F8F9FA; padding: 40px 0; margin: 0;">
+        <div style="max-width: 520px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
+          <div style="background: linear-gradient(135deg, #0A192F, #102740); padding: 32px 40px; text-align: center;">
+            <h1 style="color: #D4AF37; font-family: Georgia, serif; font-size: 28px; font-weight: 700; margin: 0;">Kozy Care</h1>
+            <p style="color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0 0 0;">Drycleaning &amp; Laundry</p>
+          </div>
+          <div style="padding: 40px;">
+            <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">A quiet thank-you, ${first}.</h2>
+            <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 0 0 18px 0;">
+              ${countWord} orders now. The suits, the shirts, the household pieces — entrusted to us again and again.
+              That kind of consistency is the truest compliment a care service can receive, and we do not take it lightly.
+            </p>
+            <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 0 0 24px 0;">
+              We would love to hear how the whole experience has felt — not about one order, but the relationship itself:
+              what stands out, and where we could serve you even better. Two minutes, and it goes straight to the people
+              who make the decisions.
+            </p>
+            <div style="text-align: center; margin: 28px 0 8px 0;">
+              <a href="${milestoneUrl}" style="display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);">Share your thoughts</a>
+            </div>
+            <p style="color: #6F88A8; font-size: 12px; margin: 12px 0 0 0; line-height: 1.5;">Or paste this link into your browser:<br><span style="color: #0A192F; word-break: break-all;">${milestoneUrl}</span></p>
+            <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #E2E5E9;">
+              <p style="color: #6F88A8; line-height: 1.7; font-size: 14px; margin: 0 0 12px 0;">
+                One more thing, kept quiet on purpose. If someone in your circle would value the same standard of care,
+                this is your personal code:
+              </p>
+              <p style="text-align: center; margin: 0 0 12px 0;"><span style="display: inline-block; font-family: Georgia, serif; font-size: 20px; font-weight: 700; letter-spacing: 3px; color: #0A192F; background: #F7F0DC; border: 1px solid #E3BE4F; border-radius: 8px; padding: 10px 24px;">${opts.code}</span></p>
+              <p style="color: #6F88A8; line-height: 1.7; font-size: 14px; margin: 0;">
+                Friends booking their first order with it receive ${opts.friendDiscountPercent}% off.
+                ${opts.rewardAmount > 0 ? `And when that order is delivered, a ${formatNaira(opts.rewardAmount)} thank-you credit lands on your account — applied automatically to your next pickup.` : ''}
+                No points to chase, no fanfare — just our way of noticing.
+              </p>
+            </div>
+            <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
+              Kozy Care — Uncompromising care. Exceptional convenience.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>`
+    await sendEmail({ to: opts.to, subject, html })
+  } catch (e) {
+    console.error('notifyMilestoneReached failed:', e)
+  }
+}
+
+/** The friend's first referred order was delivered — the referrer's
+ *  thank-you credit has landed. Quiet, factual, gratitude-shaped. */
+export async function notifyReferralRewardGranted(opts: {
+  to: string
+  referrerName: string
+  friendName: string
+  amount: number
+}): Promise<void> {
+  try {
+    const first = opts.referrerName.split(' ')[0] || 'there'
+    const friendFirst = opts.friendName.split(' ')[0] || 'a friend'
+    const subject = 'A thank-you is on your Kozy Care account'
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <body style="font-family: Georgia, serif; background: #F8F9FA; padding: 40px 0; margin: 0;">
+        <div style="max-width: 520px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
+          <div style="background: linear-gradient(135deg, #0A192F, #102740); padding: 32px 40px; text-align: center;">
+            <h1 style="color: #D4AF37; font-family: Georgia, serif; font-size: 28px; font-weight: 700; margin: 0;">Kozy Care</h1>
+            <p style="color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0 0 0;">Drycleaning &amp; Laundry</p>
+          </div>
+          <div style="padding: 40px;">
+            <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">A small thank-you, ${first}.</h2>
+            <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 0 0 18px 0;">
+              ${friendFirst} booked with your code, and their first order was delivered today. Because it came from you,
+              a ${formatNaira(opts.amount)} thank-you credit is now on your account.
+            </p>
+            <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 0 0 24px 0;">
+              There is nothing to remember and nothing to type — it applies automatically the next time you book a pickup.
+            </p>
+            <div style="text-align: center; margin: 28px 0 8px 0;">
+              <a href="${baseUrl()}/portal" style="display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);">Book your next pickup</a>
+            </div>
+            <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
+              Kozy Care — Uncompromising care. Exceptional convenience.
+            </p>
+          </div>
+        </div>
+      </body>
+      </html>`
+    await sendEmail({ to: opts.to, subject, html })
+  } catch (e) {
+    console.error('notifyReferralRewardGranted failed:', e)
+  }
+}
+
 /** A rider applied to join the Kozy delivery team (/join-riders). */
 export async function notifyAdminRiderApplication(app: {
   fullName: string

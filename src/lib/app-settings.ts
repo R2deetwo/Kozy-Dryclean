@@ -37,6 +37,8 @@ export const APP_SETTING_KEYS = [
   'first_order_discount_percent',
   'hotel_guest_discount_percent',
   'hotel_guest_promo_code',
+  'referral_friend_discount_percent',
+  'referral_reward_amount',
   'online_order_discount_percent',
   'alterations_from_price',
   'price_per_kg',
@@ -92,6 +94,8 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     firstOrderDiscountPercent: num('first_order_discount_percent', d.firstOrderDiscountPercent),
     hotelGuestDiscountPercent: num('hotel_guest_discount_percent', d.hotelGuestDiscountPercent),
     hotelGuestPromoCode: str('hotel_guest_promo_code', d.hotelGuestPromoCode),
+    referralFriendDiscountPercent: num('referral_friend_discount_percent', d.referralFriendDiscountPercent),
+    referralRewardAmount: num('referral_reward_amount', d.referralRewardAmount),
     onlineOrderDiscountPercent: num('online_order_discount_percent', d.onlineOrderDiscountPercent),
     alterationsFromPrice: num('alterations_from_price', d.alterationsFromPrice),
     pricePerKg: num('price_per_kg', d.pricePerKg),
@@ -131,6 +135,8 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
       first_order_discount_percent: JSON.stringify(d.firstOrderDiscountPercent),
       hotel_guest_discount_percent: JSON.stringify(d.hotelGuestDiscountPercent),
       hotel_guest_promo_code: JSON.stringify(d.hotelGuestPromoCode),
+      referral_friend_discount_percent: JSON.stringify(d.referralFriendDiscountPercent),
+      referral_reward_amount: JSON.stringify(d.referralRewardAmount),
       online_order_discount_percent: JSON.stringify(d.onlineOrderDiscountPercent),
       alterations_from_price: JSON.stringify(d.alterationsFromPrice),
       price_per_kg: JSON.stringify(d.pricePerKg),
@@ -190,6 +196,10 @@ export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<
     map.hotel_guest_discount_percent = JSON.stringify(patch.hotelGuestDiscountPercent)
   if (patch.hotelGuestPromoCode !== undefined)
     map.hotel_guest_promo_code = JSON.stringify(patch.hotelGuestPromoCode.toUpperCase().trim())
+  if (patch.referralFriendDiscountPercent !== undefined)
+    map.referral_friend_discount_percent = JSON.stringify(patch.referralFriendDiscountPercent)
+  if (patch.referralRewardAmount !== undefined)
+    map.referral_reward_amount = JSON.stringify(Math.round(patch.referralRewardAmount))
   if (patch.onlineOrderDiscountPercent !== undefined)
     map.online_order_discount_percent = JSON.stringify(patch.onlineOrderDiscountPercent)
   if (patch.alterationsFromPrice !== undefined)

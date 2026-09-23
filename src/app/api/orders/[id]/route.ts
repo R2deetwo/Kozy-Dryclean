@@ -30,6 +30,7 @@ import { getAppSettings } from '@/lib/app-settings'
 import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 import { detectAnomalies, logAnomaly } from '@/lib/anomalies'
 import { scheduleMediaPurge } from '@/lib/media'
+import { processDeliveryMilestones } from '@/lib/referrals'
 
 // ----- GET /api/orders/[id] -----
 export async function GET(
@@ -412,6 +413,23 @@ export async function PATCH(
           await notifyOrderStatus(updated, parsed.data.status!)
         } catch (e) {
           console.error('Status-change notification failed:', e)
+        }
+      })
+    }
+
+    // ----- Phase 52: service milestones on first genuine delivery -----
+    // deliveredAt is set exactly once per order (never reset by a drag-back),
+    // so this is the once-only trigger for BOTH the 10-order appreciation
+    // email and the referral thank-you credit (when THIS order was a
+    // friend's referred first order). Runs post-response; every step inside
+    // is compare-and-set guarded and never throws.
+    const isFirstGenuineDelivery = parsed.data.status === 'DELIVERED' && !order.deliveredAt
+    if (isFirstGenuineDelivery) {
+      after(async () => {
+        try {
+          await processDeliveryMilestones(id)
+        } catch (e) {
+          console.error('Delivery milestone processing failed:', e)
         }
       })
     }

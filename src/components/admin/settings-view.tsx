@@ -752,6 +752,43 @@ export function SettingsView() {
                       picture discounts; the combined discount stays capped at 95%.
                     </p>
                   </div>
+                  <div>
+                    <Label htmlFor="referral-friend-pct" className="text-xs uppercase tracking-wide text-navy-300">
+                      Referral courtesy for friends (%)
+                    </Label>
+                    <Input
+                      id="referral-friend-pct"
+                      type="number"
+                      min="0"
+                      max="50"
+                      value={app.referralFriendDiscountPercent}
+                      onChange={(e) => setApp({ referralFriendDiscountPercent: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-32"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      <strong className="text-navy">Silent referral program</strong> — nothing on the site
+                      advertises it. After a customer&apos;s 10th delivered order they receive a personal code;
+                      friends who book their first order with it get this percentage off.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="referral-reward" className="text-xs uppercase tracking-wide text-navy-300">
+                      Referral thank-you credit (₦)
+                    </Label>
+                    <Input
+                      id="referral-reward"
+                      type="number"
+                      min="0"
+                      value={app.referralRewardAmount}
+                      onChange={(e) => setApp({ referralRewardAmount: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-32"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Lands on the referrer&apos;s account once the friend&apos;s first order is delivered —
+                      applied automatically to their next retail order. Set 0 to keep the code working for
+                      friends without granting credit.
+                    </p>
+                  </div>
                   </div>
                   {/* Phase 36 pointer: coupons now live in the Marketing tab */}
                   <div className="flex items-start gap-2 rounded-lg bg-gold-50 p-3 text-xs leading-relaxed text-navy-300 ring-1 ring-gold-200">

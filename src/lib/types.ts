@@ -464,6 +464,23 @@ export const ONLINE_ORDER_DISCOUNT_PERCENT = 5
 export const HOTEL_GUEST_DISCOUNT_PERCENT = 15
 export const HOTEL_GUEST_PROMO_CODE = 'HOTEL15'
 
+/** Referrals (phase 52). Deliberately SILENT — nothing on the public site
+ *  advertises the program. A personal code is minted when a customer
+ *  reaches MILESTONE_ORDERS delivered orders, and revealed only in the
+ *  milestone email, the private /milestone page, and their portal card.
+ *  REFERRAL_FRIEND_DISCOUNT_PERCENT is the first-order courtesy the friend
+ *  receives at checkout; REFERRAL_REWARD_AMOUNT (naira) is the thank-you
+ *  credit that lands on the referrer's account once the friend's first
+ *  order is delivered — applied automatically to their next retail order.
+ *  Both admin-tunable (Settings → Discounts & Offers); a reward of 0 keeps
+ *  the code working for friends but grants no credit. */
+export const REFERRAL_FRIEND_DISCOUNT_PERCENT = 10
+export const REFERRAL_REWARD_AMOUNT = 2000
+
+/** The service milestone that unlocks the appreciation email, the general
+ *  feedback ask and the personal referral code — the owner's "10 washes". */
+export const MILESTONE_ORDERS = 10
+
 /** Guarantee eligibility (client directive: "be more transparent on what's
  *  considered eligible — a certain number of garments or amount of total
  *  order"). An order qualifies when EITHER threshold is met. Admin-tunable. */
@@ -494,6 +511,9 @@ export interface KozyAppSettings {
   firstOrderDiscountPercent: number
   hotelGuestDiscountPercent: number
   hotelGuestPromoCode: string
+  // Referrals (phase 52) — silent program, see constants above.
+  referralFriendDiscountPercent: number
+  referralRewardAmount: number
   // Permanent online-order discount for registered customers (phase-30).
   // 0 disables it. Applied server-side at checkout (ITEM orders) and on the
   // bulk invoice (KG orders) — never a client-supplied number.
@@ -539,6 +559,8 @@ export function defaultAppSettings(): KozyAppSettings {
     firstOrderDiscountPercent: FIRST_ORDER_DISCOUNT_PERCENT,
     hotelGuestDiscountPercent: HOTEL_GUEST_DISCOUNT_PERCENT,
     hotelGuestPromoCode: HOTEL_GUEST_PROMO_CODE,
+    referralFriendDiscountPercent: REFERRAL_FRIEND_DISCOUNT_PERCENT,
+    referralRewardAmount: REFERRAL_REWARD_AMOUNT,
     onlineOrderDiscountPercent: ONLINE_ORDER_DISCOUNT_PERCENT,
     // 0 = pricing not confirmed with the tailor yet → the storefront shows
     // "quoted after assessment" instead of a from-price.
@@ -647,6 +669,8 @@ export type NotificationEventType =
   | 'NEW_ORDER'
   | 'TRANSFER_PENDING'
   | 'FEEDBACK'
+  | 'REVIEW'
+  | 'REFERRAL_REDEEMED'
   | 'RIDER_APPLICATION'
   | 'STAFF_INVITE'
   | 'CAMPAIGN_SENT'

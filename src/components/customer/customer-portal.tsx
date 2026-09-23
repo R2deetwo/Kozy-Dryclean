@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import {
@@ -15,6 +15,9 @@ import {
   LogOut,
   Loader2,
   Zap,
+  Gift,
+  Copy,
+  Check,
 } from 'lucide-react'
 import { useOrders, type ApiOrder } from '@/lib/hooks'
 import { formatNaira, formatDate } from '@/lib/types'
@@ -98,6 +101,85 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight }: 
       onViewInvoice={(o) => setView({ name: 'invoice', order: o })}
       onCloseDetail={() => setSelectedOrderId(undefined)}
     />
+  )
+}
+
+// =====================================================
+// SILENT REFERRAL CARD (phase 52) — 10+ order customers only
+// =====================================================
+// Rendered ONLY when the customer has crossed the service milestone and
+// holds a personal code. Quiet by design: one compact card, gratitude-shaped
+// copy, no counters, no leaderboard, no "earn" language. Below the milestone
+// this component renders nothing at all.
+function ReferralCard() {
+  const [data, setData] = useState<{
+    eligible: boolean
+    code: string | null
+    credit: number
+    friendDiscountPercent: number
+  } | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/referrals')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d) setData(d)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  if (!data || !data.eligible || !data.code) return null
+
+  const copyCode = async () => {
+    try {
+      await navigator.clipboard.writeText(data.code!)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch {
+      // Clipboard unavailable — the code is select-all anyway.
+    }
+  }
+
+  return (
+    <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+      <Card className="mb-6 border-gold-200 bg-white shadow-navy">
+        <CardContent className="flex flex-wrap items-center gap-4 p-4 sm:p-5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-100 text-gold-600">
+            <Gift className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-navy">A quiet way to share the care</p>
+            <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
+              {data.friendDiscountPercent > 0
+                ? `Friends get ${data.friendDiscountPercent}% off their first order with your code`
+                : 'Share your personal code with someone who would value the care'}
+              {data.credit > 0
+                ? ` · ${formatNaira(data.credit)} thank-you credit waiting on your next order`
+                : ''}
+            </p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2 rounded-full border border-gold-300 bg-gold-50 px-4 py-2">
+            <span className="select-all font-mono text-sm font-bold tracking-[0.15em] text-navy">
+              {data.code}
+            </span>
+            <button
+              type="button"
+              onClick={copyCode}
+              className="rounded-full p-1.5 text-navy-400 transition hover:text-gold-600"
+              aria-label="Copy your referral code"
+              title="Copy code"
+            >
+              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
+          </div>
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 }
 
@@ -219,6 +301,11 @@ function CustomerDashboard({
             </CardContent>
           </Card>
         </div>
+
+        {/* Silent referral card (phase 52) — appears ONLY for 10+ order
+            customers. Below the milestone it does not render at all: no
+            locked badge, no teaser, nothing that hints a program exists. */}
+        <ReferralCard />
 
         {/* Orders or empty state */}
         {orderList.length === 0 ? (

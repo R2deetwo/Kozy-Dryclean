@@ -144,6 +144,10 @@ export async function PUT(req: NextRequest) {
   pct('firstOrderDiscountPercent', 0, 50)
   pct('hotelGuestDiscountPercent', 0, 50)
   str('hotelGuestPromoCode', 24)
+  // Referrals (phase 52) — the silent 10-order program. Friend courtesy
+  // percentage (first order only) and the referrer's thank-you credit (₦).
+  pct('referralFriendDiscountPercent', 0, 50)
+  pct('referralRewardAmount', 0, 100000)
   // Permanent online-order discount (phase-30) — 0 disables it.
   pct('onlineOrderDiscountPercent', 0, 50)
   pct('alterationsFromPrice', 0, 100000)
