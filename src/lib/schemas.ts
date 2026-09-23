@@ -108,6 +108,15 @@ export const CreateOrderSchema = z.object({
     )
     .max(6, 'At most 6 condition photos')
     .optional(),
+  // LEGACY path above (photos inside the order POST body, capped at 6 by the
+  // serverless request-size ceiling). Phase 51: the wizard now stages each
+  // compressed photo one-by-one via /api/media/stage and submits ONLY the
+  // returned IDs — the order POST stays tiny no matter how many photos.
+  stagedToken: z.string().min(8).max(64).optional(),
+  stagedPhotoIds: z
+    .array(z.string().min(10).max(32))
+    .max(30, 'At most 30 condition photos')
+    .optional(),
 })
 
 export const UpdateOrderSchema = z.object({
@@ -115,6 +124,20 @@ export const UpdateOrderSchema = z.object({
   driverId: z.string().nullable().optional(),
   finalWeight: z.number().nullable().optional(),
   totalPrice: z.number().nullable().optional(),
+})
+
+// Phase 51 — stage ONE condition photo pre-order. The wizard calls this per
+// photo right after selection, so the payload must stay small (adaptive
+// client compression targets ~150-200KB per photo) and the order POST later
+// references only the returned ID.
+export const StagePhotoSchema = z.object({
+  // Client-generated scoping token (random per wizard session). The order
+  // POST must present the same token to claim the staged rows.
+  token: z.string().min(8).max(64),
+  photo: z
+    .string()
+    .startsWith('data:image/', 'Staged photo must be an image')
+    .max(400_000, 'Photo is too large after compression — try another'),
 })
 
 // ----- Payment schemas -----

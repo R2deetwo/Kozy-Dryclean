@@ -150,6 +150,9 @@ export interface Order {
     updatedAt: string
   }>
   media?: Array<{ id: string; imageUrl: string; notes?: string | null }>
+  // Phase 51: list payloads carry the photo COUNT (mediaCount) instead of
+  // the bytes — full media comes from GET /api/orders/[id] on modal open.
+  mediaCount?: number
 }
 
 // =====================================================

@@ -65,6 +65,7 @@ export interface ApiOrder {
   driver?: { id: string; name: string; phone: string } | null
   payments?: ApiPayment[]
   media?: any[]
+  mediaCount?: number
 }
 
 export interface ApiPayment {

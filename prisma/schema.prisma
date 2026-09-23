@@ -224,6 +224,34 @@ model GarmentMedia {
 }
 
 // =====================================================
+// STAGED PHOTOS (phase 51) — pre-order upload staging
+// =====================================================
+// Condition photos used to ride along INSIDE the order POST body as base64
+// data URLs, which capped uploads at 6 photos (Vercel's 4.5MB request limit
+// would reject a 30-photo basket). Now the wizard uploads each compressed
+// photo to /api/media/stage the moment it is selected; the order POST only
+// references the staged IDs, and this table holds them until the order is
+// created (the rows are then moved into GarmentMedia and deleted here).
+//
+// RETENTION: unclaimed rows are purged 24h after createdAt by the same
+// sweep that expires GarmentMedia 24h after delivery (lib/media.ts).
+model StagedPhoto {
+  id        String   @id @default(cuid())
+  // Client-generated scoping token: only an order POST presenting BOTH the
+  // id AND this token can claim the row (ids alone are unguessable cuids,
+  // the token is cheap defence in depth).
+  token     String
+  // Compact JPEG data URL (adaptive client compression, ~150-200KB each)
+  data      String
+  // Byte length of the data URL for quick size telemetry
+  bytes     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([createdAt])
+}
+
+// =====================================================
 // PAYMENTS — manual transfer receipts + Paystack hooks
 // =====================================================
 model Payment {

@@ -53,6 +53,7 @@ import {
   MailCheck,
   BadgeCheck,
   Loader2,
+  RefreshCw,
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
@@ -137,9 +138,36 @@ const TIME_SLOTS = [
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
-/** sessionStorage key for photos stashed while a guest hops through the
- *  login/signup round-trip to claim the guarantee (same tab only). */
+/** sessionStorage keys for the condition-photo flow (phase 51).
+ *
+ * Photos upload to /api/media/stage ONE BY ONE while the customer fills
+ * the wizard — a 30-photo basket inside the order POST would breach the
+ * serverless request-size limit (the reason uploads used to cap at 6, which
+ * sent a 30-garment customer to WhatsApp). Only the staged IDs + tiny
+ * thumbnails are stashed client-side, so the stash survives the guest login
+ * round-trip and reloads without ever approaching the sessionStorage quota.
+ *
+ * GATE_PHOTOS_KEY is the LEGACY pre-phase-51 stash (full data URLs); it is
+ * read once on mount and re-staged through the new pipeline. */
 const GATE_PHOTOS_KEY = 'kozy:gate-photos'
+const PHOTO_STASH_KEY = 'kozy:condition-photos'
+const STAGE_TOKEN_KEY = 'kozy:stage-token'
+
+/** How many condition photos one order may carry. */
+const PHOTO_LIMIT = 30
+
+/** One condition photo in the wizard. `id` is the staged-photo ID on the
+ *  server; `data` (memory only, never stashed) keeps the compressed data
+ *  URL so a failed upload can be retried without re-reading the file. */
+type ConditionPhoto = {
+  key: string
+  id?: string
+  url: string
+  thumb: string
+  name: string
+  data?: string
+  status: 'uploading' | 'done' | 'failed'
+}
 
 /** Default pickup date: tomorrow. */
 function defaultPickupDate() {
@@ -203,7 +231,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // sizes ("if they want alterations, they don't have to put their size in
   // all the time"). Lives in localStorage — private to this browser.
   const [savedMeasurements, setSavedMeasurements] = useState<SavedMeasurements | null>(null)
-  const [photos, setPhotos] = useState<{ url: string; name: string }[]>([])
+  const [photos, setPhotos] = useState<ConditionPhoto[]>([])
   const [guaranteeAck, setGuaranteeAck] = useState(false)
   const [pickupAddress, setPickupAddress] = useState('')
   const [pickupDate, setPickupDate] = useState(defaultPickupDate)
@@ -219,6 +247,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const [catalogTab, setCatalogTab] = useState<CatalogTab>(initialCatalogTab ?? 'men')
   const [loading, setLoading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  /** Staging token for this wizard session (see STAGE_TOKEN_KEY above) —
+   *  presented with the photo IDs when the order is created so only this
+   *  browser can claim the photos it staged. */
+  const stageTokenRef = useRef<string>('')
   const receiptInputRef = useRef<HTMLInputElement>(null)
 
   // ----- Member gate + draft resume state -----
@@ -308,28 +340,116 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     setSavedMeasurements(loadSavedMeasurements())
   }, [])
 
+  // Keep the tiny stash ({id, name, thumb} of staged photos) in sync on
+  // every change — it is what restores the basket after the guest login
+  // round-trip or an accidental reload (the full photos are already
+  // server-side, so a few KB is all the client ever holds).
+  useEffect(() => {
+    try {
+      const compact = photos
+        .filter((p) => p.status === 'done' && p.id)
+        .map((p) => ({ id: p.id as string, name: p.name, thumb: p.thumb }))
+      if (compact.length > 0) {
+        sessionStorage.setItem(PHOTO_STASH_KEY, JSON.stringify(compact))
+      } else {
+        sessionStorage.removeItem(PHOTO_STASH_KEY)
+      }
+    } catch {
+      /* quota/unavailable — the photos are staged server-side already */
+    }
+  }, [photos])
+
+
   // ----- Restore a saved draft ("continue where you left off") -----
   // Runs once on mount, BEFORE the profile prefill effect below so a restored
   // address is never clobbered.
   useEffect(() => {
     hydrated.current = true
-    const d = loadDraft()
 
-    // Photos stashed before the guarantee gate's login round-trip: restore
-    // them (once) so the customer doesn't have to re-upload after signing in.
-    // The terms checkbox is deliberately NOT restored — acknowledging the
-    // guarantee terms must stay an explicit, current action.
+    // ----- Staging token (phase 51): one per tab, survives reloads -----
     try {
-      const stashed = sessionStorage.getItem(GATE_PHOTOS_KEY)
+      let tok = sessionStorage.getItem(STAGE_TOKEN_KEY) || ''
+      if (!tok || tok.length < 8) {
+        tok =
+          typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID().replace(/-/g, '')
+            : `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
+        sessionStorage.setItem(STAGE_TOKEN_KEY, tok)
+      }
+      stageTokenRef.current = tok
+    } catch {
+      stageTokenRef.current = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 12)}`
+    }
+
+    // Photos stashed before the guarantee gate's login round-trip (or an
+    // accidental reload): restore them (once) so the customer doesn't have
+    // to re-upload after signing in. The terms checkbox is deliberately NOT
+    // restored — acknowledging the guarantee terms must stay an explicit,
+    // current action.
+    try {
+      const stashed = sessionStorage.getItem(PHOTO_STASH_KEY)
       if (stashed) {
-        const parsed = JSON.parse(stashed) as { url: string; name: string }[]
-        if (Array.isArray(parsed) && parsed.length > 0) setPhotos(parsed)
-        sessionStorage.removeItem(GATE_PHOTOS_KEY)
+        const parsed = JSON.parse(stashed) as { id: string; name: string; thumb: string }[]
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setPhotos(
+            parsed.map((p, i) => ({
+              key: `restored-${p.id}-${i}`,
+              id: p.id,
+              url: p.thumb || '',
+              thumb: p.thumb || '',
+              name: p.name || `Photo ${i + 1}`,
+              status: 'done' as const,
+            }))
+          )
+        }
+        sessionStorage.removeItem(PHOTO_STASH_KEY)
+      } else {
+        // LEGACY pre-phase-51 stash (full data URLs): re-stage through the
+        // new pipeline so their IDs can ride along with the order. Oversized
+        // old photos (>400k chars) simply fail their tile — remove/re-add.
+        const legacy = sessionStorage.getItem(GATE_PHOTOS_KEY)
+        if (legacy) {
+          const parsed = JSON.parse(legacy) as { url: string; name: string }[]
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setPhotos(
+              parsed.map((p, i) => ({
+                key: `legacy-${i}`,
+                url: p.url,
+                thumb: p.url,
+                name: p.name || `Photo ${i + 1}`,
+                data: p.url,
+                status: 'uploading' as const,
+              }))
+            )
+            void (async () => {
+              for (let i = 0; i < parsed.length; i++) {
+                try {
+                  const res = await fetch('/api/media/stage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: stageTokenRef.current, photo: parsed[i].url }),
+                  })
+                  if (!res.ok) throw new Error('staging failed')
+                  const { id } = await res.json()
+                  setPhotos((prev) =>
+                    prev.map((x, xi) => (xi === i && x.key === `legacy-${i}` ? { ...x, id, status: 'done' } : x))
+                  )
+                } catch {
+                  setPhotos((prev) =>
+                    prev.map((x, xi) => (xi === i && x.key === `legacy-${i}` ? { ...x, status: 'failed' } : x))
+                  )
+                }
+              }
+            })()
+          }
+          sessionStorage.removeItem(GATE_PHOTOS_KEY)
+        }
       }
     } catch {
       /* corrupt stash or unavailable sessionStorage — ignore */
     }
 
+    const d = loadDraft()
     if (!d) return
     setResumedAt(d.savedAt)
     // B2B drafts can never sit on the (hidden) condition step
@@ -459,8 +579,11 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const speedOption =
     SERVICE_SPEEDS.find((s) => s.id === effectiveSpeed) ?? SERVICE_SPEEDS[0]
   const expressSurcharge = Math.round(subtotal * speedOption.surcharge)
+  // Staged photos (server-side) — the count that gates the guarantee, not
+  // tiles still uploading or failed ones.
+  const stagedPhotoCount = photos.filter((p) => p.status === 'done').length
   const guaranteeActive =
-    type === 'ITEM' && !isGuest && photos.length > 0 && guaranteeAck
+    type === 'ITEM' && !isGuest && stagedPhotoCount > 0 && guaranteeAck
 
   // ----- Phase-14 pricing components -----
   // Handwash gentle-care surcharge: +50% (admin-tunable) of the cleaning
@@ -673,27 +796,183 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     </div>
   )
 
+  // ----- Condition photos (phase 51): compress → stage → reference -----
+  // Every photo uploads to /api/media/stage the moment it is selected
+  // (three at a time — gentle on mobile networks), so a 30-garment basket
+  // never has to fit inside one order request. The order POST sends only
+  // the staged IDs; the server moves them into the order's evidence rows.
+
+  /** Patch one photo entry in state (by its stable key). */
+  const updatePhoto = (key: string, patch: Partial<ConditionPhoto>) =>
+    setPhotos((prev) => prev.map((p) => (p.key === key ? { ...p, ...patch } : p)))
+
+  /** Compress one condition photo adaptively: start at full detail and step
+   *  down (edge, then quality) only while it is too big to stage. Stays
+   *  legible for damage claims — the whole point of the evidence trail —
+   *  while each staged upload stays ~150-200KB. */
+  const compressConditionPhoto = (
+    file: File
+  ): Promise<{ dataUrl: string; thumb: string }> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = () => reject(new Error('Could not read the image'))
+      reader.onload = () => {
+        const img = new Image()
+        img.onerror = () => reject(new Error('Could not decode the image'))
+        img.onload = () => {
+          const draw = (maxEdge: number, quality: number) => {
+            const scale = Math.min(1, maxEdge / Math.max(img.width, img.height))
+            const canvas = document.createElement('canvas')
+            canvas.width = Math.max(1, Math.round(img.width * scale))
+            canvas.height = Math.max(1, Math.round(img.height * scale))
+            const ctx = canvas.getContext('2d')
+            if (!ctx) throw new Error('Canvas unavailable')
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+            return canvas.toDataURL('image/jpeg', quality)
+          }
+          try {
+            // Target ≤ ~210k chars of data URL (~155KB binary): small enough
+            // to stage in one request, detailed enough for a damage claim.
+            const attempts: Array<[number, number]> = [
+              [1440, 0.8],
+              [1200, 0.72],
+              [1080, 0.64],
+              [960, 0.58],
+            ]
+            let dataUrl = ''
+            for (const [edge, quality] of attempts) {
+              dataUrl = draw(edge, quality)
+              if (dataUrl.length <= 210_000) break
+            }
+            // Pathological detail (dense noise, intricate lace at full
+            // frame): step edge AND quality down together until it fits.
+            // Quality never drops below 0.35 and the edge never below 640px
+            // — past those the evidence stops being legible, and the
+            // server's 400k-char cap is the final ceiling.
+            const descent: Array<[number, number]> = [
+              [960, 0.5],
+              [960, 0.42],
+              [840, 0.38],
+              [720, 0.35],
+              [640, 0.35],
+            ]
+            for (const [edge, quality] of descent) {
+              if (dataUrl.length <= 210_000) break
+              dataUrl = draw(edge, quality)
+            }
+            // Tiny thumbnail for the stash (a few KB — never the full photo).
+            const tScale = Math.min(1, 200 / Math.max(img.width, img.height))
+            const tCanvas = document.createElement('canvas')
+            tCanvas.width = Math.max(1, Math.round(img.width * tScale))
+            tCanvas.height = Math.max(1, Math.round(img.height * tScale))
+            const tCtx = tCanvas.getContext('2d')
+            const thumb = tCtx
+              ? (tCtx.drawImage(img, 0, 0, tCanvas.width, tCanvas.height),
+                tCanvas.toDataURL('image/jpeg', 0.6))
+              : ''
+            resolve({ dataUrl, thumb })
+          } catch (e) {
+            reject(e instanceof Error ? e : new Error('Compression failed'))
+          }
+        }
+        img.src = reader.result as string
+      }
+      reader.readAsDataURL(file)
+    })
+
+  /** Upload one compressed photo to the staging endpoint. */
+  const stagePhoto = async (dataUrl: string): Promise<string> => {
+    const res = await fetch('/api/media/stage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: stageTokenRef.current, photo: dataUrl }),
+    })
+    if (!res.ok) throw new Error('Staging failed')
+    const data = await res.json()
+    if (!data || typeof data.id !== 'string') throw new Error('Staging failed')
+    return data.id
+  }
+
+  /** Compress + stage one file, updating its tile as it goes. */
+  const processPhotoFile = async (key: string, file: File) => {
+    try {
+      const { dataUrl, thumb } = await compressConditionPhoto(file)
+      updatePhoto(key, { url: thumb, thumb, data: dataUrl })
+      const id = await stagePhoto(dataUrl)
+      updatePhoto(key, { id, url: dataUrl, status: 'done' })
+    } catch {
+      updatePhoto(key, { status: 'failed' })
+    }
+  }
+
   const onPhotos = (files: FileList | null) => {
     if (!files) return
-    // Condition photos are downscaled to compact JPEGs (same pipeline as
-    // transfer receipts) — they ride along with the order request and are
-    // stored server-side as the guarantee's evidence trail. The old handler
-    // kept the FULL-SIZE originals in component state and never sent them
-    // anywhere (audit finding).
-    Array.from(files)
-      .slice(0, 6 - photos.length)
-      .forEach((file) => {
-        if (!file.type.startsWith('image/')) return
-        downscaleImage(file)
-          .then((url) => setPhotos((prev) => [...prev, { url, name: file.name }]))
-          .catch(() =>
-            toast({
-              title: 'Photo not added',
-              description: 'That image could not be read — try another one.',
-              variant: 'destructive',
-            })
-          )
+    // Condition photos are compressed and staged one-by-one (phase 51 — see
+    // the block comment above). The old handler kept FULL-SIZE originals in
+    // component state and capped the basket at 6 because everything had to
+    // fit inside the order request body.
+    const imageFiles = Array.from(files).filter((f) => f.type.startsWith('image/'))
+    if (imageFiles.length === 0) return
+    const room = PHOTO_LIMIT - photos.length
+    if (room <= 0) {
+      toast({
+        title: 'Photo limit reached',
+        description: `You can attach up to ${PHOTO_LIMIT} condition photos to one order — more than any basket needs.`,
       })
+      return
+    }
+    const picked = imageFiles.slice(0, room)
+    if (picked.length < imageFiles.length) {
+      toast({
+        title: `Only ${picked.length} photo${picked.length === 1 ? '' : 's'} added`,
+        description: `Each order carries at most ${PHOTO_LIMIT} condition photos.`,
+      })
+    }
+    const jobs = picked.map((file, i) => ({
+      key: `${Date.now().toString(36)}-${i}-${Math.random().toString(36).slice(2, 8)}`,
+      file,
+    }))
+    setPhotos((prev) => [
+      ...prev,
+      ...jobs.map((j) => ({
+        key: j.key,
+        url: '',
+        thumb: '',
+        name: j.file.name,
+        status: 'uploading' as const,
+      })),
+    ])
+    // Small worker pool: three concurrent uploads — phones on slow networks
+    // get steady progress instead of thirty simultaneous requests.
+    void (async () => {
+      let cursor = 0
+      const worker = async () => {
+        while (cursor < jobs.length) {
+          const job = jobs[cursor++]
+          await processPhotoFile(job.key, job.file)
+        }
+      }
+      await Promise.all([worker(), worker(), worker()])
+    })()
+  }
+
+  /** Retry one failed upload (the compressed data URL is kept in memory). */
+  const retryPhoto = async (key: string) => {
+    const photo = photos.find((p) => p.key === key)
+    if (!photo?.data) return
+    updatePhoto(key, { status: 'uploading' })
+    try {
+      const id = await stagePhoto(photo.data)
+      updatePhoto(key, { id, status: 'done' })
+    } catch {
+      updatePhoto(key, { status: 'failed' })
+    }
+  }
+
+  /** Remove a photo (a already-staged row is simply orphaned — the server
+   *  purges unclaimed staged photos after 24h). */
+  const removePhoto = (key: string) => {
+    setPhotos((prev) => prev.filter((p) => p.key !== key))
   }
 
   /** Downscale an image file to a compact JPEG data URL (max edge 1200px,
@@ -814,18 +1093,9 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
 
   const openAuthGate = () => {
     ensureDraftSaved()
-    // Stash the photos for the login round-trip (sessionStorage survives
-    // same-tab navigation to /login and back, unlike component state).
-    // Best-effort: quota errors just mean re-uploading after sign-in.
-    try {
-      if (photos.length > 0) {
-        sessionStorage.setItem(GATE_PHOTOS_KEY, JSON.stringify(photos))
-      } else {
-        sessionStorage.removeItem(GATE_PHOTOS_KEY)
-      }
-    } catch {
-      /* sessionStorage full or unavailable — proceed without the stash */
-    }
+    // The staged-photo stash stays in sync automatically (the effect above
+    // persists {id, name, thumb} — a few KB — on every change), so the
+    // login round-trip restores this basket's photos without re-uploading.
     setGateEmail((prev) => prev || guestEmail)
     setShowAuthGate(true)
   }
@@ -840,11 +1110,21 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const handleNext = () => {
     if (step === 2 && type === 'ITEM') {
       // Continue is the UPLOAD path:
-      //   no photos yet            -> nudge to upload (or skip)
+      //   uploads still in flight  -> give it a second
+      //   no staged photos yet     -> nudge to upload (or skip)
       //   photos, terms not ticked -> nudge to acknowledge the terms
       //   photos + terms, guest    -> sign-in gate to claim the guarantee
       //   photos + terms, member   -> proceed with the guarantee active
-      if (photos.length === 0) {
+      const uploading = photos.filter((p) => p.status === 'uploading').length
+      const failed = photos.filter((p) => p.status === 'failed').length
+      if (uploading > 0) {
+        toast({
+          title: 'Almost there',
+          description: `${uploading} photo${uploading === 1 ? ' is' : 's are'} still uploading — photos upload as you add them, so just give it a second.`,
+        })
+        return
+      }
+      if (stagedPhotoCount === 0) {
         toast({
           title: 'Please upload a photo to activate your guarantee',
           description:
@@ -859,6 +1139,13 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
             'Tick the confirmation box above to accept the Return-as-Received Guarantee terms and activate your 5% discount.',
         })
         return
+      }
+      if (failed > 0) {
+        // Non-blocking: the successfully staged photos still ride along.
+        toast({
+          title: `${failed} photo${failed === 1 ? ' was' : 's were'} left behind`,
+          description: 'We could not upload ' + (failed === 1 ? 'it' : 'them') + ' — you can go back and tap ' + (failed === 1 ? 'its tile' : 'a tile') + ' to retry, or continue with the photos that made it.',
+        })
       }
       if (isGuest) {
         openAuthGate()
@@ -1027,16 +1314,17 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
           ...(type === 'ITEM' && paymentMethod === 'BANK_TRANSFER' && receiptData
             ? { transferReceipt: receiptData }
             : {}),
-          // Condition photos ride along with the order — the server stores
-          // one GarmentMedia row each (the guarantee's evidence trail).
-          // Size filter: a photo stashed in sessionStorage BEFORE this
-          // deploy could be a full-size original; dropping it beats failing
-          // the whole booking on the server's size cap.
-          ...(type === 'ITEM' && photos.length > 0
+          // Condition photos ride along with the order — one GarmentMedia
+          // row each (the guarantee's evidence trail). Phase 51: the photos
+          // were staged one-by-one while the customer filled the wizard, so
+          // only the IDs travel here — a 30-photo basket no longer has to
+          // fit inside one request body (the old 6-photo cap).
+          ...(type === 'ITEM' && stagedPhotoCount > 0
             ? {
-                conditionPhotos: photos
-                  .map((p) => p.url)
-                  .filter((u) => u.length <= 900_000),
+                stagedToken: stageTokenRef.current,
+                stagedPhotoIds: photos
+                  .filter((p) => p.status === 'done' && p.id)
+                  .map((p) => p.id),
               }
             : {}),
         }),
@@ -1108,6 +1396,15 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
       // The order is placed — the saved draft is no longer needed
       clearDraft()
       setResumedAt(null)
+      // Nor are the staged-photo stash / staging token: they belong to THIS
+      // basket, and leaving them would restore stale photos on the next
+      // visit to the wizard.
+      try {
+        sessionStorage.removeItem(PHOTO_STASH_KEY)
+        sessionStorage.removeItem(STAGE_TOKEN_KEY)
+      } catch {
+        /* sessionStorage unavailable — harmless */
+      }
 
       // ----- Bank transfer: straight to the payment-verification page -----
       // The dedicated /payment/pending screen states unmistakably that the
@@ -1680,7 +1977,12 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                     accept="image/*"
                     capture="environment"
                     multiple
-                    onChange={(e) => onPhotos(e.target.files)}
+                    onChange={(e) => {
+                      onPhotos(e.target.files)
+                      // Reset so re-picking a previously-removed file still
+                      // fires onChange (the value would otherwise be "unchanged").
+                      e.target.value = ''
+                    }}
                     className="sr-only"
                   />
                   <div className="flex flex-wrap items-center gap-3">
@@ -1688,30 +1990,75 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                       type="button"
                       variant="outline"
                       onClick={() => fileInputRef.current?.click()}
+                      disabled={photos.length >= PHOTO_LIMIT}
                       className="border-gold-300 text-navy hover:bg-gold-50"
                     >
                       <Camera className="mr-2 h-4 w-4" />
                       Take or upload photos
                     </Button>
                     <span className="text-xs text-navy-300">
-                      {photos.length}/6 photos · optional
+                      {stagedPhotoCount}/{PHOTO_LIMIT} photos · optional
                     </span>
+                    {photos.some((p) => p.status === 'uploading') && (
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-gold-600">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        Uploading {photos.filter((p) => p.status === 'uploading').length}…
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Phase 51 — a customer photographing 30 garments for the
+                      first time needs to know what good evidence looks like:
+                      what to shoot, in what light, and that it uploads as
+                      they go. Short, scannable, no essay. */}
+                  <div className="mt-3 rounded-lg bg-linen-100 p-3 text-xs text-navy-300">
+                    <p className="font-medium text-navy">Getting good photos</p>
+                    <ul className="mt-1 list-inside list-disc space-y-0.5">
+                      <li>One garment per photo — or lay a few flat, fully visible.</li>
+                      <li>Good light, whole item in frame.</li>
+                      <li>Close-up of any existing stain, tear or missing button — that is what the guarantee judges against.</li>
+                      <li>Up to {PHOTO_LIMIT} photos. Each uploads as you pick it.</li>
+                    </ul>
                   </div>
 
                   {photos.length > 0 && (
                     <div className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
                       {photos.map((p, i) => (
                         <div
-                          key={i}
-                          className="group relative aspect-square overflow-hidden rounded-lg ring-1 ring-gold-200"
+                          key={p.key}
+                          className={`group relative aspect-square overflow-hidden rounded-lg ring-1 ${
+                            p.status === 'failed' ? 'ring-red-400' : 'ring-gold-200'
+                          }`}
                         >
-                          <img
-                            src={p.url}
-                            alt={`Condition photo ${i + 1}`}
-                            className="h-full w-full object-cover"
-                          />
+                          {p.url ? (
+                            <img
+                              src={p.url}
+                              alt={`Condition photo ${i + 1}`}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-linen-200">
+                              <Loader2 className="h-5 w-5 animate-spin text-gold-500" />
+                            </div>
+                          )}
+                          {p.status === 'uploading' && p.url && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-navy/40">
+                              <Loader2 className="h-5 w-5 animate-spin text-white" />
+                            </div>
+                          )}
+                          {p.status === 'failed' && (
+                            <button
+                              type="button"
+                              onClick={() => retryPhoto(p.key)}
+                              className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-red-950/70 text-white"
+                              aria-label={`Retry condition photo ${i + 1}`}
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                              <span className="text-[10px] font-medium">Tap to retry</span>
+                            </button>
+                          )}
                           <button
-                            onClick={() => setPhotos((prev) => prev.filter((_, idx) => idx !== i))}
+                            onClick={() => removePhoto(p.key)}
                             className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-full bg-black/60 text-white transition opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
                             aria-label={`Remove condition photo ${i + 1}`}
                           >

@@ -181,7 +181,9 @@ export async function POST(req: Request) {
             user: { select: { id: true, name: true, email: true, phone: true, role: true } },
             driver: { select: { id: true, name: true, phone: true } },
             payments: true,
-            media: true,
+            // Phase 51: the email helper never reads photos — pulling 30
+            // data URLs from the DB just to send an alert is pure waste.
+            media: { select: { id: true } },
           },
         })
         if (fresh) await notifyAdminTransferPending(fresh as any)

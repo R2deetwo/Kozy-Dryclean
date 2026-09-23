@@ -327,10 +327,30 @@ export async function notifyOrderStatus(
     const copy = STATUS_COPY[newStatus]
     if (!copy) return
 
+    // DELIVERED is the FEEDBACK moment (owner's directive): the customer
+    // has their garments back and everything is still crisp — a rating
+    // request that lands NOW, seconds after the admin marks the order
+    // received, converts far better than one sent days later. The same
+    // email closes the guarantee loop: check your items, 24 hours to
+    // flag anything (that window is also when the condition-photo
+    // evidence expires, so the two stories reinforce each other).
+    const isDelivered = newStatus === 'DELIVERED'
+    const firstName = order.user?.name ? order.user.name.split(' ')[0] : ''
+    const heading = isDelivered
+      ? 'Your order was delivered — how did we do?'
+      : copy.title
+    const intro = isDelivered
+      ? `${firstName ? `${firstName}, your` : 'Your'} garments are back with you — freshly cleaned, pressed and ready for the week. If everything looks and feels exactly right, we would love a quick rating: it takes about 30 seconds and it genuinely helps other Lagos households choose well.${
+          (order as any).guaranteeActive
+            ? ' If anything is NOT as it should be, check your items now — you have 24 hours from delivery to tell us under the Return-as-Received Guarantee, and your pre-pickup photos are on file.'
+            : ''
+        }`
+      : copy.body
+
     // Email — every status change
     const { subject, html } = await brandedEmail({
-      heading: copy.title,
-      intro: copy.body,
+      heading,
+      intro,
       order,
       cta:
         newStatus === 'DELIVERED'

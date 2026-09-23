@@ -29,6 +29,7 @@ import { STAGE_RANK } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
 import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 import { detectAnomalies, logAnomaly } from '@/lib/anomalies'
+import { scheduleMediaPurge } from '@/lib/media'
 
 // ----- GET /api/orders/[id] -----
 export async function GET(
@@ -294,7 +295,9 @@ export async function PATCH(
       user: { select: { id: true, name: true, email: true, phone: true, role: true } },
       driver: { select: { id: true, name: true, phone: true } },
       payments: true,
-      media: true,
+      // Phase 51: count-only media on console updates — the detail modal
+      // fetches full photos on open via GET /api/orders/[id].
+      media: { select: { id: true } },
     },
   })
 
@@ -339,7 +342,7 @@ export async function PATCH(
           user: { select: { id: true, name: true, email: true, phone: true, role: true } },
           driver: { select: { id: true, name: true, phone: true } },
           payments: true,
-          media: true,
+          media: { select: { id: true } },
         },
       })
       if (fresh) Object.assign(updated, fresh)
@@ -446,6 +449,14 @@ export async function PATCH(
       }
     })
   }
+
+  // Phase 51: photos of DELIVERED orders expire 24h after delivery — the
+  // status change is one of the natural moments to run the (throttled)
+  // retention sweep, alongside the daily cron and list loads.
+  scheduleMediaPurge()
+
+  ;(updated as any).mediaCount = (updated as any).media?.length ?? 0
+  delete (updated as any).media
 
   return NextResponse.json({ order: updated })
 }

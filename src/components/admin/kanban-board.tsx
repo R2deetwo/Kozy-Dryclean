@@ -27,6 +27,7 @@ import {
   List,
   KanbanSquare,
   ChevronRight,
+  Camera,
 } from 'lucide-react'
 import { useOrders, useUpdateOrder, ADMIN_POLL } from '@/lib/hooks'
 import { useMemo, useState } from 'react'
@@ -371,6 +372,18 @@ function OrderCard({
                   <Shield className="h-2.5 w-2.5" /> {anomalies.length}
                 </span>
               )}
+              {/* Phase 51: photos badge — the owner missed customers' uploaded
+                  photos because nothing on the card hinted they existed (the
+                  customer fell back to WhatsApp). Counts only; the bytes load
+                  in the detail modal. */}
+              {(order.mediaCount ?? 0) > 0 && (
+                <span
+                  title={`${order.mediaCount} condition photo${order.mediaCount === 1 ? '' : 's'} on file — open the order to view`}
+                  className="inline-flex items-center gap-0.5 rounded-full bg-gold-100 px-1.5 py-0.5 text-[9px] font-bold text-gold-700"
+                >
+                  <Camera className="h-2.5 w-2.5" /> {order.mediaCount}
+                </span>
+              )}
             </div>
             <p className="mt-0.5 truncate text-xs text-navy-300">
               {customer?.name ?? '—'}
@@ -613,6 +626,14 @@ function OrdersListView({
                         </span>
                         {o.guaranteeActive && (
                           <Shield className="inline h-3 w-3 text-gold-400" />
+                        )}
+                        {(o.mediaCount ?? 0) > 0 && (
+                          <span
+                            title={`${o.mediaCount} condition photo${o.mediaCount === 1 ? '' : 's'} on file — open the order to view`}
+                            className="inline-flex items-center gap-0.5 rounded-full bg-gold-100 px-1.5 py-0.5 text-[9px] font-bold text-gold-700"
+                          >
+                            <Camera className="h-2.5 w-2.5" /> {o.mediaCount}
+                          </span>
                         )}
                         {anomalies.length > 0 && (
                           <span

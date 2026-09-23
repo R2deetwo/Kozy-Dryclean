@@ -42,7 +42,9 @@ const ORDER_INCLUDE = {
   user: { select: { id: true, name: true, email: true, phone: true, role: true } },
   driver: { select: { id: true, name: true, phone: true } },
   payments: true,
-  media: true,
+  // Phase 51: count-only media everywhere except GET /api/orders/[id]
+  // (the detail modal fetches full photos on open).
+  media: { select: { id: true } },
 } as const
 
 /** Call requireRole and convert its thrown Response into a real response

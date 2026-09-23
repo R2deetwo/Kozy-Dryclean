@@ -34,6 +34,7 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { getSession, verifyLiveAccess } from '@/lib/auth'
 import { CreateOrderSchema } from '@/lib/schemas'
+import { MAX_CONDITION_PHOTOS, scheduleMediaPurge } from '@/lib/media'
 import {
   notifyOrderCreated,
   notifyGuestAccountCreated,
@@ -103,7 +104,11 @@ export async function GET(req: Request) {
       user: { select: { id: true, name: true, email: true, phone: true, role: true } },
       driver: { select: { id: true, name: true, phone: true } },
       payments: true,
-      media: true,
+      // Phase 51: the list payload carries a COUNT, never the photo bytes —
+      // a 30-photo order used to ship ~5MB of data URLs to every board load
+      // (and to the customer portal). Full media is fetched on demand by the
+      // order detail modal via GET /api/orders/[id].
+      media: { select: { id: true } },
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     take: limit + 1,
@@ -113,6 +118,16 @@ export async function GET(req: Request) {
   const hasMore = orders.length > limit
   if (hasMore) orders = orders.slice(0, limit)
   const nextCursor = hasMore ? orders[orders.length - 1].id : null
+
+  // Count-only media on every list row (see the include comment above).
+  for (const o of orders as any[]) {
+    o.mediaCount = Array.isArray(o.media) ? o.media.length : 0
+    delete o.media
+  }
+
+  // Throttled retention sweep piggy-backs on board/portal traffic (the
+  // daily cron is the backstop on quiet days).
+  scheduleMediaPurge()
 
   // Phase 32: odd-movement flags for the kanban (ADMIN only — staff
   // payloads never carry anomaly rows; the client's directive). One grouped
@@ -274,7 +289,7 @@ export async function POST(req: Request) {
     )
   }
 
-  const { type, items, serviceSpeed, modeOfWash, promoCode, alterationNotes, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod, transferReceipt, conditionPhotos } = parsed.data
+  const { type, items, serviceSpeed, modeOfWash, promoCode, alterationNotes, pickupAddress, pickupDate, pickupTimeSlot, deliveryAddress, guest, paymentMethod, transferReceipt, conditionPhotos, stagedToken, stagedPhotoIds } = parsed.data
 
   // ----- Alterations note (Phase 17, client directive) -----
   // Riders never measure at the door: the customer DESCRIBES the work at
@@ -310,7 +325,36 @@ export async function POST(req: Request) {
   // Ignore the client flag for unauthenticated requests so the discount can
   // never be claimed by crafting a request. (Server-side pricing integrity,
   // same class of fix as unitPrice coming from PriceCatalog.)
-  const guaranteeActive = session ? Boolean(parsed.data.guaranteeActive) : false
+  //
+  // Phase 51: the guarantee also requires EVIDENCE — the flag is only
+  // honored when the order actually carries at least one condition photo
+  // (staged or legacy inline). A crafted guaranteeActive=true with no
+  // photos would otherwise sell the 5% discount with nothing on file.
+
+  // ----- Staged condition photos (phase 51) -----
+  // The wizard uploads each compressed photo to /api/media/stage as it is
+  // selected (30-photo baskets would breach the serverless request-size
+  // limit in one body); the order POST claims those rows HERE — token-scoped
+  // so only the client that staged them can attach them — and moves them
+  // into GarmentMedia below. Legacy cached bundles may still send inline
+  // conditionPhotos; both paths feed the same rows, combined cap 30.
+  const claimedStaged =
+    stagedPhotoIds && stagedPhotoIds.length > 0 && stagedToken
+      ? await db.stagedPhoto.findMany({
+          where: { id: { in: stagedPhotoIds }, token: stagedToken },
+          select: { id: true, data: true },
+        })
+      : []
+  const stagedPhotoUrls = claimedStaged.map((r) => r.data)
+  const legacyPhotoUrls = (conditionPhotos ?? []).slice(
+    0,
+    Math.max(0, MAX_CONDITION_PHOTOS - stagedPhotoUrls.length)
+  )
+  const allPhotoUrls = [...stagedPhotoUrls, ...legacyPhotoUrls]
+
+  const guaranteeActive = session
+    ? Boolean(parsed.data.guaranteeActive) && allPhotoUrls.length > 0
+    : false
 
   // ----- Determine the order's owner (authed) or guest customer -----
   let ownerId: string | undefined
@@ -702,7 +746,6 @@ export async function POST(req: Request) {
         user: { select: { id: true, name: true, email: true, phone: true, role: true } },
         driver: { select: { id: true, name: true, phone: true } },
         payments: true,
-        media: true,
       },
       orderBy: { createdAt: 'desc' },
     })
@@ -779,11 +822,13 @@ export async function POST(req: Request) {
       // Condition photos → GarmentMedia rows: the Return-as-Received
       // Guarantee's evidence trail. They used to be collected in the wizard
       // but never left the customer's browser, so damage claims had no
-      // pre-pickup proof (audit finding).
-      ...(conditionPhotos && conditionPhotos.length > 0
+      // pre-pickup proof (audit finding). Phase 51: up to 30 photos arrive
+      // from the staging table (claimed above, token-scoped) plus any legacy
+      // inline photos from older cached bundles.
+      ...(allPhotoUrls.length > 0
         ? {
             media: {
-              create: conditionPhotos.map((url, i) => ({
+              create: allPhotoUrls.map((url, i) => ({
                 imageUrl: url,
                 notes: `Condition photo ${i + 1} (pre-pickup)`,
               })),
@@ -795,9 +840,26 @@ export async function POST(req: Request) {
       user: { select: { id: true, name: true, email: true, phone: true, role: true } },
       driver: { select: { id: true, name: true, phone: true } },
       payments: true,
-      media: true,
+      // Count-only: the just-booked customer's phone should not download a
+      // 5MB JSON echo of the photos it just uploaded (see GET above).
+      media: { select: { id: true } },
     },
   })
+
+  // The staged rows have been moved into GarmentMedia — clear them out so
+  // the staging table stays tiny (best-effort; the 24h sweep catches any
+  // stragglers if this delete fails).
+  if (claimedStaged.length > 0) {
+    try {
+      await db.stagedPhoto.deleteMany({
+        where: { id: { in: claimedStaged.map((r) => r.id) } },
+      })
+    } catch (e) {
+      console.error('Staged photo cleanup failed (order still placed):', e)
+    }
+  }
+  ;(order as any).mediaCount = (order as any).media?.length ?? 0
+  delete (order as any).media
 
   // ----- Coupon usage trail (phase 36) — never blocks the booking -----
   // Records the redemption (per-user limits + "how much did this promo cost
