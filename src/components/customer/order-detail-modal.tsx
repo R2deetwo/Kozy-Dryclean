@@ -187,7 +187,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
             {order.totalPrice !== undefined && (
               <div className="mt-3 flex items-center justify-between border-t pt-3">
                 <Button variant="outline" size="sm" onClick={() => onViewInvoice(order)} className="rounded-full border-[#E2E5E9] text-[#0A192F]"><Receipt className="mr-1 h-3.5 w-3.5" /> View invoice</Button>
-                <span className="text-sm text-[#6F88A8]">Total: <strong className="text-[#0A192F]">{formatNaira(order.totalPrice)}</strong></span>
+                <span className="text-sm text-[#6F88A8]">Total: <strong className="text-[#0A192F]">{(order as any).loyaltyFree ? 'On the house' : formatNaira(order.totalPrice)}</strong></span>
               </div>
             )}
           </section>

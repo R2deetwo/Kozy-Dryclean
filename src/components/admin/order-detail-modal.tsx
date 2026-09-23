@@ -13,6 +13,7 @@ import {
   Scale,
   Scissors,
   Zap,
+  Sparkles,
   User as UserIcon,
   CheckCircle2,
   XCircle,
@@ -289,6 +290,14 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
             <Badge variant="outline" className="rounded-full text-[10px] text-[#0A192F] border-[#E2E5E9]">
               {order.type === 'ITEM' ? 'Retail' : 'Corporate'}
             </Badge>
+            {(order as any).loyaltyFree && (
+              <Badge
+                className="rounded-full bg-[#FBF5E0] text-[#0A192F]"
+                title="The customer's earned complimentary service — after ten paid washes, the 11th is free. Nothing to collect on this order."
+              >
+                <Sparkles className="mr-1 h-2.5 w-2.5" /> Complimentary — loyalty
+              </Badge>
+            )}
             {order.serviceSpeed && order.serviceSpeed !== 'STANDARD' && (
               <Badge className="rounded-full bg-amber-100 text-amber-800">
                 <Zap className="mr-1 h-2.5 w-2.5" />
@@ -556,7 +565,7 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
             {order.totalPrice != null && onViewInvoice && (
               <div className="mt-3 flex items-center justify-between border-t pt-3">
                 <Button variant="outline" size="sm" onClick={() => onViewInvoice(order)} className="rounded-full border-[#E2E5E9] text-[#0A192F]"><Receipt className="mr-1 h-3.5 w-3.5" /> View invoice</Button>
-                <span className="text-sm text-[#6F88A8]">Total: <strong className="text-[#0A192F]">{formatNaira(order.totalPrice)}</strong></span>
+                <span className="text-sm text-[#6F88A8]">Total: <strong className="text-[#0A192F]">{(order as any).loyaltyFree ? 'On the house — ₦0' : formatNaira(order.totalPrice)}</strong></span>
               </div>
             )}
           </section>

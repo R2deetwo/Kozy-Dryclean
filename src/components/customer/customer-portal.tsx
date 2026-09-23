@@ -16,8 +16,6 @@ import {
   Loader2,
   Zap,
   Gift,
-  Copy,
-  Check,
 } from 'lucide-react'
 import { useOrders, type ApiOrder } from '@/lib/hooks'
 import { formatNaira, formatDate } from '@/lib/types'
@@ -105,24 +103,25 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight }: 
 }
 
 // =====================================================
-// SILENT REFERRAL CARD (phase 52) — 10+ order customers only
+// LOYALTY CARD (phase 53) — "after 10 washes, the 11th is free"
 // =====================================================
-// Rendered ONLY when the customer has crossed the service milestone and
-// holds a personal code. Quiet by design: one compact card, gratitude-shaped
-// copy, no counters, no leaderboard, no "earn" language. Below the milestone
-// this component renders nothing at all.
-function ReferralCard() {
+// The owner's visibility rule: NOTHING renders below 5 completed paid
+// services. From the 5th, a quiet countdown ("5 of 10", "6 of 10"…) so the
+// customer can look forward to it; once ten are earned, the card simply
+// says the next service is on the house. No "rewards program" branding,
+// no points language, and the offline paper version of the offer is never
+// referenced. Below five paid washes this component renders nothing at all.
+function LoyaltyCard() {
   const [data, setData] = useState<{
-    eligible: boolean
-    code: string | null
-    credit: number
-    friendDiscountPercent: number
+    punches: number
+    pending: number
+    visible: boolean
+    unlocked: boolean
   } | null>(null)
-  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     let cancelled = false
-    fetch('/api/referrals')
+    fetch('/api/loyalty')
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (!cancelled && d) setData(d)
@@ -133,49 +132,61 @@ function ReferralCard() {
     }
   }, [])
 
-  if (!data || !data.eligible || !data.code) return null
+  if (!data || !data.visible) return null
 
-  const copyCode = async () => {
-    try {
-      await navigator.clipboard.writeText(data.code!)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard unavailable — the code is select-all anyway.
-    }
+  // Ten earned, waiting to be used — the calm "it's yours" state.
+  if (data.unlocked) {
+    return (
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+        <Card className="mb-6 border-gold-200 bg-gold-50/50 shadow-navy">
+          <CardContent className="flex flex-wrap items-center gap-4 p-4 sm:p-5">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-100 text-gold-600">
+              <Gift className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-navy">Your next service is on the house</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
+                Ten services completed — this one is with our compliments. Nothing to
+                remember: it applies itself the next time you book a pickup.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
   }
 
+  // The countdown (5 of 10 … 9 of 10): ten quiet dots + the number.
+  const done = data.punches
   return (
     <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-      <Card className="mb-6 border-gold-200 bg-white shadow-navy">
-        <CardContent className="flex flex-wrap items-center gap-4 p-4 sm:p-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gold-100 text-gold-600">
-            <Gift className="h-5 w-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-navy">A quiet way to share the care</p>
-            <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
-              {data.friendDiscountPercent > 0
-                ? `Friends get ${data.friendDiscountPercent}% off their first order with your code`
-                : 'Share your personal code with someone who would value the care'}
-              {data.credit > 0
-                ? ` · ${formatNaira(data.credit)} thank-you credit waiting on your next order`
-                : ''}
+      <Card className="mb-6 border-navy-100 bg-white shadow-navy">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy-800 text-gold-300">
+              <Sparkles className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-navy">The eleventh is on the house</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
+                Service <span className="font-semibold text-navy">{done} of 10</span> — after your
+                tenth, the next one is with our compliments.
+              </p>
+            </div>
+            <p className="shrink-0 font-serif text-2xl font-bold tracking-wide text-navy">
+              {done}<span className="text-navy-300">/10</span>
             </p>
           </div>
-          <div className="flex shrink-0 items-center gap-2 rounded-full border border-gold-300 bg-gold-50 px-4 py-2">
-            <span className="select-all font-mono text-sm font-bold tracking-[0.15em] text-navy">
-              {data.code}
-            </span>
-            <button
-              type="button"
-              onClick={copyCode}
-              className="rounded-full p-1.5 text-navy-400 transition hover:text-gold-600"
-              aria-label="Copy your referral code"
-              title="Copy code"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-600" /> : <Copy className="h-3.5 w-3.5" />}
-            </button>
+          <div className="mt-3 flex items-center gap-1.5" aria-hidden="true">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <span
+                key={i}
+                className={cn(
+                  'h-1.5 flex-1 rounded-full',
+                  i < done ? 'bg-gold-400' : 'bg-navy-100'
+                )}
+              />
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -302,10 +313,11 @@ function CustomerDashboard({
           </Card>
         </div>
 
-        {/* Silent referral card (phase 52) — appears ONLY for 10+ order
-            customers. Below the milestone it does not render at all: no
-            locked badge, no teaser, nothing that hints a program exists. */}
-        <ReferralCard />
+        {/* Loyalty card (phase 53) — "after 10 washes, the 11th is free".
+            Appears ONLY from the 5th completed paid service (the owner's
+            reveal-at-5 rule); below that nothing renders at all — no locked
+            badge, no teaser, nothing that hints an offer exists. */}
+        <LoyaltyCard />
 
         {/* Orders or empty state */}
         {orderList.length === 0 ? (

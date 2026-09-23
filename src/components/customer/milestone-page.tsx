@@ -1,18 +1,20 @@
 'use client'
 
 // =============================================================================
-// /milestone — the private 10-order appreciation page (phase 52)
+// /milestone — the private ten-service appreciation page (phase 52, loyalty
+// since phase 53)
 // =============================================================================
 // Reached from the appreciation email (HMAC token link) or quietly from the
-// portal of a 10+ order customer. Two jobs, both premium in tone:
+// portal of a ten-service customer. Two jobs, both premium in tone:
 //   1. A GENERAL feedback ask — about the relationship, not one order.
 //      Submissions ride the existing /api/feedback pipeline, so they land
 //      in the admin Feedback inbox AND ping the admins by email. They are
 //      never published to the testimonial wall (Feedback rows are private
 //      by design).
-//   2. The silent referral reveal — the personal code, the friend courtesy,
-//      and the thank-you credit balance. Nothing on the public site points
-//      here; the code exists only for the customer holding this page.
+//   2. The loyalty reveal — "after 10 washes, the 11th is free": the
+//      customer's next service is on the house, applied automatically at
+//      their next booking. Nothing to type, nothing to remember. (The
+//      offline paper version of this offer is never referenced online.)
 // =============================================================================
 
 import { useState, useEffect, useCallback } from 'react'
@@ -22,24 +24,19 @@ import {
   Check,
   ArrowLeft,
   Loader2,
-  Copy,
   Gift,
-  Sparkles,
   MessageSquareHeart,
 } from 'lucide-react'
 import { Logo } from '@/components/shell/logo'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
-import { formatNaira } from '@/lib/types'
 
-interface ReferralState {
-  deliveredCount: number
-  eligible: boolean
-  code: string | null
-  credit: number
-  friendDiscountPercent: number
-  rewardAmount: number
+interface LoyaltyState {
+  paidWashes: number
+  punches: number
+  pending: number
+  visible: boolean
+  unlocked: boolean
   userName: string
   userEmail: string
 }
@@ -49,7 +46,7 @@ interface MilestonePageProps {
 }
 
 export function MilestonePage({ token }: MilestonePageProps) {
-  const [state, setState] = useState<ReferralState | null>(null)
+  const [state, setState] = useState<LoyaltyState | null>(null)
   const [loadError, setLoadError] = useState(false)
 
   // The form
@@ -61,15 +58,12 @@ export function MilestonePage({ token }: MilestonePageProps) {
   const [submitted, setSubmitted] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // The code copy interaction
-  const [copied, setCopied] = useState(false)
-
   const load = useCallback(async () => {
     try {
-      const url = token ? `/api/referrals?token=${encodeURIComponent(token)}` : '/api/referrals'
+      const url = token ? `/api/loyalty?token=${encodeURIComponent(token)}` : '/api/loyalty'
       const res = await fetch(url)
       if (!res.ok) throw new Error('Request failed')
-      const data: ReferralState = await res.json()
+      const data: LoyaltyState = await res.json()
       setState(data)
     } catch {
       setLoadError(true)
@@ -79,18 +73,6 @@ export function MilestonePage({ token }: MilestonePageProps) {
   useEffect(() => {
     load()
   }, [load])
-
-  const copyCode = async () => {
-    if (!state?.code) return
-    try {
-      await navigator.clipboard.writeText(state.code)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      // Clipboard unavailable (permissions / old browser) — the code is
-      // large and selectable, so the fallback is simply selecting it.
-    }
-  }
 
   const handleSubmit = async () => {
     setError(null)
@@ -115,7 +97,7 @@ export function MilestonePage({ token }: MilestonePageProps) {
           type: 'REVIEW',
           name: state.userName,
           email: state.userEmail,
-          reference: `Milestone — ${state.deliveredCount} orders`,
+          reference: `Milestone — ${state.paidWashes} services`,
           rating,
           message,
         }),
@@ -160,7 +142,7 @@ export function MilestonePage({ token }: MilestonePageProps) {
     )
   }
 
-  const countWord = state.deliveredCount === 10 ? 'Ten' : String(state.deliveredCount)
+  const countWord = state.paidWashes === 10 ? 'Ten' : String(state.paidWashes)
 
   // ===== State: submitted =====
   if (submitted) {
@@ -184,16 +166,20 @@ export function MilestonePage({ token }: MilestonePageProps) {
         </h1>
         <p className="mt-3 text-navy-300">
           Your words went straight to the people who make the decisions, and they
-          will be read with care. Thank you for {countWord.toLowerCase()} orders of trust.
+          will be read with care. Thank you for {countWord.toLowerCase()} services of trust.
         </p>
-        {state.code && (
+        {state.unlocked && (
           <Card className="mt-8 border-navy-100 shadow-navy">
-            <CardContent className="p-6 text-left">
+            <CardContent className="p-6 text-center">
               <p className="text-xs font-semibold uppercase tracking-wider text-gold-400">
-                Your personal code, whenever you need it
+                A note for your next booking
               </p>
-              <p className="mt-2 select-all text-center font-serif text-2xl font-bold tracking-[0.2em] text-navy">
-                {state.code}
+              <p className="mt-2 font-serif text-xl font-semibold text-navy">
+                The next one is on us
+              </p>
+              <p className="mt-1 text-sm text-navy-300">
+                Your next service is complimentary — it applies itself the next time
+                you book a pickup. Nothing to remember, nothing to type.
               </p>
             </CardContent>
           </Card>
@@ -205,7 +191,7 @@ export function MilestonePage({ token }: MilestonePageProps) {
     )
   }
 
-  // ===== Default: appreciation + general feedback + referral reveal =====
+  // ===== Default: appreciation + general feedback + loyalty reveal =====
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:py-16">
       <div className="flex justify-center">
@@ -218,7 +204,7 @@ export function MilestonePage({ token }: MilestonePageProps) {
             A quiet thank-you
           </p>
           <h1 className="mt-2 font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
-            {countWord} orders.
+            {countWord} services.
           </h1>
           <p className="mt-3 text-navy-300">
             The suits, the shirts, the household pieces — entrusted to us again and again.
@@ -226,8 +212,25 @@ export function MilestonePage({ token }: MilestonePageProps) {
           </p>
         </div>
 
+        {/* ----- The loyalty reveal (earned customers only) ----- */}
+        {state.unlocked && (
+          <Card className="mt-8 border-gold-200 bg-gold-50/50 shadow-navy">
+            <CardContent className="p-6 text-center sm:p-8">
+              <div className="flex items-center justify-center gap-2 text-sm font-semibold text-navy">
+                <Gift className="h-4 w-4 text-gold-500" />
+                The next one is on us
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-navy-300">
+                Your next service is complimentary — our way of marking ten. There is
+                nothing to remember and nothing to type: it applies itself the next
+                time you book a pickup.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
         {/* ----- The general feedback ask ----- */}
-        <Card className="mt-8 border-navy-100 shadow-navy">
+        <Card className="mt-6 border-navy-100 shadow-navy">
           <CardContent className="p-6 sm:p-8">
             <div className="flex items-center gap-2 text-sm font-semibold text-navy">
               <MessageSquareHeart className="h-4 w-4 text-gold-500" />
@@ -255,12 +258,11 @@ export function MilestonePage({ token }: MilestonePageProps) {
                     aria-label={`Rate ${star} star${star > 1 ? 's' : ''}`}
                   >
                     <Star
-                      className={cn(
-                        'h-9 w-9 transition',
-                        (hoverRating || rating) >= star
-                          ? 'fill-gold-400 text-gold-400'
-                          : 'fill-transparent text-navy-200'
-                      )}
+                      className={
+                        star <= (hoverRating || rating)
+                          ? 'h-9 w-9 fill-gold-400 text-gold-400'
+                          : 'h-9 w-9 fill-transparent text-navy-200'
+                      }
                     />
                   </button>
                 ))}
@@ -324,71 +326,6 @@ export function MilestonePage({ token }: MilestonePageProps) {
             </div>
           </CardContent>
         </Card>
-
-        {/* ----- The silent referral reveal (eligible customers only) ----- */}
-        {state.eligible && state.code && (
-          <Card className="mt-6 border-navy-100 shadow-navy">
-            <CardContent className="p-6 sm:p-8">
-              <div className="flex items-center gap-2 text-sm font-semibold text-navy">
-                <Gift className="h-4 w-4 text-gold-500" />
-                A quiet way to share the care
-              </div>
-              <p className="mt-1 text-sm text-navy-300">
-                If someone in your circle would value the same standard, this is your personal
-                code. No fanfare — it is simply yours.
-              </p>
-
-              <div className="mt-5 flex items-center justify-center">
-                <div className="flex items-center gap-3 rounded-xl border border-gold-300 bg-gold-50 px-6 py-4">
-                  <span className="select-all font-serif text-2xl font-bold tracking-[0.2em] text-navy">
-                    {state.code}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={copyCode}
-                    className="rounded-full border border-navy-200 bg-white p-2 text-navy transition hover:border-gold-300 hover:text-gold-600"
-                    aria-label="Copy your referral code"
-                    title="Copy code"
-                  >
-                    {copied ? (
-                      <Check className="h-4 w-4 text-emerald-600" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
-              </div>
-              {copied && (
-                <p className="mt-2 text-center text-xs text-emerald-600">Copied to your clipboard</p>
-              )}
-
-              <div className="mt-5 space-y-2 text-sm text-navy-300">
-                {state.friendDiscountPercent > 0 && (
-                  <p className="flex items-start gap-2">
-                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
-                    Friends booking their first order with it receive{' '}
-                    <strong className="text-navy">{state.friendDiscountPercent}% off</strong>.
-                  </p>
-                )}
-                {state.rewardAmount > 0 && (
-                  <p className="flex items-start gap-2">
-                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
-                    When their order is delivered, a{' '}
-                    <strong className="text-navy">{formatNaira(state.rewardAmount)} thank-you credit</strong>{' '}
-                    lands on your account — applied automatically to your next pickup.
-                  </p>
-                )}
-                {state.credit > 0 && (
-                  <p className="flex items-start gap-2 rounded-lg bg-emerald-50 px-3 py-2 text-emerald-800 ring-1 ring-emerald-200">
-                    <Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-                    A {formatNaira(state.credit)} thank-you credit is already on your account — it
-                    applies automatically to your next retail order.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         <div className="mt-8 text-center">
           <Button

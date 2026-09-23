@@ -14,6 +14,16 @@ interface SendEmailParams {
   tags?: string[]
 }
 
+/** Phase 53 test valve: when EMAIL_OVERRIDE_TO is set, EVERY outgoing email
+ *  is redirected to that single address — the owner can watch the whole
+ *  email system fire (customer emails AND admin alerts) in his own inbox
+ *  without a single message reaching a real customer. Unset in production,
+ *  where emails flow to their real recipients. */
+export function emailOverrideTarget(): string | null {
+  const t = process.env.EMAIL_OVERRIDE_TO?.trim()
+  return t && t.includes('@') ? t : null
+}
+
 export async function sendEmail({ to, subject, html, tags }: SendEmailParams): Promise<void> {
   const apiKey = process.env.BREVO_API_KEY
   // The sender MUST be an email verified in the Brevo dashboard (Brevo
@@ -33,6 +43,11 @@ export async function sendEmail({ to, subject, html, tags }: SendEmailParams): P
     return
   }
 
+  // Phase 53: the override valve. Also collapses every send to the one
+  // address so admin-alert loops (one email per configured recipient) can
+  // not spam N identical copies to the same test inbox.
+  const target = emailOverrideTarget() ?? to
+
   const res = await fetch('https://api.brevo.com/v3/smtp/email', {
     method: 'POST',
     headers: {
@@ -42,7 +57,7 @@ export async function sendEmail({ to, subject, html, tags }: SendEmailParams): P
     },
     body: JSON.stringify({
       sender: { name: senderName, email: senderEmail },
-      to: [{ email: to }],
+      to: [{ email: target }],
       subject,
       htmlContent: html,
       // Phase 32: tag every send as transactional/operational in the Brevo
@@ -58,6 +73,11 @@ export async function sendEmail({ to, subject, html, tags }: SendEmailParams): P
     console.error('Brevo send failed:', err)
     throw new Error(`Failed to send email: ${res.status}`)
   }
+
+  // One line per send — the operations log (and the phase-53 email test)
+  // can see exactly which subject landed in which inbox, even when the
+  // override valve is redirecting everything to a test address.
+  console.log(`[brevo] sent: ${subject} -> ${target}`)
 }
 
 export async function sendVerificationEmail(email: string, name: string, token: string): Promise<void> {

@@ -52,6 +52,7 @@ import {
   type CouponRecord,
 } from '@/lib/marketing'
 import { checkReferralEligibility, recordReferralRedemption } from '@/lib/referrals'
+import { getLoyaltyState } from '@/lib/loyalty'
 
 // Positive-integer env override with a safe default (phase-29): lets the
 // owner retune the booking rate limits from Vercel's dashboard without a
@@ -454,6 +455,10 @@ export async function POST(req: Request) {
   // Phase-14 order attributes (mode of wash, promo code, delivery fee) —
   // filled in by the ITEM pricing block below.
   const orderExtras: { deliveryFee?: number; modeOfWash?: string | null; promoCode?: string | null } = {}
+  // Phase 53: set inside the ITEM pricing block when this order is the
+  // customer's earned complimentary service (their next after ten paid
+  // washes) — the order is created with loyaltyFree and a zero total.
+  let loyaltyFreeOrder = false
 
   // ----- Service speed (turnaround tier) -----
   // KG / corporate orders always run on the standard SLA. For ITEM orders
@@ -768,6 +773,24 @@ export async function POST(req: Request) {
         pendingReferralCredit = creditApplied
       }
     }
+    // ----- Phase 53: loyalty — "after 10 washes, the 11th is free" -----
+    // The customer's earned complimentary service applies itself to their
+    // next retail basket: the whole order is priced at zero (delivery fee
+    // included — a genuinely free service, matching the offline promise).
+    // KG/bulk orders are priced at the station, so the earned service simply
+    // waits for the next retail basket. The order is flagged loyaltyFree so
+    // the confirmation email, the admin board and the card arithmetic all
+    // tell the same story, and a delivered complimentary order never counts
+    // as a punch on the next card.
+    const loyalty = await getLoyaltyState(ownerId)
+    if (loyalty.pending > 0) {
+      loyaltyFreeOrder = true
+      totalPrice = 0
+      appliedDiscounts.push(
+        `Complimentary service — earned after ten completed services (loyalty)`
+      )
+    }
+
     // Record the delivery fee + mode + code on the order for transparency
     orderExtras.deliveryFee = deliveryFee
     orderExtras.modeOfWash = modeOfWash ?? null
@@ -867,6 +890,7 @@ export async function POST(req: Request) {
       status: bankTransferAmount !== null ? 'PAYMENT_PENDING_VERIFICATION' : 'REQUESTED',
       type,
       guaranteeActive,
+      loyaltyFree: loyaltyFreeOrder,
       serviceSpeed: speed.id,
       modeOfWash: orderExtras.modeOfWash ?? null,
       promoCode: orderExtras.promoCode ?? null,

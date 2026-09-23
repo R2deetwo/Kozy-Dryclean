@@ -54,6 +54,7 @@ import {
   BadgeCheck,
   Loader2,
   RefreshCw,
+  Gift,
 } from 'lucide-react'
 import {
   GARMENT_CATALOG,
@@ -333,6 +334,24 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   })
   const isFirstOrder = !effectiveUser ? true : isFirstOrderEstimate.data === false
 
+  // ----- Phase 53: loyalty state ("after 10 washes, the 11th is free") -----
+  // Signed-in customers only — the server applies the earned complimentary
+  // service authoritatively at order time; this fetch only powers the quiet
+  // "this one's on us" note on the payment step so nobody is surprised by
+  // a zero total. Guests never see it (no history to earn with).
+  const loyaltyQuery = useQuery({
+    queryKey: ['wizard-loyalty', effectiveUser?.id ?? 'guest'],
+    queryFn: async () => {
+      const res = await fetch('/api/loyalty')
+      if (!res.ok) throw new Error('failed')
+      return (await res.json()) as { unlocked: boolean; visible: boolean }
+    },
+    enabled: Boolean(effectiveUser),
+    staleTime: 60 * 1000,
+    retry: 0,
+  })
+  const loyaltyUnlocked = loyaltyQuery.data?.unlocked === true
+
   // ----- Saved measurements (Phase 18) -----
   // Loaded once on mount from localStorage (set by the /measurements guide).
   // If present and filled, the alterations panel offers a one-tap attach.
@@ -564,6 +583,11 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     .map((c) => c.name)
   const hasQuoteItems = quoteItemNames.length > 0
   const quoteOnly = hasQuoteItems && subtotal === 0
+  // Phase 53: the customer has earned their complimentary service ("after
+  // 10 washes, the 11th is free") and THIS basket is a payable retail one —
+  // the payment step collapses into a quiet "on the house" panel (no payment
+  // radios, no coupon field: nothing to pay).
+  const complimentaryCheckout = loyaltyUnlocked && type === 'ITEM' && !quoteOnly
   // ----- Alterations (Phase 17) -----
   const hasAlterationItems = (items['alteration'] ?? 0) > 0
   const alterationNotesValid = alterationNotes.trim().length >= 10
@@ -1462,7 +1486,9 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
       toast({
         title: 'Booking placed!',
         description: `Order #${order.orderNumber} is confirmed. ${
-          type === 'KG'
+          order.loyaltyFree
+            ? 'This one is on the house — no payment needed.'
+            : type === 'KG'
             ? 'We will weigh your items at the station and send the invoice.'
             : quoteOnly
             ? 'Our specialist will assess your pieces and send your quote for approval.'
@@ -2567,7 +2593,11 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                     <div className="mt-4 flex items-center justify-between border-t pt-3">
                       <span className="font-semibold">Total</span>
                       <span className="text-xl font-bold text-navy-300">
-                        {quoteOnly ? 'Quote to follow' : formatNaira(total)}
+                        {quoteOnly
+                          ? 'Quote to follow'
+                          : complimentaryCheckout
+                            ? 'On the house'
+                            : formatNaira(total)}
                       </span>
                     </div>
                   )}
@@ -2595,6 +2625,26 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         Your basket only contains quoted item(s). We&apos;ll assess your
                         pieces at pickup and send the quote — payment details follow
                         once you approve the work.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : complimentaryCheckout ? (
+                /* Phase 53 loyalty — the earned complimentary service ("after
+                 * 10 washes, the 11th is free"): this whole order is on the
+                 * house, so there is genuinely nothing to pay. The panel
+                 * replaces the payment radios and the coupon field; the
+                 * server prices the order at zero and the confirmation email
+                 * tells the same story. */
+                <div className="mt-5">
+                  <div className="flex items-start gap-3 rounded-xl border border-gold-300 bg-gold-50/60 p-4">
+                    <Gift className="mt-0.5 h-5 w-5 shrink-0 text-gold-500" />
+                    <div>
+                      <p className="font-semibold text-navy">This one is on us</p>
+                      <p className="mt-1 text-sm leading-relaxed text-navy-300">
+                        Ten services completed — your next is with our compliments.
+                        Nothing to pay and nothing to type: confirm your pickup below
+                        and we&apos;ll take care of the rest.
                       </p>
                     </div>
                   </div>
@@ -2982,9 +3032,11 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                   : type === 'ITEM'
                     ? quoteOnly
                       ? 'Confirm booking'
-                      : paymentMethod === 'BANK_TRANSFER'
-                        ? "I've Made the Transfer"
-                        : `Pay & Confirm ${formatNaira(total)}`
+                      : complimentaryCheckout
+                        ? 'Confirm pickup'
+                        : paymentMethod === 'BANK_TRANSFER'
+                          ? "I've Made the Transfer"
+                          : `Pay & Confirm ${formatNaira(total)}`
                     : 'Confirm pickup request'}
               </Button>
             )}

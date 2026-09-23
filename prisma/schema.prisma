@@ -47,13 +47,13 @@ model User {
   marketingOptIn  Boolean  @default(true)
   // Discount tracking
   signupDiscountUsed Boolean @default(false)
-  // ----- Milestones & referrals (phase 52) -----
-  // Highest service milestone the customer has already been emailed about
-  // (0 = none yet, 1 = the 10-delivered-orders milestone). Advances at the
-  // moment the milestone email is sent, in the same flow — so a dragged-back
-  // and re-delivered order can never re-trigger it, and loyal customers who
-  // already crossed the line before the feature existed get their moment on
-  // the NEXT delivery instead of never.
+  // ----- Milestones & referrals (phase 52 / loyalty since phase 53) -----
+  // Number of service-milestone appreciation emails already sent to this
+  // customer (0 = none, 1 = the first ten-wash card, 2 = the second...).
+  // Advances via compare-and-set at the moment each milestone email is sent,
+  // so a dragged-back and re-delivered order can never re-trigger it, and
+  // loyal customers who crossed the line before the feature existed get
+  // their moment on the NEXT delivery instead of never.
   lastMilestoneSent Int     @default(0)
   // Referral thank-you credit balance (naira). Granted when a friend's
   // first referred order is DELIVERED; applied automatically (and only) to
@@ -165,6 +165,12 @@ model Order {
   anomalies         OrderAnomaly[]
   // Customer feedback (one-to-one — one review per order)
   review            Review?
+  // Phase 53 — the loyalty offer ("after 10 washes, the 11th is free"):
+  // set when this order was placed as the customer's earned complimentary
+  // service (they had completed 10 paid services at booking time). A
+  // delivered complimentary order does NOT count as a punch on the next
+  // card — only paid services count toward the next ten.
+  loyaltyFree       Boolean        @default(false)
   // Phase 52: set when this order was placed with a friend's referral code
   // (first order only) — the thank-you credit grant hangs off this row.
   referralRedemption ReferralRedemption?

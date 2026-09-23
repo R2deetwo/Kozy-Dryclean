@@ -14,7 +14,7 @@
 //     Email is sent for every status change.
 // =============================================================================
 
-import { sendEmail } from '@/lib/email'
+import { sendEmail, emailOverrideTarget } from '@/lib/email'
 import { formatNaira } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
 import { isValidEmail, normalizeEmail } from '@/lib/email-validation'
@@ -27,6 +27,9 @@ type NotifiableOrder = {
   status: string
   type: string
   totalPrice?: number | null
+  /** Phase 53 loyalty: this order is the customer's earned complimentary
+   *  service ("after 10 washes, the 11th is free") — priced at zero. */
+  loyaltyFree?: boolean
   serviceSpeed?: string | null
   pickupAddress: string
   pickupDate: Date | string
@@ -135,7 +138,9 @@ async function brandedEmail(opts: {
   if (order.serviceSpeed && order.serviceSpeed !== 'STANDARD') {
     rows.push({ label: 'Turnaround', value: turnaroundCopy(order.serviceSpeed) })
   }
-  if (order.totalPrice) {
+  if (order.loyaltyFree) {
+    rows.push({ label: 'Total', value: 'On the house — ₦0' })
+  } else if (order.totalPrice) {
     rows.push({ label: 'Total', value: formatNaira(order.totalPrice) })
   }
   rows.push(...extraRows)
@@ -255,18 +260,29 @@ export async function notifyTransferPendingVerification(
 // ----- Booking confirmation (order created — authed or guest) -----
 export async function notifyOrderCreated(order: NotifiableOrder): Promise<void> {
   try {
+    // Phase 53 loyalty: this order is the earned complimentary service —
+    // the confirmation must say so plainly instead of showing a bare ₦0.
+    const complimentary = order.loyaltyFree === true
     const { subject, html } = await brandedEmail({
-      heading: 'Your booking is confirmed',
-      intro:
-        'Thank you for choosing Kozy Care. Here are your pickup details — keep this email for your records.',
+      heading: complimentary
+        ? 'Your booking is confirmed — with our compliments'
+        : 'Your booking is confirmed',
+      intro: complimentary
+        ? 'Thank you for choosing Kozy Care — ten services in, this one is on the house. Here are your pickup details; keep this email for your records.'
+        : 'Thank you for choosing Kozy Care. Here are your pickup details — keep this email for your records.',
       order,
+      extraRows: complimentary
+        ? [{ label: 'Payment', value: 'Nothing due — this service is on the house' }]
+        : [],
       cta: { label: 'Track your order', url: `${baseUrl()}/portal` },
     })
     await sendEmail({ to: order.user.email, subject, html })
 
     await sendSMS(
       order.user.phone,
-      `Kozy Care: Booking confirmed! Order #${order.orderNumber}, pickup ${fmtDate(order.pickupDate)} (${order.pickupTimeSlot}). Track: ${baseUrl()}/portal`
+      complimentary
+        ? `Kozy Care: Booking confirmed! Order #${order.orderNumber}, pickup ${fmtDate(order.pickupDate)} (${order.pickupTimeSlot}) — this one is on the house. Track: ${baseUrl()}/portal`
+        : `Kozy Care: Booking confirmed! Order #${order.orderNumber}, pickup ${fmtDate(order.pickupDate)} (${order.pickupTimeSlot}). Track: ${baseUrl()}/portal`
     )
   } catch (e) {
     console.error('notifyOrderCreated failed:', e)
@@ -560,11 +576,16 @@ async function deliverAdminAlert(opts: {
   }
 
   // 2) Send the email to EVERY configured recipient (toggle-gated), one
-  //    result per address.
+  //    result per address. Phase 53: while the EMAIL_OVERRIDE_TO test valve
+  //    is open, all recipients collapse into the single test inbox — one
+  //    send, not N identical copies — while the event still records the real
+  //    configured recipients.
+  const override = emailOverrideTarget()
+  const sendTargets = override ? [override] : emails
   const shouldSend = enabled && !!email
   const results: RecipientResult[] = shouldSend
     ? await Promise.all(
-        emails.map(async (to): Promise<RecipientResult> => {
+        sendTargets.map(async (to): Promise<RecipientResult> => {
           try {
             await sendEmail({ to, subject: email!.subject, html: email!.html })
             return { to, ok: true }
@@ -595,8 +616,9 @@ async function deliverAdminAlert(opts: {
           emailDetail: JSON.stringify({
             attempted: emails,
             results,
-            note:
-              !enabled
+            note: override
+              ? `EMAIL_OVERRIDE_TO is active — every send was redirected to ${override}.`
+              : !enabled
                 ? 'This alert type is switched off in Settings → Notifications.'
                 : emails.length === 0
                   ? 'No valid alert recipients configured in Settings → Notifications.'
@@ -677,10 +699,21 @@ export async function notifyAdminNewOrder(order: NotifiableOrder): Promise<void>
         { label: 'Pickup', value: `${fmtDate(order.pickupDate)} · ${order.pickupTimeSlot}` },
         { label: 'Address', value: order.pickupAddress },
         { label: 'Basket', value: order.type === 'KG' ? 'Bulk (per-kg)' : itemCount },
-        { label: 'Total', value: order.totalPrice ? formatNaira(order.totalPrice) : 'To be weighed' },
+        {
+          label: 'Total',
+          value: order.loyaltyFree
+            ? 'On the house — loyalty (ten services)'
+            : order.totalPrice
+              ? formatNaira(order.totalPrice)
+              : 'To be weighed',
+        },
         {
           label: 'Payment',
-          value: isTransfer ? 'Bank transfer — verify it now' : 'Bank transfer / card',
+          value: order.loyaltyFree
+            ? 'Nothing due — complimentary service'
+            : isTransfer
+              ? 'Bank transfer — verify it now'
+              : 'Bank transfer / card',
         },
       ],
       cta: { label: 'Open the Orders board', url: `${baseUrl()}/admin` },
@@ -960,23 +993,22 @@ export async function notifyAdminReferralRedeemed(opts: {
   }
 }
 
-/** The 10-order service milestone email — appreciation + a general
- *  (relationship-level) feedback ask + the quiet referral reveal. Premium
- *  tone throughout; the reasoning behind the timing stays internal. */
+/** The ten-service milestone email — appreciation + the loyalty reveal
+ *  ("after 10 washes, the 11th is free") + a general (relationship-level)
+ *  feedback ask. Premium tone throughout; the reasoning behind the timing
+ *  stays internal. Phase 53: the reveal switched from the (now dormant)
+ *  referral code to the complimentary next service. */
 export async function notifyMilestoneReached(opts: {
   to: string
   name: string
-  deliveredCount: number
-  code: string
-  friendDiscountPercent: number
-  rewardAmount: number
+  paidWashes: number
   token: string
 }): Promise<void> {
   try {
     const first = opts.name.split(' ')[0] || 'there'
-    const countWord = opts.deliveredCount === 10 ? 'Ten' : String(opts.deliveredCount)
+    const countWord = opts.paidWashes === 10 ? 'Ten' : String(opts.paidWashes)
     const milestoneUrl = `${baseUrl()}/milestone?token=${encodeURIComponent(opts.token)}`
-    const subject = `${countWord} orders with Kozy Care — thank you, ${first}`
+    const subject = `${countWord} services with Kozy Care — your next one is on us`
     const html = `
       <!DOCTYPE html>
       <html>
@@ -989,11 +1021,18 @@ export async function notifyMilestoneReached(opts: {
           <div style="padding: 40px;">
             <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">A quiet thank-you, ${first}.</h2>
             <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 0 0 18px 0;">
-              ${countWord} orders now. The suits, the shirts, the household pieces — entrusted to us again and again.
+              ${countWord} services now. The suits, the shirts, the household pieces — entrusted to us again and again.
               That kind of consistency is the truest compliment a care service can receive, and we do not take it lightly.
             </p>
+            <div style="margin: 24px 0; padding: 20px 24px; background: #F7F0DC; border: 1px solid #E3BE4F; border-radius: 12px; text-align: center;">
+              <p style="color: #0A192F; font-family: Georgia, serif; font-size: 17px; font-weight: 700; margin: 0 0 6px 0;">The next one is on us</p>
+              <p style="color: #6F88A8; line-height: 1.6; font-size: 14px; margin: 0;">
+                Your next service is complimentary — our way of marking ten. Nothing to remember and nothing to type:
+                it applies itself the next time you book a pickup.
+              </p>
+            </div>
             <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 0 0 24px 0;">
-              We would love to hear how the whole experience has felt — not about one order, but the relationship itself:
+              We would also love to hear how the whole experience has felt — not about one order, but the relationship itself:
               what stands out, and where we could serve you even better. Two minutes, and it goes straight to the people
               who make the decisions.
             </p>
@@ -1001,18 +1040,6 @@ export async function notifyMilestoneReached(opts: {
               <a href="${milestoneUrl}" style="display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);">Share your thoughts</a>
             </div>
             <p style="color: #6F88A8; font-size: 12px; margin: 12px 0 0 0; line-height: 1.5;">Or paste this link into your browser:<br><span style="color: #0A192F; word-break: break-all;">${milestoneUrl}</span></p>
-            <div style="margin-top: 28px; padding-top: 20px; border-top: 1px solid #E2E5E9;">
-              <p style="color: #6F88A8; line-height: 1.7; font-size: 14px; margin: 0 0 12px 0;">
-                One more thing, kept quiet on purpose. If someone in your circle would value the same standard of care,
-                this is your personal code:
-              </p>
-              <p style="text-align: center; margin: 0 0 12px 0;"><span style="display: inline-block; font-family: Georgia, serif; font-size: 20px; font-weight: 700; letter-spacing: 3px; color: #0A192F; background: #F7F0DC; border: 1px solid #E3BE4F; border-radius: 8px; padding: 10px 24px;">${opts.code}</span></p>
-              <p style="color: #6F88A8; line-height: 1.7; font-size: 14px; margin: 0;">
-                Friends booking their first order with it receive ${opts.friendDiscountPercent}% off.
-                ${opts.rewardAmount > 0 ? `And when that order is delivered, a ${formatNaira(opts.rewardAmount)} thank-you credit lands on your account — applied automatically to your next pickup.` : ''}
-                No points to chase, no fanfare — just our way of noticing.
-              </p>
-            </div>
             <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
               Kozy Care — Uncompromising care. Exceptional convenience.
             </p>

@@ -28,7 +28,7 @@
 import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { getAppSettings } from '@/lib/app-settings'
-import { MILESTONE_ORDERS } from '@/lib/types'
+import { getLoyaltyState } from '@/lib/loyalty'
 import {
   notifyMilestoneReached,
   notifyReferralRewardGranted,
@@ -212,27 +212,27 @@ export async function processDeliveryMilestones(orderId: string): Promise<void> 
       }
     }
 
-    // ----- 2) Service milestone (10 delivered orders → appreciation email,
-    // general feedback ask + personal referral code) -----
-    const deliveredCount = await db.order.count({
-      where: { userId: order.userId, status: 'DELIVERED' },
-    })
-    if (deliveredCount >= MILESTONE_ORDERS && order.user.lastMilestoneSent < 1) {
-      // Compare-and-set again: the winner sends the email exactly once.
+    // ----- 2) Service milestone (each completed card of ten PAID washes →
+    // appreciation email + the loyalty reveal: "your next service is on the
+    // house" + the general feedback ask). Phase 53: the count excludes the
+    // complimentary orders themselves — a free service never punches the
+    // next card — and the milestone can now fire again on the SECOND ten,
+    // the third, and so on (lastMilestoneSent counts cards emailed). -----
+    const loyalty = await getLoyaltyState(order.userId)
+    if (loyalty.earned > (order.user.lastMilestoneSent ?? 0)) {
+      // Compare-and-set again: the winner sends the email exactly once. The
+      // `lt` guard (rather than an exact value) also covers legacy customers
+      // who crossed TWO cards before this feature existed — their stored
+      // count jumps straight to the current card, one email, never a resend.
       const claimed = await db.user.updateMany({
-        where: { id: order.userId, lastMilestoneSent: 0 },
-        data: { lastMilestoneSent: 1 },
+        where: { id: order.userId, lastMilestoneSent: { lt: loyalty.earned } },
+        data: { lastMilestoneSent: loyalty.earned },
       })
       if (claimed.count === 1) {
-        const code = await ensureReferralCode({ id: order.userId, name: order.user.name })
-        const settings = await getAppSettings()
         await notifyMilestoneReached({
           to: order.user.email,
           name: order.user.name,
-          deliveredCount,
-          code: code.code,
-          friendDiscountPercent: Math.max(0, Math.min(settings.referralFriendDiscountPercent, 50)),
-          rewardAmount: Math.max(0, Math.round(settings.referralRewardAmount)),
+          paidWashes: loyalty.paidWashes,
           token: signMilestoneToken(order.userId),
         })
       }
