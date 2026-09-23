@@ -550,11 +550,31 @@ export interface ApiRiderRosterEntry {
   deliveriesCompleted: number
 }
 
+/** A rider-reported incident on an order (phase 55). */
+export interface ApiRiderIncident {
+  id: string
+  kind: 'DAMAGE' | 'LOSS' | 'THEFT' | 'ACCIDENT' | 'OTHER' | string
+  description: string
+  atStop: string | null
+  createdAt: string
+  resolvedAt: string | null
+  resolution: string | null
+  orderNumber: string
+  orderId: string
+  riderId: string
+  riderName: string
+  riderPhone: string
+}
+
 export function useRiderApplications(options?: {
   refetchInterval?: number | false
   refetchOnWindowFocus?: boolean
 }) {
-  return useQuery<{ applications: ApiRiderApplication[]; roster: ApiRiderRosterEntry[] }>({
+  return useQuery<{
+    applications: ApiRiderApplication[]
+    roster: ApiRiderRosterEntry[]
+    incidents: ApiRiderIncident[]
+  }>({
     queryKey: ['rider-applications'],
     queryFn: async () => {
       const res = await fetch('/api/rider-applications')

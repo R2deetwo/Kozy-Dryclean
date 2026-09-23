@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { ArrowLeft, CheckCircle2, AlertCircle, Truck, Phone, Mail, MapPin, User, IdCard, Bike } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, AlertCircle, Truck, Phone, Mail, MapPin, User, IdCard, Bike, HelpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -9,6 +9,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Logo } from '@/components/shell/logo'
+import { isValidNigerianMobile, PHONE_HELP } from '@/lib/phone-validation'
+import { cn } from '@/lib/utils'
 import Link from 'next/link'
 
 export default function JoinRidersPage() {
@@ -17,6 +19,7 @@ export default function JoinRidersPage() {
   const [emailConfirmed, setEmailConfirmed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -32,10 +35,62 @@ export default function JoinRidersPage() {
     consent: false,
   })
 
+  // Phase 55: the form used to accept anything in the phone fields, and the
+  // "experience" box was read by a real applicant as "how was the ride you
+  // took?" (he answered "it was really nice, i enjoyed it"). Fields now carry
+  // explicit regex checks and self-explaining labels so an applicant knows
+  // EXACTLY what is being asked before the review call.
+  const setField = (key: string, value: string) => {
+    setForm((f) => ({ ...f, [key]: value }))
+    setFieldErrors((e) => {
+      if (!e[key]) return e
+      const next = { ...e }
+      delete next[key]
+      return next
+    })
+  }
+
+  const validate = (): boolean => {
+    const errors: Record<string, string> = {}
+    if (form.fullName.trim().length < 3 || !/^[A-Za-z][A-Za-z .'-]+$/.test(form.fullName.trim())) {
+      errors.fullName = 'Enter your full name as it appears on your licence (letters only).'
+    }
+    if (!isValidNigerianMobile(form.phone)) {
+      errors.phone = PHONE_HELP
+    }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) {
+      errors.email = 'That email address looks incomplete — check it ends with .com, .ng or similar.'
+    }
+    if (!isValidNigerianMobile(form.altPhone)) {
+      errors.altPhone = `Emergency contact: ${PHONE_HELP}`
+    }
+    if (form.address.trim().length < 6) {
+      errors.address = 'Give a street/area address we can find (at least 6 characters).'
+    }
+    if (form.lga.trim().length < 2) {
+      errors.lga = 'Which Lagos area do you want to ride in? e.g. Lekki, Ikeja.'
+    }
+    const year = parseInt(form.bikeYear, 10)
+    const thisYear = new Date().getFullYear()
+    if (!/^(19|20)\d{2}$/.test(form.bikeYear) || year < 1990 || year > thisYear + 1) {
+      errors.bikeYear = `Enter the motorcycle's model year (1990–${thisYear + 1}).`
+    }
+    if (form.licenseNumber.trim().length < 5) {
+      errors.licenseNumber = 'Enter your driver\u2019s licence number as printed on the card.'
+    }
+    setFieldErrors(errors)
+    if (Object.keys(errors).length > 0) {
+      setError('Please fix the highlighted fields before submitting.')
+      return false
+    }
+    return true
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
     setError('')
+    if (!validate()) return
+    setLoading(true)
 
     if (!form.consent) {
       setError('You must consent to the contract terms to proceed.')
@@ -205,29 +260,37 @@ export default function JoinRidersPage() {
                     <Label htmlFor="fullName" className="text-xs text-navy-300">Full Name</Label>
                     <div className="relative mt-1">
                       <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-                      <Input id="fullName" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} className="pl-9" placeholder="Tunde Balogun" required />
+                      <Input id="fullName" value={form.fullName} onChange={(e) => setField('fullName', e.target.value)} className={cn('pl-9', fieldErrors.fullName && 'border-rose-300 focus-visible:ring-rose-200')} placeholder="Tunde Balogun" required />
                     </div>
+                    {fieldErrors.fullName && <p className="mt-1 text-[11px] leading-snug text-rose-600">{fieldErrors.fullName}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="phone" className="text-xs text-navy-300">Phone Number</Label>
+                    <Label htmlFor="phone" className="text-xs text-navy-300">Your Phone Number</Label>
                     <div className="relative mt-1">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-                      <Input id="phone" type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="pl-9" placeholder="+234 803 222 4455" required />
+                      <Input id="phone" type="tel" inputMode="tel" value={form.phone} onChange={(e) => setField('phone', e.target.value)} className={cn('pl-9', fieldErrors.phone && 'border-rose-300 focus-visible:ring-rose-200')} placeholder="0803 222 4455" required />
                     </div>
+                    {fieldErrors.phone
+                      ? <p className="mt-1 text-[11px] leading-snug text-rose-600">{fieldErrors.phone}</p>
+                      : <p className="mt-1 text-[11px] text-navy-300/80">The review call and your route updates come to this number.</p>}
                   </div>
                   <div>
                     <Label htmlFor="email" className="text-xs text-navy-300">Email (optional)</Label>
                     <div className="relative mt-1">
                       <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-                      <Input id="email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="pl-9" placeholder="you@example.com" />
+                      <Input id="email" type="email" value={form.email} onChange={(e) => setField('email', e.target.value)} className={cn('pl-9', fieldErrors.email && 'border-rose-300 focus-visible:ring-rose-200')} placeholder="you@example.com" />
                     </div>
+                    {fieldErrors.email && <p className="mt-1 text-[11px] leading-snug text-rose-600">{fieldErrors.email}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="altPhone" className="text-xs text-navy-300">Emergency Contact</Label>
+                    <Label htmlFor="altPhone" className="text-xs text-navy-300">Emergency Contact (a family member or friend)</Label>
                     <div className="relative mt-1">
                       <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-                      <Input id="altPhone" type="tel" value={form.altPhone} onChange={(e) => setForm({ ...form, altPhone: e.target.value })} className="pl-9" placeholder="+234 805 000 0000" required />
+                      <Input id="altPhone" type="tel" inputMode="tel" value={form.altPhone} onChange={(e) => setField('altPhone', e.target.value)} className={cn('pl-9', fieldErrors.altPhone && 'border-rose-300 focus-visible:ring-rose-200')} placeholder="0805 000 0000" required />
                     </div>
+                    {fieldErrors.altPhone
+                      ? <p className="mt-1 text-[11px] leading-snug text-rose-600">{fieldErrors.altPhone}</p>
+                      : <p className="mt-1 text-[11px] text-navy-300/80">Someone we can reach if we can’t reach you — not your own number.</p>}
                   </div>
                 </div>
               </div>
@@ -240,12 +303,14 @@ export default function JoinRidersPage() {
                     <Label htmlFor="address" className="text-xs text-navy-300">Home Address</Label>
                     <div className="relative mt-1">
                       <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-                      <Input id="address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="pl-9" placeholder="Street, area, Lagos" required />
+                      <Input id="address" value={form.address} onChange={(e) => setField('address', e.target.value)} className={cn('pl-9', fieldErrors.address && 'border-rose-300 focus-visible:ring-rose-200')} placeholder="Street, area, Lagos" required />
                     </div>
+                    {fieldErrors.address && <p className="mt-1 text-[11px] leading-snug text-rose-600">{fieldErrors.address}</p>}
                   </div>
                   <div>
                     <Label htmlFor="lga" className="text-xs text-navy-300">Preferred LGA / Area</Label>
-                    <Input id="lga" value={form.lga} onChange={(e) => setForm({ ...form, lga: e.target.value })} className="mt-1" placeholder="e.g. Ikeja, Lekki, Ikoyi" required />
+                    <Input id="lga" value={form.lga} onChange={(e) => setField('lga', e.target.value)} className={cn('mt-1', fieldErrors.lga && 'border-rose-300 focus-visible:ring-rose-200')} placeholder="e.g. Ikeja, Lekki, Ikoyi" required />
+                    {fieldErrors.lga && <p className="mt-1 text-[11px] leading-snug text-rose-600">{fieldErrors.lga}</p>}
                   </div>
                 </div>
               </div>
@@ -258,19 +323,23 @@ export default function JoinRidersPage() {
                     <Label htmlFor="bikeModel" className="text-xs text-navy-300">Motorcycle Model</Label>
                     <div className="relative mt-1">
                       <Bike className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-                      <Input id="bikeModel" value={form.bikeModel} onChange={(e) => setForm({ ...form, bikeModel: e.target.value })} className="pl-9" placeholder="e.g. Bajaj Boxer" required />
+                      <Input id="bikeModel" value={form.bikeModel} onChange={(e) => setField('bikeModel', e.target.value)} className="pl-9" placeholder="e.g. Bajaj Boxer" required />
                     </div>
                   </div>
                   <div>
-                    <Label htmlFor="bikeYear" className="text-xs text-navy-300">Year</Label>
-                    <Input id="bikeYear" type="number" value={form.bikeYear} onChange={(e) => setForm({ ...form, bikeYear: e.target.value })} className="mt-1" placeholder="2022" required />
+                    <Label htmlFor="bikeYear" className="text-xs text-navy-300">Motorcycle Year</Label>
+                    <Input id="bikeYear" type="number" inputMode="numeric" value={form.bikeYear} onChange={(e) => setField('bikeYear', e.target.value)} className={cn('mt-1', fieldErrors.bikeYear && 'border-rose-300 focus-visible:ring-rose-200')} placeholder="2022" required />
+                    {fieldErrors.bikeYear && <p className="mt-1 text-[11px] leading-snug text-rose-600">{fieldErrors.bikeYear}</p>}
                   </div>
                   <div>
-                    <Label htmlFor="licenseNumber" className="text-xs text-navy-300">Driver&apos;s License Number</Label>
+                    <Label htmlFor="licenseNumber" className="text-xs text-navy-300">Driver&apos;s Licence Number</Label>
                     <div className="relative mt-1">
                       <IdCard className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-navy-300" />
-                      <Input id="licenseNumber" value={form.licenseNumber} onChange={(e) => setForm({ ...form, licenseNumber: e.target.value })} className="pl-9" placeholder="License number" required />
+                      <Input id="licenseNumber" value={form.licenseNumber} onChange={(e) => setField('licenseNumber', e.target.value)} className={cn('pl-9', fieldErrors.licenseNumber && 'border-rose-300 focus-visible:ring-rose-200')} placeholder="As printed on the licence card" required />
                     </div>
+                    {fieldErrors.licenseNumber
+                      ? <p className="mt-1 text-[11px] leading-snug text-rose-600">{fieldErrors.licenseNumber}</p>
+                      : <p className="mt-1 text-[11px] text-navy-300/80">We verify this during the bike &amp; licence check.</p>}
                   </div>
                   <div>
                     <Label htmlFor="availability" className="text-xs text-navy-300">Availability</Label>
@@ -288,15 +357,28 @@ export default function JoinRidersPage() {
                 </div>
               </div>
 
-              {/* Experience */}
-              <div>
-                <Label htmlFor="experience" className="text-xs text-navy-300">Delivery Experience (optional)</Label>
+              {/* Experience — phase 55 rewrite. A real applicant answered
+               * "it was really nice, i enjoyed it" here (he was recalling a
+               * ride he did for the owner before applying). The label now
+               * asks about PAST WORK, the help text says "None" is a fine
+               * answer, and the placeholder shows the expected shape. */}
+              <div className="rounded-lg bg-linen-100 p-4 ring-1 ring-navy-100">
+                <Label htmlFor="experience" className="flex items-center gap-1.5 text-xs font-semibold text-navy">
+                  <HelpCircle className="h-3.5 w-3.5 text-gold-600" />
+                  Have you worked as a rider or driver before? (optional)
+                </Label>
+                <p className="mt-1 mb-2 text-[11px] leading-relaxed text-navy-300">
+                  This is about <strong className="text-navy">jobs you have done</strong> — dispatch, courier,
+                  delivery, okada or driving work, and roughly how long. If you have never done delivery
+                  work, just write <strong className="text-navy">“None — this would be my first”</strong> —
+                  that is perfectly fine and does not count against you. (This is{' '}
+                  <em>not</em> asking about any ride you have taken as a passenger.)
+                </p>
                 <Textarea
                   id="experience"
                   value={form.experience}
-                  onChange={(e) => setForm({ ...form, experience: e.target.value })}
-                  placeholder="Tell us about your previous delivery or logistics experience..."
-                  className="mt-1"
+                  onChange={(e) => setField('experience', e.target.value)}
+                  placeholder="e.g. 2 years dispatch riding for a logistics company in Yaba · or: None — this would be my first delivery job"
                   rows={3}
                 />
               </div>

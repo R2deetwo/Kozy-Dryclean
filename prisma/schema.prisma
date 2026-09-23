@@ -76,6 +76,9 @@ model User {
   anomaliesAuthored  OrderAnomaly[]      @relation("AnomalyActor")
   // Last known GPS position (rider geofencing) — one row per driver
   driverLocation     DriverLocation?
+  // ----- Rider incidents (phase 55) -----
+  // Problems this rider reported mid-route (damage / loss / theft / …).
+  incidentsReported  RiderIncident[]    @relation("RiderIncidents")
   // ----- Referrals (phase 52) -----
   // This customer's personal referral code (one max — created when they
   // reach the 10-order service milestone).
@@ -168,6 +171,9 @@ model Order {
   statusEvents      StatusEvent[]
   // Odd-movement flags (phase 32) — visible to ADMINS only, never staff
   anomalies         OrderAnomaly[]
+  // Rider-reported problems on this order (phase 55 — admin eyes only;
+  // the customer-facing remedy is communicated separately)
+  riderIncidents    RiderIncident[]
   // Customer feedback (one-to-one — one review per order)
   review            Review?
   // Phase 53 — the loyalty offer ("after 10 washes, the 11th is free"):
@@ -772,6 +778,47 @@ model DriverLocation {
   updatedAt DateTime @updatedAt
 
   @@index([driverId])
+}
+
+// =====================================================
+// RIDER INCIDENT — a rider-reported problem on an order
+// (phase 55, the "what if the rider steals / damages /
+// misplaces the items?" backbone)
+// =====================================================
+// Public display rules:
+//   none — admin console only. The CUSTOMER is never shown
+//   incident rows; how the team communicates a remedy is a
+//   separate decision (call, guarantee claim, refund).
+//
+// Lifecycle: a rider reports from the rider app (DAMAGE /
+// LOSS / THEFT / ACCIDENT / OTHER + description). The
+// admins get an urgent alert email + a notifications-feed
+// entry immediately; resolving (or escalating to a
+// customer remedy) is recorded in resolvedAt / resolution
+// by an admin from the Riders tab.
+model RiderIncident {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driverId    String
+  driver      User      @relation("RiderIncidents", fields: [driverId], references: [id], onDelete: Cascade)
+  // DAMAGE | LOSS | THEFT | ACCIDENT | OTHER (String, not enum, so adding
+  // a kind needs no migration — same convention as accessStatus)
+  kind        String
+  description String    @db.Text
+  // Where it happened, free text: "pickup at the customer's gate" etc.
+  atStop      String?
+  createdAt   DateTime  @default(now())
+  // ----- Resolution (admin) -----
+  resolvedAt  DateTime?
+  // What was done: "re-cleaned and re-delivered", "guarantee claim paid",
+  // "police report filed, rider's contract ended"…
+  resolution  String?
+
+  @@index([orderId])
+  @@index([driverId])
+  @@index([createdAt])
+  @@index([resolvedAt])
 }
 
 // =====================================================

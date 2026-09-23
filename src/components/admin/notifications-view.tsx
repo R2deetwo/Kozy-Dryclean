@@ -33,6 +33,7 @@ import {
   CheckCheck,
   Inbox,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -92,6 +93,12 @@ const TYPE_META: Record<
     icon: Bike,
     cls: 'bg-teal-100 text-teal-800',
     link: { label: 'Open Riders', tab: 'riders' },
+  },
+  RIDER_INCIDENT: {
+    label: 'Rider incident',
+    icon: AlertTriangle,
+    cls: 'bg-rose-100 text-rose-800',
+    link: { label: 'Open Orders board', tab: 'kanban' },
   },
   STAFF_INVITE: {
     label: 'Staff account',

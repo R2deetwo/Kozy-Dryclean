@@ -17,6 +17,7 @@ import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { requireRole } from '@/lib/auth'
+import { isValidNigerianMobile } from '@/lib/phone-validation'
 import {
   notifyAdminRiderApplication,
   notifyRiderApplicationReceived,
@@ -50,7 +51,47 @@ export async function POST(req: Request) {
   if (consent !== true) {
     return NextResponse.json({ error: 'Contract consent is required' }, { status: 400 })
   }
-  const cleanEmail = typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null
+
+  // ----- Phase 55: server-side field validation (mirrors the form's checks) -----
+  // The form now validates before submitting, but the API is public — a
+  // hand-rolled POST used to store any garbage ("it was really nice, i
+  // enjoyed it" as experience, "nice" as a phone). Every required field
+  // gets the same strict shape here so the review queue only ever holds
+  // actionable applications.
+  const bad = (field: string, error: string) =>
+    NextResponse.json({ error, field }, { status: 400 })
+  if (typeof fullName !== 'string' || !/^[A-Za-z][A-Za-z .'-]{2,}$/.test(fullName.trim())) {
+    return bad('fullName', 'Full name should be your name as on your licence (letters only).')
+  }
+  if (typeof phone !== 'string' || !isValidNigerianMobile(phone)) {
+    return bad('phone', 'Phone number must be a Nigerian mobile — e.g. 0803 222 4455 or +234 803 222 4455.')
+  }
+  if (altPhone && (typeof altPhone !== 'string' || !isValidNigerianMobile(altPhone))) {
+    return bad('altPhone', 'Emergency contact must be a Nigerian mobile number (not your own number).')
+  }
+  if (typeof address !== 'string' || address.trim().length < 6) {
+    return bad('address', 'Home address is too short to find you — include a street and area.')
+  }
+  if (typeof lga !== 'string' || lga.trim().length < 2) {
+    return bad('lga', 'Tell us the Lagos area you want to ride in.')
+  }
+  if (typeof bikeModel !== 'string' || bikeModel.trim().length < 2) {
+    return bad('bikeModel', 'Motorcycle model is required (e.g. Bajaj Boxer).')
+  }
+  const yearNum = parseInt(String(bikeYear), 10)
+  if (!/^(19|20)\d{2}$/.test(String(bikeYear)) || yearNum < 1990 || yearNum > new Date().getFullYear() + 1) {
+    return bad('bikeYear', 'Motorcycle year must be between 1990 and next year.')
+  }
+  if (typeof licenseNumber !== 'string' || licenseNumber.trim().length < 5) {
+    return bad('licenseNumber', 'Licence number looks too short — enter it as printed on the card.')
+  }
+  const availabilityOk = ['full-time', 'part-time', 'weekends']
+  const availabilityValue = availabilityOk.includes(availability) ? availability : 'full-time'
+
+  const cleanEmail =
+    typeof email === 'string' && email.trim() && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())
+      ? email.trim().toLowerCase()
+      : null
 
   // Mint a collision-free reference code (practically never loops twice).
   let refCode = mintRefCode()
@@ -63,9 +104,9 @@ export async function POST(req: Request) {
   const application = await db.riderApplication.create({
     data: {
       refCode,
-      fullName, email: cleanEmail, phone, altPhone: altPhone || null,
-      address, lga, bikeModel, bikeYear, licenseNumber,
-      availability: availability || 'full-time',
+      fullName: fullName.trim(), email: cleanEmail, phone: phone.trim(), altPhone: altPhone?.trim() || null,
+      address: address.trim(), lga: lga.trim(), bikeModel: bikeModel.trim(), bikeYear: String(bikeYear).trim(), licenseNumber: licenseNumber.trim(),
+      availability: availabilityValue,
       experience: experience || null,
       consent: !!consent,
     },
@@ -176,5 +217,33 @@ export async function GET() {
     deliveriesCompleted: deliveredByDriver.get(r.id) ?? 0,
   }))
 
-  return NextResponse.json({ applications, roster })
+  // ----- Rider incidents (phase 55): the risk-management ledger -----
+  // Unresolved incidents first (that is the owner's action list the moment
+  // something goes wrong mid-route), then the recent resolved tail. Joined
+  // with order + rider so each row tells the whole story on its own.
+  const incidents = await db.riderIncident.findMany({
+    orderBy: [{ resolvedAt: 'asc' }, { createdAt: 'desc' }],
+    take: 25,
+    include: {
+      order: { select: { id: true, orderNumber: true } },
+      driver: { select: { id: true, name: true, phone: true } },
+    },
+  })
+
+  const incidentRows = incidents.map((i) => ({
+    id: i.id,
+    kind: i.kind,
+    description: i.description,
+    atStop: i.atStop,
+    createdAt: i.createdAt,
+    resolvedAt: i.resolvedAt,
+    resolution: i.resolution,
+    orderNumber: i.order.orderNumber,
+    orderId: i.order.id,
+    riderId: i.driver.id,
+    riderName: i.driver.name,
+    riderPhone: i.driver.phone,
+  }))
+
+  return NextResponse.json({ applications, roster, incidents: incidentRows })
 }

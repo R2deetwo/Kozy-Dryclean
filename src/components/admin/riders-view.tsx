@@ -24,6 +24,7 @@
 // =============================================================================
 
 import { useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   Bike,
   CheckCircle2,
@@ -37,6 +38,7 @@ import {
   BadgeCheck,
   ChevronDown,
   ChevronUp,
+  AlertTriangle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -58,6 +60,7 @@ import {
   useRiderDecision,
   type ApiRiderApplication,
   type ApiRiderRosterEntry,
+  type ApiRiderIncident,
 } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 
@@ -101,6 +104,7 @@ function fmtPing(iso: string | null): string {
 export function RidersView() {
   const { data, isLoading, error } = useRiderApplications()
   const decisionMutation = useRiderDecision()
+  const queryClient = useQueryClient()
 
   const [filter, setFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -113,6 +117,46 @@ export function RidersView() {
 
   const applications = data?.applications ?? []
   const roster = data?.roster ?? []
+  const incidents = data?.incidents ?? []
+
+  // ----- Incident resolution (phase 55) -----
+  const [resolveTarget, setResolveTarget] = useState<ApiRiderIncident | null>(null)
+  const [resolutionText, setResolutionText] = useState('')
+  const [resolving, setResolving] = useState(false)
+
+  const submitResolve = async () => {
+    if (!resolveTarget) return
+    const text = resolutionText.trim()
+    if (text.length < 5) {
+      toast({
+        title: 'A little more detail, please',
+        description: 'Record what was done for the customer and/or the rider (at least 5 characters).',
+        variant: 'destructive',
+      })
+      return
+    }
+    setResolving(true)
+    try {
+      const res = await fetch(`/api/rider-incidents/${resolveTarget.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolution: text }),
+      })
+      const payload = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(payload?.error || 'Could not record the resolution')
+      setResolveTarget(null)
+      setResolutionText('')
+      toast({
+        title: 'Incident resolved',
+        description: 'The outcome is recorded on the incident ledger and the order timeline.',
+      })
+      await queryClient.invalidateQueries({ queryKey: ['rider-applications'] })
+    } catch (e: any) {
+      toast({ title: 'Could not record the resolution', description: e?.message, variant: 'destructive' })
+    } finally {
+      setResolving(false)
+    }
+  }
 
   const counts = useMemo(
     () => ({
@@ -386,6 +430,105 @@ export function RidersView() {
         </div>
       </section>
 
+      {/* ===== Rider incidents (phase 55) ===== */}
+      {/* The risk-management ledger: every rider-reported problem, unresolved
+         * ones first. An empty section is the goal — but the moment something
+         * goes wrong mid-route, THIS is the owner's action list. */}
+      <section>
+        <h2 className="mb-3 flex items-center gap-2 text-sm font-semibold uppercase tracking-wide text-navy-300">
+          <AlertTriangle className="h-4 w-4 text-rose-500" />
+          Rider incidents
+          {incidents.filter((i) => !i.resolvedAt).length > 0 && (
+            <Badge className="rounded-full bg-rose-100 text-rose-700 hover:bg-rose-100">
+              {incidents.filter((i) => !i.resolvedAt).length} open
+            </Badge>
+          )}
+        </h2>
+        {incidents.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-navy-100 bg-white p-6 text-center">
+            <p className="text-sm font-medium text-navy">No incidents reported</p>
+            <p className="mx-auto mt-1 max-w-lg text-xs leading-relaxed text-navy-300">
+              When a rider reports damage, loss, theft or an accident from their app, it appears
+              here instantly with an urgent email. The play: speak to the rider, check the order
+              timeline, agree the customer remedy (re-clean, replacement, guarantee claim or
+              refund), then record the outcome — resolved incidents keep their story for the
+              audit trail.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {incidents.map((i) => (
+              <Card
+                key={i.id}
+                className={cn(
+                  'border-navy-100 shadow-navy',
+                  !i.resolvedAt && 'border-rose-200 ring-1 ring-rose-100'
+                )}
+              >
+                <CardContent className="p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-navy">
+                        <Badge
+                          className={cn(
+                            'rounded-full',
+                            i.kind === 'THEFT' || i.kind === 'ACCIDENT'
+                              ? 'bg-rose-100 text-rose-700 hover:bg-rose-100'
+                              : 'bg-amber-100 text-amber-800 hover:bg-amber-100'
+                          )}
+                        >
+                          {i.kind === 'DAMAGE'
+                            ? 'Damaged'
+                            : i.kind === 'LOSS'
+                              ? 'Lost / missing'
+                              : i.kind === 'THEFT'
+                                ? 'Theft'
+                                : i.kind === 'ACCIDENT'
+                                  ? 'Accident'
+                                  : 'Other'}
+                        </Badge>
+                        <span className="font-mono text-xs text-navy-300">#{i.orderNumber}</span>
+                        <span className="text-xs font-normal text-navy-300">
+                          {i.atStop ? `at ${i.atStop}` : ''} · {fmtWhen(i.createdAt)}
+                        </span>
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-navy-300">{i.description}</p>
+                      <p className="mt-2 text-xs text-navy-300">
+                        Reported by{' '}
+                        <a
+                          href={`tel:${i.riderPhone}`}
+                          className="font-semibold text-navy hover:underline"
+                        >
+                          {i.riderName}
+                        </a>
+                      </p>
+                      {i.resolvedAt && (
+                        <p className="mt-2 rounded-lg bg-emerald-50 px-3 py-2 text-xs leading-relaxed text-emerald-800 ring-1 ring-emerald-100">
+                          <CheckCircle2 className="mr-1 inline h-3 w-3" />
+                          Resolved {fmtWhen(i.resolvedAt)} — {i.resolution}
+                        </p>
+                      )}
+                    </div>
+                    {!i.resolvedAt && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setResolveTarget(i)
+                          setResolutionText('')
+                        }}
+                        className="h-8 bg-navy text-white hover:bg-navy-500"
+                      >
+                        Record the outcome
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* ===== Rider roster ===== */}
       <section>
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-300">
@@ -581,6 +724,58 @@ export function RidersView() {
               className="bg-rose-600 text-white hover:bg-rose-700"
             >
               {decisionMutation.isPending ? 'Saving…' : 'Decline application'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Resolve-incident dialog (phase 55) ===== */}
+      <Dialog open={!!resolveTarget} onOpenChange={(o) => !o && setResolveTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              Resolve the incident on #{resolveTarget?.orderNumber ?? '—'}?
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              {resolveTarget?.riderName} reported this. Record what was actually done — for the
+              customer, the rider, or both. The outcome lands on the incident ledger and the
+              order&apos;s timeline, so the story stays auditable end to end.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <Label htmlFor="incident-resolution" className="text-xs text-navy-300">
+              What was done
+            </Label>
+            <Textarea
+              id="incident-resolution"
+              value={resolutionText}
+              onChange={(e) => setResolutionText(e.target.value)}
+              placeholder="e.g. Rider returned with the missing shirt same evening (it had slid under the bike seat). Garment re-pressed and re-delivered 5pm; customer called and apologised to. Rider coached on securing the load."
+              rows={4}
+              maxLength={2000}
+              className="mt-1 text-sm"
+            />
+            <p className="mt-1 text-[11px] text-navy-300">
+              {resolutionText.trim().length}/2000 · be specific — this note is the record if the
+              customer, an insurer or the police ever asks.
+            </p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setResolveTarget(null)}
+              disabled={resolving}
+            >
+              Still open
+            </Button>
+            <Button
+              size="sm"
+              onClick={submitResolve}
+              disabled={resolving || resolutionText.trim().length < 5}
+              className="bg-emerald-700 text-white hover:bg-emerald-800"
+            >
+              {resolving ? 'Recording…' : 'Record & resolve'}
             </Button>
           </DialogFooter>
         </DialogContent>

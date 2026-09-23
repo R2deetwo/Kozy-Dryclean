@@ -125,6 +125,15 @@ const CUSTOMER_EMAIL_STATUSES = new Set([
 const SMS_STATUSES = new Set(['OUT_FOR_DELIVERY', 'DELIVERED'])
 
 function baseUrl(): string {
+  // Phase 55: when the EMAIL_OVERRIDE_TO test valve is active, emails are
+  // being sent from a DEV server but previewed as production mail — every
+  // link inside them must point at the live site. Before this guard, test
+  // emails carried http://localhost:3000 CTAs ("Open the rider app" →
+  // blank screen on the owner's phone). Production runs without the
+  // override and keeps resolving NEXTAUTH_URL / NEXT_PUBLIC_APP_URL as before.
+  if (emailOverrideTarget()) {
+    return process.env.EMAIL_OVERRIDE_BASE_URL || 'https://kozycare.ng'
+  }
   return (
     process.env.NEXTAUTH_URL ||
     process.env.NEXT_PUBLIC_APP_URL ||
@@ -1253,7 +1262,10 @@ export async function notifyRiderApplicationReceived(app: {
   refCode: string
 }): Promise<void> {
   try {
-    const { contactPhone } = await getAppSettings()
+    // (No phone number is quoted in this email — which office or line makes
+    // the review call may change as the team grows, and naming a specific
+    // number at this early stage only creates confusion or mistrust when a
+    // different line calls.)
     const firstName = app.fullName.split(' ')[0]
 
     if (app.email) {
@@ -1273,7 +1285,7 @@ export async function notifyRiderApplicationReceived(app: {
           </tr>
           <tr>
             <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Step 2 — Call</td>
-            <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">A short call from <strong>${contactPhone}</strong> to talk availability, your bike and your area (${app.lga}).</td>
+            <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">A short call from <strong>our team</strong> to talk availability, your bike and your area (${app.lga}).</td>
           </tr>
           <tr>
             <td style="padding: 8px 0; color: #6F88A8; vertical-align: top;">Step 3 — Welcome</td>
@@ -1380,6 +1392,72 @@ async function supportLine(): Promise<string> {
     return contactPhone || '+234 803 175 5230'
   } catch {
     return '+234 803 175 5230'
+  }
+}
+
+// =============================================================================
+// RIDER INCIDENT alerts (phase 55) — the "what if a rider steals, damages
+// or misplaces the items?" backbone
+// =============================================================================
+// The rider app's Report-a-problem button posts an incident (damage / loss /
+// theft / accident). The whole point is SPEED + AUDIT TRAIL: the moment a
+// rider reports, (1) the admins get an urgent alert email, (2) the incident
+// lands in the notifications feed with the order + rider attached, and
+// (3) a StatusEvent note records it on the order timeline. A late or hidden
+// incident is how a small problem becomes an unresolvable dispute — this
+// pipeline makes "report it immediately" the easiest path for the rider.
+export async function notifyRiderIncident(incident: {
+  orderNumber: string
+  orderId: string
+  riderName: string
+  riderPhone: string
+  customerName: string
+  customerPhone: string
+  kind: string
+  description: string
+  atStop: string
+}): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    const kindLabel: Record<string, string> = {
+      DAMAGE: 'Damaged garment(s)',
+      LOSS: 'Lost / missing item(s)',
+      THEFT: 'Theft reported',
+      ACCIDENT: 'Accident / fall',
+      OTHER: 'Other problem',
+    }
+    const { subject, html } = adminEmail({
+      badge: 'Rider incident — action needed',
+      heading: `${kindLabel[incident.kind] ?? 'Incident'} on order #${incident.orderNumber}`,
+      intro:
+        'A rider reported a problem mid-route. Incidents are time-sensitive: speak to the rider, check the order timeline, and decide the customer remedy (re-clean, replacement, guarantee claim or refund) before the delivery window closes. The full report is below — it is also on the order timeline.',
+      rows: [
+        { label: 'Rider', value: `${incident.riderName} · ${incident.riderPhone}` },
+        { label: 'Customer', value: `${incident.customerName} · ${incident.customerPhone}` },
+        { label: 'Order', value: `#${incident.orderNumber}` },
+        { label: 'Stop', value: incident.atStop },
+        { label: 'Reported', value: new Date().toLocaleString('en-NG') },
+        { label: 'What happened', value: incident.description },
+      ],
+      cta: { label: 'Open the order', url: `${baseUrl()}/admin` },
+    })
+    await deliverAdminAlert({
+      type: 'RIDER_INCIDENT',
+      title: `${kindLabel[incident.kind] ?? 'Incident'} reported on #${incident.orderNumber}`,
+      body: `${incident.riderName} reported ${incident.kind.toLowerCase()} at ${incident.atStop} — "${incident.description.slice(0, 140)}${incident.description.length > 140 ? '…' : ''}"`,
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: true,
+      data: {
+        orderId: incident.orderId,
+        orderNumber: incident.orderNumber,
+        riderName: incident.riderName,
+        kind: incident.kind,
+      },
+      linkTab: 'kanban',
+    })
+  } catch (e) {
+    console.error('notifyRiderIncident failed:', e)
   }
 }
 

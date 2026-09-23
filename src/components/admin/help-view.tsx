@@ -32,6 +32,8 @@ import {
   MessageSquareHeart,
   Bell,
   LayoutDashboard,
+  Bike,
+  ShieldCheck,
 } from 'lucide-react'
 import { useAppSettings } from '@/lib/hooks'
 import { formatNaira } from '@/lib/types'
@@ -339,6 +341,102 @@ export function HelpView() {
             <span className="font-semibold text-navy">Good habits:</span> never share admin logins — create a
             separate account per person who needs access; sign out on shared computers; and if a staff member
             leaves, change their password the same day.
+          </p>
+        </div>
+      </section>
+
+      {/* ---------- 7. Moving cards & customer emails (phase 55) ---------- */}
+      <section className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
+        <h2 className="flex items-center gap-2 font-serif text-lg font-semibold text-navy">
+          <Bell className="h-4 w-4 text-gold-500" /> 7 · Moving cards — when customers get emailed
+        </h2>
+        <div className="mt-3 space-y-3 text-sm leading-relaxed text-navy-300">
+          <p>
+            Every status change on the Kanban <span className="font-semibold text-navy">can</span> email the
+            customer — so a card should only move when that stage has{' '}
+            <span className="font-semibold text-navy">physically happened</span>, never to tidy the board.
+            Customers hear from Kozy Care only at the moments that matter to them:
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-emerald-800">These email the customer</p>
+              <ul className="mt-1.5 space-y-1 text-sm text-emerald-900/90">
+                <li>· <strong>Awaiting payment</strong> — transfer received, we are verifying</li>
+                <li>· <strong>Ready to pick up</strong> — payment confirmed, pickup scheduled</li>
+                <li>· <strong>Finishing</strong> — garments being pressed (final update)</li>
+                <li>· <strong>Out for delivery</strong> — the rider is on the way</li>
+                <li>· <strong>Delivered</strong> — the feedback invite</li>
+                <li>· <strong>Cancelled</strong> — always explained</li>
+              </ul>
+            </div>
+            <div className="rounded-xl border border-navy-100 bg-linen-50 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">These stay quiet</p>
+              <ul className="mt-1.5 space-y-1 text-sm text-navy-300">
+                <li>· <strong>Requested</strong> — the booking email already covers it</li>
+                <li>· <strong>Picked up</strong> — operational, nothing to act on</li>
+                <li>· <strong>At the station</strong> — operational</li>
+                <li>· <strong>Processing</strong> — operational</li>
+              </ul>
+              <p className="mt-1.5 text-xs text-navy-300">
+                The customer&apos;s portal still shows every step live — silence is not mystery.
+              </p>
+            </div>
+          </div>
+          <p>
+            The one sanctioned mid-order message is{' '}
+            <span className="font-semibold text-navy">Ask the customer</span> in the order detail — a genuine
+            question (a gate code, a colour check, a missing item) that emails and texts the customer and
+            is logged on the timeline. Need a more human channel? The same dialog (and the customer card
+            at the top of every order) has a{' '}
+            <span className="font-semibold text-navy">WhatsApp button</span> that opens a chat to them on
+            your own phone — handy for photos and voice notes, though that exchange is not logged to the
+            order, so confirm anything important through Ask the customer as well.
+          </p>
+        </div>
+      </section>
+
+      {/* ---------- 8. Riders, risk & incidents (phase 55) ---------- */}
+      <section className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
+        <h2 className="flex items-center gap-2 font-serif text-lg font-semibold text-navy">
+          <ShieldCheck className="h-4 w-4 text-gold-500" /> 8 · Riders, risk &amp; the incident playbook
+        </h2>
+        <div className="mt-3 space-y-3 text-sm leading-relaxed text-navy-300">
+          <p>
+            <span className="font-semibold text-navy">The layers that make theft, damage and loss unlikely:</span>{' '}
+            riders never handle cash (nothing to take — every order is paid digitally before a rider moves);
+            garments are photographed by the customer at booking and counted against the manifest at every
+            handover; and a rider can only confirm a pickup or delivery when their phone&apos;s GPS says they
+            are actually near the stop. Riders also see the care &amp; safety rules in their own app — garment
+            handling, Lagos road law (helmet, licence, no phone in hand), and the standing rule:{' '}
+            <span className="font-semibold text-navy">report problems immediately, always</span>.
+          </p>
+          <p>
+            <span className="font-semibold text-navy">How the geofence works</span> (it is real, and it is
+            running): the rider app shares GPS about once a minute while on duty. The server checks that
+            position against Kozy&apos;s service zones (Lekki, Ikoyi, VI, Ajah, Ikeja…) — inside a zone, the
+            rider sees stops within ~12 km of them; outside every zone, their route pauses automatically
+            until they return; and a confirmation from more than ~15 km from a stop is refused. The{' '}
+            <span className="font-semibold text-navy">Riders tab</span> shows each rider&apos;s last GPS ping
+            and zone, so you always know who is actually on the road. When you assign a new stop, their
+            app lights up within seconds — no dispatch phone calls needed.
+          </p>
+          <p>
+            <span className="font-semibold text-navy">When a rider reports a problem</span> (damage, loss,
+            theft, accident — from the stop screen in their app): you get an urgent email and it appears in
+            the <span className="font-semibold text-navy">Riders tab → Rider incidents</span> section with the
+            order, the rider and their words. The play: call the rider, read the order timeline, decide the
+            customer remedy — re-clean, replacement, a guarantee claim (up to 10× the cleaning charge) or a
+            refund — then record the outcome on the incident so the ledger stays complete. For theft or a
+            serious accident: secure what you can, file a police report where warranted, and pause the
+            rider&apos;s access (Staff tab rules apply) while you establish the facts. Writing down what was
+            done is what turns a bad day into a defensible record.
+          </p>
+          <p className="rounded-xl border border-gold-200 bg-gold-50 p-3 text-navy-300">
+            <AlertTriangle className="mr-1.5 inline h-4 w-4 text-gold-600" />
+            Liability in one line: riders are independent contractors who accepted that in writing at
+            application (own fuel, own maintenance, own safety gear) — and Kozy&apos;s promise to the customer
+            is the published guarantee + refund policy. The incident ledger, the photos, the GPS trail and
+            the manifest counts are the evidence trail that keeps both promises honest.
           </p>
         </div>
       </section>

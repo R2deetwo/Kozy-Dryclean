@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { signOut } from 'next-auth/react'
 import { motion, AnimatePresence, type PanInfo } from 'framer-motion'
 import {
@@ -14,29 +14,75 @@ import {
   Clock,
   ChevronRight,
   ArrowLeft,
-  User,
-  Sun,
   Wind,
   Check,
   AlertCircle,
+  AlertTriangle,
   Route,
   ListChecks,
   LogOut,
   Scissors,
+  ShieldCheck,
+  Bell,
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useOrders, useUpdateOrder } from '@/lib/hooks'
-import { useMemo } from 'react'
-import { formatDate, type Order } from '@/lib/types'
+import { formatDate } from '@/lib/types'
 import { orderDistanceKm } from '@/lib/geo'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
   useDriverGeofence,
   DriverGeofencePill,
   DriverGeofenceBanner,
 } from '@/components/driver/driver-geofence'
+
+// The rider's duty-of-care rules — shown in the rider app itself (phase 55:
+// "what if the rider steals, damages or misplaces the items?" → make the
+// right way the easy way). Written with a rider's phone in mind: short
+// imperatives, grouped by what actually happens on the road.
+const RIDER_RULES: { icon: typeof ShieldCheck; title: string; points: string[] }[] = [
+  {
+    icon: Package,
+    title: 'Care of the garments',
+    points: [
+      'Count every item against the list BEFORE you ride off — the swipe is your signature that the count is right.',
+      'Garment bag zipped closed at all times. Nothing rides loose on the bike.',
+      'Keep the bag away from the exhaust pipe and hot engine parts.',
+      'Rain? Bag it first, ride second — a wet garment is a damaged garment.',
+      'Gold “Guarantee” badge: inspect the items WITH the customer at pickup, and note anything odd before you leave.',
+    ],
+  },
+  {
+    icon: ShieldCheck,
+    title: 'Ride by the law',
+    points: [
+      'Valid driver’s licence on you at all times — you showed it at onboarding; carry it.',
+      'Helmet on, every trip (Lagos State law for riders).',
+      'Phone in the mount, not in your hand. Pull over safely to check the route.',
+      'One-ways, BRT lanes and red lights carry fines — those are yours to pay.',
+      'No passengers while on a Kozy route; your focus is the garments.',
+    ],
+  },
+  {
+    icon: AlertTriangle,
+    title: 'Money & honesty',
+    points: [
+      'You never handle cash. If a customer offers cash at the door, politely refuse — the office will help them pay digitally.',
+      'A tip offered is yours to keep; never ask for one.',
+      'Damage, loss, theft or a fall — REPORT IT HERE IMMEDIATELY (the Report a problem button on the stop). Reporting is always the right move: hidden problems grow into disputes, reported ones get solved the same day.',
+      'Kozy stands behind honest riders. The moment we learn about a problem from you — not from an angry customer — you have the whole team on your side.',
+    ],
+  },
+]
 
 export function DriverView() {
   const { data: session } = useSession()
@@ -65,14 +111,87 @@ export function DriverView() {
       )
   const selected = orders.find((o: any) => o.id === selectedId)
 
+  // ----- New-stop alert (phase 55) -----
+  // The rider's phone is their dashboard: when the team assigns a new pickup
+  // or delivery, the polled list gains a stop and this banner lights up —
+  // the "alert me when there's a ride" behaviour the owner asked for,
+  // without building push infrastructure. Skipped on the first load (those
+  // are existing stops, not news).
+  const knownIdsRef = useRef<Set<string> | null>(null)
+  const [newStopAlert, setNewStopAlert] = useState<{ id: string; label: string } | null>(null)
+  useEffect(() => {
+    if (ordersPaused) return
+    if (knownIdsRef.current === null) {
+      knownIdsRef.current = new Set(orders.map((o: any) => o.id))
+      return
+    }
+    for (const o of orders) {
+      if (!knownIdsRef.current.has(o.id)) {
+        const isPickup = o.status === 'PAYMENT_VERIFIED'
+        setNewStopAlert({
+          id: o.id,
+          label: `New ${isPickup ? 'pickup' : 'delivery'} assigned — ${o.user?.name ?? 'customer'}`,
+        })
+        setTimeout(() => {
+          setNewStopAlert((a) => (a && a.id === o.id ? null : a))
+        }, 8000)
+      }
+    }
+    knownIdsRef.current = new Set(orders.map((o: any) => o.id))
+  }, [allOrders, orders, ordersPaused])
+
+  // ----- Care & safety rules dialog -----
+  const [rulesOpen, setRulesOpen] = useState(false)
+
+  // ----- First-sign-in password change (phase 55) -----
+  // The welcome email promises "the app will ask you to choose your own
+  // password" — the console had that dialog for staff, the rider app did
+  // not. Riders approved through the pipeline get mustChangePassword=true;
+  // this non-dismissible dialog honours the promise.
+  const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null)
+  useEffect(() => {
+    let alive = true
+    fetch('/api/users/me')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('me failed'))))
+      .then((d) => {
+        if (alive) setMustChangePassword(Boolean(d?.user?.mustChangePassword))
+      })
+      .catch(() => {
+        if (alive) setMustChangePassword(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const [pwDialogOpen, setPwDialogOpen] = useState(false)
+  useEffect(() => {
+    if (mustChangePassword === true) setPwDialogOpen(true)
+  }, [mustChangePassword])
+
   const driverName = session?.user?.name ?? 'Driver'
 
   if (selected) {
     return (
-      <DriverOrderDetail
-        order={selected}
-        onBack={() => setSelectedId(undefined)}
-      />
+      <>
+        <DriverOrderDetail
+          order={selected}
+          onBack={() => setSelectedId(undefined)}
+          newStopAlert={newStopAlert}
+          onOpenAlertedStop={(id) => {
+            setNewStopAlert(null)
+            setSelectedId(id)
+          }}
+        />
+        <RiderPasswordDialog
+          open={pwDialogOpen}
+          forced={mustChangePassword === true}
+          onDone={() => {
+            setMustChangePassword(false)
+            setPwDialogOpen(false)
+          }}
+        />
+      </>
     )
   }
 
@@ -88,10 +207,15 @@ export function DriverView() {
             </div>
             <div className="flex items-center gap-3">
               <DriverGeofencePill state={geofence} />
-              <Sun className="h-4 w-4 text-amber-400" />
-              <span className="text-xs text-slate-300">
-                {new Date().toLocaleTimeString('en-NG', { hour: '2-digit', minute: '2-digit' })}
-              </span>
+              {/* Care & safety rules — phase 55: the duty-of-care brief lives
+                  IN the rider app, one tap away at all times. */}
+              <button
+                onClick={() => setRulesOpen(true)}
+                className="flex items-center gap-1 rounded-full bg-slate-800 px-3 py-1 text-xs font-semibold text-gold-300 transition hover:bg-slate-700"
+                title="Care & safety rules — garment care, the law, and what to do when something goes wrong"
+              >
+                <ShieldCheck className="h-3.5 w-3.5" /> Rules
+              </button>
               <button
                 onClick={() => signOut({ callbackUrl: '/' })}
                 className="flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-700"
@@ -100,11 +224,36 @@ export function DriverView() {
               </button>
             </div>
           </div>
-          {/* Stats */}
         </div>
       </header>
 
       <div className="mx-auto max-w-md px-4 py-4 sm:px-6">
+        {/* New-stop alert (phase 55) — lights up the moment the team assigns
+            a new pickup or delivery; dismisses itself after a few seconds. */}
+        <AnimatePresence>
+          {newStopAlert && (
+            <motion.button
+              key={newStopAlert.id}
+              initial={{ opacity: 0, y: -12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8 }}
+              onClick={() => {
+                setSelectedId(newStopAlert.id)
+                setNewStopAlert(null)
+              }}
+              className="mb-4 flex w-full items-center gap-3 rounded-xl border border-gold-400/40 bg-gold-400/10 px-4 py-3 text-left"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-400/20">
+                <Bell className="h-4 w-4 text-gold-300" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-gold-300">New stop assigned</span>
+                <span className="block truncate text-xs text-amber-100/80">{newStopAlert.label} — tap to open</span>
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
+
         {/* Stats */}
         <div className="mb-4 grid grid-cols-3 gap-2">
           <div className="rounded-xl bg-slate-800 p-3 text-center">
@@ -190,7 +339,172 @@ export function DriverView() {
           Tap any card to see details and swipe-to-confirm the action.
         </p>
       </div>
+
+      {/* Care & safety rules (phase 55) */}
+      <RiderRulesDialog open={rulesOpen} onOpenChange={setRulesOpen} />
+
+      {/* First-sign-in password change (phase 55) — forced while
+          mustChangePassword is set (welcome-email promise). */}
+      <RiderPasswordDialog
+        open={pwDialogOpen}
+        forced={mustChangePassword === true}
+        onDone={() => {
+          setMustChangePassword(false)
+          setPwDialogOpen(false)
+        }}
+      />
     </div>
+  )
+}
+
+/** Forced first-sign-in password change for riders — the rider-app half of
+ *  the invite flow (staff had theirs in the console since phase 32). Posts
+ *  /api/users/me/password with the emailed initial password + the rider's
+ *  own new one; the server clears mustChangePassword on success. */
+function RiderPasswordDialog({
+  open,
+  forced,
+  onDone,
+}: {
+  open: boolean
+  forced: boolean
+  onDone: () => void
+}) {
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [confirmPw, setConfirmPw] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const strengthOk =
+    newPw.length >= 10 &&
+    [/[a-z]/, /[A-Z]/, /[0-9]/, /[^A-Za-z0-9]/].filter((re) => re.test(newPw)).length >= 2
+
+  const submit = async () => {
+    setError(null)
+    if (newPw !== confirmPw) {
+      setError('The two new passwords do not match.')
+      return
+    }
+    if (!strengthOk) {
+      setError('At least 10 characters, with a mix of letters, numbers or symbols.')
+      return
+    }
+    setSaving(true)
+    try {
+      const res = await fetch('/api/users/me/password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword: currentPw, newPassword: newPw }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Could not set the password')
+      setCurrentPw('')
+      setNewPw('')
+      setConfirmPw('')
+      onDone()
+    } catch (e: any) {
+      setError(e?.message || 'Could not set the password — try again.')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!forced) onDone() }}>
+      <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-sm" onInteractOutside={(e: any) => forced && e.preventDefault()}>
+        <DialogHeader>
+          <DialogTitle className="text-white">Set your own password</DialogTitle>
+          <DialogDescription className="text-slate-400">
+            {forced
+              ? 'Welcome! For your security, choose your own password before you start riding — the one from your welcome email was just to get you in.'
+              : 'Choose a new password for your rider account.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div>
+            <p className="mb-1 text-xs font-semibold text-slate-300">Password from your welcome email</p>
+            <input
+              type="password"
+              value={currentPw}
+              onChange={(e) => setCurrentPw(e.target.value)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2.5 text-sm text-white focus:border-gold-400 focus:outline-none"
+            />
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-semibold text-slate-300">Your new password</p>
+            <input
+              type="password"
+              value={newPw}
+              onChange={(e) => setNewPw(e.target.value)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2.5 text-sm text-white focus:border-gold-400 focus:outline-none"
+            />
+            <p className="mt-1 text-[10px] text-slate-500">At least 10 characters, mixed letters/numbers/symbols.</p>
+          </div>
+          <div>
+            <p className="mb-1 text-xs font-semibold text-slate-300">Repeat the new password</p>
+            <input
+              type="password"
+              value={confirmPw}
+              onChange={(e) => setConfirmPw(e.target.value)}
+              className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2.5 text-sm text-white focus:border-gold-400 focus:outline-none"
+            />
+          </div>
+          {error && (
+            <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">{error}</p>
+          )}
+          <Button
+            onClick={submit}
+            disabled={saving || !currentPw || !strengthOk || newPw !== confirmPw}
+            className="w-full bg-navy text-white hover:bg-navy-500"
+          >
+            {saving ? 'Setting…' : 'Set my password'}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** The duty-of-care brief: garment care, Lagos road law, the no-cash rule
+ *  and the report-immediately promise. One tap from the header, any time. */
+function RiderRulesDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (o: boolean) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[88vh] overflow-y-auto border-slate-700 bg-slate-900 sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-white">
+            <ShieldCheck className="h-5 w-5 text-gold-400" /> Care &amp; safety rules
+          </DialogTitle>
+          <DialogDescription className="text-slate-400">
+            You are the face of Kozy Care at every door. These rules protect the
+            garments, protect you, and keep you on the right side of the law.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {RIDER_RULES.map((section) => (
+            <div key={section.title} className="rounded-xl bg-slate-800/70 p-4 ring-1 ring-slate-700">
+              <p className="flex items-center gap-2 text-sm font-bold text-white">
+                <section.icon className="h-4 w-4 text-gold-400" /> {section.title}
+              </p>
+              <ul className="mt-2 space-y-2">
+                {section.points.map((p, i) => (
+                  <li key={i} className="flex gap-2 text-xs leading-relaxed text-slate-300">
+                    <Check className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
+                    <span>{p}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+          <p className="text-center text-[11px] leading-relaxed text-slate-500">
+            Something already went wrong? Open the stop and tap{' '}
+            <span className="font-semibold text-amber-300">Report a problem</span> — the office is
+            alerted instantly, and reporting immediately is always the right move.
+          </p>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -289,7 +603,17 @@ function DriverStopCard({
   )
 }
 
-function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }) {
+function DriverOrderDetail({
+  order,
+  onBack,
+  newStopAlert,
+  onOpenAlertedStop,
+}: {
+  order: any
+  onBack: () => void
+  newStopAlert?: { id: string; label: string } | null
+  onOpenAlertedStop?: (id: string) => void
+}) {
   const customer = order.user
   const updateOrderMutation = useUpdateOrder()
 
@@ -300,6 +624,12 @@ function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }
   const [confirming, setConfirming] = useState(false)
   const [done, setDone] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // ----- Report a problem (phase 55) -----
+  // The rider-facing half of the incident pipeline: damage / loss / theft /
+  // accident / other, posted straight to the office. Low friction by
+  // design — a report must never be harder than the problem itself.
+  const [reportOpen, setReportOpen] = useState(false)
 
   const handleDragEnd = (_e: any, info: PanInfo) => {
     if (info.offset.x > 180) {
@@ -327,6 +657,28 @@ function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-slate-900 text-white">
       <div className="mx-auto max-w-md">
+        {/* New-stop alert also shows while working inside a stop — a rider is
+            most often HERE when the team assigns the next pickup. */}
+        <AnimatePresence>
+          {newStopAlert && (
+            <motion.button
+              key={newStopAlert.id}
+              initial={{ opacity: 0, y: -12, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -8 }}
+              onClick={() => onOpenAlertedStop?.(newStopAlert.id)}
+              className="mx-4 mt-3 flex w-auto items-center gap-3 rounded-xl border border-gold-400/40 bg-gold-400/10 px-4 py-3 text-left"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-400/20">
+                <Bell className="h-4 w-4 text-gold-300" />
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-bold text-gold-300">New stop assigned</span>
+                <span className="block truncate text-xs text-amber-100/80">{newStopAlert.label} — tap to open</span>
+              </span>
+            </motion.button>
+          )}
+        </AnimatePresence>
         {/* Header */}
         <header className="sticky top-0 z-10 flex items-center justify-between bg-slate-950 px-4 py-3 sm:px-6">
           <button
@@ -463,6 +815,16 @@ function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }
           <p className="mt-4 text-center text-[10px] text-slate-500">
             Financial details hidden — driver role restricts access to payment fields.
           </p>
+
+          {/* Report a problem (phase 55) — the incident pipeline entry point.
+              Subtle on purpose (it must not compete with the swipe), but
+              always present: a problem can surface at any point of the stop. */}
+          <button
+            onClick={() => setReportOpen(true)}
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/5 py-2.5 text-xs font-semibold text-amber-300 transition hover:bg-amber-500/10"
+          >
+            <AlertTriangle className="h-4 w-4" /> Report a problem with this stop
+          </button>
         </div>
 
         {/* Swipe-to-confirm slider */}
@@ -494,7 +856,171 @@ function DriverOrderDetail({ order, onBack }: { order: any; onBack: () => void }
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Incident reporter (phase 55) */}
+      <ReportProblemDialog
+        open={reportOpen}
+        onOpenChange={setReportOpen}
+        order={order}
+        isPickup={isPickup}
+      />
     </div>
+  )
+}
+
+/** Rider-side incident form: what happened + description → POST
+ *  /api/orders/[id]/incident. On success the rider sees confirmation that
+ *  the office was alerted (and is told to stay reachable) — the report is
+ *  now the office's problem to chase, not the rider's to hide. */
+function ReportProblemDialog({
+  open,
+  onOpenChange,
+  order,
+  isPickup,
+}: {
+  open: boolean
+  onOpenChange: (o: boolean) => void
+  order: any
+  isPickup: boolean
+}) {
+  const KINDS = [
+    { value: 'DAMAGE', label: 'Damaged', hint: 'A garment got torn, stained or wet' },
+    { value: 'LOSS', label: 'Lost / missing', hint: 'An item is missing from the manifest' },
+    { value: 'THEFT', label: 'Theft', hint: 'Something was stolen' },
+    { value: 'ACCIDENT', label: 'Accident / fall', hint: 'You came off the bike or crashed' },
+    { value: 'OTHER', label: 'Other', hint: 'Anything else that needs the office' },
+  ]
+  const [kind, setKind] = useState('DAMAGE')
+  const [description, setDescription] = useState('')
+  const [sending, setSending] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async () => {
+    const text = description.trim()
+    if (text.length < 10) {
+      setError('A little more detail, please — at least 10 characters.')
+      return
+    }
+    setSending(true)
+    setError(null)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/incident`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, description: text, atStop: isPickup ? 'pickup' : 'delivery' }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Send failed')
+      setSent(true)
+    } catch (e: any) {
+      setError(e?.message || 'Could not send the report — call the office.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  const close = (o: boolean) => {
+    onOpenChange(o)
+    if (!o) {
+      // Reset for the next time it's needed.
+      setTimeout(() => {
+        setSent(false)
+        setDescription('')
+        setKind('DAMAGE')
+        setError(null)
+      }, 300)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={close}>
+      <DialogContent className="border-slate-700 bg-slate-900 sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-white">
+            <AlertTriangle className="h-5 w-5 text-amber-400" /> Report a problem
+          </DialogTitle>
+          <DialogDescription className="text-slate-400">
+            Order #{order.orderNumber} · {isPickup ? 'at pickup' : 'on delivery'}. The office is
+            alerted the moment you send — reporting immediately is always the right move.
+          </DialogDescription>
+        </DialogHeader>
+
+        {sent ? (
+          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4 text-center">
+            <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-emerald-400" />
+            <p className="text-sm font-bold text-white">Reported — the office knows</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-300">
+              Stay reachable: they will call you shortly. If a customer is waiting with you, tell
+              them the office will make it right — you don&apos;t have to promise anything specific.
+            </p>
+            <Button
+              onClick={() => close(false)}
+              className="mt-3 w-full bg-navy text-white hover:bg-navy-500"
+            >
+              Back to the stop
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-slate-300">What happened?</p>
+              <div className="grid grid-cols-2 gap-2">
+                {KINDS.map((k) => (
+                  <button
+                    key={k.value}
+                    onClick={() => setKind(k.value)}
+                    className={cn(
+                      'rounded-xl border px-3 py-2.5 text-left transition',
+                      kind === k.value
+                        ? 'border-gold-400 bg-gold-400/10'
+                        : 'border-slate-700 bg-slate-800/60 hover:border-slate-500'
+                    )}
+                  >
+                    <span className="block text-sm font-semibold text-white">{k.label}</span>
+                    <span className="block text-[10px] leading-snug text-slate-400">{k.hint}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="mb-1.5 text-xs font-semibold text-slate-300">Tell us what happened</p>
+              <textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                rows={4}
+                maxLength={2000}
+                placeholder="e.g. The customer's white shirt has a fresh oil stain down the sleeve — I spotted it while counting the items at the gate."
+                className="w-full rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-gold-400 focus:outline-none"
+              />
+              <p className="mt-1 text-right text-[10px] text-slate-500">{description.trim().length}/2000</p>
+            </div>
+            {error && (
+              <p className="rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                {error}
+              </p>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => close(false)}
+                disabled={sending}
+                className="border-slate-600 text-slate-300 hover:bg-slate-800 hover:text-white"
+              >
+                Never mind
+              </Button>
+              <Button
+                onClick={submit}
+                disabled={sending || description.trim().length < 10}
+                className="bg-amber-600 text-white hover:bg-amber-700"
+              >
+                {sending ? 'Sending…' : 'Send report to the office'}
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 
