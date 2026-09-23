@@ -19,6 +19,7 @@ import {
   Bell,
   Megaphone,
   UserCog,
+  Bike,
   ChevronRight,
 } from 'lucide-react'
 import { useOrders, usePayments, useUsers, useNotificationEvents, ADMIN_POLL } from '@/lib/hooks'
@@ -35,6 +36,7 @@ import { FeedbackView } from './feedback-view'
 import { HelpView } from './help-view'
 import { NotificationsView } from './notifications-view'
 import { StaffView } from './staff-view'
+import { RidersView } from './riders-view'
 import { MarketingView } from './marketing-view'
 import { ChangePasswordDialog } from './change-password-dialog'
 import { Logo } from '@/components/shell/logo'
@@ -51,6 +53,7 @@ type Tab =
   | 'feedback'
   | 'notifications'
   | 'staff'
+  | 'riders'
   | 'settings'
   | 'help'
 
@@ -221,6 +224,10 @@ export function AdminDashboard() {
     { key: 'reviews', label: 'Reviews', icon: Star, adminOnly: true },
     { key: 'feedback', label: 'Feedback', icon: MessageSquareHeart },
     { key: 'staff', label: 'Staff', icon: UserCog, adminOnly: true },
+    // Phase 54: the rider onboarding pipeline — applications from
+    // /join-riders, approve/reject, and the live rider roster. Recruiting
+    // is an owner decision, so admin-only like Staff.
+    { key: 'riders', label: 'Riders', icon: Bike, adminOnly: true },
     { key: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
     { key: 'help', label: 'Help', icon: LifeBuoy },
   ]
@@ -459,6 +466,7 @@ export function AdminDashboard() {
           {isAdmin && tab === 'reviews' && <ReviewsView />}
           {tab === 'feedback' && <FeedbackView />}
           {isAdmin && tab === 'staff' && <StaffView />}
+          {isAdmin && tab === 'riders' && <RidersView />}
           {isAdmin && tab === 'settings' && <SettingsView />}
           {tab === 'help' && <HelpView />}
         </main>

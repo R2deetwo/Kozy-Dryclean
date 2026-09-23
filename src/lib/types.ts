@@ -672,6 +672,7 @@ export type NotificationEventType =
   | 'REVIEW'
   | 'REFERRAL_REDEEMED'
   | 'RIDER_APPLICATION'
+  | 'RIDER_DECISION'
   | 'STAFF_INVITE'
   | 'CAMPAIGN_SENT'
   | 'TEST'

@@ -512,6 +512,100 @@ export function useUpdateStaff() {
   })
 }
 
+
+// ----- Rider onboarding (phase 54) -----
+export interface ApiRiderApplication {
+  id: string
+  refCode: string | null
+  fullName: string
+  email: string | null
+  phone: string
+  altPhone: string | null
+  address: string
+  lga: string
+  bikeModel: string
+  bikeYear: string
+  licenseNumber: string
+  availability: string
+  experience: string | null
+  consent: boolean
+  status: 'PENDING' | 'REVIEWED' | 'APPROVED' | 'REJECTED'
+  user: { id: string; name: string; email: string; phone: string; accessStatus: string } | null
+  reviewedBy: { id: string; name: string } | null
+  reviewedAt: string | null
+  decisionNote: string | null
+  createdAt: string
+}
+
+export interface ApiRiderRosterEntry {
+  id: string
+  name: string
+  email: string
+  phone: string
+  accessStatus: 'ACTIVE' | 'PAUSED' | 'REVOKED'
+  joinedAt: string
+  lastPingAt: string | null
+  lastZone: string | null
+  openAssignments: number
+  deliveriesCompleted: number
+}
+
+export function useRiderApplications(options?: {
+  refetchInterval?: number | false
+  refetchOnWindowFocus?: boolean
+}) {
+  return useQuery<{ applications: ApiRiderApplication[]; roster: ApiRiderRosterEntry[] }>({
+    queryKey: ['rider-applications'],
+    queryFn: async () => {
+      const res = await fetch('/api/rider-applications')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to load rider applications')
+      }
+      return res.json()
+    },
+    staleTime: 30 * 1000,
+    ...options,
+  })
+}
+
+export function useRiderDecision() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      action: 'approve' | 'reject'
+      email?: string
+      note?: string
+    }) => {
+      const { id, ...payload } = input
+      const res = await fetch(`/api/rider-applications/${id}/decision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        throw new Error(data.error || data.message || 'Failed to record the decision')
+      }
+      return data as {
+        application: ApiRiderApplication
+        rider?: { id: string; email: string }
+        welcome?: { ok: boolean; error: string | null }
+        hint?: string
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rider-applications'] })
+      // Approvals create a DRIVER account — the order modal's driver
+      // dropdown (built from the users list) must see it.
+      qc.invalidateQueries({ queryKey: ['users'] })
+      // Decisions log RIDER_DECISION events into the operations feed.
+      qc.invalidateQueries({ queryKey: ['admin-notifications'] })
+    },
+  })
+}
+
 // ----- Current user -----
 export function useCurrentUser() {
   return useQuery({

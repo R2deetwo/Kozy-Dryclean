@@ -21,6 +21,7 @@ import {
   RotateCcw,
   Trash2,
   Ban,
+  MessageCircleQuestion,
 } from 'lucide-react'
 import {
   useOrders,
@@ -63,6 +64,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from '@/hooks/use-toast'
+import { Textarea } from '@/components/ui/textarea'
 
 interface Props {
   order: any
@@ -132,6 +134,45 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
   const deletePaymentMutation = useDeletePayment()
   const [confirmRemovePayment, setConfirmRemovePayment] = useState<any | null>(null)
   const [confirmCancelOrder, setConfirmCancelOrder] = useState(false)
+
+  // ----- "Ask the customer" composer (phase 54) -----
+  // The one mid-order message the cadence rules ALLOW: a genuine question
+  // from the team (email + SMS + a timeline entry for the audit trail).
+  const [askOpen, setAskOpen] = useState(false)
+  const [askText, setAskText] = useState('')
+  const [askSending, setAskSending] = useState(false)
+
+  const handleAskCustomer = async () => {
+    const text = askText.trim()
+    if (text.length < 10) {
+      toast({
+        title: 'A little more detail, please',
+        description: 'Tell the customer what you need to know (at least 10 characters).',
+        variant: 'destructive',
+      })
+      return
+    }
+    setAskSending(true)
+    try {
+      const res = await fetch(`/api/orders/${order.id}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question: text }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Send failed')
+      setAskOpen(false)
+      setAskText('')
+      toast({
+        title: 'Question sent',
+        description: `${customer?.name ?? 'The customer'} will get it by email and text — the question is also logged in this order's timeline.`,
+      })
+    } catch (e: any) {
+      toast({ title: 'Could not send the question', description: e?.message, variant: 'destructive' })
+    } finally {
+      setAskSending(false)
+    }
+  }
 
   // Users list for driver assignment — fetchAll so the dropdown contains
   // EVERY driver, not just the newest 25 users.
@@ -377,6 +418,20 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
                   ))}
                 </SelectContent>
               </Select>
+              {/* Ask the customer (phase 54) — the one mid-order message
+               * the cadence rules allow. Staff and admins both see it;
+               * drivers have their own Call button in the rider app. */}
+              {order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setAskOpen(true)}
+                  className="ml-auto h-8 border-[#C8D2DF] text-[#0A192F] hover:bg-[#EEF0F2]"
+                  title="Email and text the customer a question about this order — also logged in the timeline"
+                >
+                  <MessageCircleQuestion className="mr-1 h-3.5 w-3.5" /> Ask the customer
+                </Button>
+              )}
               {/* The explicit way an order LEAVES the board (other than being
                * delivered): cancelling emails the customer and drops the
                * tile off every pipeline column. Admin-only (phase 32):
@@ -656,6 +711,44 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Ask-the-customer composer (phase 54) */}
+      <Dialog open={askOpen} onOpenChange={setAskOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">Ask {customer?.name ?? 'the customer'} a question</DialogTitle>
+            <DialogDescription className="text-xs">
+              This is the only mid-order message customers get apart from their status updates —
+              use it when the team genuinely needs an answer (a gate code, a colour check, a
+              missing item). It goes out by email and text, and is logged in the order timeline.
+            </DialogDescription>
+          </DialogHeader>
+          <Textarea
+            value={askText}
+            onChange={(e) => setAskText(e.target.value)}
+            placeholder="e.g. Our rider is nearby — which gate should he call at for the pickup?"
+            rows={4}
+            maxLength={1000}
+            className="text-sm"
+          />
+          <p className="text-[11px] text-[#6F88A8]">
+            {askText.trim().length}/1000 · they can reply by calling or messaging the Kozy line.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button size="sm" variant="outline" onClick={() => setAskOpen(false)} disabled={askSending}>
+              Never mind
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleAskCustomer}
+              disabled={askSending || askText.trim().length < 10}
+              className="bg-[#0A192F] text-white hover:bg-[#102740]"
+            >
+              {askSending ? 'Sending…' : 'Send question'}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Confirm cancelling the order */}
       <AlertDialog open={confirmCancelOrder} onOpenChange={setConfirmCancelOrder}>

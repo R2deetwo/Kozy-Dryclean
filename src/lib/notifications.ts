@@ -94,8 +94,35 @@ const STATUS_COPY: Record<string, { title: string; body: string }> = {
   },
 }
 
-// Statuses worth an SMS (actionable, time-sensitive)
-const SMS_STATUSES = new Set(['PICKED_UP', 'OUT_FOR_DELIVERY', 'DELIVERED'])
+// ---------------------------------------------------------------------
+// CUSTOMER EMAIL CADENCE (owner's directive, phase 54)
+// "We don't really want users to be getting messages at every step…"
+// The Kanban has ten columns, but only the moments where the customer
+// must DO something (pay, be reachable, check their garments) or where
+// something genuinely lands at their door earn an email:
+//   AWAITING PAYMENT  — they need to know we're verifying their transfer
+//   READY TO PICK UP — their pickup is now scheduled (payment confirmed)
+//   FINISHING        — their garments are being pressed (the final update)
+//   OUT FOR DELIVERY — the rider is on the way; keep the phone nearby
+//   DELIVERED        — the feedback ask + 24h guarantee window
+//   CANCELLED        — rare and always needs explaining
+// Deliberately QUIET (no email, no SMS): REQUESTED (the booking
+// confirmation email already covers the moment the order is placed),
+// PICKED_UP, AT_STATION, PROCESSING — operational stages the customer
+// cannot act on. The portal still shows live status for every step.
+const CUSTOMER_EMAIL_STATUSES = new Set([
+  'PAYMENT_PENDING_VERIFICATION',
+  'PAYMENT_VERIFIED',
+  'FINISHING',
+  'OUT_FOR_DELIVERY',
+  'DELIVERED',
+  'CANCELLED',
+])
+
+// Statuses worth an SMS (actionable, time-sensitive — same curation
+// philosophy as the email set: "no need to tell them that you picked it
+// up", so PICKED_UP lost its SMS in phase 54)
+const SMS_STATUSES = new Set(['OUT_FOR_DELIVERY', 'DELIVERED'])
 
 function baseUrl(): string {
   return (
@@ -343,6 +370,18 @@ export async function notifyOrderStatus(
     const copy = STATUS_COPY[newStatus]
     if (!copy) return
 
+    // Phase 54 cadence gate: quiet stages (REQUESTED / PICKED_UP /
+    // AT_STATION / PROCESSING) never email or SMS the customer — see
+    // CUSTOMER_EMAIL_STATUSES above. The stage-dedup in the PATCH route
+    // still advances lastNotifiedStage so a later re-move stays silent
+    // too; the portal timeline keeps showing every step live.
+    if (!CUSTOMER_EMAIL_STATUSES.has(newStatus)) {
+      console.log(
+        `[notify] quiet stage — no customer email/SMS for ${newStatus} (order #${order.orderNumber})`
+      )
+      return
+    }
+
     // DELIVERED is the FEEDBACK moment (owner's directive): the customer
     // has their garments back and everything is still crisp — a rating
     // request that lands NOW, seconds after the admin marks the order
@@ -385,6 +424,47 @@ export async function notifyOrderStatus(
     }
   } catch (e) {
     console.error('notifyOrderStatus failed:', e)
+  }
+}
+
+// ----- Staff question to the customer (phase 54) -----
+// The owner's rule: the only mid-order message a customer should get, apart
+// from the curated status cadence above, is a genuine QUESTION from the
+// team ("which gate should the rider call at?", "we found a second shirt —
+// is it yours?"). Sent from the admin order modal's "Ask the customer"
+// composer — email first (the question in full) + a best-effort SMS so a
+// time-sensitive question reaches them even away from their inbox.
+export async function notifyCustomerQuestion(
+  order: NotifiableOrder,
+  question: string,
+  senderName: string
+): Promise<void> {
+  try {
+    const { contactPhone } = await getAppSettings()
+    const firstName = order.user?.name ? order.user.name.split(' ')[0] : 'there'
+    const { subject, html } = await brandedEmail({
+      heading: 'A quick question about your order',
+      intro: `${firstName}, our team needs one quick detail from you to keep order #${order.orderNumber} moving smoothly. Could you help us with this?`,
+      order,
+      extraRows: [
+        { label: 'From', value: `${senderName} — Kozy Care team` },
+        { label: 'Question', value: question },
+      ],
+      cta: { label: 'View your order', url: `${baseUrl()}/portal` },
+      footer: `A quick reply keeps everything on schedule: call or message us on ${contactPhone} with your answer (Mon–Sat, 8am–6pm). We only email you when it genuinely matters.<br>Kozy Care — Uncompromising care. Exceptional convenience.`,
+    })
+    await sendEmail({ to: order.user.email, subject, html })
+
+    // Best-effort SMS (never throws hard): trimmed to the first ~120 chars
+    // so the full question stays legible within one SMS segment.
+    const shortQuestion =
+      question.length > 120 ? `${question.slice(0, 117).trim()}…` : question
+    await sendSMS(
+      order.user.phone,
+      `Kozy Care: Quick question about order #${order.orderNumber} — ${shortQuestion} Reply/call ${contactPhone}.`
+    )
+  } catch (e) {
+    console.error('notifyCustomerQuestion failed:', e)
   }
 }
 
@@ -1152,6 +1232,157 @@ export async function notifyAdminRiderApplication(app: {
   }
 }
 
+// =============================================================================
+// RIDER ONBOARDING emails (phase 54)
+// =============================================================================
+// The owner commissioned riders offline and pointed them at the business
+// directly — applicants were emailing staff inboxes with no system behind
+// it. Phase 54 turns /join-riders into a real pipeline: the applicant now
+// gets an immediate confirmation (email + SMS) with a reference code, and
+// an approval email that carries their rider-app credentials and the
+// onboarding steps, so "how do I actually start riding?" has an answer.
+
+/** 1) Application received — sent to the APPLICANT right after they submit.
+ *  Email only when they gave one; SMS always (Nigerian riders live on their
+ *  phones — email is optional on the form). Never throws. */
+export async function notifyRiderApplicationReceived(app: {
+  fullName: string
+  email?: string | null
+  phone: string
+  lga: string
+  refCode: string
+}): Promise<void> {
+  try {
+    const { contactPhone } = await getAppSettings()
+    const firstName = app.fullName.split(' ')[0]
+
+    if (app.email) {
+      const bodyHtml = `
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+          Thank you for applying to ride with Kozy Care, <strong style="color:#0A192F;">${firstName}</strong>.
+          Your application is in our review queue — here is what happens next:
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Your reference</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;"><code style="background:#F8F9FA; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:13px;">${app.refCode}</code></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Step 1 — Review</td>
+            <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">We review applications within <strong>48 hours</strong> (Mon–Sat).</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Step 2 — Call</td>
+            <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">A short call from <strong>${contactPhone}</strong> to talk availability, your bike and your area (${app.lga}).</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top;">Step 3 — Welcome</td>
+            <td style="padding: 8px 0; color: #0A192F;">If it's a fit, you'll receive your rider-app sign-in by email and your first route follows.</td>
+          </tr>
+        </table>
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+          Keep your phone close — the review call is how every rider starts. Nothing is needed from you until then.
+        </p>`
+
+      const { subject, html } = staffEmailChrome({
+        heading: `Application received — ${firstName}`,
+        bodyHtml,
+        cta: undefined,
+        footer: 'This is an application confirmation, not a contract of employment.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+      })
+      await sendEmail({ to: app.email, subject, html })
+    }
+
+    await sendSMS(
+      app.phone,
+      `Kozy Care: Application received (${app.refCode}). We'll call you within 48 hours (Mon-Sat) about riding in ${app.lga}. Keep your phone close.`
+    )
+  } catch (e) {
+    console.error('notifyRiderApplicationReceived failed:', e)
+  }
+}
+
+/** 2) Application approved — the WELCOME email: rider-app credentials +
+ *  the four onboarding steps. Same recipe as the staff invite (system
+ *  generates the password, rider sets their own at first sign-in) plus
+ *  rider-specific "how the job works" guidance. Returns the delivery
+ *  outcome so the API can tell the admin whether the email landed. */
+export async function notifyRiderApproved(opts: {
+  to: string
+  name: string
+  password: string
+  managerName: string
+  refCode: string
+  lga: string
+  note?: string
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { to, name, password, managerName, refCode, lga, note } = opts
+    const loginUrl = `${baseUrl()}/login?email=${encodeURIComponent(to)}`
+    const firstName = name.split(' ')[0]
+
+    const bodyHtml = `
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+          Good news, <strong style="color:#0A192F;">${firstName}</strong> — your Kozy Care rider application (${refCode}) is approved.
+          Welcome to the team. Your rider app is ready: sign in below and your route screen appears the moment the team assigns you a pickup or delivery.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Sign-in email</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;">${to}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Initial password</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;"><code style="background:#F8F9FA; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:13px;">${password}</code></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top;">Your area</td>
+            <td style="padding: 8px 0; color: #0A192F;">${lga}</td>
+          </tr>
+        </table>
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 14px; margin: 20px 0 0 0;"><strong style="color:#0A192F;">How your first week works:</strong></p>
+        <ol style="color: #0A192F; font-size: 14px; line-height: 1.7; margin: 8px 0 0 0; padding-left: 20px;">
+          <li>Sign in with the button below — the app will ask you to choose your own password.</li>
+          <li>Keep your phone's location ON while on duty; your route list updates automatically.</li>
+          <li>Each stop shows the address, a Navigate button and the customer's phone — call them when you arrive.</li>
+          <li>Swipe to confirm every pickup and delivery. That confirmation is what moves the customer's order along.</li>
+        </ol>
+        ${
+          note
+            ? `<div style="margin: 20px 0 0 0; padding: 14px 16px; background: #F8F9FA; border-left: 3px solid #D4AF37; border-radius: 4px;">
+                 <p style="color: #0A192F; font-size: 14px; margin: 0; line-height: 1.6;"><strong>Message from ${managerName}:</strong><br>${note}</p>
+               </div>`
+            : ''
+        }
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+          Ride safe — you are the face of Kozy Care at every door. Keep this email private until you have set your own password. Support: ${await supportLine()}.
+        </p>`
+
+    const { subject, html } = staffEmailChrome({
+      heading: `Welcome to the rider team, ${firstName}!`,
+      bodyHtml,
+      cta: { label: 'Open the rider app', url: loginUrl },
+    })
+
+    await sendEmail({ to, subject, html })
+    return { ok: true }
+  } catch (e: any) {
+    console.error('Rider welcome email failed:', e)
+    return { ok: false, error: e?.message ?? 'unknown error' }
+  }
+}
+
+/** The contact line for rider-facing emails (settings value, with a sane
+ *  fallback so the copy never renders an empty string). */
+async function supportLine(): Promise<string> {
+  try {
+    const { contactPhone } = await getAppSettings()
+    return contactPhone || '+234 803 175 5230'
+  } catch {
+    return '+234 803 175 5230'
+  }
+}
+
 /** Manual delivery check — the "Send test email" button in Settings →
  * Notifications. Sends to every configured recipient and records the result
  * so the owner can instantly see whether alerts reach each inbox (and, if
@@ -1358,12 +1589,15 @@ export async function notifyStaffAccessRestored(opts: {
 
 /** Log a staff-management event to the admin operations feed (never throws). */
 export async function logStaffEvent(opts: {
-  type: 'STAFF_INVITE'
+  type: 'STAFF_INVITE' | 'RIDER_DECISION'
   title: string
   body: string
   staffEmail: string
   emailStatus: NotificationEmailStatus
   detail?: Record<string, unknown>
+  /** Console tab the event deep-links to (phase 54: rider decisions open
+   *  the Riders tab instead of Staff). Defaults to 'staff'. */
+  linkTab?: string
 }): Promise<void> {
   try {
     await db.notificationEvent.create({
@@ -1375,7 +1609,7 @@ export async function logStaffEvent(opts: {
         recipients: JSON.stringify([opts.staffEmail]),
         emailStatus: opts.emailStatus,
         emailDetail: opts.detail ? JSON.stringify(opts.detail) : undefined,
-        linkTab: 'staff',
+        linkTab: opts.linkTab ?? 'staff',
       },
     })
   } catch (e) {

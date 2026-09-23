@@ -1,13 +1,38 @@
 // =============================================================================
 // POST /api/rider-applications — public submission (rate-limited)
-// GET  /api/rider-applications — admin-only, list all applications
+// GET  /api/rider-applications — admin-only: the full onboarding pipeline
+// =============================================================================
+// Phase 54: applications are no longer a dead-end inbox row.
+//   POST — assigns a short reference code (KZR-XXXX), stores the
+//          application, alerts the admins (unchanged) AND now confirms to
+//          the applicant: email when they gave one + SMS always, with the
+//          reference and the 48-hour review-call promise.
+//   GET  — applications (with the linked rider account where approved)
+//          PLUS the rider roster: every DRIVER account with live delivery
+//          stats, so the owner sees the pipeline AND the fleet health in
+//          one view.
 // =============================================================================
 
 import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { requireRole } from '@/lib/auth'
-import { notifyAdminRiderApplication } from '@/lib/notifications'
+import {
+  notifyAdminRiderApplication,
+  notifyRiderApplicationReceived,
+} from '@/lib/notifications'
+
+/** Short application reference like KZR-7F2K (4 alphanumeric chars, no
+ *  ambiguous glyphs). Uniqueness is enforced by the schema; a collision
+ *  retries with a fresh code. */
+function mintRefCode(): string {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 4; i++) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)]
+  }
+  return `KZR-${code}`
+}
 
 export async function POST(req: Request) {
   const ip = getClientIP(req)
@@ -22,21 +47,46 @@ export async function POST(req: Request) {
   if (!fullName || !phone || !address || !lga || !bikeModel || !bikeYear || !licenseNumber) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+  if (consent !== true) {
+    return NextResponse.json({ error: 'Contract consent is required' }, { status: 400 })
+  }
+  const cleanEmail = typeof email === 'string' && email.trim() ? email.trim().toLowerCase() : null
+
+  // Mint a collision-free reference code (practically never loops twice).
+  let refCode = mintRefCode()
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const clash = await db.riderApplication.findUnique({ where: { refCode } })
+    if (!clash) break
+    refCode = mintRefCode()
+  }
 
   const application = await db.riderApplication.create({
     data: {
-      fullName, email: email || null, phone, altPhone: altPhone || null,
+      refCode,
+      fullName, email: cleanEmail, phone, altPhone: altPhone || null,
       address, lga, bikeModel, bikeYear, licenseNumber,
       availability: availability || 'full-time',
       experience: experience || null,
       consent: !!consent,
-    }
+    },
   })
 
-  // Alert the owner — applications previously landed silently in the DB
-  // with no admin view or notification ever mentioning them (audit
-  // finding). Never blocks the response.
+  // Never blocks the response:
+  //   1. the applicant gets their confirmation (email + SMS) immediately —
+  //      phase 54: "apply → know it landed → know what happens next";
+  //   2. the admins get the existing alert (unchanged behaviour).
   after(async () => {
+    try {
+      await notifyRiderApplicationReceived({
+        fullName: application.fullName,
+        email: application.email,
+        phone: application.phone,
+        lga: application.lga,
+        refCode: application.refCode ?? 'KZR',
+      })
+    } catch (e) {
+      console.error('Rider-application confirmation failed:', e)
+    }
     try {
       await notifyAdminRiderApplication(application)
     } catch (e) {
@@ -44,13 +94,87 @@ export async function POST(req: Request) {
     }
   })
 
-  return NextResponse.json({ ok: true, id: application.id }, { status: 201 })
+  return NextResponse.json({ ok: true, id: application.id, refCode }, { status: 201 })
 }
 
 export async function GET() {
-  const session = await requireRole('ADMIN')
+  // requireRole throws its 401/403 as a Response; some Next 16 builds turn
+  // a thrown Response into an empty 500 (phase-24 finding — this endpoint
+  // was orphaned before phase 54, so the latent bug never surfaced).
+  // Converting it keeps the status code honest for the console UI.
+  let session: Awaited<ReturnType<typeof requireRole>>
+  try {
+    session = await requireRole('ADMIN')
+  } catch (e) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    throw e
+  }
+  void session
+
+  // ----- The applications pipeline -----
   const applications = await db.riderApplication.findMany({
     orderBy: { createdAt: 'desc' },
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true, accessStatus: true } },
+      reviewedBy: { select: { id: true, name: true } },
+    },
   })
-  return NextResponse.json({ applications })
+
+  // ----- The rider roster (phase 54): every DRIVER account with live
+  // delivery stats — the "business impact" view the owner asked for.
+  // Open assignments are pipeline orders currently riding with them;
+  // completed deliveries are orders they delivered. -----
+  const riders = await db.user.findMany({
+    where: { role: 'DRIVER' },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      accessStatus: true,
+      createdAt: true,
+      driverLocation: { select: { updatedAt: true, zone: true } },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
+
+  const riderIds = riders.map((r) => r.id)
+  const openByDriver = new Map<string, number>()
+  const deliveredByDriver = new Map<string, number>()
+  if (riderIds.length > 0) {
+    const grouped = await db.order.groupBy({
+      by: ['driverId', 'status'],
+      where: { driverId: { in: riderIds } },
+      _count: { _all: true },
+    })
+    for (const g of grouped) {
+      if (!g.driverId) continue
+      if (['PAYMENT_VERIFIED', 'PICKED_UP', 'AT_STATION', 'PROCESSING', 'FINISHING', 'OUT_FOR_DELIVERY'].includes(g.status)) {
+        openByDriver.set(g.driverId, (openByDriver.get(g.driverId) ?? 0) + g._count._all)
+      }
+      if (g.status === 'DELIVERED') {
+        deliveredByDriver.set(g.driverId, (deliveredByDriver.get(g.driverId) ?? 0) + g._count._all)
+      }
+    }
+  }
+
+  const roster = riders.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    phone: r.phone,
+    accessStatus: r.accessStatus,
+    joinedAt: r.createdAt,
+    lastPingAt: r.driverLocation?.updatedAt ?? null,
+    lastZone: r.driverLocation?.zone ?? null,
+    openAssignments: openByDriver.get(r.id) ?? 0,
+    deliveriesCompleted: deliveredByDriver.get(r.id) ?? 0,
+  }))
+
+  return NextResponse.json({ applications, roster })
 }

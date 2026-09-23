@@ -396,12 +396,20 @@ export async function PATCH(
     // so the admin's dropdown/drag feels instant (email providers take
     // seconds). notifyOrderStatus never throws, so it can't break the update.
     //
+    // PHASE 54 CADENCE: notifyOrderStatus itself now gates WHICH statuses
+    // email the customer (awaiting payment, ready to pick up, finishing,
+    // out for delivery, delivered + cancelled). Requested / picked up /
+    // at station / processing are quiet — the owner asked that customers
+    // not be messaged at every step, and the portal shows live status.
+    //
     // STAGE-EMAIL DEDUP: only pipeline stages the customer has NOT been
     // emailed about yet (strictly forward), plus non-pipeline statuses
     // (PAYMENT_PENDING_VERIFICATION / CANCELLED — event-driven, not progress).
     // A backwards or repeat move is logged in the timeline but SILENT — the
     // customer must never receive an email implying their order regressed,
-    // nor a duplicate for a stage they were already told about.
+    // nor a duplicate for a stage they were already told about. The rank
+    // still advances through quiet stages so a later re-move stays silent
+    // too.
     const notifyRank = STAGE_RANK[parsed.data.status] ?? -1
     const statusChanged = parsed.data.status !== order.status
     const shouldEmailCustomer =

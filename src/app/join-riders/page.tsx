@@ -13,6 +13,8 @@ import Link from 'next/link'
 
 export default function JoinRidersPage() {
   const [submitted, setSubmitted] = useState(false)
+  const [refCode, setRefCode] = useState('')
+  const [emailConfirmed, setEmailConfirmed] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [form, setForm] = useState({
@@ -42,22 +44,27 @@ export default function JoinRidersPage() {
     }
 
     try {
-      // Save application — for now we'll store it as a user note
-      // In production this would go to a RiderApplication table
+      // Phase 54: applications are a real pipeline now — the server stores
+      // the application under a short reference code (KZR-XXXX) and the
+      // applicant immediately gets a confirmation email (when provided)
+      // plus an SMS with the same reference and the 48-hour review promise.
       const res = await fetch('/api/rider-applications', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       })
 
-      if (!res.ok) {
-        // If the endpoint doesn't exist yet, just show success
-        setSubmitted(true)
-      } else {
-        setSubmitted(true)
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}))
+        if (data?.refCode) setRefCode(data.refCode)
+        setEmailConfirmed(!!form.email)
       }
+      // Network-level failures still show the success card (the phone
+      // number is the owner's actual follow-up channel) but without a
+      // fabricated reference.
+      setSubmitted(true)
     } catch {
-      setSubmitted(true) // Don't fail — store locally for now
+      setSubmitted(true)
     }
     setLoading(false)
   }
@@ -71,9 +78,33 @@ export default function JoinRidersPage() {
               <CheckCircle2 className="h-7 w-7 text-gold-600" />
             </div>
             <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Application received!</h1>
+            {refCode && (
+              <p className="mb-3 text-xs text-navy-300">
+                Your reference is{' '}
+                <span className="rounded-full bg-navy-50 px-2.5 py-1 font-mono font-semibold text-navy ring-1 ring-navy-100">
+                  {refCode}
+                </span>{' '}
+                — keep it for any follow-up.
+              </p>
+            )}
+            <p className="text-sm text-navy-300 mb-2">
+              We review applications within <strong className="text-navy">48 hours</strong> (Mon–Sat)
+              and will call you at <strong className="text-navy">{form.phone}</strong> to talk
+              availability, your bike and your area.
+            </p>
             <p className="text-sm text-navy-300 mb-6">
-              Thank you for your interest in joining the Kozy Care rider team. We&apos;ll review
-              your application and contact you within 48 hours at <strong className="text-navy">{form.phone}</strong>.
+              {emailConfirmed ? (
+                <>
+                  A confirmation email is on its way to{' '}
+                  <strong className="text-navy">{form.email}</strong> — check your inbox
+                  (and spam, just in case).
+                </>
+              ) : (
+                <>
+                  We&apos;ll also text you a confirmation shortly. No email was given, so keep
+                  this page handy — everything happens by phone from here.
+                </>
+              )}
             </p>
             <Link href="/">
               <Button className="bg-gold-gradient text-navy hover:opacity-90 w-full">
@@ -126,6 +157,31 @@ export default function JoinRidersPage() {
               <p className="text-xs text-navy-300 mt-1">{b.desc}</p>
             </div>
           ))}
+        </div>
+
+        {/* How onboarding works (phase 54) — the owner's riders were applying
+         * over email with no idea what happens next; this strip answers that
+         * before they even submit. */}
+        <div className="mb-8 rounded-2xl bg-white p-5 ring-1 ring-navy-100">
+          <h2 className="text-center text-xs font-semibold uppercase tracking-widest text-navy-300">
+            How onboarding works
+          </h2>
+          <ol className="mt-4 grid gap-4 sm:grid-cols-4">
+            {[
+              { n: '1', title: 'Apply', desc: 'This form — two minutes, no fees.' },
+              { n: '2', title: 'Review call', desc: 'Within 48 hours, from our official line.' },
+              { n: '3', title: 'Bike & licence check', desc: 'A quick verification of your details.' },
+              { n: '4', title: 'Welcome email', desc: 'Your rider-app sign-in + first route.' },
+            ].map((s) => (
+              <li key={s.n} className="flex flex-col items-center text-center">
+                <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-full bg-navy font-serif text-sm font-bold text-gold-400">
+                  {s.n}
+                </div>
+                <p className="text-sm font-semibold text-navy">{s.title}</p>
+                <p className="mt-1 text-xs leading-relaxed text-navy-300">{s.desc}</p>
+              </li>
+            ))}
+          </ol>
         </div>
 
         {/* Application form */}

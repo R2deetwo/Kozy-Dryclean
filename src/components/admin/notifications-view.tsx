@@ -87,6 +87,12 @@ const TYPE_META: Record<
     icon: Bike,
     cls: 'bg-sky-100 text-sky-800',
   },
+  RIDER_DECISION: {
+    label: 'Rider decision',
+    icon: Bike,
+    cls: 'bg-teal-100 text-teal-800',
+    link: { label: 'Open Riders', tab: 'riders' },
+  },
   STAFF_INVITE: {
     label: 'Staff account',
     icon: UserCog,
