@@ -91,6 +91,17 @@ ORDER 2 — #KZ-75691751 — parked at READY TO PICK UP, assigned to Test Rider
 ADMIN console
   - Sign in as vk5m2w8t4a@woosh.dpdns.org / KozyE2EAdmin!56
   - Kanban: the two test orders are labelled Test Customer / Test Rider.
+  - NEW (phase 57) — pacing colours: every active card now carries the
+    promise the customer stipulated, as a small "Due …" line + soft colour:
+      sage dot   = on track
+      amber edge = due soon (final stretch of the window)
+      rose edge  = overdue (promise broken — faint rose tint on the card)
+    Clocks: the pickup slot (until collected) → the speed tier paid for
+    (24h / 48h / 3–5 days from pickup) → the one-hour delivery run.
+    Header chips count "N due soon / N overdue"; the list view has a Due
+    column sortable urgent-first. The parked test order #KZ-75691751 will
+    light up as soon as its pickup window passes — that is the system
+    working, not a fault.
   - Notifications feed: every event from the battery is recorded there too.
 
 ## 5. Repeatable battery (for future regression runs)

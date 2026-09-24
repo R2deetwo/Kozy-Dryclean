@@ -35,6 +35,7 @@ import {
   useAppSettings,
 } from '@/lib/hooks'
 import { formatNaira, formatDateTime, formatDate, type OrderStatus } from '@/lib/types'
+import { getOrderTiming, pacingSentence } from '@/lib/order-timing'
 import { OrderPipeline, OrderTimeline } from '@/components/shared/order-pipeline'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -68,6 +69,7 @@ import {
 import { toast } from '@/hooks/use-toast'
 import { Textarea } from '@/components/ui/textarea'
 import { whatsappLink } from '@/lib/phone-validation'
+import { cn } from '@/lib/utils'
 
 interface Props {
   order: any
@@ -501,6 +503,32 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
                 </Button>
               )}
             </div>
+            {/* Phase 57: the order's promise, stated where the team acts.
+             * Same clocks the Kanban colours use — pickup slot before pickup,
+             * the speed tier the customer paid for during turnaround, and
+             * the one-hour delivery run at the end. */}
+            {(() => {
+              const timing = getOrderTiming(order)
+              if (!timing) return null
+              const tone =
+                timing.state === 'overdue'
+                  ? 'text-rose-700'
+                  : timing.state === 'watch'
+                    ? 'text-amber-700'
+                    : 'text-emerald-700/80'
+              const dot =
+                timing.state === 'overdue'
+                  ? 'bg-rose-400'
+                  : timing.state === 'watch'
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-300'
+              return (
+                <p className={cn('mt-2 flex items-center gap-1.5 text-[11px] leading-snug', tone)}>
+                  <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', dot)} />
+                  {pacingSentence(timing)}
+                </p>
+              )
+            })()}
             {/* Phase 55: the owner's "don't over-log" rule, right where the
              * status is changed. Staff see exactly which moves email the
              * customer, so a card is only advanced when the stage has

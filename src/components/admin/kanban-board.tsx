@@ -30,7 +30,7 @@ import {
   Camera,
 } from 'lucide-react'
 import { useOrders, useUpdateOrder, ADMIN_POLL } from '@/lib/hooks'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   KANBAN_COLUMNS,
   formatNaira,
@@ -43,6 +43,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { OrderDetailModal } from './order-detail-modal'
 import { LiveBadge } from './payment-queue'
+import { getOrderTiming, pacingText, type TimingState } from '@/lib/order-timing'
 
 const COLUMN_META: Record<OrderStatus, { label: string; icon: any; tone: string }> = {
   REQUESTED: { label: 'Requested', icon: ShoppingCart, tone: 'slate' },
@@ -62,6 +63,32 @@ const COLUMN_META: Record<OrderStatus, { label: string; icon: any; tone: string 
 // default (client directive: "get rid of completed cycles"); a toggle brings
 // the Delivered column back when the team wants to see today's finishes.
 const ACTIVE_COLUMNS: OrderStatus[] = KANBAN_COLUMNS.filter((c) => c !== 'DELIVERED')
+
+// Phase 57 — pacing colours, deliberately soft. Every active card carries
+// the promise the customer stipulated (their pickup slot, the speed tier
+// they paid for, or the one-hour delivery run). On-track stays a whisper of
+// sage; "due soon" earns a gentle amber edge; only a broken promise gets a
+// rose edge plus the faintest card tint. No loud fills, no alarms.
+const PACING: Record<TimingState, { dot: string; text: string; strip: string; tint: string }> = {
+  onTrack: { dot: 'bg-emerald-300', text: 'text-emerald-700/70', strip: '', tint: '' },
+  watch: { dot: 'bg-amber-400', text: 'text-amber-700', strip: 'border-l-[3px] border-l-amber-300', tint: '' },
+  overdue: {
+    dot: 'bg-rose-400',
+    text: 'text-rose-700 font-medium',
+    strip: 'border-l-[3px] border-l-rose-300',
+    tint: 'bg-rose-50/60',
+  },
+}
+
+// Re-renders once a minute so "Due in 3h" counts down even between polls.
+function useMinuteTick(): Date {
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 60_000)
+    return () => clearInterval(t)
+  }, [])
+  return now
+}
 
 export function KanbanBoard({ isAdmin = false }: { isAdmin?: boolean }) {
   // Live mode (phase 25): the board polls every few seconds (paused while
@@ -124,6 +151,20 @@ export function KanbanBoard({ isAdmin = false }: { isAdmin?: boolean }) {
     ? visibleOrders.filter((o: any) => (o.anomalies ?? []).length > 0).length
     : 0
 
+  // Phase 57: pacing totals — the board-level "stay ahead" signal. Colour
+  // only counts when it is rare, so chips appear ONLY when there is
+  // something to act on (a clean board shows just the legend).
+  const now = useMinuteTick()
+  const paced = useMemo(
+    () =>
+      visibleOrders
+        .map((o: any) => getOrderTiming(o, now))
+        .filter((t): t is NonNullable<typeof t> => t !== null),
+    [visibleOrders, now]
+  )
+  const dueSoonCount = paced.filter((t) => t.state === 'watch').length
+  const overdueCount = paced.filter((t) => t.state === 'overdue').length
+
   return (
     // Phase 32 layout fix: heights now match the fixed sidebar geometry —
     // desktop: viewport minus the console header (3.5rem); mobile: viewport
@@ -146,6 +187,22 @@ export function KanbanBoard({ isAdmin = false }: { isAdmin?: boolean }) {
                   <Shield className="h-3 w-3" /> {flaggedCount} flagged
                 </span>
               )}
+              {dueSoonCount > 0 && (
+                <span
+                  title={`${dueSoonCount} order${dueSoonCount === 1 ? '' : 's'} inside the final stretch of their promise — check these before they slip`}
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-100/80 px-2 py-0.5 text-[10px] font-semibold text-amber-800"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> {dueSoonCount} due soon
+                </span>
+              )}
+              {overdueCount > 0 && (
+                <span
+                  title={`${overdueCount} order${overdueCount === 1 ? '' : 's'} past the time the customer was promised — these need a move or a call now`}
+                  className="inline-flex items-center gap-1 rounded-full bg-rose-100/80 px-2 py-0.5 text-[10px] font-semibold text-rose-800"
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> {overdueCount} overdue
+                </span>
+              )}
             </div>
             <p className="text-xs text-navy-300">
               {view === 'kanban'
@@ -154,6 +211,24 @@ export function KanbanBoard({ isAdmin = false }: { isAdmin?: boolean }) {
                   : 'Drag order cards between columns to update their pipeline stage — the board updates itself live. Completed cycles are hidden by default.'
                 : 'Sortable list of all orders. Click any row to view details — the list updates itself live.'}
             </p>
+            {/* Phase 57: the pacing legend — what the card colours mean. Each
+                card carries the promise the customer stipulated: their pickup
+                slot, the speed tier they paid for, or the one-hour delivery
+                run. Colour appears as that window closes. */}
+            <div
+              title="Pacing — each order carries the promise the customer stipulated: their pickup slot, the speed tier they paid for (24h / 48h / 3–5 days), or the one-hour delivery run. Cards colour as the window closes."
+              className="mt-1.5 flex items-center gap-3 text-[10px] text-navy-300"
+            >
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> on track
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> due soon
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> overdue
+              </span>
+            </div>
           </div>
           <div className="flex items-center gap-3">
             {/* Phase 32: completed cycles stay off the active board; this
@@ -339,6 +414,11 @@ function OrderCard({
   // anomalies from the API, and this render check is defence in depth).
   const anomalies: any[] = isAdmin ? order.anomalies ?? [] : []
 
+  // Phase 57 — the pacing chip + soft colour edge (see PACING above).
+  const now = useMinuteTick()
+  const timing = getOrderTiming(order, now)
+  const pacing = timing ? PACING[timing.state] : null
+
   return (
     <Card
       ref={setNodeRef}
@@ -354,7 +434,9 @@ function OrderCard({
       className={cn(
         'cursor-grab border-navy-100 bg-white shadow-sm transition hover:border-gold-300 hover:shadow-md active:cursor-grabbing',
         dragging && 'shadow-lg',
-        isDragging && 'opacity-50'
+        isDragging && 'opacity-50',
+        pacing?.strip,
+        pacing?.tint
       )}
     >
       <CardContent className="p-3">
@@ -395,6 +477,19 @@ function OrderCard({
             <User className="h-3.5 w-3.5 shrink-0 text-gold-400" />
           )}
         </div>
+
+        {/* Phase 57: the promise line — when this order is due for the
+            customer. Sage = comfortable, amber = final stretch, rose =
+            the promise is already broken. */}
+        {timing && (
+          <div
+            title={`${timing.clock} — ${timing.state === 'overdue' ? 'past the promised time' : timing.state === 'watch' ? 'final stretch of the promised window' : 'comfortably inside the promised window'}`}
+            className={cn('mt-1.5 flex items-center gap-1.5 text-[10px]', pacing?.text)}
+          >
+            <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', pacing?.dot)} />
+            {pacingText(timing, now)}
+          </div>
+        )}
 
         <div className="mt-2 flex items-center gap-1.5 text-[10px] text-navy-300">
           <Clock className="h-3 w-3" />
@@ -495,8 +590,10 @@ function OrdersListView({
   isAdmin?: boolean
   onOpen: (o: any) => void
 }) {
-  const [sortBy, setSortBy] = useState<'date' | 'number' | 'amount' | 'status'>('date')
+  const [sortBy, setSortBy] = useState<'date' | 'number' | 'amount' | 'status' | 'due'>('date')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
+  // Phase 57: pacing needs a live clock in the list view too.
+  const now = useMinuteTick()
   // Phase 32: 'ACTIVE' (the live pipeline — completed cycles hidden) is the
   // default, matching the kanban's behaviour. 'ALL' brings history back.
   const [filter, setFilter] = useState<'ACTIVE' | OrderStatus | 'ALL'>('ACTIVE')
@@ -513,6 +610,13 @@ function OrdersListView({
     else if (sortBy === 'number') cmp = a.orderNumber.localeCompare(b.orderNumber)
     else if (sortBy === 'amount') cmp = (a.totalPrice ?? 0) - (b.totalPrice ?? 0)
     else if (sortBy === 'status') cmp = a.status.localeCompare(b.status)
+    // Phase 57: sort by the promised time — ascending puts the most urgent
+    // order first (the "stay ahead" work queue); terminal orders sort last.
+    else if (sortBy === 'due') {
+      const ta = getOrderTiming(a, now)?.dueAt.getTime() ?? Number.POSITIVE_INFINITY
+      const tb = getOrderTiming(b, now)?.dueAt.getTime() ?? Number.POSITIVE_INFINITY
+      cmp = ta - tb
+    }
     return sortDir === 'asc' ? cmp : -cmp
   })
 
@@ -521,7 +625,8 @@ function OrdersListView({
       setSortDir(sortDir === 'asc' ? 'desc' : 'asc')
     } else {
       setSortBy(col)
-      setSortDir('desc')
+      // Due defaults to urgent-first; every other column to newest/first.
+      setSortDir(col === 'due' ? 'asc' : 'desc')
     }
   }
 
@@ -592,6 +697,12 @@ function OrdersListView({
                     {sortBy === 'status' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                   </button>
                 </th>
+                <th className="hidden px-4 py-3 sm:table-cell">
+                  <button onClick={() => toggleSort('due')} className="flex items-center gap-1 font-semibold">
+                    Due
+                    {sortBy === 'due' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
+                  </button>
+                </th>
                 <th className="hidden px-4 py-3 lg:table-cell">
                   <button onClick={() => toggleSort('date')} className="flex items-center gap-1 font-semibold">
                     Date
@@ -613,6 +724,9 @@ function OrdersListView({
                 const meta = COLUMN_META[o.status]
                 // Odd-movement flags — admin only (staff payloads carry none)
                 const anomalies: any[] = isAdmin ? o.anomalies ?? [] : []
+                // Phase 57: pacing chip in the row — same colours as cards.
+                const timing = getOrderTiming(o, now)
+                const pacing = timing ? PACING[timing.state] : null
                 return (
                   <tr
                     key={o.id}
@@ -669,6 +783,19 @@ function OrdersListView({
                       >
                         {meta.label}
                       </span>
+                    </td>
+                    <td className="hidden px-4 py-3 sm:table-cell">
+                      {timing ? (
+                        <span
+                          title={`${timing.clock} — ${timing.state === 'overdue' ? 'past the promised time' : timing.state === 'watch' ? 'final stretch of the promised window' : 'comfortably inside the promised window'}`}
+                          className={cn('flex items-center gap-1.5 text-[11px]', pacing?.text)}
+                        >
+                          <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', pacing?.dot)} />
+                          {pacingText(timing, now)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-navy-300">—</span>
+                      )}
                     </td>
                     <td className="hidden px-4 py-3 text-xs text-navy-300 lg:table-cell">
                       {formatDate(o.pickupDate)}

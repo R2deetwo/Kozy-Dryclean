@@ -382,6 +382,31 @@ export function HelpView() {
               </p>
             </div>
           </div>
+          <div className="rounded-xl border border-navy-100 bg-linen-50 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
+              Card colours — the pacing clocks (phase 57)
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm">
+              <span className="flex items-center gap-1.5 text-emerald-700/80">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> on track
+              </span>
+              <span className="flex items-center gap-1.5 text-amber-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> due soon (soft amber edge)
+              </span>
+              <span className="flex items-center gap-1.5 text-rose-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-rose-400" /> overdue (rose edge, faint tint)
+              </span>
+            </div>
+            <p className="mt-2 text-sm leading-relaxed text-navy-300">
+              Every active card carries the promise <span className="font-semibold text-navy">the customer
+              stipulated</span>: their chosen pickup slot (until the garment is collected), the speed tier they
+              paid for — <span className="font-semibold text-navy">24h / 48h express or the 3–5 day standard
+              window</span> (from pickup until finishing), and the one-hour delivery run once a rider is out.
+              Colour only appears as a window closes, so a calm board is a healthy board. Sort the list view by{' '}
+              <span className="font-semibold text-navy">Due</span> to work the most urgent order first and stay
+              ahead of the promises rather than chasing them.
+            </p>
+          </div>
           <p>
             The one sanctioned mid-order message is{' '}
             <span className="font-semibold text-navy">Ask the customer</span> in the order detail — a genuine
