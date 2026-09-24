@@ -29,6 +29,7 @@ import { useSession } from 'next-auth/react'
 import { useOrders, useUpdateOrder } from '@/lib/hooks'
 import { formatDate } from '@/lib/types'
 import { orderDistanceKm } from '@/lib/geo'
+import { getOrderTiming, formatDue } from '@/lib/order-timing'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -148,34 +149,55 @@ export function DriverView() {
       )
   const selected = orders.find((o: any) => o.id === selectedId)
 
-  // ----- New-stop alert (phase 55) -----
+  // ----- New-stop alert (phase 55, rebuilt phase 59 without
+  // setState-in-effect — the new lint rule) -----
   // The rider's phone is their dashboard: when the team assigns a new pickup
-  // or delivery, the polled list gains a stop and this banner lights up —
+  // or delivery, the polled list gains a stop and the banner lights up —
   // the "alert me when there's a ride" behaviour the owner asked for,
   // without building push infrastructure. Skipped on the first load (those
-  // are existing stops, not news).
-  const knownIdsRef = useRef<Set<string> | null>(null)
+  // are existing stops, not news), and frozen while paused so re-entering
+  // the service area never replays the whole route as "new".
+  const [knownIds, setKnownIds] = useState<string[] | null>(null)
   const [newStopAlert, setNewStopAlert] = useState<{ id: string; label: string } | null>(null)
-  useEffect(() => {
-    if (ordersPaused) return
-    if (knownIdsRef.current === null) {
-      knownIdsRef.current = new Set(orders.map((o: any) => o.id))
-      return
-    }
-    for (const o of orders) {
-      if (!knownIdsRef.current.has(o.id)) {
-        const isPickup = o.status === 'PAYMENT_VERIFIED'
+  // `isLoading` guard: the first render has an EMPTY list while the query
+  // is in flight — baselining against it would make every stop on the
+  // first load look "new" and fire a phantom banner. Only learn the route
+  // once real data has arrived (an empty route AFTER a fetch is a real
+  // baseline — the next assignment then correctly alerts).
+  if (!ordersPaused && !isLoading) {
+    const ids = orders.map((o: any) => o.id)
+    if (knownIds === null) {
+      // First sight of the route — a baseline, never news.
+      setKnownIds(ids)
+    } else {
+      const fresh = orders.filter((o: any) => !knownIds.includes(o.id))
+      if (fresh.length > 0) {
+        // Newest first (the list is createdAt-desc) — when several stops
+        // land in one poll, the banner carries the latest assignment.
+        const o = fresh[0]
         setNewStopAlert({
           id: o.id,
-          label: `New ${isPickup ? 'pickup' : 'delivery'} assigned — ${o.user?.name ?? 'customer'}`,
+          label: `New ${o.status === 'PAYMENT_VERIFIED' ? 'pickup' : 'delivery'} assigned — ${
+            o.user?.name ?? 'customer'
+          }`,
         })
-        setTimeout(() => {
-          setNewStopAlert((a) => (a && a.id === o.id ? null : a))
-        }, 8000)
+      }
+      // Adopt the current route (drops completed stops, so the same order
+      // returning as a DELIVERY leg IS new work and alerts again).
+      if (fresh.length > 0 || ids.join('\u241f') !== knownIds.join('\u241f')) {
+        setKnownIds(ids)
       }
     }
-    knownIdsRef.current = new Set(orders.map((o: any) => o.id))
-  }, [allOrders, orders, ordersPaused])
+  }
+  // Self-dismiss after 8s — setState in the timer callback, not the effect
+  // body, per the lint rule's async-callback allowance.
+  useEffect(() => {
+    if (!newStopAlert) return
+    const t = setTimeout(() => {
+      setNewStopAlert((a) => (a && a.id === newStopAlert.id ? null : a))
+    }, 8000)
+    return () => clearTimeout(t)
+  }, [newStopAlert?.id])
 
   // ----- Care & safety rules dialog -----
   const [rulesOpen, setRulesOpen] = useState(false)
@@ -184,7 +206,8 @@ export function DriverView() {
   // The welcome email promises "the app will ask you to choose your own
   // password" — the console had that dialog for staff, the rider app did
   // not. Riders approved through the pipeline get mustChangePassword=true;
-  // this non-dismissible dialog honours the promise.
+  // this non-dismissible dialog honours the promise. The dialog's open
+  // state IS the flag (derived, not synced through an effect).
   const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null)
   useEffect(() => {
     let alive = true
@@ -201,11 +224,6 @@ export function DriverView() {
     }
   }, [])
 
-  const [pwDialogOpen, setPwDialogOpen] = useState(false)
-  useEffect(() => {
-    if (mustChangePassword === true) setPwDialogOpen(true)
-  }, [mustChangePassword])
-
   const driverName = session?.user?.name ?? 'Driver'
 
   if (selected) {
@@ -221,12 +239,9 @@ export function DriverView() {
           }}
         />
         <RiderPasswordDialog
-          open={pwDialogOpen}
+          open={mustChangePassword === true}
           forced={mustChangePassword === true}
-          onDone={() => {
-            setMustChangePassword(false)
-            setPwDialogOpen(false)
-          }}
+          onDone={() => setMustChangePassword(false)}
         />
       </>
     )
@@ -373,7 +388,7 @@ export function DriverView() {
         )}
 
         <p className="mt-6 text-center text-[10px] text-slate-500">
-          Tap any card to see details and swipe-to-confirm the action.
+          Tap a stop for its 3 steps — ride there, count with the customer, swipe to confirm.
         </p>
       </div>
 
@@ -381,14 +396,12 @@ export function DriverView() {
       <RiderRulesDialog open={rulesOpen} onOpenChange={setRulesOpen} />
 
       {/* First-sign-in password change (phase 55) — forced while
-          mustChangePassword is set (welcome-email promise). */}
+          mustChangePassword is set (welcome-email promise). The flag IS the
+          dialog's open state — no mirrored state, no sync effect. */}
       <RiderPasswordDialog
-        open={pwDialogOpen}
+        open={mustChangePassword === true}
         forced={mustChangePassword === true}
-        onDone={() => {
-          setMustChangePassword(false)
-          setPwDialogOpen(false)
-        }}
+        onDone={() => setMustChangePassword(false)}
       />
     </div>
   )
@@ -560,11 +573,20 @@ function DriverStopCard({
   const isPickup = order.status === 'PAYMENT_VERIFIED'
   const isDrop = order.status === 'OUT_FOR_DELIVERY'
 
-  // Straight-line distance from the rider's last GPS fix to the stop's zone
+  // The stop's OWN address (delivery stops show the drop-off, not the
+  // pickup address) and the distance to THAT zone.
+  const addr = stopAddress(order)
   const stop =
     geofence.lat != null && geofence.lng != null
-      ? orderDistanceKm(geofence.lat, geofence.lng, order.pickupAddress)
+      ? orderDistanceKm(geofence.lat, geofence.lng, addr)
       : null
+
+  // The stop's own clock: pickup → the customer's chosen slot; delivery →
+  // the one-hour delivery-run promise (phase 57's clocks, in the rider's
+  // pocket). Overdue deliveries surface in rose so the route answers
+  // "which stop first?" at a glance.
+  const timing = getOrderTiming(order)
+  const dueText = timing ? formatDue(timing.dueAt) : null
 
   return (
     <motion.button
@@ -582,12 +604,12 @@ function DriverStopCard({
             {index}
           </div>
           {isPickup && (
-            <Badge className="bg-white/20 text-white hover:bg-white/20">
+            <Badge className="bg-gold-400/90 text-navy hover:bg-gold-400/90">
               <Package className="mr-1 h-3 w-3" /> Pickup
             </Badge>
           )}
           {isDrop && (
-            <Badge className="bg-white/20 text-white hover:bg-white/20">
+            <Badge className="bg-white/90 text-cyan-700 hover:bg-white/90">
               <Truck className="mr-1 h-3 w-3" /> Delivery
             </Badge>
           )}
@@ -598,13 +620,24 @@ function DriverStopCard({
       <p className="mt-3 text-base font-bold text-white">{customer?.name}</p>
       <p className="mt-1 flex items-start gap-1 text-xs text-white/80">
         <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
-        {order.pickupAddress}
+        {addr}
       </p>
 
       <div className="mt-3 flex items-center justify-between text-xs">
-        <span className="flex items-center gap-1 text-white/70">
+        <span
+          className={cn(
+            'flex items-center gap-1',
+            isPickup ? 'text-white/70' : timing?.state === 'overdue' ? 'font-semibold text-rose-300' : 'text-white/70'
+          )}
+        >
           <Clock className="h-3 w-3" />
-          {order.pickupTimeSlot}
+          {isPickup
+            ? `Slot ${order.pickupTimeSlot}`
+            : dueText
+            ? timing?.state === 'overdue'
+              ? `Due by ${dueText} · running over`
+              : `Due by ${dueText}`
+            : order.pickupTimeSlot}
         </span>
         <span className="flex items-center gap-2">
           {stop && (
@@ -657,6 +690,12 @@ function DriverOrderDetail({
   const isPickup = order.status === 'PAYMENT_VERIFIED'
   const actionLabel = isPickup ? 'Swipe to confirm pickup' : 'Swipe to confirm delivery'
   const actionVerb = isPickup ? 'PICKED_UP' : 'DELIVERED'
+
+  // The stop's own clock (phase 57): pickup → the chosen slot; delivery →
+  // the one-hour run promise. Shown on the customer card in the promise's
+  // own words, coloured by state like the ops board.
+  const timing = getOrderTiming(order)
+  const dueText = timing ? formatDue(timing.dueAt) : null
 
   const [confirming, setConfirming] = useState(false)
   const [done, setDone] = useState(false)
@@ -727,14 +766,20 @@ function DriverOrderDetail({
           <span className="font-mono text-xs text-slate-400">#{order.orderNumber}</span>
         </header>
 
-        {/* Action banner */}
+        {/* Action banner — the stop's type identity, colour-coded to match
+            its route card: gold = collect, cyan = hand over. The first
+            question at every door is "what am I doing here?" — answered
+            before anything else on the screen. */}
         <div
           className={cn(
-            'px-4 py-3 text-center text-sm font-semibold sm:px-6',
-            isPickup ? 'bg-navy' : 'bg-navy-500'
+            'flex items-center justify-center gap-2 px-4 py-3 text-sm font-bold tracking-wide sm:px-6',
+            isPickup
+              ? 'bg-gold-400/15 text-gold-300 ring-1 ring-inset ring-gold-400/30'
+              : 'bg-cyan-400/15 text-cyan-300 ring-1 ring-inset ring-cyan-400/30'
           )}
         >
-          {isPickup ? 'COLLECT FROM CUSTOMER' : 'DELIVER TO CUSTOMER'}
+          {isPickup ? <Package className="h-4 w-4" /> : <Truck className="h-4 w-4" />}
+          {isPickup ? 'PICKUP — COLLECT FROM CUSTOMER' : 'DELIVERY — HAND OVER TO CUSTOMER'}
         </div>
 
         {/* Customer card */}
@@ -757,46 +802,48 @@ function DriverOrderDetail({
               )}
             </div>
 
-            {/* Address */}
+            {/* Address — the stop's OWN address: delivery stops show the
+                drop-off, not the address the garments came from. */}
             <div className="mt-4 rounded-xl bg-slate-900/60 p-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                <MapPin className="h-3.5 w-3.5" /> Address
+                <MapPin className="h-3.5 w-3.5" /> {isPickup ? 'Pickup address' : 'Delivery address'}
               </p>
-              <p className="mt-1 text-sm text-white">
-                {isPickup ? order.pickupAddress : order.deliveryAddress ?? order.pickupAddress}
-              </p>
+              <p className="mt-1 text-sm text-white">{stopAddress(order)}</p>
             </div>
 
-            {/* Slot */}
+            {/* The stop's promise: the pickup slot the customer chose, or the
+                one-hour delivery-run clock for drops. */}
             <div className="mt-2 rounded-xl bg-slate-900/60 p-3">
               <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-                <Clock className="h-3.5 w-3.5" /> Time window
+                <Clock className="h-3.5 w-3.5" /> {isPickup ? 'Pickup window' : 'Delivery promise'}
               </p>
-              <p className="mt-1 text-sm text-white">
-                {formatDate(order.pickupDate)} · {order.pickupTimeSlot}
-              </p>
+              {isPickup || !dueText ? (
+                <p className="mt-1 text-sm text-white">
+                  {formatDate(order.pickupDate)} · {order.pickupTimeSlot}
+                </p>
+              ) : (
+                <p
+                  className={cn(
+                    'mt-1 text-sm font-semibold',
+                    timing?.state === 'overdue'
+                      ? 'text-rose-300'
+                      : timing?.state === 'watch'
+                      ? 'text-amber-300'
+                      : 'text-emerald-300'
+                  )}
+                >
+                  Due by {dueText}
+                  {timing?.state === 'overdue' ? ' — running over' : ' — within the hour of dispatch'}
+                </p>
+              )}
             </div>
           </div>
 
-          {/* Large action buttons */}
-          <div className="mt-3 grid grid-cols-2 gap-3">
-            <a
-              href={`tel:${customer?.phone}`}
-              className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-navy text-base font-bold text-white shadow-lg active:scale-95"
-            >
-              <Phone className="h-5 w-5" /> Call
-            </a>
-            <a
-              href={`https://www.google.com/maps/search/?api=1&destination=${encodeURIComponent(
-                isPickup ? order.pickupAddress : order.deliveryAddress ?? order.pickupAddress
-              )}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex h-14 items-center justify-center gap-2 rounded-2xl bg-cyan-600 text-base font-bold text-white shadow-lg active:scale-95"
-            >
-              <Navigation className="h-5 w-5" /> Navigate
-            </a>
-          </div>
+          {/* What happens at this stop, in order — the "after accepting,
+              what next?" answer. Every top courier app (Uber Driver,
+              DoorDash, Onfleet) answers it the same way: a numbered
+              sequence with the ride-first action carrying the buttons. */}
+          <StopSteps order={order} isPickup={isPickup} />
 
           {/* Items list — no financial data */}
           <div className="mt-4 rounded-2xl bg-slate-800 p-4">
@@ -901,6 +948,88 @@ function DriverOrderDetail({
         order={order}
         isPickup={isPickup}
       />
+    </div>
+  )
+}
+
+/** The "after accepting — what next?" card. A stop is always the same
+ *  three moves in the same order: ride there, verify the items WITH the
+ *  customer, swipe to confirm. Step 1 carries the action buttons — Navigate
+ *  seeds Google Maps with this stop's address and draws the route from the
+ *  rider's current location (the phase-59 fix for "it did not seed the
+ *  address"); Call reaches the customer without leaving the screen. */
+function StopSteps({ order, isPickup }: { order: any; isPickup: boolean }) {
+  const customer = order.user
+
+  const itemCount = (() => {
+    try {
+      const items = JSON.parse(order.itemsManifest || '[]')
+      return items.reduce((s: number, i: any) => s + i.quantity, 0)
+    } catch {
+      return 0
+    }
+  })()
+
+  const steps = [
+    {
+      title: isPickup ? 'Ride to the pickup address' : 'Ride to the delivery address',
+      body: 'Navigate opens Google Maps with this stop already set and the route drawn from where you stand. Call if you can\u2019t find the gate.',
+      actions: true as const,
+    },
+    {
+      title: isPickup ? 'Count the items with the customer' : 'Hand over and count together',
+      body:
+        order.type === 'KG'
+          ? 'Bulk laundry bag \u2014 the studio weighs it in.'
+          : `${itemCount} item${itemCount === 1 ? '' : 's'} on the list \u2014 the count must match before you ride off. Spot something odd? Report it now, not later.`,
+    },
+    {
+      title: isPickup ? 'Swipe to confirm pickup' : 'Swipe to confirm delivery',
+      body: 'The slider at the bottom of this screen \u2014 your signature that the stop is done.',
+    },
+  ]
+
+  return (
+    <div className="mt-3 rounded-2xl bg-slate-800 p-4">
+      <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+        At this stop — in this order
+      </p>
+      <ol className="mt-3 space-y-4">
+        {steps.map((s, i) => (
+          <li key={i} className="flex gap-3">
+            <span
+              className={cn(
+                'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
+                i === 0 ? 'bg-gold-400 text-navy' : 'bg-slate-700 text-slate-300'
+              )}
+            >
+              {i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-white">{s.title}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-slate-400">{s.body}</p>
+              {'actions' in s && (
+                <div className="mt-2 flex gap-2">
+                  <a
+                    href={navigationUrl(order)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-cyan-600 text-sm font-bold text-white shadow-lg active:scale-95 transition active:bg-cyan-700"
+                  >
+                    <Navigation className="h-4 w-4" /> Navigate
+                  </a>
+                  <a
+                    href={`tel:${customer?.phone}`}
+                    className="flex h-12 items-center justify-center gap-2 rounded-xl bg-slate-700 px-4 text-sm font-bold text-white active:scale-95 transition active:bg-slate-600"
+                  >
+                    <Phone className="h-4 w-4" /> Call
+                  </a>
+                </div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
     </div>
   )
 }

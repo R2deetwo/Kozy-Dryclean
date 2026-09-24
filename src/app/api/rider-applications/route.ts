@@ -187,6 +187,8 @@ export async function GET() {
   const riderIds = riders.map((r) => r.id)
   const openByDriver = new Map<string, number>()
   const deliveredByDriver = new Map<string, number>()
+  const doneTodayByDriver = new Map<string, number>()
+  const openIncidentsByDriver = new Map<string, number>()
   if (riderIds.length > 0) {
     const grouped = await db.order.groupBy({
       by: ['driverId', 'status'],
@@ -202,6 +204,38 @@ export async function GET() {
         deliveredByDriver.set(g.driverId, (deliveredByDriver.get(g.driverId) ?? 0) + g._count._all)
       }
     }
+
+    // Phase 59 — driver-grade tracking, the way fleet dashboards (Onfleet
+    // workers, Bringg) model it: what did this rider FINISH today? Each
+    // completed stop counts — a pickup made and a delivery made on the
+    // same order are two stops of work. "Today" is the Lagos business day
+    // (UTC+1, no DST), not the server's UTC day.
+    const lagosNow = new Date(Date.now() + 60 * 60 * 1000)
+    lagosNow.setUTCHours(0, 0, 0, 0)
+    const startOfLagosDay = new Date(lagosNow.getTime() - 60 * 60 * 1000)
+    const [pickedToday, deliveredToday, openIncidents] = await Promise.all([
+      db.order.groupBy({
+        by: ['driverId'],
+        where: { driverId: { in: riderIds }, pickedUpAt: { gte: startOfLagosDay } },
+        _count: { _all: true },
+      }),
+      db.order.groupBy({
+        by: ['driverId'],
+        where: { driverId: { in: riderIds }, deliveredAt: { gte: startOfLagosDay } },
+        _count: { _all: true },
+      }),
+      db.riderIncident.groupBy({
+        by: ['driverId'],
+        where: { driverId: { in: riderIds }, resolvedAt: null },
+        _count: { _all: true },
+      }),
+    ])
+    for (const g of pickedToday)
+      if (g.driverId) doneTodayByDriver.set(g.driverId, (doneTodayByDriver.get(g.driverId) ?? 0) + g._count._all)
+    for (const g of deliveredToday)
+      if (g.driverId) doneTodayByDriver.set(g.driverId, (doneTodayByDriver.get(g.driverId) ?? 0) + g._count._all)
+    for (const g of openIncidents)
+      if (g.driverId) openIncidentsByDriver.set(g.driverId, g._count._all)
   }
 
   const roster = riders.map((r) => ({
@@ -215,6 +249,8 @@ export async function GET() {
     lastZone: r.driverLocation?.zone ?? null,
     openAssignments: openByDriver.get(r.id) ?? 0,
     deliveriesCompleted: deliveredByDriver.get(r.id) ?? 0,
+    todayCompleted: doneTodayByDriver.get(r.id) ?? 0,
+    unresolvedIncidents: openIncidentsByDriver.get(r.id) ?? 0,
   }))
 
   // ----- Rider incidents (phase 55): the risk-management ledger -----

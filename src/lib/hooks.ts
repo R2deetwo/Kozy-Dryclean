@@ -548,6 +548,10 @@ export interface ApiRiderRosterEntry {
   lastZone: string | null
   openAssignments: number
   deliveriesCompleted: number
+  /** Stops completed today (Lagos day): pickups made + deliveries made. */
+  todayCompleted: number
+  /** Unresolved rider-reported incidents — the owner's watch list. */
+  unresolvedIncidents: number
 }
 
 /** A rider-reported incident on an order (phase 55). */

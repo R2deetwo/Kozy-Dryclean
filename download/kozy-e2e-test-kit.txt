@@ -27,6 +27,17 @@
   type that persona's password and switch. The console sidebar also now
   always shows Sign out (it used to sit below the screen edge on short
   laptop windows).
+- THE RIDER APP IS NOW SELF-EXPLAINING (phase 59): every stop card states
+  its TYPE at a glance — gold "Pickup" badge (collect) vs "Delivery" badge
+  (hand over), and delivery cards carry the drop-off address plus their
+  own clock ("Due by ..."). Open any stop and the screen walks the rider
+  through exactly what to do, in order: "At this stop — in this order"
+  (1 ride there, 2 count the items with the customer, 3 swipe to confirm)
+  — with Navigate and Call inside step 1. The Navigate button now properly
+  seeds Google Maps with the stop's address and starts the route (it used
+  to open a blank search page). The console's Customers tab shows
+  CUSTOMERS ONLY — riders are tracked in the Riders tab (open stops /
+  done today / delivered / open issues per rider).
 
 ## 2. What is already sitting in each inbox (sent during the battery)
 

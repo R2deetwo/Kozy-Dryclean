@@ -580,29 +580,45 @@ export function RidersView() {
                     </span>
                   </div>
 
-                  <div className="mt-3 grid grid-cols-3 gap-2 text-center">
-                    <div className="rounded-lg bg-linen-100 p-2">
+                  <div className="mt-3 grid grid-cols-4 gap-1.5 text-center">
+                    <div className="rounded-lg bg-linen-100 p-2" title="Stops currently on this rider's route">
                       <p className="text-lg font-bold text-navy">{r.openAssignments}</p>
                       <p className="text-[10px] uppercase tracking-wide text-navy-300">
                         open stops
                       </p>
                     </div>
-                    <div className="rounded-lg bg-linen-100 p-2">
+                    <div className="rounded-lg bg-linen-100 p-2" title="Pickups + deliveries completed since midnight, Lagos time">
+                      <p className="text-lg font-bold text-navy">{r.todayCompleted}</p>
+                      <p className="text-[10px] uppercase tracking-wide text-navy-300">
+                        done today
+                      </p>
+                    </div>
+                    <div className="rounded-lg bg-linen-100 p-2" title="Deliveries completed all-time">
                       <p className="text-lg font-bold text-navy">{r.deliveriesCompleted}</p>
                       <p className="text-[10px] uppercase tracking-wide text-navy-300">
                         delivered
                       </p>
                     </div>
-                    <div className="rounded-lg bg-linen-100 p-2">
-                      <p className="text-lg font-bold text-navy">{fmtWhen(r.joinedAt)}</p>
-                      <p className="text-[10px] uppercase tracking-wide text-navy-300">joined</p>
+                    <div
+                      className={cn(
+                        'rounded-lg p-2',
+                        r.unresolvedIncidents > 0 ? 'bg-rose-50 ring-1 ring-rose-200' : 'bg-linen-100'
+                      )}
+                      title={r.unresolvedIncidents > 0 ? 'Unresolved reported incidents — see the ledger below' : 'No unresolved incidents'}
+                    >
+                      <p className={cn('text-lg font-bold', r.unresolvedIncidents > 0 ? 'text-rose-600' : 'text-navy')}>
+                        {r.unresolvedIncidents}
+                      </p>
+                      <p className={cn('text-[10px] uppercase tracking-wide', r.unresolvedIncidents > 0 ? 'text-rose-500' : 'text-navy-300')}>
+                        open issues
+                      </p>
                     </div>
                   </div>
 
                   <p className="mt-3 text-[11px] leading-relaxed text-navy-300">
                     <Package className="mr-1 inline h-3 w-3" />
-                    Assign this rider to pickups and deliveries from any order&apos;s detail
-                    view — their route screen updates automatically.
+                    Joined {fmtWhen(r.joinedAt)} · assign this rider to pickups and deliveries
+                    from any order&apos;s detail view — their route screen updates automatically.
                   </p>
                 </CardContent>
               </Card>

@@ -68,10 +68,18 @@ export function CustomersView() {
     refetchOnWindowFocus: true,
   })
   const [search, setSearch] = useState('')
-  const [filter, setFilter] = useState<'all' | 'RETAIL' | 'CORPORATE' | 'DRIVER'>('all')
+  const [filter, setFilter] = useState<'all' | 'B2C' | 'B2B'>('all')
   const [selected, setSelected] = useState<any | undefined>(undefined)
 
-  const filtered = (users ?? []).filter((u) => {
+  // Phase 59 — this is the CUSTOMERS list, customers only. Riders and
+  // admins are different kinds of people with different data models: a
+  // rider is tracked on stops completed and GPS presence (their home is
+  // the Riders tab), an admin is a team member (Staff tab). Neither has
+  // "orders placed" nor "money spent" — those columns only ever made
+  // sense for the people who actually buy the service.
+  const customers = (users ?? []).filter((u) => u.role === 'B2C' || u.role === 'B2B')
+
+  const filtered = customers.filter((u) => {
     if (filter !== 'all' && u.role !== filter) return false
     if (!search) return true
     const s = search.toLowerCase()
@@ -87,7 +95,12 @@ export function CustomersView() {
       <div className="mb-4">
         <h1 className="text-lg font-bold tracking-tight text-navy">Customers (CRM)</h1>
         <p className="text-xs text-navy-300">
-          Browse all clients, riders, and admin accounts. Recent signups are flagged
+          The people who use the service — retail and corporate clients, with
+          what they order and what they spend. Riders are tracked in the
+          <span className="mx-1 font-semibold text-navy">Riders</span> tab; team
+          members in
+          <span className="mx-1 font-semibold text-navy">Staff</span>. Recent
+          signups are flagged
           <span className="mx-1 inline-flex items-center rounded-full bg-gold-400 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-navy">new</span>
           for their first week.
         </p>
@@ -108,7 +121,6 @@ export function CustomersView() {
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="B2C">Retail</TabsTrigger>
             <TabsTrigger value="B2B">Corporate</TabsTrigger>
-            <TabsTrigger value="DRIVER">Drivers</TabsTrigger>
           </TabsList>
         </Tabs>
       </div>
