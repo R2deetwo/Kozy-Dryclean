@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, Suspense, useEffect, useRef } from 'react'
-import { signIn, useSession } from 'next-auth/react'
+import { useState, Suspense } from 'react'
+import { signIn, signOut, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle, Send } from 'lucide-react'
+import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle, Send, UserCheck, LogOut } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,31 +31,41 @@ function LoginForm() {
   const callbackUrl = safePath(searchParams.get('callbackUrl'))
   const { data: session, status } = useSession()
 
-  // Already signed in? Straight to where they should be — landing on the
-  // login form again (the old behaviour) makes customers think the sign-in
-  // failed (audit finding). Role-aware so this never fights the submit
-  // handler's own redirect (ADMIN → /admin, DRIVER → /driver).
-  // Phase 44 fix: the submit handler's push and this effect's replace used
-  // to race (plus a redundant router.refresh()), the aborts stranding
-  // DRIVERS on a stuck "Signing in…" button — admins only survived because
-  // the middleware hard-redirects them. The flag hands the wheel to whichever
-  // path starts navigating first.
-  const submitNavigating = useRef(false)
-  useEffect(() => {
-    if (status === 'authenticated') {
-      if (submitNavigating.current) return
-      const role = (session?.user as any)?.role
-      if (role === 'ADMIN' || role === 'STAFF') router.replace('/admin')
-      else if (role === 'DRIVER') router.replace('/driver')
-      else router.replace(callbackUrl || '/portal')
-    }
-  }, [status, session, router, callbackUrl])
+  // Owner request (phase 58): visiting /login while signed in used to
+  // force-redirect straight to the console — the owner could never see the
+  // form to sign in with a DIFFERENT set of credentials (e.g. his admin
+  // persona while testing the rider login link). Now the form always shows,
+  // with a banner making the existing session explicit (that banner also
+  // preserves the old audit fix: a signed-in visitor is never left guessing
+  // whether their sign-in "failed" — the card says plainly that they are
+  // already in) and one-tap Continue / Sign out actions.
+  const sessionUser = session?.user as any
+  const sessionRole = sessionUser?.role
+  const continueUrl =
+    sessionRole === 'ADMIN' || sessionRole === 'STAFF'
+      ? '/admin'
+      : sessionRole === 'DRIVER'
+        ? '/driver'
+        : callbackUrl || '/portal'
 
   const [email, setEmail] = useState(searchParams.get('email') || '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // Prefill the email from the active session ("showing my credentials"),
+  // unless the URL carries an explicit ?email= (rider/ops login links win —
+  // that is exactly the switch-account test path). Render-time adjustment
+  // pattern (React docs: "You Might Not Need an Effect") — fills an EMPTY
+  // field once per session identity, so typing is never clobbered and no
+  // cascading effect renders.
+  const sessionEmail = sessionUser?.email ?? null
+  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null)
+  if (sessionEmail && sessionEmail !== prefilledFrom) {
+    setPrefilledFrom(sessionEmail)
+    if (!email && !searchParams.get('email')) setEmail(sessionEmail)
+  }
 
   const [unverifiedEmail, setUnverifiedEmail] = useState(false)
   const [resending, setResending] = useState(false)
@@ -104,7 +114,6 @@ function LoginForm() {
       // Phase 44 fix: ONE navigation, no router.refresh() — the refresh used
       // to abort this very push mid-flight (stuck "Signing in…" for drivers).
       // A fresh route load already pulls current server data.
-      submitNavigating.current = true
       if (role === 'ADMIN' || role === 'STAFF') router.push('/admin')
       else if (role === 'DRIVER') router.push('/driver')
       else {
@@ -126,8 +135,47 @@ function LoginForm() {
 
         <Card className="border-navy-100 shadow-navy">
           <CardContent className="p-6 sm:p-8">
+            {status === 'authenticated' && sessionUser && (
+              <div
+                role="status"
+                className="mb-5 rounded-lg bg-emerald-50 px-3 py-2.5 text-xs text-emerald-900 ring-1 ring-emerald-200"
+              >
+                <div className="flex items-start gap-2">
+                  <UserCheck className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-semibold">You&apos;re already signed in</p>
+                    <p className="mt-0.5">
+                      Signed in as <strong className="break-all">{sessionUser.email}</strong>. Continue where you
+                      left off, or sign in below with a different account.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        onClick={() => router.push(continueUrl)}
+                        className="bg-gold-gradient font-semibold text-[#0A192F] hover:opacity-90"
+                      >
+                        Continue as {sessionUser.name?.split(' ')[0] || 'your account'}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => signOut({ callbackUrl: '/login' })}
+                        className="border-navy-200 text-navy hover:bg-navy hover:text-white"
+                      >
+                        <LogOut className="mr-1.5 h-3.5 w-3.5" /> Sign out
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <h1 className="font-serif text-2xl font-semibold text-navy text-center mb-2">Welcome back</h1>
-            <p className="text-sm text-navy-300 text-center mb-6">Sign in to your Kozy Care account</p>
+            <p className="text-sm text-navy-300 text-center mb-6">
+              {status === 'authenticated'
+                ? 'Sign in below with a different account'
+                : 'Sign in to your Kozy Care account'}
+            </p>
 
             {error && (
               <div className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 flex items-start gap-2 ring-1 ring-rose-200">

@@ -19,6 +19,14 @@
 - Your admin inbox also now receives every admin alert (Settings →
   Notifications): kozygarmentcare@gmail.com, practiceprosystems@gmail.com,
   vk5m2w8t4a@woosh.dpdns.org.
+- SWITCHING PERSONAS (phase 58): the Sign in page no longer bounces you
+  into the console if you're already signed in. You'll see a calm banner
+  ("You're already signed in as ...") with a Continue button, plus the
+  normal form — email prefilled with whichever account the link targets
+  (e.g. the rider login link fills the RIDER email) — so you can simply
+  type that persona's password and switch. The console sidebar also now
+  always shows Sign out (it used to sit below the screen edge on short
+  laptop windows).
 
 ## 2. What is already sitting in each inbox (sent during the battery)
 

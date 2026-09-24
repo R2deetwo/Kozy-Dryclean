@@ -258,7 +258,14 @@ export function AdminDashboard() {
               </p>
             )}
           </div>
-          <nav className="flex-1 space-y-0.5 p-2">
+          {/* Phase 58 fix: with 13 admin tabs the nav column is ~774px tall,
+           * so on short viewports (laptop scaling, ~640px usable) the Live
+           * strip + Change password + Sign out were pushed BELOW the fixed
+           * h-screen sidebar — unreachable and invisible ("no way to sign
+           * out as admin"). min-h-0 + overflow-y-auto lets the tab list
+           * scroll internally so the account section stays pinned at the
+           * bottom at every height. Thin navy scrollbar keeps it calm. */}
+          <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2 [scrollbar-width:thin] [scrollbar-color:#1B3A5F_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-navy-500 [&::-webkit-scrollbar-track]:bg-transparent">
             {nav.map((n) => {
               const Icon = n.icon
               const active = tab === n.key
