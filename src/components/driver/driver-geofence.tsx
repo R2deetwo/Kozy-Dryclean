@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { MapPin, LocateFixed, ShieldAlert, Navigation2 } from 'lucide-react'
+import { MapPin, LocateFixed, ShieldAlert } from 'lucide-react'
 
 export type GeofenceStatus =
   | 'locating' // getting the first GPS fix
@@ -116,6 +116,12 @@ export function useDriverGeofence(enabled: boolean): GeofenceState {
 // -----------------------------------------------------------------------------
 // UI — compact status pill for the driver header
 // -----------------------------------------------------------------------------
+// Phase 61 copy fix: the pill used to read "Ajah · 5.6 km" — the distance
+// to the zone's approximate CENTRE, which reads as "you're 5.6 km from your
+// own zone" and confused everyone who saw it. A rider inside the fence
+// doesn't need a number at all: the pill now says what matters — on duty,
+// and which zone the system is matching them against.
+// -----------------------------------------------------------------------------
 export function DriverGeofencePill({ state }: { state: GeofenceState }) {
   if (state.status === 'in') {
     return (
@@ -124,7 +130,7 @@ export function DriverGeofencePill({ state }: { state: GeofenceState }) {
           <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
           <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
         </span>
-        {state.zone} · {state.distanceKm} km
+        On duty · {state.zone}
       </span>
     )
   }
@@ -132,7 +138,7 @@ export function DriverGeofencePill({ state }: { state: GeofenceState }) {
     return (
       <span className="flex items-center gap-1.5 rounded-full bg-amber-500/15 px-2.5 py-1 text-[11px] font-semibold text-amber-300">
         <ShieldAlert className="h-3 w-3" />
-        Outside area · {state.distanceKm} km
+        Off area · {state.distanceKm} km out
       </span>
     )
   }
@@ -157,6 +163,13 @@ export function DriverGeofencePill({ state }: { state: GeofenceState }) {
 
 // -----------------------------------------------------------------------------
 // UI — banner between stats and route list
+// -----------------------------------------------------------------------------
+// Phase 61 copy fix: the "in zone" banner ("Live in Ajah — showing stops
+// within 12 km of you") quoted ORDER_VISIBILITY_RADIUS_KM, an internal
+// tuning constant measured from the zone centre, NOT from the rider — it
+// answered a question nobody asked and cluttered the working screen. A
+// rider inside the fence is in the normal state of their day: no banner.
+// Only the two states that change behaviour (outside / location off) speak.
 // -----------------------------------------------------------------------------
 export function DriverGeofenceBanner({ state }: { state: GeofenceState }) {
   if (state.status === 'outside') {
@@ -194,21 +207,6 @@ export function DriverGeofenceBanner({ state }: { state: GeofenceState }) {
           Kozy can&apos;t confirm you&apos;re inside a service area, so all assigned
           stops are shown. To see only stops near you, allow location for this
           site in your browser settings, then reload.
-        </p>
-      </motion.div>
-    )
-  }
-  if (state.status === 'in') {
-    return (
-      <motion.div
-        initial={{ opacity: 0, y: -6 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-4 flex items-center gap-2.5 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-4 py-2.5"
-      >
-        <Navigation2 className="h-3.5 w-3.5 text-emerald-400" />
-        <p className="text-xs text-emerald-200/80">
-          Live in <span className="font-semibold text-emerald-300">{state.zone}</span>{' '}
-          — showing stops within 12 km of you.
         </p>
       </motion.div>
     )

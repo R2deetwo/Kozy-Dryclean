@@ -43,6 +43,8 @@ export const APP_SETTING_KEYS = [
   'alterations_from_price',
   'price_per_kg',
   'minimum_kg',
+  'rider_pickup_rate',
+  'rider_delivery_rate',
 ] as const
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number]
@@ -100,6 +102,8 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     alterationsFromPrice: num('alterations_from_price', d.alterationsFromPrice),
     pricePerKg: num('price_per_kg', d.pricePerKg),
     minimumKg: num('minimum_kg', d.minimumKg),
+    riderPickupRate: num('rider_pickup_rate', d.riderPickupRate),
+    riderDeliveryRate: num('rider_delivery_rate', d.riderDeliveryRate),
     // Not a DB setting — derived from the server env at the API layer. The
     // false here is a placeholder so this DB-mapped object satisfies the
     // type; callers that care use the /api/settings/app response, which
@@ -141,6 +145,8 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
       alterations_from_price: JSON.stringify(d.alterationsFromPrice),
       price_per_kg: JSON.stringify(d.pricePerKg),
       minimum_kg: JSON.stringify(d.minimumKg),
+      rider_pickup_rate: JSON.stringify(d.riderPickupRate),
+      rider_delivery_rate: JSON.stringify(d.riderDeliveryRate),
     }
     const missing = (Object.keys(seed) as AppSettingKey[]).filter((k) => !existing.has(k))
     if (missing.length > 0) {
@@ -208,6 +214,10 @@ export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<
     map.price_per_kg = JSON.stringify(Math.round(patch.pricePerKg))
   if (patch.minimumKg !== undefined)
     map.minimum_kg = JSON.stringify(Math.round(patch.minimumKg))
+  if (patch.riderPickupRate !== undefined)
+    map.rider_pickup_rate = JSON.stringify(Math.max(0, Math.round(patch.riderPickupRate)))
+  if (patch.riderDeliveryRate !== undefined)
+    map.rider_delivery_rate = JSON.stringify(Math.max(0, Math.round(patch.riderDeliveryRate)))
 
   await Promise.all(
     (Object.keys(map) as AppSettingKey[]).map((key) =>

@@ -20,10 +20,12 @@ import {
   AlertTriangle,
   Route,
   ListChecks,
-  LogOut,
   Scissors,
   ShieldCheck,
   Bell,
+  History as HistoryIcon,
+  Wallet,
+  User as UserIcon,
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
 import { useOrders, useUpdateOrder } from '@/lib/hooks'
@@ -45,6 +47,9 @@ import {
   DriverGeofencePill,
   DriverGeofenceBanner,
 } from '@/components/driver/driver-geofence'
+import { DriverHistoryTab } from '@/components/driver/driver-history-tab'
+import { DriverEarningsTab } from '@/components/driver/driver-earnings-tab'
+import { DriverAccountTab } from '@/components/driver/driver-account-tab'
 
 // The rider's duty-of-care rules — shown in the rider app itself (phase 55:
 // "what if the rider steals, damages or misplaces the items?" → make the
@@ -121,6 +126,13 @@ export function navigationUrl(order: any): string {
 
 export function DriverView() {
   const { data: session } = useSession()
+
+  // ----- App tabs (phase 61) — Route / History / Earnings / Account -----
+  // Uber-Driver structure: the working screen stays the route, everything
+  // a rider owns lives one thumb-tap away. The tab state is "route" most
+  // of the day; opening a stop takes over the whole screen as before.
+  const [tab, setTab] = useState<'route' | 'history' | 'earnings' | 'account'>('route')
+  const [pwOpen, setPwOpen] = useState(false) // anytime password change (Account)
 
   // ----- Rider geofencing -----
   // Tracks GPS, pings the server ~1/min, and pauses order activity while the
@@ -247,17 +259,27 @@ export function DriverView() {
     )
   }
 
+  const TABS = [
+    { id: 'route', label: 'Route', icon: Route },
+    { id: 'history', label: 'History', icon: HistoryIcon },
+    { id: 'earnings', label: 'Earnings', icon: Wallet },
+    { id: 'account', label: 'Account', icon: UserIcon },
+  ] as const
+
   return (
     <div className="min-h-[calc(100vh-3.5rem)] bg-slate-900 text-white">
-      {/* Driver header */}
+      {/* Driver header — the working identity. Phase 61: sign-out moved to
+          Account (it was never a mid-route action); the pill answers "am I
+          on duty?" and Rules stays one tap away, exactly where the owner
+          liked it. */}
       <header className="bg-slate-950 px-4 py-4 shadow-lg sm:px-6">
         <div className="mx-auto max-w-md">
           <div className="flex items-center justify-between">
-            <div>
+            <div className="min-w-0">
               <p className="text-xs uppercase tracking-wider text-gold-400">Driver on duty</p>
-              <p className="text-lg font-bold">{driverName}</p>
+              <p className="truncate text-lg font-bold">{driverName}</p>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-2">
               <DriverGeofencePill state={geofence} />
               {/* Care & safety rules — phase 55: the duty-of-care brief lives
                   IN the rider app, one tap away at all times. */}
@@ -268,12 +290,6 @@ export function DriverView() {
               >
                 <ShieldCheck className="h-3.5 w-3.5" /> Rules
               </button>
-              <button
-                onClick={() => signOut({ callbackUrl: '/' })}
-                className="flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-rose-700"
-              >
-                <LogOut className="h-3 w-3" /> Sign out
-              </button>
             </div>
           </div>
         </div>
@@ -281,7 +297,8 @@ export function DriverView() {
 
       <div className="mx-auto max-w-md px-4 py-4 sm:px-6">
         {/* New-stop alert (phase 55) — lights up the moment the team assigns
-            a new pickup or delivery; dismisses itself after a few seconds. */}
+            a new pickup or delivery, on ANY tab; dismisses itself after a
+            few seconds. */}
         <AnimatePresence>
           {newStopAlert && (
             <motion.button
@@ -290,6 +307,7 @@ export function DriverView() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -8 }}
               onClick={() => {
+                setTab('route')
                 setSelectedId(newStopAlert.id)
                 setNewStopAlert(null)
               }}
@@ -306,102 +324,156 @@ export function DriverView() {
           )}
         </AnimatePresence>
 
-        {/* Stats */}
-        <div className="mb-4 grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-slate-800 p-3 text-center">
-            <p className="text-xs text-slate-400">Today</p>
-            <p className="text-2xl font-bold text-white">{orders.length}</p>
-            <p className="text-[10px] text-slate-500">stops</p>
-          </div>
-          <div className="rounded-xl bg-slate-800 p-3 text-center">
-            <p className="text-xs text-slate-400">Pickups</p>
-            <p className="text-2xl font-bold text-gold-400">
-              {orders.filter((o) => o.status === 'PAYMENT_VERIFIED').length}
-            </p>
-            <p className="text-[10px] text-slate-500">to collect</p>
-          </div>
-          <div className="rounded-xl bg-slate-800 p-3 text-center">
-            <p className="text-xs text-slate-400">Drops</p>
-            <p className="text-2xl font-bold text-cyan-400">
-              {orders.filter((o) => o.status === 'OUT_FOR_DELIVERY').length}
-            </p>
-            <p className="text-[10px] text-slate-500">to deliver</p>
-          </div>
-        </div>
-
-        {/* Geofence status (paused / live-in-zone / location-off) */}
-        <DriverGeofenceBanner state={geofence} />
-
-        {/* Route header */}
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="flex items-center gap-2 text-base font-bold">
-            <Route className="h-4 w-4 text-gold-400" /> Your route today
-          </h2>
-          <span className="text-xs text-slate-400">
-            {orders.length} stop{orders.length === 1 ? '' : 's'}
-          </span>
-        </div>
-
-        {/* Stop cards */}
-        {orders.length === 0 ? (
-          ordersPaused ? (
-            <div className="rounded-xl border border-amber-500/30 bg-slate-800 p-8 text-center">
-              <Navigation2 className="mx-auto mb-2 h-10 w-10 text-amber-400" />
-              <p className="font-semibold text-white">No active stops</p>
-              <p className="mt-1 text-xs text-slate-400">
-                Your route resumes automatically when you re-enter a Kozy service
-                area — no action needed.
-              </p>
+        {/* ----- Tab content ----- */}
+        {tab === 'route' && (
+          <>
+            {/* Stats */}
+            <div className="mb-4 grid grid-cols-3 gap-2">
+              <div className="rounded-xl bg-slate-800 p-3 text-center">
+                <p className="text-xs text-slate-400">Today</p>
+                <p className="text-2xl font-bold text-white">{orders.length}</p>
+                <p className="text-[10px] text-slate-500">stops</p>
+              </div>
+              <div className="rounded-xl bg-slate-800 p-3 text-center">
+                <p className="text-xs text-slate-400">Pickups</p>
+                <p className="text-2xl font-bold text-gold-400">
+                  {orders.filter((o) => o.status === 'PAYMENT_VERIFIED').length}
+                </p>
+                <p className="text-[10px] text-slate-500">to collect</p>
+              </div>
+              <div className="rounded-xl bg-slate-800 p-3 text-center">
+                <p className="text-xs text-slate-400">Drops</p>
+                <p className="text-2xl font-bold text-cyan-400">
+                  {orders.filter((o) => o.status === 'OUT_FOR_DELIVERY').length}
+                </p>
+                <p className="text-[10px] text-slate-500">to deliver</p>
+              </div>
             </div>
-          ) : (
-            <div className="rounded-xl bg-slate-800 p-8 text-center">
-              <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-gold-400" />
-              <p className="font-semibold text-white">Route complete!</p>
-              <p className="mt-1 text-xs text-slate-400">
-                No pickups or deliveries assigned right now.
-              </p>
+
+            {/* Geofence status (paused / location-off) */}
+            <DriverGeofenceBanner state={geofence} />
+
+            {/* Route header */}
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="flex items-center gap-2 text-base font-bold">
+                <Route className="h-4 w-4 text-gold-400" /> Your route today
+              </h2>
+              <span className="text-xs text-slate-400">
+                {orders.length} stop{orders.length === 1 ? '' : 's'}
+              </span>
             </div>
-          )
-        ) : (
-          <ul className="space-y-3">
-            {orders.map((o, i) => (
-              <DriverStopCard
-                key={o.id}
-                order={o}
-                index={i + 1}
-                geofence={geofence}
-                onOpen={() => setSelectedId(o.id)}
-              />
-            ))}
-          </ul>
+
+            {/* Stop cards */}
+            {orders.length === 0 ? (
+              ordersPaused ? (
+                <div className="rounded-xl border border-amber-500/30 bg-slate-800 p-8 text-center">
+                  <Navigation2 className="mx-auto mb-2 h-10 w-10 text-amber-400" />
+                  <p className="font-semibold text-white">No active stops</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    Your route resumes automatically when you re-enter a Kozy service
+                    area — no action needed.
+                  </p>
+                </div>
+              ) : (
+                <div className="rounded-xl bg-slate-800 p-8 text-center">
+                  <CheckCircle2 className="mx-auto mb-2 h-10 w-10 text-gold-400" />
+                  <p className="font-semibold text-white">Route complete!</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    No pickups or deliveries assigned right now.
+                  </p>
+                </div>
+              )
+            ) : (
+              <ul className="space-y-3">
+                {orders.map((o, i) => (
+                  <DriverStopCard
+                    key={o.id}
+                    order={o}
+                    index={i + 1}
+                    geofence={geofence}
+                    onOpen={() => setSelectedId(o.id)}
+                  />
+                ))}
+              </ul>
+            )}
+
+            {/* Orders are cursor-paginated — older assignments load on demand */}
+            {!ordersPaused && hasMore && (
+              <button
+                onClick={() => loadMore()}
+                disabled={isFetchingMore}
+                className="mt-3 w-full rounded-full border border-slate-600 py-2 text-xs font-semibold text-slate-300 transition hover:border-gold-400 hover:text-white disabled:opacity-50"
+              >
+                {isFetchingMore ? 'Loading…' : `Load more (${orders.length} shown)`}
+              </button>
+            )}
+
+            <p className="mt-6 text-center text-[10px] text-slate-500">
+              Tap a stop for its 3 steps — ride there, count with the customer, swipe to confirm.
+            </p>
+          </>
         )}
 
-        {/* Orders are cursor-paginated — older assignments load on demand */}
-        {!ordersPaused && hasMore && (
-          <button
-            onClick={() => loadMore()}
-            disabled={isFetchingMore}
-            className="mt-3 w-full rounded-full border border-slate-600 py-2 text-xs font-semibold text-slate-300 transition hover:border-gold-400 hover:text-white disabled:opacity-50"
-          >
-            {isFetchingMore ? 'Loading…' : `Load more (${orders.length} shown)`}
-          </button>
-        )}
+        {tab === 'history' && <DriverHistoryTab />}
 
-        <p className="mt-6 text-center text-[10px] text-slate-500">
-          Tap a stop for its 3 steps — ride there, count with the customer, swipe to confirm.
-        </p>
+        {tab === 'earnings' && <DriverEarningsTab />}
+
+        {tab === 'account' && (
+          <DriverAccountTab
+            onOpenRules={() => setRulesOpen(true)}
+            onOpenPassword={() => setPwOpen(true)}
+          />
+        )}
       </div>
+
+      {/* Bottom tab bar (phase 61) — the rider's thumb never reaches the
+          top of the screen on a bike. Route is the default landing tab. */}
+      <nav
+        className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-800 bg-slate-950/95 backdrop-blur"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="mx-auto flex max-w-md items-stretch">
+          {TABS.map((t) => {
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  'relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-[10px] font-semibold transition',
+                  active ? 'text-gold-300' : 'text-slate-500 hover:text-slate-300'
+                )}
+                aria-current={active ? 'page' : undefined}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="rider-tab-indicator"
+                    className="absolute top-0 h-0.5 w-10 rounded-full bg-gold-400"
+                  />
+                )}
+                <t.icon className="h-5 w-5" />
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+      </nav>
+      {/* Clearance for the fixed bottom bar */}
+      <div className="h-16" />
 
       {/* Care & safety rules (phase 55) */}
       <RiderRulesDialog open={rulesOpen} onOpenChange={setRulesOpen} />
 
-      {/* First-sign-in password change (phase 55) — forced while
-          mustChangePassword is set (welcome-email promise). The flag IS the
-          dialog's open state — no mirrored state, no sync effect. */}
+      {/* Password change — forced on first sign-in (mustChangePassword),
+          or any time from Account. The flag IS the forced dialog's open
+          state; the Account one is plain open state. */}
       <RiderPasswordDialog
-        open={mustChangePassword === true}
+        open={mustChangePassword === true || pwOpen}
         forced={mustChangePassword === true}
-        onDone={() => setMustChangePassword(false)}
+        onDone={() => {
+          setMustChangePassword(false)
+          setPwOpen(false)
+        }}
       />
     </div>
   )
@@ -552,6 +624,15 @@ function RiderRulesDialog({ open, onOpenChange }: { open: boolean; onOpenChange:
             <span className="font-semibold text-amber-300">Report a problem</span> — the office is
             alerted instantly, and reporting immediately is always the right move.
           </p>
+          {/* Phase 61: the explicit exit the owner asked for — the little ✕
+              top-right is easy to miss on a phone inside a long scrollable
+              dialog, which left riders feeling trapped in the rules. */}
+          <Button
+            onClick={() => onOpenChange(false)}
+            className="w-full bg-gold-400 text-navy font-bold hover:bg-gold-300"
+          >
+            Got it — back to my route
+          </Button>
         </div>
       </DialogContent>
     </Dialog>
@@ -642,7 +723,7 @@ function DriverStopCard({
         <span className="flex items-center gap-2">
           {stop && (
             <span className="flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
-              <MapPin className="h-2.5 w-2.5" /> {stop.distanceKm} km · {stop.zone}
+              <MapPin className="h-2.5 w-2.5" /> {stop.zone} · {stop.distanceKm} km away
             </span>
           )}
           <span className="rounded-full bg-white/15 px-2 py-0.5 font-mono text-[10px]">

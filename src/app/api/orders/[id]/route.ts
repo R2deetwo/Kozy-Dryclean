@@ -31,6 +31,8 @@ import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 import { detectAnomalies, logAnomaly } from '@/lib/anomalies'
 import { scheduleMediaPurge } from '@/lib/media'
 import { processDeliveryMilestones } from '@/lib/referrals'
+import { pushToUser } from '@/lib/webpush'
+import { sendWhatsApp, assignmentBrief } from '@/lib/whatsapp'
 
 // ----- GET /api/orders/[id] -----
 export async function GET(
@@ -480,6 +482,50 @@ export async function PATCH(
   // status change is one of the natural moments to run the (throttled)
   // retention sweep, alongside the daily cron and list loads.
   scheduleMediaPurge()
+
+  // ----- Rider assignment notifications (phase 61) -----
+  // The moment a stop is assigned, the rider's own devices announce it:
+  //   1. Web Push to every device where they turned notifications on — the
+  //      phone wakes even with the browser closed (the answer to "do they
+  //      have to be on the website to see a ride come in?": NO).
+  //   2. WhatsApp via the Meta Cloud API when (and only when) the owner
+  //      adds WHATSAPP_TOKEN + WHATSAPP_PHONE_NUMBER_ID — until then this
+  //      leg is a logged no-op and the console's one-tap wa.me bridge does
+  //      the WhatsApp job instead. Either way the assignment itself never
+  //      waits on a notification channel.
+  if (parsed.data.driverId !== undefined && parsed.data.driverId !== order.driverId && parsed.data.driverId) {
+    const riderId = parsed.data.driverId
+    const leg: 'PICKUP' | 'DELIVERY' =
+      (parsed.data.status ?? order.status) === 'OUT_FOR_DELIVERY' ? 'DELIVERY' : 'PICKUP'
+    const address = leg === 'PICKUP' ? updated.pickupAddress : (updated.deliveryAddress || updated.pickupAddress)
+    const slot =
+      leg === 'PICKUP'
+        ? `${new Date(updated.pickupDate).toDateString()} · ${updated.pickupTimeSlot}`
+        : 'next delivery run'
+    const customerName = (updated as any).user?.name ?? 'customer'
+    after(async () => {
+      try {
+        await pushToUser(riderId, {
+          title: `New ${leg === 'PICKUP' ? 'pickup' : 'delivery'} assigned`,
+          body: `${customerName} — ${address}. Open the app for the 3 steps.`,
+          url: '/driver',
+          tag: `stop-${updated.id}`,
+        })
+        await sendWhatsApp(
+          (updated as any).driver?.phone,
+          assignmentBrief({
+            orderNumber: updated.orderNumber,
+            leg,
+            customerName,
+            address,
+            slot,
+          })
+        )
+      } catch (e) {
+        console.error('[notify] assignment notification failed:', e)
+      }
+    })
+  }
 
   ;(updated as any).mediaCount = (updated as any).media?.length ?? 0
   delete (updated as any).media

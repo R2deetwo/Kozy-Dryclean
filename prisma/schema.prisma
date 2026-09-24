@@ -88,6 +88,10 @@ model User {
   riderApplications     RiderApplication[]      @relation("RiderApplications")
   // Applications this admin reviewed/decided (audit trail).
   reviewedRiderApps     RiderApplication[]      @relation("RiderApplicationReviews")
+  // ----- Rider push subscriptions (phase 61) -----
+  // Each browser/device where this rider turned on stop notifications.
+  // A rider may have several (phone + tablet); all are pinged on assignment.
+  pushSubscriptions   PushSubscription[]      @relation("PushSubscriptions")
 }
 
 enum Role {
@@ -819,6 +823,33 @@ model RiderIncident {
   @@index([driverId])
   @@index([createdAt])
   @@index([resolvedAt])
+}
+
+// =====================================================
+// PUSH SUBSCRIPTION (phase 61) — rider stop notifications
+// =====================================================
+// Web-Push endpoint registrations (RFC 8291) created by the rider app when
+// the rider turns on notifications (Account → Notifications). One row per
+// browser/device. When the team assigns a stop, /api/orders/[id] PATCH sends
+// a push to every one of the rider's subscriptions — the rider's phone wakes
+// up with the assignment EVEN IF THE BROWSER IS CLOSED (Android/Chrome; iOS
+// requires the app to be added to the home screen first).
+// Expired/revoked endpoints (410 from the push service) are deleted on sight
+// so the table never accumulates dead rows.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("PushSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+  // The full Web-Push subscription object (endpoint + keys + auth), stored
+  // as JSON — exactly the shape webpush.sendNotification accepts.
+  endpoint  String   @unique
+  payload   String
+  // Device label shown in the rider's Account screen ("Chrome on Android")
+  device    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
 }
 
 // =====================================================

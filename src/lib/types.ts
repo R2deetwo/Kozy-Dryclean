@@ -528,6 +528,12 @@ export interface KozyAppSettings {
   // reached this browser's localStorage).
   pricePerKg: number
   minimumKg: number
+  // Rider pay (phase 61) — naira per completed stop, set by the office in
+  // Settings → Rider pay. Drives the rider app's Earnings tab; 0/0 means
+  // "rates not published yet" (riders see their completed work, never a
+  // fabricated number).
+  riderPickupRate: number
+  riderDeliveryRate: number
   // Card payments (Paystack) — NOT stored in the DB: derived server-side
   // from the presence of PAYSTACK_SECRET_KEY on each /api/settings/app
   // read. When false, checkout greys the card option out and transfer is
@@ -568,6 +574,11 @@ export function defaultAppSettings(): KozyAppSettings {
     // Bulk pricing defaults mirror the live AppSetting values.
     pricePerKg: B2B_PRICING.pricePerKg,
     minimumKg: B2B_PRICING.minimumKg,
+    // Rider pay defaults to unpublished — the office sets real rates in
+    // Settings → Rider pay; nothing shows in the rider Earnings tab until
+    // they do (honesty over decoration).
+    riderPickupRate: 0,
+    riderDeliveryRate: 0,
     // Pessimistic client default — the server response overrides it with
     // the real env-derived value. Greyed out beats a broken card checkout.
     paystackAvailable: false,
