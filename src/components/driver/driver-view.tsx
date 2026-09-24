@@ -84,6 +84,40 @@ const RIDER_RULES: { icon: typeof ShieldCheck; title: string; points: string[] }
   },
 ]
 
+// =============================================================================
+// Phase 59 — stop helpers. A stop's identity is its TYPE (pickup or delivery)
+// and its own address. Every top-tier delivery app (Uber Driver, DoorDash,
+// Onfleet) renders the task type as the card's primary identity — never a
+// small badge — because "what am I doing here?" is the first question at
+// every stop. Pickup → collect at the customer's address; delivery → drop
+// at the delivery address (falling back to the pickup address when the
+// customer's drop-off is the same place).
+// =============================================================================
+export function isPickupStop(order: any): boolean {
+  return order?.status === 'PAYMENT_VERIFIED'
+}
+
+export function stopAddress(order: any): string {
+  if (!order) return ''
+  return isPickupStop(order)
+    ? order.pickupAddress
+    : order.deliveryAddress || order.pickupAddress
+}
+
+/** Google Maps deep link that actually STARTS NAVIGATION (phase 59 fix).
+ *  The old /maps/search/?api=1&destination=… link opened a search page —
+ *  it never seeded the destination, which is exactly what the owner hit
+ *  ("opened the navigation, it did not seed the address"). The /maps/dir/
+ *  endpoint is the documented turn-by-turn URL: destination pre-filled,
+ *  route computed from the rider's current location. "Lagos, Nigeria" is
+ *  appended to help the geocoder resolve free-text Lagos street addresses. */
+export function navigationUrl(order: any): string {
+  const address = `${stopAddress(order)}, Lagos, Nigeria`
+  return `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(
+    address
+  )}&travelmode=driving`
+}
+
 export function DriverView() {
   const { data: session } = useSession()
 
@@ -100,14 +134,17 @@ export function DriverView() {
   const updateOrderMutation = useUpdateOrder()
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
 
-  // The API already filters orders to the logged-in driver (RBAC)
-  // For now, show all orders returned (driver sees only their own).
+  // The API already filters orders to the logged-in driver (RBAC).
+  // Phase 59: the route list shows only ACTIONABLE stops — a picked-up
+  // order is at the studio (its next rider moment is OUT_FOR_DELIVERY,
+  // which re-adds it as a delivery). It used to linger on the route with
+  // no type badge — the rider couldn't tell what was left to do with it.
   // While paused (outside the geofence) the server would return no stops —
   // mirror that client-side so no stale route lingers on screen.
   const orders = ordersPaused
     ? []
     : (allOrders ?? []).filter((o: any) =>
-        ['PICKED_UP', 'OUT_FOR_DELIVERY', 'PAYMENT_VERIFIED'].includes(o.status)
+        ['OUT_FOR_DELIVERY', 'PAYMENT_VERIFIED'].includes(o.status)
       )
   const selected = orders.find((o: any) => o.id === selectedId)
 
