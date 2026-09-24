@@ -205,6 +205,32 @@ export function useOrder(id?: string) {
   })
 }
 
+export function useDispatchSuggest(orderId?: string, enabled?: boolean) {
+  return useQuery({
+    queryKey: ['dispatch-suggest', orderId],
+    queryFn: async () => {
+      const res = await fetch(`/api/dispatch/suggest?orderId=${orderId}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to build dispatch suggestions')
+      }
+      return res.json() as Promise<{
+        order: { leg: 'PICKUP' | 'DELIVERY'; zone: string | null; slotStart: string; hoursUntilSlot: number }
+        context: { zonePickupsToday: number; unassignedInZoneToday: number }
+        suggestions: Array<{
+          rider: { id: string; name: string; phone: string }
+          score: number
+          factors: Array<{ kind: string; label: string; text: string; tone: 'good' | 'neutral' | 'warn'; points: number; max: number }>
+          flags: string[]
+        }>
+      }>
+    },
+    enabled: !!orderId && enabled !== false,
+    staleTime: 20_000,
+    refetchInterval: ADMIN_POLL.slow,
+  })
+}
+
 export function useCreateOrder() {
   const qc = useQueryClient()
   return useMutation({

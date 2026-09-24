@@ -27,6 +27,17 @@
   type that persona's password and switch. The console sidebar also now
   always shows Sign out (it used to sit below the screen edge on short
   laptop windows).
+- THE CONSOLE NOW THINKS WITH YOU (phase 60): open any order that has no
+  rider yet and the modal shows a "Dispatch" card — every active rider
+  scored /100 for THAT stop, each score explained in plain lines (distance
+  to the slot, current load, same-zone batching, on-time record, zone
+  familiarity). Click Assign on the suggestion you like (or expand "All
+  riders"); assigning sends no email — the rider's own app announces the
+  stop. The Customers tab now reads every customer against THEIR OWN
+  ordering rhythm: chips at the top (VIP · On rhythm · Going quiet · At
+  risk) answer "who is slipping?" in one tap, and each customer's modal
+  shows their usual gap, average order and a quietness-risk meter. VIP =
+  top 10% of lifetime value, recomputed as the book grows.
 - THE RIDER APP IS NOW SELF-EXPLAINING (phase 59): every stop card states
   its TYPE at a glance — gold "Pickup" badge (collect) vs "Delivery" badge
   (hand over), and delivery cards carry the drop-off address plus their

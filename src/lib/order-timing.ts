@@ -70,6 +70,13 @@ const TURNAROUND_TIERS: Record<string, { watch: number; due: number; clock: stri
 const RUN_WATCH = 45 * 60_000
 const RUN_DUE = 60 * 60_000
 
+/** Milliseconds from pickup until the tier's promise is due (phase 60:
+ *  shared with the dispatch engine so "on time" means the same thing on
+ *  the board and in a rider's reliability score). */
+export function TURNAROUND_DUE_MS(serviceSpeed?: string | null): number {
+  return (TURNAROUND_TIERS[serviceSpeed ?? 'STANDARD'] ?? TURNAROUND_TIERS.STANDARD).due
+}
+
 /** Parse a pickup slot like "09:00 - 10:00" into minutes-from-midnight. */
 function parseSlot(slot?: string | null): { start: number; end: number } | null {
   if (!slot) return null
@@ -85,6 +92,20 @@ function atLocalTime(base: Date, minutesFromMidnight: number): Date {
   const d = new Date(base.getTime())
   d.setHours(Math.floor(minutesFromMidnight / 60), minutesFromMidnight % 60, 0, 0)
   return d
+}
+
+/** The customer's chosen slot on the pickup date, as calendar moments
+ * (phase 60: the dispatch engine uses the START as its urgency deadline).
+ * Falls back to the business day (08:00–17:00) when the slot string is odd. */
+export function pickupSlotWindow(order: {
+  pickupDate: string | Date
+  pickupTimeSlot?: string | null
+}): { start: Date; end: Date } {
+  const base = new Date(order.pickupDate)
+  const slot = parseSlot(order.pickupTimeSlot)
+  const startMin = slot?.start ?? 8 * 60
+  const endMin = slot?.end ?? 17 * 60
+  return { start: atLocalTime(base, startMin), end: atLocalTime(base, endMin) }
 }
 
 /** The active promise on an order, or null for terminal orders. */

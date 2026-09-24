@@ -34,6 +34,8 @@ import {
   LayoutDashboard,
   Bike,
   ShieldCheck,
+  Navigation,
+  HeartPulse,
 } from 'lucide-react'
 import { useAppSettings } from '@/lib/hooks'
 import { formatNaira } from '@/lib/types'
@@ -462,6 +464,50 @@ export function HelpView() {
             application (own fuel, own maintenance, own safety gear) — and Kozy&apos;s promise to the customer
             is the published guarantee + refund policy. The incident ledger, the photos, the GPS trail and
             the manifest counts are the evidence trail that keeps both promises honest.
+          </p>
+        </div>
+      </section>
+
+      {/* ---------- 9. Smart Dispatch & customer health (phase 60) ---------- */}
+      <section className="rounded-2xl border border-navy-100 bg-white p-6 shadow-sm">
+        <h2 className="flex items-center gap-2 font-serif text-lg font-semibold text-navy">
+          <Navigation className="h-4 w-4 text-gold-500" /> 9 · Smart Dispatch &amp; customer health
+        </h2>
+        <div className="mt-3 space-y-3 text-sm leading-relaxed text-navy-300">
+          <p>
+            Open any order that has no rider yet and the modal now shows a{' '}
+            <span className="font-semibold text-navy">Dispatch</span> card: every active rider scored
+            out of 100 for THIS stop, with the reasons written out next to the score. The scoring weighs
+            the things that actually decide a good assignment in Lagos:
+          </p>
+          <ul className="space-y-1.5">
+            <li className="flex items-start gap-2"><ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
+              <span><span className="font-semibold text-navy">Distance to the slot</span> — a pickup in 30 minutes wants a rider within ~3 km; one later today doesn&apos;t care where he is right now. The distance budget grows with the time left.</span></li>
+            <li className="flex items-start gap-2"><ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
+              <span><span className="font-semibold text-navy">Load</span> — spreading work evenly finishes every promise sooner than stacking one rider while another idles.</span></li>
+            <li className="flex items-start gap-2"><ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
+              <span><span className="font-semibold text-navy">Corridor</span> — a rider already holding two Lekki stops collects a third Lekki pickup in the same pass (the cheapest kilometre in logistics is one you were already riding).</span></li>
+            <li className="flex items-start gap-2"><ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-500" />
+              <span><span className="font-semibold text-navy">Promises &amp; terrain</span> — the rider&apos;s own on-time record (the same tier clocks the board colours run on), and how much of their lifetime delivering happened in this zone.</span></li>
+          </ul>
+          <p>
+            It suggests — you decide. The <span className="font-semibold text-navy">Assign</span> button
+            sits on each suggestion, the full rider list is one tap away, and assigning sends no email:
+            the rider&apos;s own app announces the new stop. Riders without fresh GPS are scored neutrally
+            (never buried), and paused riders never appear.
+          </p>
+          <p className="flex items-start gap-1.5">
+            <HeartPulse className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
+            <span>
+              <span className="font-semibold text-navy">Customers (CRM)</span> now reads every customer
+              against <span className="font-semibold text-navy">their own ordering rhythm</span>: the
+              chips at the top (VIP · On rhythm · Going quiet · At risk) answer &quot;who is slipping?&quot; in one
+              tap, and each customer&apos;s modal shows their usual gap between orders, average order value
+              and a quietness-risk meter. A weekly shirt customer and a monthly duvet customer are both
+              healthy at very different gaps — so the question is never &quot;how long since their last order?&quot;
+              but &quot;have they been quiet longer than THEY usually are?&quot; VIP is the top 10% of lifetime
+              value, recomputed as the book grows.
+            </span>
           </p>
         </div>
       </section>

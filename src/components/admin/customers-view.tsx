@@ -18,10 +18,18 @@ import {
   AlertTriangle,
   MailCheck,
   MailX,
+  Award,
+  HeartPulse,
 } from 'lucide-react'
 import { useUsers, useOrders, useDeleteUser, ADMIN_POLL } from '@/lib/hooks'
 import { useMemo } from 'react'
 import { formatNaira, formatDate } from '@/lib/types'
+import {
+  computeCustomerHealth,
+  vipCustomerIds,
+  healthLabel,
+  type CustomerHealth,
+} from '@/lib/customer-health'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -53,6 +61,45 @@ function isNewCustomer(createdAt: string | Date): boolean {
   return Date.now() - new Date(createdAt).getTime() < NEW_CUSTOMER_WINDOW_MS
 }
 
+/** "3d ago" / "2h ago" for the Last-order column. */
+function sinceLabel(ms: number): string {
+  const mins = Math.round(ms / 60_000)
+  if (mins < 60) return `${Math.max(1, mins)}m ago`
+  const hours = Math.round(mins / 60)
+  if (hours < 48) return `${hours}h ago`
+  return `${Math.round(hours / 24)}d ago`
+}
+
+const HEALTH_CHIP: Record<string, string> = {
+  good: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  warn: 'bg-amber-50 text-amber-700 ring-amber-200',
+  risk: 'bg-rose-50 text-rose-700 ring-rose-200',
+  neutral: 'bg-slate-100 text-slate-600 ring-slate-200',
+}
+
+const HEALTH_DOT: Record<string, string> = {
+  good: 'bg-emerald-400',
+  warn: 'bg-amber-400',
+  risk: 'bg-rose-400',
+  neutral: 'bg-slate-300',
+}
+
+function HealthChip({ health }: { health: CustomerHealth }) {
+  const { label, tone } = healthLabel(health.status)
+  return (
+    <span
+      title={health.sentence}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full px-2 py-px text-[10px] font-semibold ring-1',
+        HEALTH_CHIP[tone]
+      )}
+    >
+      <span className={cn('h-1.5 w-1.5 rounded-full', HEALTH_DOT[tone])} />
+      {label}
+    </span>
+  )
+}
+
 export function CustomersView() {
   // Users are the primary list here → incremental paging with a "Load more"
   // control (orders joined per-row need the full set → fetchAll).
@@ -69,6 +116,7 @@ export function CustomersView() {
   })
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'B2C' | 'B2B'>('all')
+  const [healthFilter, setHealthFilter] = useState<'all' | 'vip' | 'loyal' | 'cooling' | 'atrisk'>('all')
   const [selected, setSelected] = useState<any | undefined>(undefined)
 
   // Phase 59 — this is the CUSTOMERS list, customers only. Riders and
@@ -79,8 +127,46 @@ export function CustomersView() {
   // sense for the people who actually buy the service.
   const customers = (users ?? []).filter((u) => u.role === 'B2C' || u.role === 'B2B')
 
+  // ----- Phase 60: retention intelligence -----
+  // Every customer's health is computed from their own order rhythm
+  // (cadence, recency, value), and VIP is a cohort call — the top decile of
+  // lifetime value among customers with delivered orders. One pass, memo'd;
+  // re-computes as the orders poll refreshes.
+  const healthById = useMemo(() => {
+    const map = new Map<string, CustomerHealth>()
+    for (const u of customers) {
+      map.set(u.id, computeCustomerHealth((orders ?? []).filter((o) => o.userId === u.id)))
+    }
+    return map
+  }, [customers, orders])
+  const vipSet = useMemo(
+    () => vipCustomerIds(customers.map((u) => ({ id: u.id, health: healthById.get(u.id)! }))),
+    [customers, healthById]
+  )
+  const counts = useMemo(() => {
+    let vip = 0
+    let loyal = 0
+    let cooling = 0
+    let atrisk = 0
+    for (const u of customers) {
+      if (vipSet.has(u.id)) vip++
+      const h = healthById.get(u.id)
+      if (h?.status === 'loyal') loyal++
+      else if (h?.status === 'cooling') cooling++
+      else if (h?.status === 'atrisk') atrisk++
+    }
+    return { vip, loyal, cooling, atrisk }
+  }, [customers, healthById, vipSet])
+
   const filtered = customers.filter((u) => {
     if (filter !== 'all' && u.role !== filter) return false
+    if (healthFilter !== 'all') {
+      if (healthFilter === 'vip' && !vipSet.has(u.id)) return false
+      if (healthFilter !== 'vip') {
+        const h = healthById.get(u.id)
+        if (h?.status !== healthFilter) return false
+      }
+    }
     if (!search) return true
     const s = search.toLowerCase()
     return (
@@ -95,8 +181,9 @@ export function CustomersView() {
       <div className="mb-4">
         <h1 className="text-lg font-bold tracking-tight text-navy">Customers (CRM)</h1>
         <p className="text-xs text-navy-300">
-          The people who use the service — retail and corporate clients, with
-          what they order and what they spend. Riders are tracked in the
+          The people who use the service — with their health read against their own
+          ordering rhythm, so quiet regulars surface before they are gone. Riders are
+          tracked in the
           <span className="mx-1 font-semibold text-navy">Riders</span> tab; team
           members in
           <span className="mx-1 font-semibold text-navy">Staff</span>. Recent
@@ -125,6 +212,39 @@ export function CustomersView() {
         </Tabs>
       </div>
 
+      {/* Phase 60 — health filter chips: the retention workflow
+       * ("who is slipping?") in one tap. */}
+      <div className="mb-4 flex flex-wrap items-center gap-1.5">
+        {([
+          ['all', 'All', customers.length, 'bg-navy text-white'],
+          ['vip', 'VIP', counts.vip, 'bg-gold-50 text-gold-700 ring-gold-300'],
+          ['loyal', 'On rhythm', counts.loyal, 'bg-emerald-50 text-emerald-700 ring-emerald-200'],
+          ['cooling', 'Going quiet', counts.cooling, 'bg-amber-50 text-amber-700 ring-amber-200'],
+          ['atrisk', 'At risk', counts.atrisk, 'bg-rose-50 text-rose-700 ring-rose-200'],
+        ] as const).map(([key, label, count, active]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setHealthFilter(key as any)}
+            className={cn(
+              'rounded-full px-2.5 py-1 text-[11px] font-semibold ring-1 transition',
+              healthFilter === key
+                ? active
+                : 'bg-white text-navy-300 ring-navy-100 hover:text-navy',
+              // A category nobody currently matches reads as "ready, empty" —
+              // dimmed rather than shouting 0.
+              healthFilter !== key && count === 0 && key !== 'all' && 'opacity-40'
+            )}
+          >
+            {label}
+            <span className="ml-1 opacity-70">{count}</span>
+          </button>
+        ))}
+        <span className="ml-1 hidden text-[10px] text-navy-300/70 sm:inline">
+          health = quiet for longer than their own usual gap · VIP = top 10% lifetime value
+        </span>
+      </div>
+
       <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
         <table className="w-full text-sm">
           <thead className="bg-linen-200 text-left text-xs uppercase tracking-wide text-navy-300">
@@ -133,6 +253,8 @@ export function CustomersView() {
               <th className="hidden px-4 py-2 md:table-cell">Type</th>
               <th className="hidden px-4 py-2 lg:table-cell">Contact</th>
               <th className="px-4 py-2 text-center">Orders</th>
+              <th className="px-4 py-2">Health</th>
+              <th className="hidden px-4 py-2 sm:table-cell">Last order</th>
               <th className="hidden px-4 py-2 lg:table-cell">Total Spent</th>
               <th className="hidden px-4 py-2 sm:table-cell">Since</th>
             </tr>
@@ -140,7 +262,8 @@ export function CustomersView() {
           <tbody>
             {filtered.map((u) => {
               const userOrders = (orders ?? []).filter((o) => o.userId === u.id)
-              const ltv = userOrders.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
+              const health = healthById.get(u.id)
+              const isVip = vipSet.has(u.id)
               const isNew = isNewCustomer(u.createdAt)
               return (
                 <tr
@@ -176,6 +299,14 @@ export function CustomersView() {
                       <div className="min-w-0">
                         <p className="flex items-center gap-1.5 truncate font-medium text-navy">
                           {u.name}
+                          {isVip && (
+                            <span
+                              title="VIP — top 10% of lifetime value"
+                              className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-gold-50 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-gold-700 ring-1 ring-gold-300"
+                            >
+                              <Award className="h-2.5 w-2.5" /> VIP
+                            </span>
+                          )}
                           {/* NEW badge — recent signups stand out so the owner
                               can personally welcome fresh customers (and spot
                               duplicate/junk entries fast). */}
@@ -208,8 +339,16 @@ export function CustomersView() {
                   <td className="px-4 py-3 text-center">
                     <span className="font-semibold text-navy">{userOrders.length}</span>
                   </td>
+                  <td className="px-4 py-3">
+                    {health ? <HealthChip health={health} /> : null}
+                  </td>
+                  <td className="hidden px-4 py-3 text-xs text-navy-300 sm:table-cell">
+                    {health?.lastDeliveredAt
+                      ? sinceLabel(Date.now() - new Date(health.lastDeliveredAt).getTime())
+                      : '—'}
+                  </td>
                   <td className="hidden px-4 py-3 lg:table-cell">
-                    <span className="font-semibold text-navy-300">{formatNaira(ltv)}</span>
+                    <span className="font-semibold text-navy-300">{formatNaira(health?.ltv ?? 0)}</span>
                   </td>
                   <td className="hidden px-4 py-3 sm:table-cell text-xs text-navy-300">
                     {formatDate(u.createdAt)}
@@ -244,6 +383,8 @@ export function CustomersView() {
         <CustomerDetailModal
           user={selected}
           orderCount={(orders ?? []).filter((o) => o.userId === selected.id).length}
+          health={healthById.get(selected.id)}
+          isVip={vipSet.has(selected.id)}
           onClose={() => setSelected(undefined)}
         />
       )}
@@ -267,10 +408,14 @@ function RoleBadge({ role }: { role: any }) {
 function CustomerDetailModal({
   user,
   orderCount,
+  health,
+  isVip,
   onClose,
 }: {
   user: any
   orderCount: number
+  health?: CustomerHealth
+  isVip?: boolean
   onClose: () => void
 }) {
   // Phase 31: staff browse the CRM but the destructive delete is
@@ -285,7 +430,6 @@ function CustomerDetailModal({
     () => allOrders.filter((o) => o.userId === user.id),
     [allOrders, user.id]
   )
-  const ltv = orders.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
   const activeCount = orders.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status)).length
   const reviewCount = 0 // reviews ride along with orders server-side; shown via the warning copy
 
@@ -327,6 +471,11 @@ function CustomerDetailModal({
           <DialogTitle className="flex items-center gap-2">
             {user.name}
             <RoleBadge role={user.role} />
+            {isVip && (
+              <span className="inline-flex items-center gap-0.5 rounded-full bg-gold-50 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-gold-700 ring-1 ring-gold-300">
+                <Award className="h-2.5 w-2.5" /> VIP
+              </span>
+            )}
             {isNewCustomer(user.createdAt) && (
               <span className="inline-flex items-center rounded-full bg-gold-400 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-navy">
                 new
@@ -360,10 +509,69 @@ function CustomerDetailModal({
             <Card className="border-navy-100">
               <CardContent className="p-4">
                 <p className="text-xs text-navy-300">Total spent</p>
-                <p className="text-xl font-bold text-navy-300">{formatNaira(ltv)}</p>
+                <p className="text-xl font-bold text-navy-300">{formatNaira(health?.ltv ?? orders.reduce((s, o) => s + (o.totalPrice ?? 0), 0))}</p>
               </CardContent>
             </Card>
           </div>
+
+          {/* Phase 60 — the relationship, read against their own rhythm. */}
+          {health && (
+            <div className="rounded-lg border border-navy-100 bg-linen-100 p-4">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-navy">
+                <HeartPulse className="h-4 w-4 text-gold-500" /> Relationship
+                {isVip && (
+                  <span className="ml-1 rounded-full bg-gold-50 px-2 py-px text-[10px] font-bold uppercase tracking-wide text-gold-700 ring-1 ring-gold-300">
+                    VIP
+                  </span>
+                )}
+              </p>
+              <p className="mt-1.5 text-sm leading-relaxed text-navy-300">{health.sentence}</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+                <div>
+                  <p className="text-navy-300/80">Delivered</p>
+                  <p className="font-semibold text-navy">{health.deliveredCount}</p>
+                </div>
+                <div>
+                  <p className="text-navy-300/80">Avg order</p>
+                  <p className="font-semibold text-navy">{health.aov ? formatNaira(health.aov) : '—'}</p>
+                </div>
+                <div>
+                  <p className="text-navy-300/80">Their rhythm</p>
+                  <p className="font-semibold text-navy">
+                    {health.cadenceDays ? `every ~${health.cadenceDays}d` : 'still forming'}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-navy-300/80">Last order</p>
+                  <p className="font-semibold text-navy">
+                    {health.daysSinceLastOrder !== null ? `${health.daysSinceLastOrder}d ago` : '—'}
+                  </p>
+                </div>
+              </div>
+              {health.churnRisk !== null && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between text-[10px] font-medium text-navy-300">
+                    <span>Quietness risk</span>
+                    <span className={cn(
+                      'font-bold',
+                      health.churnRisk >= 45 ? 'text-rose-600' : health.churnRisk >= 15 ? 'text-amber-600' : 'text-emerald-600'
+                    )}>
+                      {health.churnRisk}/100
+                    </span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-white ring-1 ring-navy-100">
+                    <div
+                      className={cn(
+                        'h-full rounded-full',
+                        health.churnRisk >= 45 ? 'bg-rose-400' : health.churnRisk >= 15 ? 'bg-amber-400' : 'bg-emerald-400'
+                      )}
+                      style={{ width: `${Math.max(3, health.churnRisk)}%` }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="rounded-lg bg-linen-200 p-3 text-sm">

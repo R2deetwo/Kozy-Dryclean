@@ -31,12 +31,12 @@ import {
   usePayments,
   useVerifyPayment,
   useDeletePayment,
-  useUsers,
   useAppSettings,
 } from '@/lib/hooks'
 import { formatNaira, formatDateTime, formatDate, type OrderStatus } from '@/lib/types'
 import { getOrderTiming, pacingSentence } from '@/lib/order-timing'
 import { OrderPipeline, OrderTimeline } from '@/components/shared/order-pipeline'
+import { DispatchCard } from '@/components/admin/dispatch-card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -179,10 +179,11 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
     }
   }
 
-  // Users list for driver assignment — fetchAll so the dropdown contains
-  // EVERY driver, not just the newest 25 users.
-  const { data: usersData } = useUsers({ fetchAll: true })
-  const drivers = (usersData ?? []).filter((u: any) => u.role === 'DRIVER')
+  // Phase 60: rider assignment moved from a blind name dropdown (which had
+  // actually rotted into dead code — the console had NO assignment UI at
+  // all) to the Dispatch card: scored, explained suggestions with the
+  // assign button on each. The card fetches its own fleet facts, so the
+  // modal no longer pulls the full users list either.
 
   // Parse items from itemsManifest JSON string
   const items = useMemo(() => {
@@ -200,16 +201,6 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
   // select follows in the same render.
   if (order.status !== statusSelect) {
     setStatusSelect(order.status)
-  }
-
-  const handleAssignDriver = (driverId: string) => {
-    updateOrderMutation.mutate(
-      { id: order.id, driverId },
-      {
-        onSuccess: () => toast({ title: 'Driver assigned' }),
-        onError: (e: any) => toast({ title: 'Could not assign driver', description: e?.message, variant: 'destructive' }),
-      }
-    )
   }
 
   const handleStatusChange = (newStatus: OrderStatus) => {
@@ -615,6 +606,14 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
                 <a href={`tel:${driver.phone}`} className="inline-flex items-center gap-1 text-xs text-[#0A192F] font-semibold hover:underline"><Phone className="h-3 w-3" /> {driver.phone}</a>
               </div>
             </section>
+          )}
+
+          {/* Phase 60 — Smart Dispatch: the assignment moment. Ranked,
+           * explained rider suggestions with one-click assign, shown exactly
+           * while the order has no rider. (Assignment sends no email — the
+           * rider's own app announces the new stop; see phase 55/59.) */}
+          {!driver && order.status !== 'DELIVERED' && order.status !== 'CANCELLED' && (
+            <DispatchCard orderId={order.id} orderNumber={order.orderNumber} />
           )}
 
           <section>
