@@ -51,6 +51,7 @@ import {
 } from '@/lib/hooks'
 import type { MarketingCampaign } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
+import { EmailPreviewDialog, type EmailPreviewTarget } from '@/components/admin/email-preview-dialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -192,8 +193,10 @@ export function NewsletterEnginePanel() {
   // newsletters that are coming after the one currently waiting.
   const { data: libraryData } = useNewsletterLibrary()
 
-  const [previewHtml, setPreviewHtml] = useState<string | null>(null)
-  const [previewLoading, setPreviewLoading] = useState(false)
+  // Phase 63 — the preview is the shared EmailPreviewDialog (fetch + srcDoc),
+  // the same one the campaign list uses, so the email looks identical
+  // wherever it is checked.
+  const [previewTarget, setPreviewTarget] = useState<EmailPreviewTarget | null>(null)
   const [showLibrary, setShowLibrary] = useState(false)
   const [confirmApprove, setConfirmApprove] = useState(false)
   const [confirmSkip, setConfirmSkip] = useState(false)
@@ -297,17 +300,9 @@ export function NewsletterEnginePanel() {
 
   const enabled = schedule.enabled
 
-  async function openPreview() {
+  function openPreview() {
     if (!pending) return
-    setPreviewLoading(true)
-    try {
-      const res = await fetch(`/api/marketing/campaigns/${pending.id}/preview`)
-      setPreviewHtml(res.ok ? await res.text() : null)
-    } catch {
-      setPreviewHtml(null)
-    } finally {
-      setPreviewLoading(false)
-    }
+    setPreviewTarget({ id: pending.id, name: pending.name })
   }
 
   async function handleTest() {
@@ -613,7 +608,6 @@ export function NewsletterEnginePanel() {
                         size="sm"
                         variant="outline"
                         onClick={openPreview}
-                        disabled={previewLoading}
                       >
                         <Eye className="mr-1 h-3.5 w-3.5" /> Preview
                       </Button>
@@ -761,30 +755,9 @@ export function NewsletterEnginePanel() {
         </CardContent>
       </Card>
 
-      {/* Preview dialog — the exact email, nothing sent */}
-      <Dialog open={!!previewHtml || previewLoading} onOpenChange={() => setPreviewHtml(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Email preview</DialogTitle>
-            <DialogDescription>
-              Exactly what customers will receive — the yellow &ldquo;test copy&rdquo; stripe is
-              removed on the real send. Nothing is sent from this screen.
-            </DialogDescription>
-          </DialogHeader>
-          {previewLoading ? (
-            <div className="flex h-72 items-center justify-center text-sm text-navy-300">
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Preparing…
-            </div>
-          ) : (
-            <iframe
-              title="Newsletter preview"
-              srcDoc={previewHtml ?? ''}
-              className="h-[460px] w-full rounded-lg border border-navy-100"
-              sandbox=""
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Preview dialog (phase 63) — the shared EmailPreviewDialog: identical
+          to the campaign-list preview, driven by fetch + srcDoc. */}
+      <EmailPreviewDialog target={previewTarget} onClose={() => setPreviewTarget(null)} />
 
       {/* Library browser */}
       <LibraryBrowser

@@ -63,6 +63,7 @@ import {
   type MarketingSubscriber,
 } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
+import { EmailPreviewDialog } from '@/components/admin/email-preview-dialog'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -490,16 +491,31 @@ function CampaignsTab() {
                         Test
                       </Button>
                     )}
-                    {['DRAFT', 'SCHEDULED', 'SENDING', 'SENT'].includes(c.status) && (
-                      <Button
-                        size="sm"
-                        className="bg-navy text-white hover:bg-navy/90"
-                        disabled={busyId === c.id}
-                        onClick={() => openSendDialog(c)}
+                    {/* Phase 63 simplification: an automation DRAFT has ONE
+                        review path — the newsletter engine card above
+                        (Preview → Approve schedules it for its slot). The
+                        list used to also offer "Send now", a second,
+                        competing primary action on the same email, which
+                        made the flow easy to second-guess. */}
+                    {c.source === 'automation' && c.status === 'DRAFT' ? (
+                      <span
+                        className="rounded-full border border-gold-200 bg-gold-50 px-2.5 py-1 text-[11px] font-semibold text-gold-700"
+                        title="Approve it from the newsletter engine card at the top — approving schedules it for its send day"
                       >
-                        <Send className="mr-1 h-3 w-3" />
-                        {c.status === 'SENT' ? 'Retry failed' : c.status === 'SCHEDULED' ? 'Send early' : 'Send now'}
-                      </Button>
+                        Awaiting your approval ↑
+                      </span>
+                    ) : (
+                      ['DRAFT', 'SCHEDULED', 'SENDING', 'SENT'].includes(c.status) && (
+                        <Button
+                          size="sm"
+                          className="bg-navy text-white hover:bg-navy/90"
+                          disabled={busyId === c.id}
+                          onClick={() => openSendDialog(c)}
+                        >
+                          <Send className="mr-1 h-3 w-3" />
+                          {c.status === 'SENT' ? 'Retry failed' : c.status === 'SCHEDULED' ? 'Send early' : 'Send now'}
+                        </Button>
+                      )
                     )}
                     {['DRAFT', 'SCHEDULED'].includes(c.status) && (
                       <Button
@@ -520,26 +536,17 @@ function CampaignsTab() {
         </div>
       )}
 
-      {/* ---- Preview dialog: the exact email, nothing is sent ---- */}
-      <Dialog open={!!previewCampaign} onOpenChange={(o) => !o && setPreviewCampaign(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Email preview — {previewCampaign?.name}</DialogTitle>
-            <DialogDescription>
-              This is exactly what your customers receive. Nothing is sent from this screen — use
-              Test to get a copy in your own inbox, or Send now to deliver it.
-            </DialogDescription>
-          </DialogHeader>
-          {previewCampaign && (
-            <iframe
-              title="Campaign email preview"
-              src={`/api/marketing/campaigns/${previewCampaign.id}/preview`}
-              className="h-[65vh] w-full rounded-lg border border-navy-100 bg-white"
-              sandbox=""
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* ---- Preview dialog (phase 63): fetch + srcDoc via the shared
+          EmailPreviewDialog. The old <iframe src> version was blocked by the
+          app's own clickjacking headers (X-Frame-Options: DENY + CSP
+          frame-ancestors 'none' in next.config.ts) — the browser refused to
+          show the endpoint's response inside any frame, which is why a
+          preview looked fine before approval (the engine card fetches) but
+          broke on the scheduled campaign (first use of THIS button). ---- */}
+      <EmailPreviewDialog
+        target={previewCampaign ? { id: previewCampaign.id, name: previewCampaign.name } : null}
+        onClose={() => setPreviewCampaign(null)}
+      />
 
       {/* ---- Phase 40: review-and-change editor for drafts ---- */}
       <EditCampaignDialog
