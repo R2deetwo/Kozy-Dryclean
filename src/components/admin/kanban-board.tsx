@@ -90,7 +90,14 @@ function useMinuteTick(): Date {
   return now
 }
 
-export function KanbanBoard({ isAdmin = false }: { isAdmin?: boolean }) {
+export function KanbanBoard({
+  isAdmin = false,
+  branchId,
+}: {
+  isAdmin?: boolean
+  /** Phase 62: the console's branch switcher — null shows every branch. */
+  branchId?: string | null
+}) {
   // Live mode (phase 25): the board polls every few seconds (paused while
   // the tab is hidden) and refetches the moment the tab regains focus —
   // new bookings, payment verifications and status changes made anywhere
@@ -116,7 +123,11 @@ export function KanbanBoard({ isAdmin = false }: { isAdmin?: boolean }) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  const orders = ordersData ?? []
+  // Phase 62: branch switcher filter. Orders created before branches
+  // existed (or with an unresolvable address) carry no branch — they stay
+  // visible in the "All branches" view only, so switching never hides a
+  // legacy card you forgot about.
+  const orders = (ordersData ?? []).filter((o: any) => !branchId || o.branchId === branchId)
   const boardColumns = showCompleted ? KANBAN_COLUMNS : ACTIVE_COLUMNS
   const completedCount = orders.filter((o: any) => o.status === 'DELIVERED').length
   const visibleOrders = orders.filter((o: any) =>

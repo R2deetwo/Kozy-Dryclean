@@ -92,6 +92,15 @@ model User {
   // Each browser/device where this rider turned on stop notifications.
   // A rider may have several (phone + tablet); all are pinged on assignment.
   pushSubscriptions   PushSubscription[]      @relation("PushSubscriptions")
+  // ----- Branch assignment (phase 62) -----
+  // For DRIVER accounts: their home branch (Ogombo / Chevron Drive). Used by
+  // dispatch suggestions as a branch-affinity bonus. Plain scalar string —
+  // resolved via the branches lookup, deliberately not a foreign key.
+  branchId            String?
+  // ----- Memberships (phase 62) -----
+  // The customer's Kozy Circle memberships (history preserved — one live,
+  // cancelled/lapsed ones remain for the record).
+  subscriptions       Subscription[]
 }
 
 enum Role {
@@ -169,6 +178,23 @@ model Order {
   lastNotifiedStage Int            @default(0)
   createdAt         DateTime       @default(now())
   updatedAt         DateTime       @updatedAt
+
+  // ----- Membership (phase 62: The Kozy Circle) -----
+  // The subscription this order was placed against (member bag/box pickups
+  // and included perk services). Plain scalar — resolved client-side via the
+  // subscriptions API, same lightweight pattern as the branch fields below.
+  subscriptionId    String?
+  // ----- Branch routing (phase 62: Ogombo / Chevron Drive) -----
+  // The branch this order's pickup is assigned to (server-side at creation
+  // from the pickup address's service zone; admins can re-route). Plain
+  // scalar string, resolved via the branches lookup — deliberately NOT a
+  // foreign key so branch rows can be edited without touching order history.
+  branchId          String?
+  // ----- Kozy Network fulfillment (phase 62) -----
+  // Set when an approved network partner (an independent operator running
+  // under the Kozy brand) processes this order instead of an in-house branch.
+  // Revenue-share statements derive from delivered orders carrying this id.
+  fulfilledByPartnerId String?
 
   media             GarmentMedia[]
   payments          Payment[]
@@ -890,4 +916,193 @@ model Review {
   @@index([driverId])
   @@index([isApproved])
   @@index([rating])
+}
+
+// =====================================================
+// BRANCH (phase 62) — physical processing locations
+// =====================================================
+// The business runs two locations today (Ogombo — the HQ — and Chevron
+// Drive). Every order's pickup is assigned to a branch server-side at
+// creation: the pickup address's service zone decides it, falling back to
+// the nearest branch by GPS distance. Orders carry branchId as a plain
+// scalar; admins can re-route from the order modal, and the console gets a
+// global branch switcher + per-branch health monitoring.
+model Branch {
+  id        String   @id @default(cuid())
+  name      String   @unique // "Ogombo"
+  slug      String   @unique // "ogombo"
+  address   String
+  phone     String?
+  // JSON array of SERVICE_ZONES names this branch owns
+  // (e.g. ["Lekki","Ikoyi","Victoria Island"]) — drives assignment.
+  zoneNames String   @default("[]")
+  lat       Float    @default(6.5)
+  lng       Float    @default(3.4)
+  isActive  Boolean  @default(true)
+  // Exactly one branch should be the default (fallback for unmatched
+  // addresses). Enforced in the API layer, not the DB.
+  isDefault Boolean  @default(false)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// =====================================================
+// SUBSCRIPTION_PLAN (phase 62) — The Kozy Circle tiers
+// =====================================================
+// Admin-priced monthly membership tiers. Volume is regulated by physical
+// kits (Kozy Bag / Kozy Box) the business provides — the bag IS the unit, so
+// nobody counts garments at the door. Every number here is admin-editable
+// from Memberships → Plans; price edits also sync a Paystack recurring Plan
+// (best-effort, when PAYSTACK_SECRET_KEY is configured).
+model SubscriptionPlan {
+  id        String   @id @default(cuid())
+  // ESSENTIALS | HOUSEHOLD | CONCIERGE
+  code      String   @unique
+  name      String // "The Essentials"
+  tagline   String   @default("")
+  priceMonthly Int // naira
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  // ----- Included volume per monthly cycle -----
+  includedUnits Int // bag/box pickups per month (4 = weekly cadence)
+  // bag | box — drives the marketing copy ("measured by the bag")
+  unitKind     String @default("bag")
+  unitName     String @default("Kozy Bag")
+  // Extra units beyond the included allowance (the margin builder —
+  // "pay extra for up to two more").
+  extraUnitPrice Int  @default(5000)
+  maxExtraUnits  Int  @default(2)
+  // Kit replacement fee when a cancelled member keeps the bag/box.
+  replacementFee Int  @default(5000)
+  // ----- Included perks (counts per period; 0 = not included) -----
+  duvetsPerQuarter   Int     @default(0)
+  curtainsPerQuarter Int     @default(0)
+  springCleanPerYear Int     @default(0)
+  // Concierge channel: designer pieces are assessed and treated by the
+  // concierge desk (Tier 3's signature perk).
+  concierge          Boolean @default(false)
+  // Percentage off every à-la-carte service (dry cleaning, shoes,
+  // alterations) — composes with the existing server-side pricing engine.
+  memberDiscountPct  Int     @default(5)
+  // Priority pickup windows (first slots of the day).
+  prioritySlots      Boolean @default(false)
+  // Paystack recurring plan code — synced when an admin saves the plan and
+  // keys are configured. Null = manual/transfer renewals only.
+  paystackPlanCode   String?
+  subscriptions      Subscription[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+// =====================================================
+// SUBSCRIPTION (phase 62) — one member's membership
+// =====================================================
+// One ACTIVE subscription per customer (enforced in the API). The cycle
+// engine: periodStart/periodEnd define the current monthly cycle; usage
+// counters (unitsUsed, duvetsUsed, …) belong to that cycle and reset on
+// renewal. Payment mirrors the Payment-table lifecycle but lives HERE
+// (bank-transfer verification + Paystack refs) so membership money never
+// pollutes the order pipeline or the Kanban board.
+//
+// Statuses:
+//   PENDING_ACTIVATION — subscribed, payment not yet verified (transfer)
+//   ACTIVE             — paid & running (periodEnd in the future)
+//   EXPIRING           — ACTIVE + cancelAtPeriodEnd (kept for the customer's
+//                        clarity; computed at read time, never stored)
+//   PAST_DUE           — period ended while a transfer renewal was pending
+//   LAPSED             — ended, not renewed (history preserved)
+//   CANCELLED          — cancelled by member or admin
+model Subscription {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id])
+  planId      String
+  plan        SubscriptionPlan @relation(fields: [planId], references: [id])
+  status      String   @default("PENDING_ACTIVATION")
+  periodStart DateTime?
+  periodEnd   DateTime?
+  // Naira actually paid for the CURRENT cycle (equals plan price unless the
+  // admin adjusted it — e.g. a founding-member discount).
+  pricePaid   Int      @default(0)
+  // BANK_TRANSFER | PAYSTACK
+  paymentMethod String?
+  // Transfer receipt screenshot (downscaled data URL), shown to the admin
+  // in the Memberships → Subscribers verification list.
+  transferReceipt String?
+  // Paystack reference for the CURRENT cycle's charge: "SUB-{id}" for the
+  // initial charge, then renewal events extend the period. Unique per row
+  // so the webhook can find it idempotently.
+  paystackRef String?  @unique
+  // Paystack recurring-subscription codes (present once the first charge
+  // succeeds with a plan attached — Paystack auto-creates the subscription).
+  paystackSubscriptionCode String?
+  paystackEmailToken       String?
+  // ----- Usage counters (belong to the CURRENT cycle / quarter / year) -----
+  unitsUsed      Int @default(0) // bag/box pickups consumed this cycle
+  extraUnitsUsed Int @default(0)
+  duvetsUsed     Int @default(0) // this calendar quarter
+  curtainsUsed   Int @default(0)
+  springCleanUsed Int @default(0) // this calendar year
+  // Reset bookmarks — when the counters were last zeroed (renewal resets
+  // units; quarter/year rolls reset the perk counters lazily at read time).
+  usageCycleKey String? // "2026-09-01" — the cycle the unit counters belong to
+  usageQuarterKey String? // "2026-Q3"
+  usageYearKey    String? // "2026"
+  // ----- Kit lifecycle -----
+  // PENDING_DELIVERY -> WITH_MEMBER -> RETURNED | REPLACED (fee charged)
+  kitState      String   @default("PENDING_DELIVERY")
+  kitDeliveredAt DateTime?
+  // ----- Cancellation -----
+  cancelAtPeriodEnd Boolean  @default(false)
+  cancelledAt  DateTime?
+  cancelledReason String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([periodEnd])
+}
+
+// =====================================================
+// PARTNER (phase 62) — the Kozy Network
+// =====================================================
+// An independent laundry operator running UNDER the Kozy brand: Kozy brings
+// demand + technology + brand; the partner brings processing capacity.
+// Applications arrive from the public /partners page; approval happens in
+// the admin Partners view. Orders tagged fulfilledByPartnerId derive the
+// revenue-share ledger (partner keeps revenueSharePartnerPct of delivered
+// order value; Kozy keeps the rest).
+//
+// v1 scope: application + approval + branch assignment + share % + derived
+// ledger. Partner self-serve portal logins are deliberately phase 2 — no
+// new auth surface is opened until the first partner is signed.
+model Partner {
+  id           String   @id @default(cuid())
+  businessName String
+  contactName  String
+  email        String   @unique
+  phone        String
+  address      String
+  // Their story: equipment, staff, throughput, existing clients.
+  capacityNotes String? @db.Text
+  // The branch hub they hang off (plain scalar, like orders/riders).
+  branchId     String?
+  // PENDING | APPROVED | SUSPENDED | REJECTED
+  status       String   @default("PENDING")
+  // Revenue split — the partner's share of delivered order value (%).
+  revenueSharePartnerPct Int @default(70)
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
 }

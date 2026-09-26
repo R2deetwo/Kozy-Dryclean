@@ -76,6 +76,8 @@ export interface DispatchOrderLeg {
   zoneCenter?: { lat: number; lng: number } | null
   /** When the promise at this stop starts (pickup slot start / now-ish). */
   slotStart?: Date | null
+  /** Phase 62: the branch this order is routed to (affinity factor). */
+  branchId?: string | null
 }
 
 export interface RiderFacts {
@@ -96,6 +98,8 @@ export interface RiderFacts {
   totalDelivered: number
   /** Unresolved rider incidents. */
   unresolvedIncidents: number
+  /** Phase 62: the rider's home branch (affinity factor). */
+  branchId?: string | null
 }
 
 // ----- Output -----
@@ -288,6 +292,34 @@ export function scoreRider(
           : `${rider.zoneDelivered} of ${rider.totalDelivered} lifetime deliveries were in ${zone}`
     }
     factors.push({ kind: 'terrain', label: 'Terrain', text, tone, points, max })
+  }
+
+  // ---- 6. BRANCH (0–10): same-branch affinity (phase 62) ----
+  // A rider whose home branch matches the order's branch rides the same
+  // corridor anyway — pickups land at their hub, deliveries fan out from it.
+  // Unassigned riders (or unrouted orders) stay neutral: never punished,
+  // just not boosted.
+  {
+    const max = 10
+    let points: number
+    let text: string
+    let tone: FactorTone
+    if (!order.branchId || !rider.branchId) {
+      points = 5
+      text = !order.branchId
+        ? 'Order not routed to a branch yet'
+        : 'Rider has no home branch — assign one in Team → Riders'
+      tone = 'neutral'
+    } else if (order.branchId === rider.branchId) {
+      points = 10
+      text = 'Same home branch — natural corridor'
+      tone = 'good'
+    } else {
+      points = 2
+      text = 'Different home branch — cross-corridor run'
+      tone = 'neutral'
+    }
+    factors.push({ kind: 'branch', label: 'Branch', text, tone, points, max })
   }
 
   const total = clamp(

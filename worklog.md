@@ -1370,3 +1370,28 @@ Stage Summary:
 - BLOCKER for the user: a fresh Vercel token is needed to ship phase 61 (SAML revoked the old one) — vercel.com/account/tokens, then VERCEL_TOKEN=<token> bash scripts/p61_deploy_when_token.sh; after that, set the rider phone (p61_set_rider_phone.ts) so 08124129296 powers the WhatsApp bridge + self-test.
 - Validation artifacts: scripts/p61_seed.ts, p61_qa.js (61/61), p61_push_format_probe.js, p61_debug_geo.js, p61_debug_push.js, p61_capture_riderpay.js, vlm_p61_qa.mjs, p61_live_check.js, p61_deploy_when_token.sh, p61_set_rider_phone.ts, work/p61-A-run.log, work/p61-{route,history,earnings,account}-mobile.png, work/p61-riderpay-admin.png, work/p61-vlm-reviews.txt, work/p61-vapid-keys.json (pre-existing), work/p61-push-mock.{crt,key} (gitignored).
 - Remaining recommendations: FRESH VERCEL TOKEN (blocker); rider phone on prod right after; Brevo sender DNS for concierge@kozycare.ng; the live console's pre-existing React #418 hydration error; mobile Kanban column-width redesign candidate; APK/TWA build as a next phase if the owner wants it.
+
+---
+Task ID: 62
+Agent: Super Z (main agent)
+Task: Growth architecture — The Kozy Circle memberships, multi-branch operations (Ogombo/Chevron), the Kozy Network partner program, and console restructure
+
+Work Log:
+- Deep research: 2ULaundry bag-subscription model, Rinse Go fee-waiver positioning, Lagos market (₦30k/mo plans exist), laundry-OS licensing (onthewaylaundry), franchise multi-location dashboards
+- Plan written + saved to download/KOZY_GROWTH_PLAN.md (tiers, decision log with rationale, chunked implementation roadmap)
+- Chunk A (data): Prisma models Branch, SubscriptionPlan, Subscription, Partner + Order.branchId/subscriptionId/fulfilledByPartnerId + User.branchId; relations user/plan on Subscription; db push OK; lib/subscriptions.ts (self-seeding plans, cycle/usage engine, activateOrRenew) + lib/branches.ts (zone→branch assignment with nearest-fallback)
+- Chunk B (APIs): /api/subscriptions (POST subscribe + GET admin), /me (GET+PATCH cancel), /[id] (verify/renew/cancel/kit/reset), /pickup (one-tap member booking creating real orders — PAYMENT_VERIFIED when covered), /plans (GET public + PUT admin w/ Paystack plan sync), /api/branches (GET/PUT), /api/partners (POST apply/GET admin+ledger), /api/partners/[id] (approve/reject/suspend/update); schemas + hooks (14 new); notifications (new-member alert, activation email, cancellation email, partner-application alert); member pricing woven into POST /api/orders (free delivery + plan discount replacing weaker online discount); PATCH /api/orders/[id] gains admin-only branchId/fulfilledByPartnerId with status-event audit trail
+- Chunk C (Paystack): /api/paystack/subscription-initialize (attaches plan code → recurring), webhook handles SUB- refs + renewal charge.success (idempotent), verify route + callback page membership-aware
+- Chunk D (customer): /memberships page (hero, kit explainer, 3 tier cards w/ middle anchor, value math, FAQ, join dialog w/ card+transfer), portal Membership tab (usage meters, one-tap booking incl. perks, cancel-at-period-end + undo, kit state), quiet discovery: nav text link + footer links (never front-and-center, per owner directive)
+- Chunk E (branches): Settings→Branches tab (zones editor, default flag, active), server-side assignment at order creation, admin branch switcher (All/Ogombo/Chevron) filtering Overview+Operations+Finance, BranchHealth cards (alerts: unrouted pickups, stale receipts, no riders), rider home-branch select in Team→Riders, dispatch scoring +10 branch-affinity factor
+- Chunk F (partners): /partners public page (pitch + application), admin Partners view (applications queue w/ approve terms, network roster w/ derived monthly ledger), order-modal Fulfillment select
+- Chunk G (console IA): 13 flat sidebar rows → 9 grouped (Run/Grow/Scale/Manage) with in-page sub-tabs; Operations=Pipeline+Payments+Health; Customers=Directory+Reviews+Feedback; Team=Staff+Riders; Help → sidebar footer; deep-link remap keeps all NotificationEvent links working
+- Chunk H (QA): tsc clean; eslint — all new files clean, only pre-existing issues remain (+1 fixed); production build green; full E2E suite scripts/phase62-e2e.js — 39/39 (subscribe→verify→pickup routing→usage counters→perk gating incl. PERK_EXCEEDED→member pricing→partner apply/approve/ledger→RBAC→cancel→pages); fixed duplicate-guard identity bug (kind+slot now part of the match); screenshots saved
+- Deployment: run scripts/p61_deploy_when_token.sh with the fresh token (ships phase 61 + 62 together — build runs prisma db push on Supabase)
+
+Stage Summary:
+- The Kozy Circle live: 3 tiers (₦30k bag / ₦50k box+duvets / ₦80k concierge) — every number admin-editable in Memberships→Plans (Paystack recurring sync best-effort)
+- Every order now routes to Ogombo or Chevron Drive automatically (zone→branch, nearest fallback); console has branch switcher + per-branch health alerts
+- Kozy Network: operators apply at /partners, admin approves with branch + revenue share, delivered-order ledger derives automatically
+- Console condensed 13→9 grouped rows; memberships MRR tile on Overview
+- E2E 39/39, build green, schema pushed locally; awaiting prod deploy via token

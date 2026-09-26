@@ -90,3 +90,5 @@ work/pgembed/
 work/pgdata/
 work/pg.log
 work/p61-push-mock.*
+research/
+tool-results/

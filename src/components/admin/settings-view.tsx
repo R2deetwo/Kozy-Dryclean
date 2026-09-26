@@ -32,6 +32,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { BranchesTab } from './branches-settings'
 
 const CATEGORY_LABELS: Record<string, string> = {
   Shirts: 'Shirts & Tops',
@@ -262,6 +263,9 @@ export function SettingsView() {
           </TabsTrigger>
           <TabsTrigger value="notifications" className="data-[state=active]:bg-navy data-[state=active]:text-white">
             <Bell className="mr-1.5 h-3.5 w-3.5" /> Notifications
+          </TabsTrigger>
+          <TabsTrigger value="branches" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+            <MapPin className="mr-1.5 h-3.5 w-3.5" /> Branches
           </TabsTrigger>
         </TabsList>
 
@@ -540,6 +544,12 @@ export function SettingsView() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* BRANCHES TAB (phase 62) — the physical locations: zones owned,
+            default fallback, active state. Decides where new pickups land. */}
+        <TabsContent value="branches" className="mt-4">
+          <BranchesTab />
         </TabsContent>
 
         {/* PRICING TAB — server-backed: per-kg terms now save to AppSetting

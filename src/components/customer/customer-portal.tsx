@@ -16,6 +16,7 @@ import {
   Loader2,
   Zap,
   Gift,
+  Crown,
 } from 'lucide-react'
 import { useOrders, type ApiOrder } from '@/lib/hooks'
 import { formatNaira, formatDate } from '@/lib/types'
@@ -28,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { OrderDetailModal } from './order-detail-modal'
 import { InvoiceView } from './invoice-view'
 import { BookingWizard } from './booking-wizard'
+import { MembershipTab } from './membership-tab'
 import { motion } from 'framer-motion'
 
 interface Props {
@@ -219,7 +221,7 @@ function CustomerDashboard({
   // Fetch orders from the real API (already RBAC-filtered server-side to this
   // user) — cursor-paginated, older orders load on demand.
   const { data: orders, isLoading, hasMore, loadMore, isFetchingMore } = useOrders()
-  const [tab, setTab] = useState<'active' | 'invoices'>('active')
+  const [tab, setTab] = useState<'active' | 'invoices' | 'membership'>('active')
   const [selected, setSelected] = useState<any | undefined>(
     highlightedId ? orders?.find((o) => o.id === highlightedId) : undefined
   )
@@ -319,45 +321,51 @@ function CustomerDashboard({
             badge, no teaser, nothing that hints an offer exists. */}
         <LoyaltyCard />
 
-        {/* Orders or empty state */}
-        {orderList.length === 0 ? (
-          <Card className="border-dashed border-navy-200">
-            <CardContent className="flex flex-col items-center justify-center gap-3 p-8 text-center sm:p-10">
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy">
-                <ShoppingBag className="h-7 w-7" />
-              </div>
-              <p className="font-medium text-navy">No orders yet</p>
-              <p className="max-w-sm text-sm text-navy-300">
-                Book your first pickup and it&apos;ll show up here with live tracking.
-              </p>
-              <Button onClick={onBook} className="mt-2 rounded-full bg-gold-gradient text-navy hover:opacity-90">
-                <PlusCircle className="mr-2 h-4 w-4" /> Book pickup
-              </Button>
-            </CardContent>
-          </Card>
-        ) : (
-          <Tabs value={tab} onValueChange={(v) => setTab(v as 'active' | 'invoices')}>
-            <TabsList className="bg-linen-200">
-              <TabsTrigger value="active" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
-                <Clock className="mr-1.5 h-3.5 w-3.5" /> Active ({activeOrders.length})
-              </TabsTrigger>
-              <TabsTrigger value="invoices" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
-                <Receipt className="mr-1.5 h-3.5 w-3.5" /> History ({pastOrders.length})
-              </TabsTrigger>
-            </TabsList>
+        {/* Orders + membership — the tabs always render so a fresh Kozy
+            Circle member can reach their Membership tab even with zero
+            orders (the empty state lives inside the Active tab). */}
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'active' | 'invoices' | 'membership')}>
+          <TabsList className="bg-linen-200">
+            <TabsTrigger value="active" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
+              <Clock className="mr-1.5 h-3.5 w-3.5" /> Active ({activeOrders.length})
+            </TabsTrigger>
+            <TabsTrigger value="invoices" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
+              <Receipt className="mr-1.5 h-3.5 w-3.5" /> History ({pastOrders.length})
+            </TabsTrigger>
+            <TabsTrigger value="membership" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
+              <Crown className="mr-1.5 h-3.5 w-3.5" /> Membership
+            </TabsTrigger>
+          </TabsList>
 
             <TabsContent value="active" className="mt-4">
-              <div className="space-y-3">
-                {activeOrders.map((o) => (
-                  <ActiveOrderCard
-                    key={o.id}
-                    order={o}
-                    highlighted={selected?.id === o.id}
-                    onView={() => setSelected(o)}
-                    onViewInvoice={() => onViewInvoice(o)}
-                  />
-                ))}
-              </div>
+              {orderList.length === 0 ? (
+                <Card className="border-dashed border-navy-200">
+                  <CardContent className="flex flex-col items-center justify-center gap-3 p-8 text-center sm:p-10">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gold-100 text-navy">
+                      <ShoppingBag className="h-7 w-7" />
+                    </div>
+                    <p className="font-medium text-navy">No orders yet</p>
+                    <p className="max-w-sm text-sm text-navy-300">
+                      Book your first pickup and it&apos;ll show up here with live tracking.
+                    </p>
+                    <Button onClick={onBook} className="mt-2 rounded-full bg-gold-gradient text-navy hover:opacity-90">
+                      <PlusCircle className="mr-2 h-4 w-4" /> Book pickup
+                    </Button>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="space-y-3">
+                  {activeOrders.map((o) => (
+                    <ActiveOrderCard
+                      key={o.id}
+                      order={o}
+                      highlighted={selected?.id === o.id}
+                      onView={() => setSelected(o)}
+                      onViewInvoice={() => onViewInvoice(o)}
+                    />
+                  ))}
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="invoices" className="mt-4">
@@ -381,8 +389,11 @@ function CustomerDashboard({
                 </button>
               )}
             </TabsContent>
-          </Tabs>
-        )}
+
+            <TabsContent value="membership" className="mt-4">
+              <MembershipTab />
+            </TabsContent>
+        </Tabs>
       </div>
 
       {/* Order detail modal */}

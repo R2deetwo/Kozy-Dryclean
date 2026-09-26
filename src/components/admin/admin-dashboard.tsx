@@ -9,7 +9,6 @@ import {
   CreditCard,
   Users as UsersIcon,
   Wallet,
-  Search,
   Activity,
   TrendingUp,
   Truck,
@@ -18,44 +17,73 @@ import {
   LogOut,
   Bell,
   Megaphone,
-  UserCog,
-  Bike,
   ChevronRight,
+  Crown,
+  Handshake,
+  MapPin,
+  Check,
 } from 'lucide-react'
-import { useOrders, usePayments, useUsers, useNotificationEvents, ADMIN_POLL } from '@/lib/hooks'
+import { useOrders, usePayments, useUsers, useNotificationEvents, useBranches, useAdminMemberships, usePartners, ADMIN_POLL } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { KanbanBoard } from './kanban-board'
-import { PaymentQueue } from './payment-queue'
-import { CustomersView } from './customers-view'
+import { OperationsView } from './operations-view'
+import { CustomersPage } from './customers-page'
+import { TeamView } from './team-view'
+import { MembershipsView } from './memberships-view'
+import { PartnersView } from './partners-view'
 import { FinanceView } from './finance-view'
 import { SettingsView } from './settings-view'
-import { ReviewsView } from './reviews-view'
-import { FeedbackView } from './feedback-view'
-import { HelpView } from './help-view'
 import { NotificationsView } from './notifications-view'
-import { StaffView } from './staff-view'
-import { RidersView } from './riders-view'
 import { MarketingView } from './marketing-view'
+import { HelpView } from './help-view'
 import { ChangePasswordDialog } from './change-password-dialog'
 import { Logo } from '@/components/shell/logo'
-import { Star, MessageSquareHeart, KeyRound } from 'lucide-react'
+import { Star, MessageSquareHeart, KeyRound, UserCog, Bike } from 'lucide-react'
+
+// =============================================================================
+// The console shell (phase 62 restructure)
+// =============================================================================
+// The left rail went from 13 flat rows to 9 grouped ones:
+//   Overview · Notifications
+//   RUN      → Operations (Pipeline · Payments · Health)
+//   GROW     → Customers (Directory · Reviews · Feedback) · Memberships · Growth
+//   SCALE    → Partners · Team (Staff · Riders)
+//   MANAGE   → Finance · Settings
+// plus a global BRANCH SWITCHER (All / Ogombo / Chevron Drive) in the header
+// that filters Overview, Operations and Finance. Deep links from
+// notifications are remapped from the old tab keys so nothing breaks.
 
 type Tab =
   | 'overview'
-  | 'kanban'
-  | 'payments'
-  | 'customers'
-  | 'finance'
-  | 'marketing'
-  | 'reviews'
-  | 'feedback'
   | 'notifications'
-  | 'staff'
-  | 'riders'
+  | 'operations'
+  | 'customers'
+  | 'memberships'
+  | 'growth'
+  | 'partners'
+  | 'team'
+  | 'finance'
   | 'settings'
   | 'help'
+
+/** Old linkTab values (pre-restructure) → new { tab, subtab } targets. */
+const DEEP_LINK_MAP: Record<string, { tab: Tab; sub?: string }> = {
+  overview: { tab: 'overview' },
+  kanban: { tab: 'operations', sub: 'pipeline' },
+  payments: { tab: 'operations', sub: 'payments' },
+  customers: { tab: 'customers', sub: 'directory' },
+  reviews: { tab: 'customers', sub: 'reviews' },
+  feedback: { tab: 'customers', sub: 'feedback' },
+  memberships: { tab: 'memberships' },
+  marketing: { tab: 'growth' },
+  partners: { tab: 'partners' },
+  staff: { tab: 'team', sub: 'staff' },
+  riders: { tab: 'team', sub: 'riders' },
+  finance: { tab: 'finance' },
+  settings: { tab: 'settings' },
+  help: { tab: 'help' },
+}
 
 export function AdminDashboard() {
   // Real signed-in identity (the old header hardcoded a fake
@@ -91,10 +119,10 @@ export function AdminDashboard() {
   }, [status, session, isConsoleUser, role, router])
 
   // ----- Pause/revoke heartbeat (phase 31) + must-change-password (32) -----
-  // /api/users/me reads the DATABASE (not the 30-day JWT). Polling it once
-  // a minute means a paused or revoked staff member — or a demoted admin —
-  // is signed out of the console within ~60 seconds, without waiting for
-  // an API call to 403 first. Server-side, every console API ALSO checks
+  // /api/users/me reads the DATABASE (not the 30-day JWT). Polling it once a
+  // minute means a paused or revoked staff member — or a demoted admin —
+  // is signed out of the console within ~60 seconds, without waiting for an
+  // API call to 403 first. Server-side, every console API ALSO checks
   // live access, so this is UX polish on top of real enforcement.
   // Phase 32: the same read carries mustChangePassword — set at invite /
   // password-reset — which opens the non-dismissible set-your-own-password
@@ -129,6 +157,7 @@ export function AdminDashboard() {
     const timer = setInterval(check, 60_000)
     return () => clearInterval(timer)
   }, [status, isConsoleUser])
+
   // fetchAll: sidebar badges (active orders, pending payments) are counts over
   // the whole collections — the hooks page through the cursor API for them.
   // LIVE MODE (phase 25): the dashboard polls itself — badges, KPIs and every
@@ -151,15 +180,41 @@ export function AdminDashboard() {
     refetchInterval: ADMIN_POLL.medium,
     refetchOnWindowFocus: true,
   })
-  const [tab, setTab] = useState<Tab>('overview')
+  // Phase 62: branches (the switcher), membership + partner badges.
+  const { data: branches } = useBranches({ refetchInterval: ADMIN_POLL.slow })
+  const { data: memberships } = useAdminMemberships({ refetchInterval: 60_000 })
+  const { data: partnerData } = usePartners({ refetchInterval: 60_000 })
 
-  const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
-  const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
+  const [tab, setTab] = useState<Tab>('overview')
+  // Sub-tab targets for deep links (operations → payments etc.).
+  const [deepSub, setDeepSub] = useState<{ operations?: string; customers?: string; team?: string }>({})
+  // Phase 62: the global branch switcher. 'ALL' | branch id.
+  const [branchFilter, setBranchFilter] = useState<string>('ALL')
+  const branchId = branchFilter === 'ALL' ? null : branchFilter
+  const activeBranches = (branches ?? []).filter((b) => b.isActive)
+
+  const pendingPayments = (payments ?? []).filter(
+    (p) => p.status === 'PENDING' && (!branchId || (p as any).order?.branchId === branchId)
+  )
+  const activeOrders = (orders ?? []).filter(
+    (o) => !['DELIVERED', 'CANCELLED'].includes(o.status) && (!branchId || o.branchId === branchId)
+  )
   const unreadNotifications = notifications?.unread ?? 0
+  const pendingMemberships = (memberships ?? []).filter((m) => m.status === 'PENDING_ACTIVATION')
+  const pendingPartners = (partnerData?.partners ?? []).filter((p) => p.status === 'PENDING')
+
+  /** Notification deep-links arrive as OLD tab keys — remap them. */
+  const onDeepGoto = (key: string) => {
+    const target = DEEP_LINK_MAP[key] ?? { tab: 'overview' as Tab }
+    setTab(target.tab)
+    if (target.sub) {
+      setDeepSub((d) => ({ ...d, [target.tab]: target.sub }))
+    }
+  }
 
   // ----- Mobile tab-row affordance (phase-33) -------------------------------
   // iOS Safari renders no scrollbar on the horizontal tab row, so the user
-  // has no signal that ~7 more tabs live off the right edge. We track scroll
+  // has no signal that more tabs live off the right edge. We track scroll
   // position to toggle edge fades, and centre the active tab when it changes
   // so the current view is always visible without swiping.
   const tabRowRef = useRef<HTMLDivElement | null>(null)
@@ -190,60 +245,86 @@ export function AdminDashboard() {
     })
   }, [tab])
 
-  // ----- Role-aware navigation (phase 31) -----
-  // STAFF gets the operational side only. Money (Finances), marketing
-  // (Reviews moderation), business configuration (Settings — pricing + the
-  // discount engine) and staff management itself are ADMIN-only, hidden
-  // here AND enforced server-side on every one of those API routes.
-  const allNav: {
-    key: Tab
-    label: string
-    icon: any
-    badge?: number
-    adminOnly?: boolean
+  // ----- Role-aware navigation (phase 31 + 62 groups) -----
+  // STAFF gets the operational side only. Money (Finances), memberships
+  // pricing, marketing, partners, business configuration (Settings) and team
+  // management itself are ADMIN-only, hidden here AND enforced server-side
+  // on every one of those API routes.
+  const navGroups: {
+    label: string | null
+    items: { key: Tab; label: string; icon: any; badge?: number; adminOnly?: boolean }[]
   }[] = [
-    { key: 'overview', label: 'Dashboard', icon: LayoutDashboard },
     {
-      key: 'notifications',
-      label: 'Notifications',
-      icon: Bell,
-      badge: unreadNotifications,
+      label: null,
+      items: [
+        { key: 'overview', label: 'Overview', icon: LayoutDashboard },
+        {
+          key: 'notifications',
+          label: 'Notifications',
+          icon: Bell,
+          badge: unreadNotifications,
+        },
+      ],
     },
-    { key: 'kanban', label: 'Orders', icon: KanbanSquare, badge: activeOrders.length },
     {
-      key: 'payments',
-      label: 'Verify Payments',
-      icon: CreditCard,
-      badge: pendingPayments.length,
+      label: 'Run',
+      items: [
+        { key: 'operations', label: 'Operations', icon: KanbanSquare, badge: activeOrders.length || pendingPayments.length },
+      ],
     },
-    { key: 'customers', label: 'Customers', icon: UsersIcon },
-    { key: 'finance', label: 'Finances', icon: Wallet, adminOnly: true },
-    // Phase 36: the owner's marketing hub — campaigns, coupons, the email
-    // list and analytics. Admin-only (staff never sees customer outreach).
-    { key: 'marketing', label: 'Marketing', icon: Megaphone, adminOnly: true },
-    { key: 'reviews', label: 'Reviews', icon: Star, adminOnly: true },
-    { key: 'feedback', label: 'Feedback', icon: MessageSquareHeart },
-    { key: 'staff', label: 'Staff', icon: UserCog, adminOnly: true },
-    // Phase 54: the rider onboarding pipeline — applications from
-    // /join-riders, approve/reject, and the live rider roster. Recruiting
-    // is an owner decision, so admin-only like Staff.
-    { key: 'riders', label: 'Riders', icon: Bike, adminOnly: true },
-    { key: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
-    { key: 'help', label: 'Help', icon: LifeBuoy },
+    {
+      label: 'Grow',
+      items: [
+        { key: 'customers', label: 'Customers', icon: UsersIcon },
+        {
+          key: 'memberships',
+          label: 'Memberships',
+          icon: Crown,
+          adminOnly: true,
+          badge: pendingMemberships.length,
+        },
+        { key: 'growth', label: 'Growth', icon: Megaphone, adminOnly: true },
+      ],
+    },
+    {
+      label: 'Scale',
+      items: [
+        {
+          key: 'partners',
+          label: 'Partners',
+          icon: Handshake,
+          adminOnly: true,
+          badge: pendingPartners.length,
+        },
+        { key: 'team', label: 'Team', icon: UserCog, adminOnly: true },
+      ],
+    },
+    {
+      label: 'Manage',
+      items: [
+        { key: 'finance', label: 'Finance', icon: Wallet, adminOnly: true },
+        { key: 'settings', label: 'Settings', icon: Settings, adminOnly: true },
+      ],
+    },
   ]
-  const nav = allNav.filter((n) => isAdmin || !n.adminOnly)
+  const nav = navGroups
+    .map((g) => ({ ...g, items: g.items.filter((n) => isAdmin || !n.adminOnly) }))
+    .filter((g) => g.items.length > 0)
+
+  // ----- The branch switcher (shared component, rendered in both headers) -----
+  const switcher =
+    activeBranches.length <= 1 ? null : (
+      <BranchSwitcher branches={activeBranches} value={branchFilter} onChange={setBranchFilter} />
+    )
 
   return (
     <div className="flex min-h-screen bg-linen-200">
       {/* Sidebar — Kozy midnight navy.
-       * Phase 32 layout fix: the old shell reserved 3.5rem of space for a
-       * site navbar that no longer renders on /admin, so the sticky sidebar
-       * floated 56px below the viewport top (a white rectangle above the
-       * blue panel) and its bottom edge — the Live strip — straddled the
-       * boundary between the sidebar and the white page below (exactly
-       * what the client reported). With no header above it, the sidebar
-       * now pins to the very top and spans the full viewport height, at
-         every scroll position. */}
+       * Phase 32 layout fix: no header above the sidebar — it pins to the very
+       * top and spans the full viewport height at every scroll position.
+       * Phase 62: grouped rows (Run / Grow / Scale / Manage) replace the old
+       * 13-item flat list; group labels make the structure legible at a
+       * glance instead of overwhelming. */}
       <aside className="sticky top-0 hidden h-screen w-64 shrink-0 bg-navy text-navy-100 lg:block">
         <div className="flex h-full flex-col">
           <div className="border-b border-navy-500 px-4 py-4">
@@ -258,45 +339,52 @@ export function AdminDashboard() {
               </p>
             )}
           </div>
-          {/* Phase 58 fix: with 13 admin tabs the nav column is ~774px tall,
-           * so on short viewports (laptop scaling, ~640px usable) the Live
-           * strip + Change password + Sign out were pushed BELOW the fixed
-           * h-screen sidebar — unreachable and invisible ("no way to sign
-           * out as admin"). min-h-0 + overflow-y-auto lets the tab list
-           * scroll internally so the account section stays pinned at the
-           * bottom at every height. Thin navy scrollbar keeps it calm. */}
-          <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto p-2 [scrollbar-width:thin] [scrollbar-color:#1B3A5F_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-navy-500 [&::-webkit-scrollbar-track]:bg-transparent">
-            {nav.map((n) => {
-              const Icon = n.icon
-              const active = tab === n.key
-              return (
-                <button
-                  key={n.key}
-                  onClick={() => setTab(n.key)}
-                  className={cn(
-                    'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition',
-                    active
-                      ? 'bg-gold-400 text-navy shadow-gold'
-                      : 'text-navy-100 hover:bg-navy-500 hover:text-white'
-                  )}
-                >
-                  <Icon className="h-4 w-4" />
-                  <span className="flex-1 text-left">{n.label}</span>
-                  {n.badge ? (
-                    <Badge
-                      className={cn(
-                        'rounded-full px-1.5 py-0 text-[10px]',
-                        n.key === 'payments' || n.key === 'notifications'
-                          ? 'bg-gold-400 text-navy hover:bg-gold-400'
-                          : 'bg-white/15 text-white hover:bg-white/15'
-                      )}
-                    >
-                      {n.badge}
-                    </Badge>
-                  ) : null}
-                </button>
-              )
-            })}
+          {/* Phase 58 fix: min-h-0 + overflow-y-auto lets the tab list scroll
+           * internally so the account section stays pinned at the bottom at
+           * every height. */}
+          <nav className="min-h-0 flex-1 overflow-y-auto p-2 [scrollbar-width:thin] [scrollbar-color:#1B3A5F_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-navy-500 [&::-webkit-scrollbar-track]:bg-transparent">
+            {nav.map((group, gi) => (
+              <div key={group.label ?? 'top'} className={gi > 0 ? 'mt-3' : ''}>
+                {group.label && (
+                  <p className="px-3 pb-1 pt-2 text-[9px] font-bold uppercase tracking-[0.22em] text-navy-400">
+                    {group.label}
+                  </p>
+                )}
+                <div className="space-y-0.5">
+                  {group.items.map((n) => {
+                    const Icon = n.icon
+                    const active = tab === n.key
+                    return (
+                      <button
+                        key={n.key}
+                        onClick={() => setTab(n.key)}
+                        className={cn(
+                          'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition',
+                          active
+                            ? 'bg-gold-400 text-navy shadow-gold'
+                            : 'text-navy-100 hover:bg-navy-500 hover:text-white'
+                        )}
+                      >
+                        <Icon className="h-4 w-4" />
+                        <span className="flex-1 text-left">{n.label}</span>
+                        {n.badge ? (
+                          <Badge
+                            className={cn(
+                              'rounded-full px-1.5 py-0 text-[10px]',
+                              n.key === 'notifications' || n.key === 'memberships' || n.key === 'partners'
+                                ? 'bg-gold-400 text-navy hover:bg-gold-400'
+                                : 'bg-white/15 text-white hover:bg-white/15'
+                            )}
+                          >
+                            {n.badge}
+                          </Badge>
+                        ) : null}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
           {/* Live indicator — makes the auto-refresh visible instead of
            *  something the admin has to trust. */}
@@ -313,8 +401,16 @@ export function AdminDashboard() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => setChangePasswordOpen(true)}
+              onClick={() => setTab('help')}
               className="w-full justify-start text-xs text-navy-300 hover:bg-navy-500 hover:text-white"
+            >
+              <LifeBuoy className="mr-2 h-3 w-3" /> Operator guide
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setChangePasswordOpen(true)}
+              className="mt-1 w-full justify-start text-xs text-navy-300 hover:bg-navy-500 hover:text-white"
             >
               <KeyRound className="mr-2 h-3 w-3" /> Change password
             </Button>
@@ -332,18 +428,8 @@ export function AdminDashboard() {
 
       <div className="flex min-w-0 flex-1 flex-col">
         {/* Mobile console header + tab row (lg:hidden).
-         * Phase-33 fix — the client could not find the console menus on an
-         * iPhone. Diagnosis: the old mobile tab row was a bare horizontal
-         * scroll of pills with no header above it and no scroll affordance —
-         * on a 390px viewport ~7 of 11 tabs sat invisibly off the right edge
-         * (row 390px vs content 1144px), and iOS Safari shows no scrollbar.
-         * On Android the client had swiped by luck; on iPhone nothing hinted
-         * the row moved. Additionally Sign out / Change password existed
-         * only in the desktop sidebar — on phones there was no way out at
-         * all. Now: a sticky header (brand + identity + live dot + sign-out
-         * & change-password icon buttons) plus a taller tab row with a
-         * right-edge fade + chevron that disappears at scroll end, and the
-         * active tab auto-centres so it is always on screen. */}
+         * Phase-33 fix: sticky header + scrollable tab row with fades.
+         * Phase 62: the branch switcher rides along (scrollable, compact). */}
         <div className="sticky top-0 z-40 border-b bg-white lg:hidden">
           <div
             className="flex items-center justify-between gap-2 px-3 pb-1.5 pt-2"
@@ -386,13 +472,15 @@ export function AdminDashboard() {
               </div>
             </div>
           </div>
+          {/* Branch switcher (mobile) */}
+          <div className="nav-scroll flex gap-1.5 overflow-x-auto px-3 pb-1.5">{switcher}</div>
           <div className="relative">
             <div
               ref={tabRowRef}
               onScroll={updateTabFades}
               className="nav-scroll flex gap-1.5 overflow-x-auto px-3 pb-2.5 pt-1"
             >
-              {nav.map((n) => {
+              {nav.flatMap((g) => g.items).map((n) => {
                 const Icon = n.icon
                 const active = tab === n.key
                 return (
@@ -418,8 +506,7 @@ export function AdminDashboard() {
                 )
               })}
             </div>
-            {/* Scroll affordance — iOS shows no scrollbar on this row; the
-             * fade + chevron tell the user more tabs live to the right. */}
+            {/* Scroll affordance — iOS shows no scrollbar on this row. */}
             <div
               aria-hidden
               className={cn(
@@ -439,13 +526,15 @@ export function AdminDashboard() {
           </div>
         </div>
 
-        {/* Top bar (desktop) — signed-in identity only. The decorative
-            search input and the notifications bell were removed: neither
-            was wired to anything real (audit finding). */}
+        {/* Top bar (desktop) — branch switcher + signed-in identity. */}
         <header className="hidden items-center justify-between border-b bg-white px-6 py-3 lg:flex">
-          <div className="flex items-center gap-2 text-sm text-navy-300">
-            <Search className="h-4 w-4" />
-            <span>Use the tabs below to move between operations</span>
+          <div className="flex items-center gap-3">
+            {switcher}
+            <span className="text-xs text-navy-300">
+              {branchId
+                ? `Scoped to ${activeBranches.find((b) => b.id === branchId)?.name ?? 'branch'} — orders, payments & finance`
+                : 'Use the groups on the left to move between operations'}
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-navy text-xs font-semibold text-gold-400">
@@ -460,20 +549,32 @@ export function AdminDashboard() {
 
         {/* Body — admin-only tabs are doubly gated (nav is filtered above,
             and this render check keeps a stale tab state from ever mounting
-            a restricted view for a staff session). KanbanBoard gets the role
-            so it can hide the admin-only anomaly flags from staff. */}
+            a restricted view for a staff session). */}
         <main className="flex-1 overflow-x-hidden">
-          {tab === 'overview' && <Overview onGoto={setTab} isAdmin={isAdmin} />}
-          {tab === 'notifications' && <NotificationsView onGoto={(t) => setTab(t as Tab)} />}
-          {tab === 'kanban' && <KanbanBoard isAdmin={isAdmin} />}
-          {tab === 'payments' && <PaymentQueue isAdmin={isAdmin} />}
-          {tab === 'customers' && <CustomersView />}
-          {isAdmin && tab === 'finance' && <FinanceView />}
-          {isAdmin && tab === 'marketing' && <MarketingView />}
-          {isAdmin && tab === 'reviews' && <ReviewsView />}
-          {tab === 'feedback' && <FeedbackView />}
-          {isAdmin && tab === 'staff' && <StaffView />}
-          {isAdmin && tab === 'riders' && <RidersView />}
+          {tab === 'overview' && <Overview onGoto={onDeepGoto} isAdmin={isAdmin} branchId={branchId} />}
+          {tab === 'notifications' && <NotificationsView onGoto={onDeepGoto} />}
+          {tab === 'operations' && (
+            <OperationsView
+              isAdmin={isAdmin}
+              initialTab={(deepSub.operations as any) ?? undefined}
+              paymentsPending={pendingPayments.length}
+              activeOrders={activeOrders.length}
+            />
+          )}
+          {tab === 'customers' && (
+            <CustomersPage
+              isAdmin={isAdmin}
+              initialTab={(deepSub.customers as any) ?? undefined}
+              feedbackNew={0}
+            />
+          )}
+          {isAdmin && tab === 'memberships' && <MembershipsView />}
+          {isAdmin && tab === 'growth' && <MarketingView />}
+          {isAdmin && tab === 'partners' && <PartnersView />}
+          {isAdmin && tab === 'team' && (
+            <TeamView initialTab={(deepSub.team as any) ?? undefined} />
+          )}
+          {isAdmin && tab === 'finance' && <FinanceView branchId={branchId} />}
           {isAdmin && tab === 'settings' && <SettingsView />}
           {tab === 'help' && <HelpView />}
         </main>
@@ -491,10 +592,21 @@ export function AdminDashboard() {
   )
 }
 
-function Overview({ onGoto, isAdmin }: { onGoto: (t: Tab) => void; isAdmin: boolean }) {
+function Overview({
+  onGoto,
+  isAdmin,
+  branchId,
+}: {
+  onGoto: (t: string) => void
+  isAdmin: boolean
+  branchId: string | null
+}) {
   // fetchAll: overview aggregates (revenue, active orders, customer counts)
   // must see every record — shared cache with the sidebar badges above.
   // Live mode: same polling as the sidebar so KPIs tick over on their own.
+  // Phase 62: the branch switcher filters the operational KPIs (revenue
+  // follows payments on the branch's orders; customer count stays global —
+  // customers belong to the business, not a branch).
   const { data: orders } = useOrders({
     fetchAll: true,
     refetchInterval: ADMIN_POLL.medium,
@@ -514,21 +626,31 @@ function Overview({ onGoto, isAdmin }: { onGoto: (t: Tab) => void; isAdmin: bool
     () => (allUsers ?? []).filter((u) => u.role === 'B2C' || u.role === 'B2B'),
     [allUsers]
   )
+  const { data: memberships } = useAdminMemberships({ refetchInterval: 60_000 })
 
-  const pendingPayments = (payments ?? []).filter((p) => p.status === 'PENDING')
-  const activeOrders = (orders ?? []).filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
+  const scopedOrders = (orders ?? []).filter((o: any) => !branchId || o.branchId === branchId)
+  const scopedOrderIds = useMemo(() => new Set(scopedOrders.map((o: any) => o.id)), [scopedOrders])
+  const scopedPayments = (payments ?? []).filter(
+    (p: any) => !branchId || scopedOrderIds.has(p.orderId)
+  )
+
+  const pendingPayments = scopedPayments.filter((p) => p.status === 'PENDING')
+  const activeOrders = scopedOrders.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
   // Collected revenue = VERIFIED payments (money actually in the bank);
-  // pipeline = value of orders still in flight. The old tile summed
-  // DELIVERED orders' totals — close, but not what "verified" means.
-  const collectedRevenue = (payments ?? [])
+  // pipeline = value of orders still in flight.
+  const collectedRevenue = scopedPayments
     .filter((p) => p.status === 'VERIFIED')
     .reduce((s, p) => s + (p.amount ?? 0), 0)
   const pipelineValue = activeOrders.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
   const startOfToday = new Date()
   startOfToday.setHours(0, 0, 0, 0)
-  const newToday = (orders ?? []).filter(
-    (o) => new Date(o.createdAt) >= startOfToday
-  ).length
+  const newToday = scopedOrders.filter((o) => new Date(o.createdAt) >= startOfToday).length
+  const activeMembers = (memberships ?? []).filter(
+    (m) => m.status === 'ACTIVE' || m.status === 'PENDING_ACTIVATION'
+  )
+  const mrr = activeMembers
+    .filter((m) => m.status === 'ACTIVE')
+    .reduce((s, m) => s + (m.plan?.priceMonthly ?? m.pricePaid ?? 0), 0)
 
   return (
     <div className="p-4 sm:p-6">
@@ -538,6 +660,7 @@ function Overview({ onGoto, isAdmin }: { onGoto: (t: Tab) => void; isAdmin: bool
         </h1>
         <p className="mt-1 text-sm text-navy-300">
           Operations overview · {new Date().toLocaleDateString('en-NG', { weekday: 'long', day: 'numeric', month: 'long' })}
+          {branchId && ' · scoped to branch'}
         </p>
       </div>
 
@@ -560,14 +683,24 @@ function Overview({ onGoto, isAdmin }: { onGoto: (t: Tab) => void; isAdmin: bool
           onClick={() => onGoto('payments')}
         />
         {isAdmin && (
-          <KpiCard
-            label="Revenue (verified payments)"
-            value={`₦${collectedRevenue.toLocaleString('en-NG')}`}
-            delta={`₦${pipelineValue.toLocaleString('en-NG')} in pipeline`}
-            icon={TrendingUp}
-            tone="emerald"
-            onClick={() => onGoto('finance')}
-          />
+          <>
+            <KpiCard
+              label="Revenue (verified payments)"
+              value={`₦${collectedRevenue.toLocaleString('en-NG')}`}
+              delta={`₦${pipelineValue.toLocaleString('en-NG')} in pipeline`}
+              icon={TrendingUp}
+              tone="emerald"
+              onClick={() => onGoto('finance')}
+            />
+            <KpiCard
+              label="Circle MRR (memberships)"
+              value={`₦${mrr.toLocaleString('en-NG')}`}
+              delta={`${activeMembers.length} member${activeMembers.length === 1 ? '' : 's'} · ${activeMembers.filter((m) => m.status === 'PENDING_ACTIVATION').length} awaiting payment`}
+              icon={Crown}
+              tone="emerald"
+              onClick={() => onGoto('memberships')}
+            />
+          </>
         )}
         <KpiCard
           label="Total customers"
@@ -589,7 +722,7 @@ function Overview({ onGoto, isAdmin }: { onGoto: (t: Tab) => void; isAdmin: bool
           onClick={() => onGoto('payments')}
         />
         <QuickActionCard
-          title="Order Kanban"
+          title="Order pipeline"
           desc="Drag-and-drop orders across the pipeline stages"
           cta="Open board"
           icon={KanbanSquare}
@@ -606,7 +739,7 @@ function Overview({ onGoto, isAdmin }: { onGoto: (t: Tab) => void; isAdmin: bool
 
       {/* Recent activity */}
       <div className="mt-6 grid gap-3 md:grid-cols-2">
-        <RecentOrdersCard />
+        <RecentOrdersCard orders={scopedOrders} />
         <RecentCustomersCard onGoto={onGoto} />
       </div>
     </div>
@@ -695,17 +828,10 @@ function QuickActionCard({
   )
 }
 
-function RecentOrdersCard() {
-  // Only the 5 newest orders are shown, but this shares the ['orders','all']
-  // cache with the Overview aggregates — no extra requests, and the user
-  // lookup map below needs the full users set anyway.
-  const { data: allOrders } = useOrders({
-    fetchAll: true,
-    refetchInterval: ADMIN_POLL.medium,
-    refetchOnWindowFocus: true,
-  })
-  const orders = useMemo(() => (allOrders ?? []).slice(0, 5), [allOrders])
-  const { data: users } = useUsers({ fetchAll: true, refetchInterval: ADMIN_POLL.slow })
+function RecentOrdersCard({ orders }: { orders: any[] }) {
+  // Only the 5 newest orders are shown; the caller passes the (possibly
+  // branch-scoped) list so this card needs no data hooks of its own.
+  const recent = orders.slice(0, 5)
   return (
     <div className="rounded-xl border bg-white p-4">
       <div className="mb-3 flex items-center justify-between">
@@ -713,38 +839,36 @@ function RecentOrdersCard() {
         <Truck className="h-4 w-4 text-navy-300" />
       </div>
       <ul className="space-y-2 text-sm">
-        {orders.map((o) => {
-          const u = (users ?? []).find((u) => u.id === o.userId) ?? o.user
-          return (
-            <li
-              key={o.id}
-              className="flex items-center justify-between gap-2 border-b last:border-0"
-            >
-              <div className="py-1.5">
-                <p className="font-mono text-xs font-semibold text-navy">
-                  #{o.orderNumber}
-                </p>
-                <p className="text-xs text-navy-300">{u?.name}</p>
-              </div>
-              <Badge variant="outline" className="rounded-full text-[10px]">
-                {o.status.replace(/_/g, ' ').toLowerCase()}
-              </Badge>
-            </li>
-          )
-        })}
+        {recent.length === 0 && (
+          <li className="py-2 text-xs text-navy-300">No orders in this scope yet.</li>
+        )}
+        {recent.map((o) => (
+          <li
+            key={o.id}
+            className="flex items-center justify-between gap-2 border-b last:border-0"
+          >
+            <div className="py-1.5">
+              <p className="font-mono text-xs font-semibold text-navy">
+                #{o.orderNumber}
+              </p>
+              <p className="text-xs text-navy-300">{o.user?.name}</p>
+            </div>
+            <Badge variant="outline" className="rounded-full text-[10px]">
+              {o.status.replace(/_/g, ' ').toLowerCase()}
+            </Badge>
+          </li>
+        ))}
       </ul>
     </div>
   )
 }
 
-/** Newest signups — replaces the old "Recent notifications" card, which was
- *  permanently empty (no server notification log exists). Real CRM signal:
- *  who just joined, with the unverified flag the team may need to chase. */
-function RecentCustomersCard({ onGoto }: { onGoto: (t: Tab) => void }) {
+/** Newest signups — real CRM signal: who just joined, with the unverified
+ * flag the team may need to chase. */
+function RecentCustomersCard({ onGoto }: { onGoto: (t: string) => void }) {
   const { data: allUsers } = useUsers({
     fetchAll: true,
     refetchInterval: ADMIN_POLL.slow,
-    refetchOnWindowFocus: true,
   })
   const recent = useMemo(
     () =>
@@ -788,6 +912,52 @@ function RecentCustomersCard({ onGoto }: { onGoto: (t: Tab) => void }) {
           </li>
         ))}
       </ul>
+    </div>
+  )
+}
+
+// =====================================================
+// BRANCH SWITCHER (phase 62) — the global location scope
+// =====================================================
+// All / Ogombo / Chevron Drive. Filters Overview, Operations and Finance.
+// Declared OUTSIDE the dashboard component (stable identity, no remounts).
+function BranchSwitcher({
+  branches,
+  value,
+  onChange,
+}: {
+  branches: { id: string; name: string }[]
+  value: string
+  onChange: (v: string) => void
+}) {
+  return (
+    <div
+      className="flex items-center gap-1 rounded-full border border-navy-100 bg-linen-100 p-0.5"
+      role="group"
+      aria-label="Branch filter"
+    >
+      <button
+        onClick={() => onChange('ALL')}
+        className={cn(
+          'rounded-full px-2.5 py-1 text-[11px] font-medium transition',
+          value === 'ALL' ? 'bg-navy text-white shadow-sm' : 'text-navy-300 hover:text-navy'
+        )}
+      >
+        All
+      </button>
+      {branches.map((b) => (
+        <button
+          key={b.id}
+          onClick={() => onChange(b.id)}
+          className={cn(
+            'flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition',
+            value === b.id ? 'bg-navy text-white shadow-sm' : 'text-navy-300 hover:text-navy'
+          )}
+        >
+          <MapPin className="h-3 w-3" />
+          {b.name}
+        </button>
+      ))}
     </div>
   )
 }

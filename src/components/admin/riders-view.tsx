@@ -23,7 +23,7 @@
 // what any client renders.
 // =============================================================================
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   Bike,
@@ -39,6 +39,8 @@ import {
   ChevronDown,
   ChevronUp,
   AlertTriangle,
+  Building2,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -58,6 +60,8 @@ import {
 import {
   useRiderApplications,
   useRiderDecision,
+  useBranches,
+  useRiderBranchAssign,
   type ApiRiderApplication,
   type ApiRiderRosterEntry,
   type ApiRiderIncident,
@@ -620,6 +624,11 @@ export function RidersView() {
                     Joined {fmtWhen(r.joinedAt)} · assign this rider to pickups and deliveries
                     from any order&apos;s detail view — their route screen updates automatically.
                   </p>
+
+                  {/* Phase 62 — home branch. Dispatch suggestions score
+                   * same-branch riders higher, and the branch health cards
+                   * count riders on duty per location. */}
+                  <RiderBranchSelect riderId={r.id} branchId={(r as any).branchId ?? null} />
                 </CardContent>
               </Card>
             ))}
@@ -796,6 +805,53 @@ export function RidersView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// =====================================================
+// RIDER BRANCH SELECT (phase 62)
+// =====================================================
+// Assigns the rider's home branch (Ogombo / Chevron Drive). Dispatch
+// suggestions score same-branch riders higher; the branch health cards
+// count riders per location.
+function RiderBranchSelect({ riderId, branchId }: { riderId: string; branchId: string | null }) {
+  const { data: branches } = useBranches()
+  const assign = useRiderBranchAssign()
+  const [value, setValue] = useState(branchId ?? '')
+  // Follow server-side changes with the React-documented adjust-during-render
+  // pattern (no effect, no cascade).
+  const [lastBranch, setLastBranch] = useState(branchId)
+  if (branchId !== lastBranch) {
+    setLastBranch(branchId)
+    setValue(branchId ?? '')
+  }
+
+  return (
+    <div className="mt-3 border-t border-navy-100 pt-3">
+      <label className="text-[10px] font-semibold uppercase tracking-wide text-navy-300">
+        Home branch
+      </label>
+      <div className="mt-1 flex items-center gap-2">
+        <Building2 className="h-3.5 w-3.5 shrink-0 text-gold-600" />
+        <select
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            assign.mutate({ userId: riderId, branchId: e.target.value || null })
+          }}
+          disabled={assign.isPending}
+          className="h-8 w-full rounded-lg border border-navy-200 bg-white px-2 text-xs text-navy focus:border-gold-400 focus:outline-none"
+        >
+          <option value="">Unassigned</option>
+          {(branches ?? []).map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.name}
+            </option>
+          ))}
+        </select>
+        {assign.isPending && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-navy-300" />}
+      </div>
     </div>
   )
 }

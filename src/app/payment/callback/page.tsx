@@ -20,7 +20,7 @@ import { useAppSettings } from '@/lib/hooks'
 type VerifyState =
   | { kind: 'loading' }
   | { kind: 'polling'; attempt: number }
-  | { kind: 'success'; amount: number | null; orderNumber: string }
+  | { kind: 'success'; amount: number | null; orderNumber: string; membership?: boolean; planName?: string }
   | { kind: 'failed' }
   | { kind: 'error' }
 
@@ -51,7 +51,13 @@ export default function PaymentCallbackPage() {
         }
         const data = await res.json()
         if (data.paid) {
-          setState({ kind: 'success', amount: data.amount ?? null, orderNumber: data.orderNumber ?? ref })
+          setState({
+            kind: 'success',
+            amount: data.amount ?? null,
+            orderNumber: data.orderNumber ?? ref,
+            membership: Boolean(data.membership),
+            planName: data.planName,
+          })
           return
         }
         if (data.status === 'failed') {
@@ -126,21 +132,30 @@ export default function PaymentCallbackPage() {
                 <CheckCircle2 className="h-8 w-8 text-green-600" />
               </motion.div>
               <h1 className="mt-6 font-serif text-3xl font-semibold text-navy">
-                Payment received!
+                {state.membership ? 'Welcome to the Circle' : 'Payment received!'}
               </h1>
-              <p className="mt-3 text-navy-300">
-                Order <strong className="text-navy">#{state.orderNumber}</strong>
-                {state.amount ? (
-                  <> — {formatNaira(state.amount)} paid.</>
-                ) : (
-                  <> is confirmed.</>
-                )}{' '}
-                We&apos;ve emailed your receipt and your pickup is now scheduled.
-              </p>
+              {state.membership ? (
+                <p className="mt-3 text-navy-300">
+                  <strong className="text-navy">{state.planName ?? 'Your membership'}</strong>
+                  {state.amount ? <> — {formatNaira(state.amount)} paid.</> : <> is live.</>}{' '}
+                  Your rider hands over your Kozy kit at the first pickup — book it any time from
+                  the Membership tab in your portal.
+                </p>
+              ) : (
+                <p className="mt-3 text-navy-300">
+                  Order <strong className="text-navy">#{state.orderNumber}</strong>
+                  {state.amount ? (
+                    <> — {formatNaira(state.amount)} paid.</>
+                  ) : (
+                    <> is confirmed.</>
+                  )}{' '}
+                  We&apos;ve emailed your receipt and your pickup is now scheduled.
+                </p>
+              )}
               <div className="mt-8 flex flex-col items-center gap-3">
                 <Link href="/portal" className="w-full">
                   <Button className="w-full bg-[#0A192F] text-white hover:bg-[#1B3A5F]">
-                    Track my order
+                    {state.membership ? 'Open my portal' : 'Track my order'}
                   </Button>
                 </Link>
                 <Button

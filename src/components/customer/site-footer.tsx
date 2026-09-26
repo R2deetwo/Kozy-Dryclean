@@ -206,6 +206,16 @@ export function SiteFooter() {
                   Corporate programs
                 </Link>
               </li>
+              <li>
+                <Link href="/memberships" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
+                  The Kozy Circle · monthly plans
+                </Link>
+              </li>
+              <li>
+                <Link href="/partners" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
+                  Run a laundry? Join the network
+                </Link>
+              </li>
             </ul>
           </div>
         </div>

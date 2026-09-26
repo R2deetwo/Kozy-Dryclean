@@ -35,7 +35,14 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from '@/hooks/use-toast'
 
-export function PaymentQueue({ isAdmin = false }: { isAdmin?: boolean }) {
+export function PaymentQueue({
+  isAdmin = false,
+  branchId,
+}: {
+  isAdmin?: boolean
+  /** Phase 62: the console's branch switcher — null shows every branch. */
+  branchId?: string | null
+}) {
   // fetchAll: the queue must see every PENDING receipt (a pending payment
   // beyond page 1 would otherwise be invisible), and the orders lookup map
   // needs the full set to resolve any receipt's order.
@@ -55,11 +62,14 @@ export function PaymentQueue({ isAdmin = false }: { isAdmin?: boolean }) {
   // the admin removes them from the list entirely (phase 25).
   const [tab, setTab] = useState<'PENDING' | 'REJECTED'>('PENDING')
   const [confirmRemove, setConfirmRemove] = useState<any | null>(null)
+  // Phase 62: branch filter — a receipt whose order belongs to another
+  // branch (or has no branch yet) shows only in "All branches".
+  const branchMatch = (p: any) => !branchId || p.order?.branchId === branchId
   const pending = (paymentsData ?? []).filter(
-    (p) => p.status === 'PENDING' && p.method === 'BANK_TRANSFER'
+    (p) => p.status === 'PENDING' && p.method === 'BANK_TRANSFER' && branchMatch(p)
   )
   const rejected = (paymentsData ?? []).filter(
-    (p) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER'
+    (p) => p.status === 'REJECTED' && p.method === 'BANK_TRANSFER' && branchMatch(p)
   )
   const payments = tab === 'PENDING' ? pending : rejected
   const orders = useOrders({

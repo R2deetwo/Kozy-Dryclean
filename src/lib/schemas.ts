@@ -124,6 +124,12 @@ export const UpdateOrderSchema = z.object({
   driverId: z.string().nullable().optional(),
   finalWeight: z.number().nullable().optional(),
   totalPrice: z.number().nullable().optional(),
+  // Phase 62: branch re-routing (admin reassigns which hub processes the
+  // order) and partner fulfillment tagging (order processed by a Kozy
+  // Network operator instead of an in-house branch). ADMIN only — enforced
+  // in the PATCH route, not the schema.
+  branchId: z.string().nullable().optional(),
+  fulfilledByPartnerId: z.string().nullable().optional(),
 })
 
 // Phase 51 — stage ONE condition photo pre-order. The wizard calls this per
@@ -139,6 +145,24 @@ export const StagePhotoSchema = z.object({
     .startsWith('data:image/', 'Staged photo must be an image')
     .max(400_000, 'Photo is too large after compression — try another'),
 })
+
+// ----- Membership pickup (phase 62: The Kozy Circle) -----
+// The one-tap member booking: no itemization, no photo capture — the Kozy
+// Bag/Box regulates volume. `kind` selects the entitlement being consumed:
+//   unit        — a bag/box pickup (included allowance first, extras billed)
+//   duvet / curtain / spring-clean — the tier's included perk services
+export const MemberPickupSchema = z.object({
+  kind: z.enum(['unit', 'duvet', 'curtain', 'spring-clean']),
+  // How many bags/boxes this pickup collects (kind=unit) or how many perk
+  // items to include (duvet/curtain counts; spring-clean is always 1).
+  count: z.number().int().min(1).max(4).optional().default(1),
+  pickupAddress: z.string().trim().min(8, 'Pickup address is required').max(400),
+  pickupDate: z.string().min(1, 'Pickup date is required'),
+  pickupTimeSlot: z.string().min(1, 'Pickup time slot is required'),
+  deliveryAddress: z.string().trim().max(400).optional(),
+  note: z.string().trim().max(500).optional(),
+})
+export type MemberPickupInput = z.infer<typeof MemberPickupSchema>
 
 // ----- Payment schemas -----
 export const CreatePaymentSchema = z.object({

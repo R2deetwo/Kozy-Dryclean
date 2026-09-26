@@ -27,10 +27,13 @@ export function TestimonialsCarousel() {
 
   const count = testimonials?.length ?? 0
 
-  // Reset the index if the list shrinks (e.g. after a refetch)
-  useEffect(() => {
+  // Reset the index if the list shrinks (e.g. after a refetch) —
+  // adjust-during-render (the React-documented pattern, no effect needed).
+  const [lastCount, setLastCount] = useState(count)
+  if (count !== lastCount) {
+    setLastCount(count)
     if (index >= Math.max(count, 1)) setIndex(0)
-  }, [count, index])
+  }
 
   const goNext = useCallback(() => {
     setDirection(1)

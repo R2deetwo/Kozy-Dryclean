@@ -32,6 +32,8 @@ import {
   useVerifyPayment,
   useDeletePayment,
   useAppSettings,
+  useBranches,
+  usePartners,
 } from '@/lib/hooks'
 import { formatNaira, formatDateTime, formatDate, type OrderStatus } from '@/lib/types'
 import { getOrderTiming, pacingSentence } from '@/lib/order-timing'
@@ -657,6 +659,13 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
             <DispatchCard orderId={order.id} orderNumber={order.orderNumber} />
           )}
 
+          {/* Phase 62 — Routing & fulfillment (ADMIN only): which branch
+           * processes this order (usually decided automatically by the
+           * pickup zone — re-route here when capacity says otherwise), and
+           * whether an approved network partner processes it instead (their
+           * revenue share is derived from delivered orders tagged here). */}
+          {isAdmin && <RoutingSection order={order} updateOrderMutation={updateOrderMutation} />}
+
           <section>
             <h3 className="mb-2 text-sm font-semibold text-[#0A192F]">Payment</h3>
             {payments.length === 0 ? <p className="text-sm text-[#6F88A8]">No payment yet.</p> : (
@@ -928,5 +937,84 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
         </AlertDialogContent>
       </AlertDialog>
     </Dialog>
+  )
+}
+
+// =====================================================
+// ROUTING & FULFILLMENT (phase 62, ADMIN only)
+// =====================================================
+// Branch re-routing + partner fulfillment tagging. Both write through the
+// standard order PATCH (audited as status events server-side) and update the
+// shared cache instantly.
+function RoutingSection({
+  order,
+  updateOrderMutation,
+}: {
+  order: any
+  updateOrderMutation: any
+}) {
+  const { data: branches } = useBranches()
+  const { data: partnerData } = usePartners()
+  const approved = (partnerData?.partners ?? []).filter((p: any) => p.status === 'APPROVED')
+
+  const setBranch = (branchId: string) =>
+    updateOrderMutation.mutate({ id: order.id, branchId: branchId || null })
+  const setPartner = (partnerId: string) =>
+    updateOrderMutation.mutate({ id: order.id, fulfilledByPartnerId: partnerId || null })
+
+  const selectClass =
+    'mt-1 w-full rounded-lg border border-[#D5DBE1] bg-white px-2.5 py-2 text-sm text-[#0A192F] focus:border-[#D4AF37] focus:outline-none'
+
+  return (
+    <section className="rounded-lg border border-[#D5DBE1] bg-white p-3">
+      <p className="flex items-center gap-1.5 text-sm font-semibold text-[#0A192F]">
+        <MapPin className="h-3.5 w-3.5 text-[#D4AF37]" /> Routing &amp; fulfillment
+      </p>
+      <div className="mt-2 grid gap-3 sm:grid-cols-2">
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-[#6F88A8]">
+            Processing branch
+          </label>
+          <select
+            value={(order as any).branchId ?? ''}
+            onChange={(e) => setBranch(e.target.value)}
+            className={selectClass}
+          >
+            <option value="">Not routed (legacy)</option>
+            {(branches ?? []).map((b: any) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+                {b.zoneNames?.length ? ` — ${b.zoneNames.join(', ')}` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] font-semibold uppercase tracking-wide text-[#6F88A8]">
+            Fulfilled by (network partner)
+          </label>
+          <select
+            value={(order as any).fulfilledByPartnerId ?? ''}
+            onChange={(e) => setPartner(e.target.value)}
+            className={selectClass}
+            disabled={approved.length === 0}
+          >
+            <option value="">
+              {approved.length === 0 ? 'No approved partners yet' : 'In-house (this branch)'}
+            </option>
+            {approved.map((p: any) => (
+              <option key={p.id} value={p.id}>
+                {p.businessName} — {p.revenueSharePartnerPct}% partner share
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] leading-snug text-[#6F88A8]">
+        Branch routing is automatic from the pickup&apos;s zone — change it only when capacity
+        says otherwise. Tagging a partner moves processing (and their revenue share) to them;
+        the Partners ledger updates when the order is delivered.
+      </p>
+    </section>
   )
 }

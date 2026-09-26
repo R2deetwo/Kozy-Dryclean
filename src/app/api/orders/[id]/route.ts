@@ -264,6 +264,59 @@ export async function PATCH(
     }
   }
   if (parsed.data.driverId !== undefined) updateData.driverId = parsed.data.driverId
+
+  // ----- Phase 62: branch re-routing + partner fulfillment (ADMIN only) -----
+  // Re-routing decides which physical hub processes the order — a capacity
+  // decision, not an operational one, so staff keep their existing powers
+  // untouched. Partner tagging feeds the revenue-share ledger, equally an
+  // owner decision. Both are logged as status events for the audit trail.
+  if (
+    (parsed.data.branchId !== undefined || parsed.data.fulfilledByPartnerId !== undefined) &&
+    session.user?.role !== 'ADMIN'
+  ) {
+    return NextResponse.json(
+      {
+        error: 'FORBIDDEN_ROUTING',
+        message: 'Branch re-routing and partner fulfillment are manager decisions.',
+      },
+      { status: 403 }
+    )
+  }
+  let routingNote: string | null = null
+  if (parsed.data.branchId !== undefined && parsed.data.branchId !== order.branchId) {
+    updateData.branchId = parsed.data.branchId
+    if (parsed.data.branchId) {
+      const branch = await db.branch.findUnique({ where: { id: parsed.data.branchId } })
+      routingNote = `Re-routed to ${branch?.name ?? 'another branch'} by ${session.user?.name ?? 'admin'}`
+    } else {
+      routingNote = `Branch cleared by ${session.user?.name ?? 'admin'}`
+    }
+  }
+  if (
+    parsed.data.fulfilledByPartnerId !== undefined &&
+    parsed.data.fulfilledByPartnerId !== order.fulfilledByPartnerId
+  ) {
+    updateData.fulfilledByPartnerId = parsed.data.fulfilledByPartnerId
+    if (parsed.data.fulfilledByPartnerId) {
+      const partner = await db.partner.findUnique({ where: { id: parsed.data.fulfilledByPartnerId } })
+      routingNote = routingNote
+        ? `${routingNote} · fulfilled by ${partner?.businessName ?? 'partner'} (${partner?.revenueSharePartnerPct ?? 70}% share)`
+        : `Fulfilled by ${partner?.businessName ?? 'partner'} (${partner?.revenueSharePartnerPct ?? 70}% share) by ${session.user?.name ?? 'admin'}`
+    } else {
+      routingNote = routingNote
+        ? `${routingNote} · partner fulfillment cleared`
+        : `Partner fulfillment cleared by ${session.user?.name ?? 'admin'}`
+    }
+  }
+  if (routingNote) {
+    try {
+      await db.statusEvent.create({
+        data: { orderId: id, status: order.status, note: routingNote, actorId: session.user?.id },
+      })
+    } catch {
+      /* trail is best-effort */
+    }
+  }
   if (parsed.data.finalWeight !== undefined) {
     updateData.finalWeight = parsed.data.finalWeight
     // Auto-calculate totalPrice for KG orders when weight is set — priced

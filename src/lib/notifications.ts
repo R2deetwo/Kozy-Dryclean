@@ -617,6 +617,8 @@ const CATEGORY_TEXT: Record<string, string> = {
   review: 'Review',
   referral: 'Referral',
   incident: 'Incident',
+  membership: 'Membership',
+  partner: 'Partner',
   test: 'Test',
 }
 
@@ -1771,5 +1773,177 @@ export async function logStaffEvent(opts: {
     })
   } catch (e) {
     console.error('Staff NotificationEvent create failed:', e)
+  }
+}
+
+// =============================================================================
+// MEMBERSHIPS (phase 62) — The Kozy Circle notifications
+// =============================================================================
+// Same taxonomy as everything else: [Kozy Care Ops · Membership] for the
+// admin inbox, [Kozy Care · Membership] for the member. Every function
+// never-throws, exactly like the order notifications above.
+
+/** A customer just joined (payment still pending) — admin alert. */
+export async function notifyAdminNewSubscription(opts: {
+  user: { name: string; email: string; phone: string }
+  plan: { name: string; code: string; priceMonthly: number }
+  paymentMethod: string
+  subscriptionId: string
+}): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    const { subject, html } = adminEmail({
+      category: 'membership',
+      badge: 'New membership',
+      heading: `${opts.user.name} joined ${opts.plan.name}`,
+      intro:
+        opts.paymentMethod === 'PAYSTACK'
+          ? 'A new Kozy Circle member paid by card — the membership activates itself the moment Paystack confirms the charge.'
+          : 'A new Kozy Circle member chose bank transfer. Verify the receipt in Memberships → Subscribers to activate their month.',
+      rows: [
+        { label: 'Member', value: opts.user.name },
+        { label: 'Email', value: opts.user.email },
+        { label: 'Phone', value: opts.user.phone },
+        { label: 'Plan', value: `${opts.plan.name} (${opts.plan.code})` },
+        { label: 'Monthly', value: formatNaira(opts.plan.priceMonthly) },
+        { label: 'Payment', value: opts.paymentMethod === 'PAYSTACK' ? 'Paystack (card)' : 'Bank transfer — awaiting receipt/verification' },
+      ],
+      cta: { label: 'Open Memberships', url: `${baseUrl()}/admin` },
+    })
+    await deliverAdminAlert({
+      type: 'SUBSCRIPTION',
+      title: `${opts.user.name} joined ${opts.plan.name}`,
+      body: `${formatNaira(opts.plan.priceMonthly)}/mo · ${opts.paymentMethod === 'PAYSTACK' ? 'card' : 'transfer pending'}`,
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: cfg.newOrder,
+      data: { planCode: opts.plan.code, userEmail: opts.user.email, subscriptionId: opts.subscriptionId },
+      linkTab: 'memberships',
+    })
+  } catch (e) {
+    console.error('notifyAdminNewSubscription failed:', e)
+  }
+}
+
+/** The membership is LIVE (transfer verified or card charged) — member email. */
+export async function notifyMembershipActive(opts: {
+  user: { name: string; email: string }
+  planName: string
+  pricePaid: number
+  periodEnd: Date
+  unitName: string
+  includedUnits: number
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const bodyHtml = `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        Welcome to the Kozy Circle, <strong style="color:#0A192F;">${firstName}</strong>.
+        Your <strong style="color:#0A192F;">${opts.planName}</strong> membership is active — here is your month at a glance:
+      </p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        <tr>
+          <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Your month</td>
+          <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">Active until <strong>${fmtDate(opts.periodEnd)}</strong> (renews automatically unless you cancel).</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Included</td>
+          <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;"><strong>${opts.includedUnits} × ${opts.unitName}</strong> pickups — book each week from your portal, one tap.</td>
+        </tr>
+        <tr>
+          <td style="padding: 8px 0; color: #6F88A8; vertical-align: top;">Your kit</td>
+          <td style="padding: 8px 0; color: #0A192F;">Your rider hands over the ${opts.unitName} at your first pickup. Fill it, leave the counting to us.</td>
+        </tr>
+      </table>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+        Paid: <strong style="color:#0A192F;">${formatNaira(opts.pricePaid)}</strong>. Manage everything from the Membership tab in your portal.
+      </p>`
+    const { subject, html } = staffEmailChrome({
+      category: 'membership',
+      heading: `Your ${opts.planName} membership is live`,
+      bodyHtml,
+      cta: { label: 'Book your first pickup', url: `${baseUrl()}/portal` },
+      footer: 'Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMembershipActive failed:', e)
+  }
+}
+
+/** The member set cancel-at-period-end — confirmation email (no guilt trips). */
+export async function notifyMembershipCancelled(opts: {
+  user: { name: string; email: string }
+  planName: string
+  periodEnd: Date | null
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const until = opts.periodEnd ? fmtDate(opts.periodEnd) : 'the end of your paid month'
+    const bodyHtml = `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        Done, <strong style="color:#0A192F;">${firstName}</strong> — your <strong style="color:#0A192F;">${opts.planName}</strong> membership will not renew.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 12px 0;">
+        Everything stays exactly as it is until <strong style="color:#0A192F;">${until}</strong> — your remaining pickups, your perks, your priority slots. Nothing stops early.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+        Changed your mind? One tap in your portal's Membership tab undoes this before the month ends. And when your ${opts.planName} is returned at your final delivery, that closes the chapter properly.
+      </p>`
+    const { subject, html } = staffEmailChrome({
+      category: 'membership',
+      heading: `Your membership will not renew`,
+      bodyHtml,
+      cta: { label: 'Reconsider', url: `${baseUrl()}/portal` },
+      footer: 'Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMembershipCancelled failed:', e)
+  }
+}
+
+// =============================================================================
+// KOZY NETWORK (phase 62) — partner application alert
+// =============================================================================
+
+/** An operator applied to join the network — admin alert. */
+export async function notifyAdminPartnerApplication(partner: {
+  businessName: string
+  contactName: string
+  email: string
+  phone: string
+  address: string
+  capacityNotes?: string | null
+}): Promise<void> {
+  try {
+    const cfg = await adminAlertConfig()
+    const { subject, html } = adminEmail({
+      category: 'partner',
+      badge: 'Network application',
+      heading: `${partner.businessName} applied to join the Kozy Network`,
+      intro:
+        'A laundry operator wants to run under the Kozy brand — demand, technology and riders from us; processing capacity from them. Review the application, then set their branch and revenue share.',
+      rows: [
+        { label: 'Business', value: partner.businessName },
+        { label: 'Contact', value: `${partner.contactName} · ${partner.phone}` },
+        { label: 'Email', value: partner.email },
+        { label: 'Location', value: partner.address },
+        ...(partner.capacityNotes ? [{ label: 'Capacity', value: partner.capacityNotes }] : []),
+      ],
+      cta: { label: 'Contact them', url: `tel:${partner.phone.replace(/\s/g, '')}` },
+    })
+    await deliverAdminAlert({
+      type: 'PARTNER_APPLICATION',
+      title: `${partner.businessName} applied to join the network`,
+      body: `${partner.contactName} · ${partner.phone} · ${partner.address}`,
+      emails: cfg.emails,
+      email: { subject, html },
+      enabled: true,
+      data: { businessName: partner.businessName, email: partner.email, phone: partner.phone },
+      linkTab: 'partners',
+    })
+  } catch (e) {
+    console.error('notifyAdminPartnerApplication failed:', e)
   }
 }

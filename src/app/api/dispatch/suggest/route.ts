@@ -70,6 +70,7 @@ export async function GET(req: Request) {
       pickupTimeSlot: true,
       deliveryAddress: true,
       serviceSpeed: true,
+      branchId: true,
     },
   })
   if (!order) {
@@ -101,6 +102,7 @@ export async function GET(req: Request) {
       id: true,
       name: true,
       phone: true,
+      branchId: true,
       driverLocation: { select: { lat: true, lng: true, zone: true, updatedAt: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -195,6 +197,7 @@ export async function GET(req: Request) {
         zoneDelivered: record.zoneDelivered,
         totalDelivered: record.total,
         unresolvedIncidents: incidentsByRider.get(r.id) ?? 0,
+        branchId: r.branchId ?? null,
       }
       const score: DispatchScore = scoreRider(
         {
@@ -202,6 +205,7 @@ export async function GET(req: Request) {
           zoneName: zone?.name ?? null,
           zoneCenter: zone ? { lat: zone.lat, lng: zone.lng } : null,
           slotStart: isDeliveryLeg ? now : slot.start,
+          branchId: order.branchId ?? null,
         },
         facts,
         now

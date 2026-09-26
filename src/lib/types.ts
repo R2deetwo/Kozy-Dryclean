@@ -2,7 +2,6 @@
 // Mirrors the Prisma schema but as plain TS types for client-side state.
 
 export type Role = 'ADMIN' | 'STAFF' | 'DRIVER' | 'B2C' | 'B2B'
-
 // Staff-access lifecycle (phase 31). Console roles are policed against this
 // at login and on every console API call; customer roles ignore it.
 export type AccessStatus = 'ACTIVE' | 'PAUSED' | 'REVOKED'
@@ -42,6 +41,8 @@ export interface User {
   role: Role
   // Company name for corporate clients
   company?: string
+  // Phase 62: home branch for DRIVER accounts (dispatch affinity)
+  branchId?: string | null
   createdAt: string
 }
 
@@ -153,6 +154,92 @@ export interface Order {
   // Phase 51: list payloads carry the photo COUNT (mediaCount) instead of
   // the bytes — full media comes from GET /api/orders/[id] on modal open.
   mediaCount?: number
+  // ----- Phase 62 (growth architecture) -----
+  // The branch this pickup is assigned to ("ogombo" | "chevron" ids —
+  // resolved via the branches lookup on the client).
+  branchId?: string | null
+  // The membership this order was placed against (member bag/box pickups
+  // and included perk services).
+  subscriptionId?: string | null
+  // Set when a Kozy Network partner (not an in-house branch) processes it.
+  fulfilledByPartnerId?: string | null
+}
+
+// =====================================================
+// BRANCH (phase 62) — Ogombo & Chevron Drive
+// =====================================================
+export interface Branch {
+  id: string
+  name: string
+  slug: string
+  address: string
+  phone: string | null
+  // SERVICE_ZONES names this branch owns (drives order assignment)
+  zoneNames: string[]
+  lat: number
+  lng: number
+  isActive: boolean
+  isDefault: boolean
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+// =====================================================
+// MEMBERSHIPS (phase 62) — The Kozy Circle
+// =====================================================
+export interface MembershipPlan {
+  id: string
+  code: string // ESSENTIALS | HOUSEHOLD | CONCIERGE
+  name: string
+  tagline: string
+  priceMonthly: number
+  sortOrder: number
+  isActive: boolean
+  includedUnits: number
+  unitKind: string // 'bag' | 'box'
+  unitName: string
+  extraUnitPrice: number
+  maxExtraUnits: number
+  replacementFee: number
+  duvetsPerQuarter: number
+  curtainsPerQuarter: number
+  springCleanPerYear: number
+  concierge: boolean
+  memberDiscountPct: number
+  prioritySlots: boolean
+  paystackPlanCode?: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type MembershipStatus =
+  | 'PENDING_ACTIVATION'
+  | 'ACTIVE'
+  | 'PAST_DUE'
+  | 'LAPSED'
+  | 'CANCELLED'
+
+export interface Membership {
+  id: string
+  userId: string
+  status: MembershipStatus
+  pricePaid: number
+  paymentMethod: string | null
+  periodStart: string | null
+  periodEnd: string | null
+  cancelAtPeriodEnd: boolean
+  // Usage snapshot (current cycle / quarter / year)
+  unitsUsed: number
+  extraUnitsUsed: number
+  duvetsUsed: number
+  curtainsUsed: number
+  springCleanUsed: number
+  kitState: string
+  kitDeliveredAt: string | null
+  plan?: MembershipPlan
+  createdAt: string
+  updatedAt: string
 }
 
 // =====================================================
@@ -687,6 +774,8 @@ export type NotificationEventType =
   | 'RIDER_INCIDENT'
   | 'STAFF_INVITE'
   | 'CAMPAIGN_SENT'
+  | 'SUBSCRIPTION'
+  | 'PARTNER_APPLICATION'
   | 'TEST'
 
 export type NotificationEmailStatus = 'NONE' | 'DISABLED' | 'SENT' | 'PARTIAL' | 'FAILED'

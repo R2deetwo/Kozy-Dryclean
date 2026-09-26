@@ -71,7 +71,9 @@ export async function GET(req: Request) {
     where,
     include: {
       order: {
-        select: { id: true, orderNumber: true, userId: true },
+        // Phase 62: branchId rides along so the console's branch switcher
+        // can filter the verification queue per location.
+        select: { id: true, orderNumber: true, userId: true, branchId: true },
       },
     },
     orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],

@@ -31,19 +31,32 @@ import { formatNaira, formatDateTime, type Order } from '@/lib/types'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 
-export function FinanceView() {
+export function FinanceView({
+  branchId,
+}: {
+  /** Phase 62: the console's branch switcher — null shows every branch. */
+  branchId?: string | null
+}) {
   // fetchAll: finance totals/revenue charts must see every order/payment —
   // the hooks page through the cursor API (bounded by MAX_PAGES).
-  const { data: orders } = useOrders({
+  const { data: allOrders } = useOrders({
     fetchAll: true,
     refetchInterval: ADMIN_POLL.medium,
     refetchOnWindowFocus: true,
   })
-  const { data: payments } = usePayments({
+  const { data: allPayments } = usePayments({
     fetchAll: true,
     refetchInterval: ADMIN_POLL.medium,
     refetchOnWindowFocus: true,
   })
+
+  // Phase 62: branch switcher. Legacy orders without a branch (and their
+  // payments) appear only in the "All branches" view.
+  const orders = (allOrders ?? []).filter((o: any) => !branchId || o.branchId === branchId)
+  const orderIds = useMemo(() => new Set(orders.map((o: any) => o.id)), [orders])
+  const payments = (allPayments ?? []).filter(
+    (p: any) => !branchId || orderIds.has(p.orderId)
+  )
 
   const stats = useMemo(() => {
     const verified = (payments ?? []).filter((p: any) => p.status === 'VERIFIED')

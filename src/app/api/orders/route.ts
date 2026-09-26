@@ -53,6 +53,8 @@ import {
 } from '@/lib/marketing'
 import { checkReferralEligibility, recordReferralRedemption } from '@/lib/referrals'
 import { getLoyaltyState } from '@/lib/loyalty'
+import { assignBranchForAddress } from '@/lib/branches'
+import { effectiveStatus } from '@/lib/subscriptions'
 
 // Positive-integer env override with a safe default (phase-29): lets the
 // owner retune the booking rate limits from Vercel's dashboard without a
@@ -459,6 +461,10 @@ export async function POST(req: Request) {
   // customer's earned complimentary service (their next after ten paid
   // washes) — the order is created with loyaltyFree and a zero total.
   let loyaltyFreeOrder = false
+  // Phase 62: the owner's live Kozy Circle membership — filled in by the
+  // ITEM pricing block (free delivery + member discount) and linked on the
+  // created order for the member's history.
+  let membershipLive: any = null
 
   // ----- Service speed (turnaround tier) -----
   // KG / corporate orders always run on the standard SLA. For ITEM orders
@@ -711,16 +717,44 @@ export async function POST(req: Request) {
     // ----- Delivery fee: first delivery free, then the going rate -----
     // The free delivery is per CUSTOMER (not per browser): count their
     // previous orders. Cancelled orders don't consume the free delivery.
+    // Phase 62: Kozy Circle members NEVER pay delivery — their plan covers
+    // every pickup and drop-off, which is the visible core benefit.
+    const activeMembership =
+      owner.role === 'B2C' || owner.role === 'B2B'
+        ? await db.subscription.findFirst({
+            where: { userId: ownerId, status: { in: ['ACTIVE', 'PAST_DUE'] } },
+            orderBy: { createdAt: 'desc' },
+            include: { plan: true },
+          })
+        : null
+    membershipLive =
+      activeMembership &&
+      ['ACTIVE', 'EXPIRING', 'PAST_DUE'].includes(effectiveStatus(activeMembership))
+        ? activeMembership
+        : null
     const previousOrders = await db.order.count({
       where: { userId: ownerId, status: { not: 'CANCELLED' } },
     })
     const isFirstDelivery = previousOrders === 0
-    const deliveryFee = isFirstDelivery ? 0 : appSettings.deliveryFee
-    if (deliveryFee > 0) {
+    const deliveryFee = membershipLive ? 0 : isFirstDelivery ? 0 : appSettings.deliveryFee
+    if (membershipLive) {
+      appliedDiscounts.push(
+        `Member delivery — free (${membershipLive.plan?.name ?? 'Kozy Circle'})`
+      )
+    } else if (deliveryFee > 0) {
       appliedDiscounts.push(`Delivery fee`) // informational line in admin
     } else {
       appliedDiscounts.push(`Free first delivery`)
     }
+
+    // ----- Phase 62: member discount on everything à-la-carte -----
+    // The plan's percentage off dry cleaning, shoes and alterations —
+    // composes with the guarantee 5% and the first-order/hotel offers under
+    // the same 95% stack cap. Deliberately REPLACES the standing online
+    // discount when it is stronger (a Concierge member's 15% beats the 5%
+    // registered-customer discount; the weaker online line is simply not
+    // applied) so the member's basket reads one clean benefit, not a pile.
+    const memberDiscountPct = membershipLive?.plan?.memberDiscountPct ?? 0
 
     // ----- Permanent online-order discount (phase-30, client directive) -----
     // 5% (admin-tunable) off EVERY order placed by a signed-in customer —
@@ -731,11 +765,18 @@ export async function POST(req: Request) {
     // those are phone/walk-in customers placed on their behalf, not online
     // self-service. Stacks with the guarantee 5% and the first-order/hotel
     // offers; the combined percentage cap below (95%) still applies.
+    // Phase 62: a member's stronger plan discount replaces the online line
+    // (see the memberDiscountPct note above).
     const onlinePct =
       session && session.user?.role !== 'ADMIN'
         ? Math.max(0, Math.min(appSettings.onlineOrderDiscountPercent, 50))
         : 0
-    if (onlinePct > 0) {
+    if (memberDiscountPct > 0) {
+      totalDiscount += memberDiscountPct / 100
+      appliedDiscounts.push(
+        `Kozy Circle member discount (${memberDiscountPct}%) — ${membershipLive?.plan?.name ?? 'plan'}`
+      )
+    } else if (onlinePct > 0) {
       totalDiscount += onlinePct / 100
       appliedDiscounts.push(`Online order discount (${onlinePct}%) — for registered customers, every order`)
     }
@@ -883,6 +924,18 @@ export async function POST(req: Request) {
     )
   }
 
+  // ----- Phase 62: branch assignment (server-side, deterministic) -----
+  // The pickup address's service zone decides which hub (Ogombo / Chevron
+  // Drive) the order lands at; unknown zones fall back to the nearest
+  // branch. Never blocks the booking — a lookup failure simply leaves the
+  // order unassigned (admin can route it from the order modal).
+  let branchAssignment: { branchId: string; branchName: string; reason: string } | null = null
+  try {
+    branchAssignment = await assignBranchForAddress(pickupAddress)
+  } catch (e) {
+    console.error('[branches] assignment failed (order still placed):', e)
+  }
+
   const order = await db.order.create({
     data: {
       orderNumber,
@@ -898,6 +951,8 @@ export async function POST(req: Request) {
       itemsManifest: JSON.stringify(items),
       alterationNotes: hasAlterationItems ? alterationNotes!.trim() : (alterationNotes?.trim() || null),
       totalPrice,
+      ...(membershipLive ? { subscriptionId: membershipLive.id } : {}),
+      ...(branchAssignment ? { branchId: branchAssignment.branchId } : {}),
       pickupAddress,
       pickupDate: new Date(pickupDate),
       pickupTimeSlot,

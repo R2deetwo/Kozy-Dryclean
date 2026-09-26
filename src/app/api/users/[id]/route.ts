@@ -41,6 +41,53 @@ async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResp
   }
 }
 
+// =============================================================================
+// PATCH /api/users/[id] — ADMIN: assign a rider to their home branch
+// =============================================================================
+// Phase 62: drivers get a home branch (Ogombo / Chevron Drive). Dispatch
+// suggestions score branch-affinity, and the branch health cards count
+// riders on duty per branch. DRIVER accounts only — a branch on any other
+// role is meaningless and quietly ignored.
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await requireAdmin()
+  if (session instanceof NextResponse) return session
+
+  const { id } = await params
+  const body = await req.json().catch(() => ({}))
+
+  const user = await db.user.findUnique({ where: { id } })
+  if (!user) {
+    return NextResponse.json({ error: 'User not found' }, { status: 404 })
+  }
+  if (user.role !== 'DRIVER') {
+    return NextResponse.json(
+      { error: 'Branch assignment applies to rider accounts only.' },
+      { status: 400 }
+    )
+  }
+
+  // null clears the assignment; a string must reference a real branch.
+  let branchId: string | null = null
+  if (typeof body?.branchId === 'string' && body.branchId) {
+    const branch = await db.branch.findUnique({ where: { id: body.branchId } })
+    if (!branch) {
+      return NextResponse.json({ error: 'Branch not found' }, { status: 400 })
+    }
+    branchId = branch.id
+  }
+
+  const updated = await db.user.update({
+    where: { id },
+    data: { branchId },
+    select: { id: true, name: true, role: true, branchId: true },
+  })
+
+  return NextResponse.json({ user: updated })
+}
+
 export async function DELETE(
   req: Request,
   { params }: { params: Promise<{ id: string }> }

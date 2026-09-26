@@ -43,6 +43,24 @@ export async function GET(req: NextRequest) {
   const gatewayStatus = data?.data?.status // 'success' | 'failed' | 'abandoned' | ...
   const amount = data?.data?.amount ? data.data.amount / 100 : null
 
+  // ----- Phase 62: membership references ("SUB-…") -----
+  // The same public endpoint serves the membership callback: paid → the
+  // webhook has (or is about to) activate the cycle. We return a
+  // membership-shaped projection so /payment/callback can speak member.
+  if (reference.startsWith('SUB-')) {
+    const sub = await db.subscription.findUnique({
+      where: { paystackRef: reference },
+      include: { plan: true },
+    })
+    return NextResponse.json({
+      status: gatewayStatus || 'unknown',
+      paid: gatewayStatus === 'success',
+      amount,
+      membership: true,
+      planName: sub?.plan?.name ?? 'your Kozy Circle membership',
+    })
+  }
+
   // Local lookup so we can tell the customer which order this was for
   const order = await db.order.findFirst({
     where: {

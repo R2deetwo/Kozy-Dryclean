@@ -20,7 +20,8 @@
 import { NextResponse } from 'next/server'
 import crypto from 'crypto'
 import { db } from '@/lib/db'
-import { notifyPaymentVerified } from '@/lib/notifications'
+import { notifyPaymentVerified, notifyMembershipActive } from '@/lib/notifications'
+import { activateOrRenewSubscription } from '@/lib/subscriptions'
 
 export async function POST(req: Request) {
   // ----- 1. Verify the Paystack signature -----
@@ -74,6 +75,15 @@ export async function POST(req: Request) {
   const data = event?.data
 
   if (eventType === 'charge.success') {
+    // ----- Phase 62: membership charges route separately -----
+    // Initial charge: reference "SUB-{subscriptionId}". Renewals: the
+    // event carries a subscription object (subscription_code) and a
+    // Paystack-generated reference — matched by the stored code.
+    const isMembership =
+      typeof paystackRefOf(data) === 'string' && String(paystackRefOf(data)).startsWith('SUB-')
+    if (isMembership || data?.subscription) {
+      return handleMembershipChargeSuccess(data)
+    }
     return handleChargeSuccess(data)
   }
 
@@ -197,4 +207,101 @@ async function handleChargeSuccess(data: any) {
   console.log(`Paystack webhook: verified payment for order ${order.orderNumber}`)
 
   return NextResponse.json({ ok: true, message: 'Payment verified and order advanced' })
+}
+
+// Small helper: read the reference off a Paystack event payload.
+function paystackRefOf(data: any): string | undefined {
+  return data?.reference ?? undefined
+}
+
+// ----- Handle charge.success for MEMBERSHIPS (phase 62) -----
+// Two shapes arrive here:
+//   1. Initial charge — reference "SUB-{subscriptionId}" (we set it at
+//      initialize). Find the subscription, activate the cycle, store the
+//      recurring-subscription codes Paystack hands back.
+//   2. Renewal charge — Paystack-generated reference + data.subscription
+//      (subscription_code / email_token). Match by the stored code and
+//      extend the member's period by one cycle.
+// Both paths are idempotent: an ACTIVE membership whose periodEnd already
+// covers "now + 29 days" is treated as processed.
+async function handleMembershipChargeSuccess(data: any) {
+  const ref = paystackRefOf(data)
+  const amountInKobo = data?.amount
+  const amount = amountInKobo ? amountInKobo / 100 : 0
+
+  const subCode = data?.subscription?.subscription_code ?? data?.subscription?.subscriptionCode
+  const emailToken = data?.subscription?.email_token ?? data?.subscription?.emailToken
+
+  // Resolve the subscription: by reference first (initial charge), then by
+  // subscription code (renewals).
+  let sub: any = null
+  if (ref && String(ref).startsWith('SUB-')) {
+    sub = await db.subscription.findUnique({ where: { paystackRef: String(ref) } })
+  }
+  if (!sub && subCode) {
+    sub = await db.subscription.findFirst({ where: { paystackSubscriptionCode: subCode } })
+  }
+  if (!sub) {
+    console.error('[memberships] Paystack webhook: no subscription for ref/code:', ref, subCode)
+    // 200 so Paystack does not retry forever — nothing we can match.
+    return NextResponse.json({ ok: true, message: 'Subscription not found' })
+  }
+
+  // Idempotency: a renewal that landed twice, or a race with the initial
+  // activation. The period must EXTEND by exactly one cycle from the
+  // current end — never re-activate from scratch on an active membership
+  // unless the period has actually lapsed.
+  const now = Date.now()
+  const periodEndMs = sub.periodEnd ? new Date(sub.periodEnd).getTime() : 0
+  const activeAndFresh = sub.status === 'ACTIVE' && periodEndMs - now > 29 * 24 * 60 * 60 * 1000
+  if (activeAndFresh) {
+    // Still record the recurring codes if this is the first time we see them.
+    if (subCode && !sub.paystackSubscriptionCode) {
+      await db.subscription.update({
+        where: { id: sub.id },
+        data: { paystackSubscriptionCode: subCode, paystackEmailToken: emailToken ?? null },
+      })
+    }
+    return NextResponse.json({ ok: true, message: 'Already active — renewal ignored' })
+  }
+
+  // A lapsed membership being re-charged (retry after PAST_DUE) should
+  // restart from now; an expiring-soon renewal extends from period end —
+  // activateOrRenewSubscription handles both branches.
+  const plan = await db.subscriptionPlan.findUnique({ where: { id: sub.planId } })
+  const pricePaid = amount > 0 ? amount : plan?.priceMonthly ?? 0
+
+  const updated = await activateOrRenewSubscription(sub.id, {
+    pricePaid,
+    method: 'PAYSTACK',
+  })
+
+  // Persist the recurring codes — every future charge.success with this
+  // subscription_code finds the member.
+  if (subCode) {
+    await db.subscription.update({
+      where: { id: sub.id },
+      data: { paystackSubscriptionCode: subCode, paystackEmailToken: emailToken ?? null },
+    })
+  }
+
+  // Member email — never blocks the webhook response.
+  try {
+    const user = await db.user.findUnique({ where: { id: sub.userId } })
+    if (user && plan) {
+      await notifyMembershipActive({
+        user: { name: user.name, email: user.email },
+        planName: plan.name,
+        pricePaid,
+        periodEnd: updated.periodEnd,
+        unitName: plan.unitName,
+        includedUnits: plan.includedUnits,
+      })
+    }
+  } catch (e) {
+    console.error('[memberships] activation email failed:', e)
+  }
+
+  console.log(`[memberships] Paystack webhook: membership ${sub.id} charged ${pricePaid}`)
+  return NextResponse.json({ ok: true, message: 'Membership activated/renewed' })
 }

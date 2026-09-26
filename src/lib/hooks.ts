@@ -61,6 +61,10 @@ export interface ApiOrder {
   deliveredAt: string | null
   createdAt: string
   updatedAt: string
+  // Phase 62: routing + fulfillment (plain scalars, resolved client-side).
+  branchId?: string | null
+  subscriptionId?: string | null
+  fulfilledByPartnerId?: string | null
   user?: { id: string; name: string; email: string; phone: string; role: string }
   driver?: { id: string; name: string; phone: string } | null
   payments?: ApiPayment[]
@@ -80,7 +84,7 @@ export interface ApiPayment {
   verifiedById: string | null
   createdAt: string
   updatedAt: string
-  order?: { id: string; orderNumber: string; userId: string }
+  order?: { id: string; orderNumber: string; userId: string; branchId?: string | null }
 }
 
 export interface ApiUser {
@@ -1217,3 +1221,379 @@ export function useApproveAutomationCampaign() {
   })
 }
 
+
+// =============================================================================
+// Memberships — The Kozy Circle (phase 62)
+// =============================================================================
+
+export interface ApiMembershipPlan {
+  id: string
+  code: string
+  name: string
+  tagline: string
+  priceMonthly: number
+  sortOrder: number
+  isActive: boolean
+  includedUnits: number
+  unitKind: string
+  unitName: string
+  extraUnitPrice: number
+  maxExtraUnits: number
+  replacementFee: number
+  duvetsPerQuarter: number
+  curtainsPerQuarter: number
+  springCleanPerYear: number
+  concierge: boolean
+  memberDiscountPct: number
+  prioritySlots: boolean
+  paystackPlanCode?: string | null
+}
+
+export interface ApiMembershipUsage {
+  unitsUsed: number
+  unitsRemaining: number
+  extraUnitsUsed: number
+  extraRemaining: number
+  duvetsUsed: number
+  duvetsRemaining: number
+  curtainsUsed: number
+  curtainsRemaining: number
+  springCleanUsed: number
+  springCleanRemaining: number
+}
+
+export interface ApiMembership {
+  id: string
+  userId: string
+  status: string
+  effectiveStatus?: string
+  pricePaid: number
+  paymentMethod: string | null
+  periodStart: string | null
+  periodEnd: string | null
+  cancelAtPeriodEnd: boolean
+  unitsUsed: number
+  extraUnitsUsed: number
+  duvetsUsed: number
+  curtainsUsed: number
+  springCleanUsed: number
+  kitState: string
+  kitDeliveredAt: string | null
+  plan?: ApiMembershipPlan
+  usage?: ApiMembershipUsage | null
+  transferReceipt?: string | null
+  user?: { id: string; name: string; email: string; phone: string } | null
+  createdAt: string
+}
+
+/** Public plan list — the marketing page and the portal both read this. */
+export function useMembershipPlans(activeOnly = false) {
+  return useQuery<ApiMembershipPlan[]>({
+    queryKey: ['membership-plans', activeOnly ? 'active' : 'all'],
+    queryFn: async () => {
+      const res = await fetch(`/api/subscriptions/plans${activeOnly ? '?active=1' : ''}`)
+      if (!res.ok) throw new Error('Failed to load plans')
+      const data = await res.json()
+      return data.plans as ApiMembershipPlan[]
+    },
+    staleTime: 60 * 1000,
+  })
+}
+
+/** ADMIN: save edited plans (prices, perks, caps). */
+export function useSaveMembershipPlans() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (plans: Array<Partial<ApiMembershipPlan> & { id: string }>) => {
+      const res = await fetch('/api/subscriptions/plans', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ plans }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save the plans')
+      return data as { plans: ApiMembershipPlan[]; paystack?: Array<{ code: string; planCode: string | null }> }
+    },
+    onSuccess: (data) => {
+      qc.setQueryData(['membership-plans', 'all'], data.plans)
+      qc.invalidateQueries({ queryKey: ['membership-plans'] })
+    },
+  })
+}
+
+/** The signed-in member's own membership (null when not a member). */
+export function useMyMembership() {
+  return useQuery<{ membership: ApiMembership | null; effectiveStatus?: string; usage?: ApiMembershipUsage | null }>({
+    queryKey: ['my-membership'],
+    queryFn: async () => {
+      const res = await fetch('/api/subscriptions/me')
+      if (!res.ok) throw new Error('Failed to load membership')
+      return res.json()
+    },
+    staleTime: 15 * 1000,
+  })
+}
+
+/** Join the Circle — returns the payment next-step (paystack | transfer). */
+export function useSubscribe() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      planCode: string
+      paymentMethod: 'PAYSTACK' | 'BANK_TRANSFER'
+      transferReceipt?: string
+    }) => {
+      const res = await fetch('/api/subscriptions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const err = new Error(data.message || data.error || 'Could not start the membership')
+        ;(err as any).code = data.error
+        ;(err as any).subscription = data.subscription
+        throw err
+      }
+      return data as { subscription: ApiMembership; next: 'paystack' | 'transfer' }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-membership'] }),
+  })
+}
+
+/** Start the Paystack charge for a pending membership → authorization URL. */
+export function useMembershipPaystackInit() {
+  return useMutation({
+    mutationFn: async (subscriptionId: string) => {
+      const res = await fetch('/api/paystack/subscription-initialize', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const err = new Error(data.message || data.error || 'Could not start the payment')
+        ;(err as any).code = data.error
+        throw err
+      }
+      return data as { authorizationUrl: string; reference: string; amount: number; recurring: boolean }
+    },
+  })
+}
+
+/** Cancel at period end / undo. */
+export function useMembershipCancel() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (action: 'cancel' | 'cancel-undo') => {
+      const res = await fetch('/api/subscriptions/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || data.error || 'Could not update the membership')
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['my-membership'] }),
+  })
+}
+
+/** Book a member pickup / perk service — creates a real order. */
+export function useMembershipPickup() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean'
+      count?: number
+      pickupAddress: string
+      pickupDate: string
+      pickupTimeSlot: string
+      deliveryAddress?: string
+      note?: string
+    }) => {
+      const res = await fetch('/api/subscriptions/pickup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || data.error || 'Could not book the pickup')
+      return data as { order: ApiOrder; duplicate?: boolean; extraUnits?: number; extraCharge?: number }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-membership'] })
+      qc.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+/** ADMIN: every membership, with usage + the member's contact. */
+export function useAdminMemberships(options?: { refetchInterval?: number | false }) {
+  return useQuery<ApiMembership[]>({
+    queryKey: ['admin-memberships'],
+    queryFn: async () => {
+      const res = await fetch('/api/subscriptions')
+      if (!res.ok) throw new Error('Failed to load memberships')
+      const data = await res.json()
+      return data.items as ApiMembership[]
+    },
+    staleTime: 10 * 1000,
+    refetchInterval: options?.refetchInterval ?? 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+/** ADMIN: verify / renew / cancel / kit lifecycle / reset usage. */
+export function useMembershipAdminAction() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; action: string; pricePaid?: number; reason?: string; method?: string }) => {
+      const res = await fetch(`/api/subscriptions/${input.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Action failed')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['admin-memberships'] })
+      qc.invalidateQueries({ queryKey: ['my-membership'] })
+    },
+  })
+}
+
+// =============================================================================
+// Branches (phase 62) — Ogombo / Chevron Drive
+// =============================================================================
+
+export interface ApiBranch {
+  id: string
+  name: string
+  slug: string
+  address: string
+  phone: string | null
+  zoneNames: string[]
+  lat: number
+  lng: number
+  isActive: boolean
+  isDefault: boolean
+  sortOrder: number
+}
+
+export function useBranches(options?: { refetchInterval?: number | false }) {
+  return useQuery<ApiBranch[]>({
+    queryKey: ['branches'],
+    queryFn: async () => {
+      const res = await fetch('/api/branches')
+      if (!res.ok) throw new Error('Failed to load branches')
+      const data = await res.json()
+      return data.branches as ApiBranch[]
+    },
+    staleTime: 60 * 1000,
+    refetchInterval: options?.refetchInterval ?? false,
+  })
+}
+
+/** ADMIN: save branch edits (zones, default, active). */
+export function useSaveBranches() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (branches: Array<Partial<ApiBranch> & { id: string }>) => {
+      const res = await fetch('/api/branches', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branches }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not save branches')
+      return data as { branches: ApiBranch[] }
+    },
+    onSuccess: (data) => qc.setQueryData(['branches'], data.branches),
+  })
+}
+
+// =============================================================================
+// Kozy Network partners (phase 62)
+// =============================================================================
+
+export interface ApiPartner {
+  id: string
+  businessName: string
+  contactName: string
+  email: string
+  phone: string
+  address: string
+  capacityNotes: string | null
+  branchId: string | null
+  status: string
+  revenueSharePartnerPct: number
+  reviewedAt: string | null
+  reviewNote: string | null
+  createdAt: string
+}
+
+export interface ApiPartnerLedger {
+  partnerId: string
+  ordersLifetime: number
+  ordersThisMonth: number
+  revenueLifetime: number
+  revenueThisMonth: number
+  partnerShareThisMonth: number
+  kozyShareThisMonth: number
+}
+
+export function usePartners(options?: { refetchInterval?: number | false }) {
+  return useQuery<{ partners: ApiPartner[]; ledger: ApiPartnerLedger[] }>({
+    queryKey: ['partners'],
+    queryFn: async () => {
+      const res = await fetch('/api/partners')
+      if (!res.ok) throw new Error('Failed to load partners')
+      return res.json()
+    },
+    staleTime: 15 * 1000,
+    refetchInterval: options?.refetchInterval ?? 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+export function usePartnerDecision() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      id: string
+      action: 'approve' | 'reject' | 'suspend' | 'reactivate' | 'update'
+      branchId?: string | null
+      revenueSharePartnerPct?: number
+      note?: string
+    }) => {
+      const res = await fetch(`/api/partners/${input.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Decision failed')
+      return data
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['partners'] }),
+  })
+}
+
+/** ADMIN: assign a rider to their home branch. */
+export function useRiderBranchAssign() {
+  return useMutation({
+    mutationFn: async (input: { userId: string; branchId: string | null }) => {
+      const res = await fetch(`/api/users/${input.userId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ branchId: input.branchId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not assign the branch')
+      return data
+    },
+  })
+}

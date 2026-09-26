@@ -32,8 +32,19 @@ export function PublicNav() {
         </div>
         {/* Account cluster — one aligned pill family, mobile and desktop.
             Order is the owner's funnel: browse pricing -> sign up (gold,
-            terminal). */}
+            terminal). The Membership link is deliberately a QUIET text link
+            (phase 62): the Kozy Circle is an option for people who want it,
+            never front-and-center. */}
         <div className="flex items-center gap-2">
+          <Link href="/memberships">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hidden rounded-full px-3 text-xs font-medium text-navy-300 hover:bg-linen-100 hover:text-navy sm:inline-flex"
+            >
+              Membership
+            </Button>
+          </Link>
           <Link href="/services">
             <Button
               variant="outline"
