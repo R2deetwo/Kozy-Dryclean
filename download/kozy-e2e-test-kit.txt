@@ -27,6 +27,28 @@
   type that persona's password and switch. The console sidebar also now
   always shows Sign out (it used to sit below the screen edge on short
   laptop windows).
+- THE RIDER APP IS NOW A FULL APP (phase 61 — on kozycare.ng once the
+  current deployment gap is closed; ask the engineer for status): four
+  bottom tabs — Route (the working screen), History (every ride you
+  completed, grouped by day, on-time vs the customer's slot), Earnings
+  (this payout week in naira, all-time, published per-stop rates, a priced
+  ledger — the office sets the rates in Settings > Offers & Delivery >
+  Rider Pay), and Account (profile, notifications, install-the-app, rules,
+  password, sign out). The Rules screen now closes with a big "Got it —
+  back to my route" button. Distances read "Lekki · 4.1 km away" — the
+  confusing "aja 5.6 km / within 12 km" text is gone.
+- RIDERS NO LONGER WATCH THE SCREEN (phase 61): in Account > Notifications
+  a rider turns on stop notifications — from then on, assigning them a
+  stop wakes their phone with a real notification, browser closed or not
+  (Android; iPhone needs Add to Home Screen first). The same card has a
+  WhatsApp "Send test" button that opens WhatsApp to the number the office
+  has on file — your test number 08124129296 is on your rider persona.
+- WHATSAPP WITHOUT THE INTEGRATION (phase 61): when you assign a rider in
+  the console, the order modal carries a green "Send the job brief on
+  WhatsApp" button — one tap opens WhatsApp (app or Web) with the stop's
+  brief pre-typed; you just press send. When you're ready for AUTOMATIC
+  WhatsApp, the Meta Cloud API path is already built and activates the
+  moment two env vars are added — no code change.
 - THE CONSOLE NOW THINKS WITH YOU (phase 60): open any order that has no
   rider yet and the modal shows a "Dispatch" card — every active rider
   scored /100 for THAT stop, each score explained in plain lines (distance
