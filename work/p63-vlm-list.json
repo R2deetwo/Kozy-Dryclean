@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "(1) **Yes.** The card for **'p63qa — Next engine draft (auto)'** displays a gold **'Awaiting your approval'** chip instead of a 'Send now' button, and the text is fully readable.\n(2) **Not visible in this screenshot.** The campaign **'p63qa — Curtain promo (manual draft)'** is not shown in the current view (it is likely further down the list).\n(3) **No.** There is no clipped or overlapping text visible anywhere on the screen.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790444029,
+  "id": "20260927013346680d819d469c4587",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260927013346680d819d469c4587",
+  "usage": {
+    "completion_tokens": 114,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 981,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1095
+  }
+}

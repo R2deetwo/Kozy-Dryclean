@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot, here is the exact description of the dialog and iframe area:\n\n**Dialog Header and Text:**\n*   **Title:** \"Email preview — p63 — Harmattan care (auto draft)\"\n*   **Description text:** \"This is exactly what your customers receive. Nothing is sent from this screen — use Test to get a copy in your own inbox, or Send now to deliver it.\"\n*   **Close button:** An \"X\" icon is visible in the top-right corner.\n\n**Iframe/Preview Area Content:**\nThe main content area (the intended email preview) is a **large, solid light-gray rectangle**. It is completely **blank** except for a single icon centered in the middle:\n\n*   **Icon:** A generic \"broken page\" or \"empty document\" icon (depicting a sheet of paper with a sad face or frowning expression on it).\n*   **Text:** There is **no visible error message text**, no JSON data, and no rendered email content (HTML/text/images) within the preview area.\n\n**Summary:** The iframe has failed to load or render the email preview, displaying only a blank gray background with a \"sad document\" placeholder icon.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790443437,
+  "id": "20260927012350d253509bb01a4b8b",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260927012350d253509bb01a4b8b",
+  "usage": {
+    "completion_tokens": 249,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 948,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1197
+  }
+}

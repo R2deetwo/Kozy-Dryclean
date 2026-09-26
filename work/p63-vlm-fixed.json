@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot, here is exactly what is visible in the **Email preview** dialog:\n\n## Rendering Status: **Partially Rendered**\n\nThe email is **not fully rendered**. It displays the top portion of the email template correctly but is cut off before showing the body text or footer.\n\n### Visible Elements (Top-Down):\n\n1.  **Yellow \"Test copy\" stripe**: Fully rendered at the very top with the text: *\"Test copy — this version went only to you, no customer has received it\"* on a pale yellow/cream background.\n\n2.  **Navy header**: Fully rendered with:\n    *   Large gold/yellow serif wordmark: **\"Kozy Care\"**\n    *   Subtitle in smaller white/grey caps: **\"PREMIUM DRYCLEANING & LAUNDRY\"**\n    *   Dark navy blue background\n\n3.  **Fabric banner image**: Partially rendered. You can see a photograph of white/cream fabric (appears to be draped textile or curtains) with soft shadows and folds. The image is visible but cuts off at the bottom edge of the preview container.\n\n### Missing/Not Visible:\n\n*   **Email body text**: Not visible (cut off)\n*   **Footer with unsubscribe link**: Not visible (cut off)\n*   **No broken/blank document icon**: The preview is rendering actual HTML/image content, not showing a placeholder error icon.\n\n### Layout Issues:\n\n*   **Vertical truncation**: The preview modal/window is not tall enough to display the full email content. The fabric image is sliced horizontally at the bottom of the white preview container.\n*   **No scrollbar visible**: While the content is clearly cut off, there isn't an obvious scrollbar within the preview pane in this static screenshot (though one may exist or the modal may be resizable).\n*   **Aspect ratio**: The preview appears to be showing a mobile/narrow width version of the email (appropriate for email client previews), but the height constraint is the primary issue.\n\n**Summary**: This is a successful partial render showing the email's branding header and hero image correctly, but the user cannot see the actual message body or footer without scrolling or expanding the preview window.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790443935,
+  "id": "2026092701320451716b0a531b4aa7",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092701320451716b0a531b4aa7",
+  "usage": {
+    "completion_tokens": 453,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 976,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1429
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "The email renders correctly. The preview displays the yellow \"Test copy\" stripe at the top, followed by the navy blue header featuring the gold \"Kozy Care\" wordmark and the \"PREMIUM DRYCLEANING & LAUNDRY\" subtext, along with the body content (confetti graphic). There is no broken-document or blank gray icon visible; the content is fully rendered as expected.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790444739,
+  "id": "20260927014535898b9a3bbc694dc8",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260927014535898b9a3bbc694dc8",
+  "usage": {
+    "completion_tokens": 85,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 943,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1028
+  }
+}
