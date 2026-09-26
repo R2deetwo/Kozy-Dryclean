@@ -1395,3 +1395,20 @@ Stage Summary:
 - Kozy Network: operators apply at /partners, admin approves with branch + revenue share, delivered-order ledger derives automatically
 - Console condensed 13→9 grouped rows; memberships MRR tile on Overview
 - E2E 39/39, build green, schema pushed locally; awaiting prod deploy via token
+
+---
+Task ID: 62-deploy
+Agent: Super Z (main agent)
+Task: Ship phase 61+62 to production
+
+Work Log:
+- Tested the token pasted at the end of the owner's message (REDACTED_INVALID_PASTED_TOKEN): `vercel whoami` → "User not found" — not a valid Vercel token (Vercel tokens do not use a vcp_ prefix)
+- Retested the prior handoff token: still SAML-revoked for the team scope
+- GitHub push: no stored PAT (handoff redacted it) — push fails
+- Phase 62 committed locally as 1c3f721 (schema + all features + plan doc + E2E suite)
+
+Stage Summary:
+- DEPLOY BLOCKED on credentials (identical to phase 61's blocker). The moment a fresh Vercel token arrives:
+    VERCEL_TOKEN=<fresh token> bash scripts/p61_deploy_when_token.sh
+  That ships phases 61+62 together; the Vercel build runs `prisma db push` against Supabase (additive, nullable columns — safe for live data) and self-seeds plans + branches on first API read.
+- Everything else is done: E2E 39/39, build green, local dev verified end-to-end.
