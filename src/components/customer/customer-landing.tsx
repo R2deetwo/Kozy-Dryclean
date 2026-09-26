@@ -22,6 +22,7 @@ import {
   Zap,
   Scissors,
   BedDouble,
+  Crown,
 } from 'lucide-react'
 import {
   formatNaira,
@@ -34,7 +35,7 @@ import {
   itemsForGroup,
   type CatalogDisplayGroup,
 } from '@/lib/pricing-groups'
-import { useServerPrices, useAppSettings } from '@/lib/hooks'
+import { useServerPrices, useAppSettings, useMembershipPlans } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -88,6 +89,15 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
   const menFrom = minStandardPrice(MEN_CATALOG_GROUPS)
   const womenFrom = minStandardPrice(WOMEN_CATALOG_GROUPS)
   const homeFrom = minStandardPrice(LANDING_SHARED_GROUPS)
+
+  // Phase 64 — the quiet Kozy Circle strip: the live "from" price comes off
+  // the same plans API the membership page renders, so admin price changes
+  // reach this strip without a redeploy (never a stale hardcode).
+  const { data: circlePlans } = useMembershipPlans(true)
+  const circlePrices = (circlePlans ?? [])
+    .filter((p) => p.isActive)
+    .map((p) => p.priceMonthly)
+  const circleFrom = circlePrices.length ? Math.min(...circlePrices) : null
 
   return (
     <div className="bg-linen">
@@ -291,12 +301,13 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
       <HowItWorksSection />
 
       {/* ============================================================
-          SERVICES AT A GLANCE — compact pointer to /services (phase 45).
-          The client's customer found the home page a very long scroll, so
-          the full per-item pricing tables, atelier story, sneaker
-          restoration and alterations moved to their own page. The home page
-          keeps this summary: six cards, honest "from" prices (live from the
-          server catalog), one click to the detail.
+          SERVICES AT A GLANCE — compact pointer (phase 45 → 64). The home
+          page keeps this summary: six cards, honest "from" prices (live from
+          the server catalog). Laundry prices deep-link to the merged Plans &
+          Pricing page (#pricing below the plans); specialty care keeps its
+          /services deep links. Right after the glance, the quiet Kozy Circle
+          strip catches the weekly-laundry customer at the exact moment
+          they've priced a one-off basket (phase 64).
       ============================================================ */}
       <section id="services" className="bg-white py-12 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
@@ -318,8 +329,8 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
               variant="outline"
               className="rounded-full border-gold-300 bg-white text-navy hover:bg-gold-50"
             >
-              <Link href="/services">
-                See all services &amp; pricing{' '}
+              <Link href="/memberships">
+                See plans &amp; full prices{' '}
                 <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
               </Link>
             </Button>
@@ -328,21 +339,21 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-3">
             {[
               {
-                href: '/services',
+                href: '/memberships#pricing',
                 icon: ShoppingBag,
                 title: "Men's dry cleaning",
                 blurb: 'Suits, shirts, agbada and native wear — pressed to atelier standard.',
                 price: menFrom != null ? `From ${formatNaira(menFrom)}` : 'Per item',
               },
               {
-                href: '/services',
+                href: '/memberships#pricing',
                 icon: Sparkles,
                 title: "Women's dry cleaning",
                 blurb: 'Dresses, skirts, iro & buba — delicate fabrics get dedicated care zones.',
                 price: womenFrom != null ? `From ${formatNaira(womenFrom)}` : 'Per item',
               },
               {
-                href: '/services',
+                href: '/memberships#pricing',
                 icon: BedDouble,
                 title: 'Home & linens',
                 blurb: 'Bedsheets, duvets, curtains — fresh, folded, sealed for delivery.',
@@ -366,7 +377,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                     : 'Quoted before we sew',
               },
               {
-                href: '/services#pricing',
+                href: '/memberships#pricing',
                 icon: Building2,
                 title: 'Corporate & hotels',
                 blurb: 'Weight-based programs with monthly statements and Net-15 terms.',
@@ -402,6 +413,48 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 </Link>
               )
             })}
+          </div>
+        </div>
+      </section>
+
+      {/* ============================================================
+          THE KOZY CIRCLE — quiet membership strip (phase 64). The Circle
+          stays discoverable, never front-and-center: one understated navy
+          band right after the visitor has priced a one-off basket — the
+          exact moment "there's a better way to do this weekly" lands.
+          Live "from" price off the plans API; no new imagery, so the page
+          gains zero download weight.
+      ============================================================ */}
+      <section className="bg-linen py-10">
+        <div className="mx-auto max-w-7xl px-4 sm:px-6">
+          <div className="overflow-hidden rounded-2xl bg-navy-gradient shadow-navy ring-1 ring-gold-400/20">
+            <div className="flex flex-col items-start gap-5 p-6 sm:p-7 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-4">
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-400 text-navy">
+                  <Crown className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gold-300">
+                    The Kozy Circle
+                  </p>
+                  <p className="mt-1 font-serif text-xl font-semibold text-white sm:text-2xl">
+                    Laundry every week? Put it on a rhythm.
+                  </p>
+                  <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-navy-100/80">
+                    One monthly plan, a Kozy Bag on rotation, weekly pickup and delivery
+                    {circleFrom != null ? ` — from ${formatNaira(circleFrom)} a month` : ''}.
+                    Members get a discount on everything à-la-carte, and the quarterly
+                    duvet refresh comes to you. Cancel any time.
+                  </p>
+                </div>
+              </div>
+              <Link
+                href="/memberships"
+                className="shrink-0 rounded-full bg-gold-gradient px-6 py-3 text-sm font-semibold text-navy transition hover:opacity-90"
+              >
+                See the plans <ArrowRight className="ml-1.5 inline h-4 w-4" />
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -505,7 +558,9 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
           human warmth without the scroll cost.
       ============================================================ */}
       <section className="relative overflow-hidden bg-navy">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {/* Same handover asset now also fronts the memberships hero (phase 64
+            recycle) — kept here as the full-bleed backdrop. role="presentation"
+            + empty alt keeps it decorative for screen readers. */}
         <img
           src="/brand/images/laundry-handover.png"
           alt=""

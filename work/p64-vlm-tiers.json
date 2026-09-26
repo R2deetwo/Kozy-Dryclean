@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the analysis of the pricing tier cards:\n\n*   **Number of Tier Cards:** There are **3** visible tier cards in the top row (though their content is partially cut off).\n*   **Names and Prices:**\n    *   **Left Card:** Name appears to be **\"Singlet\"** (or similar), Price: **₦300**\n    *   **Middle Card:** Name is **obscured/not visible**, Price is **obscured/not visible**\n    *   **Right Card:** Name appears to be **\"Blazer\"** (or similar), Price: **₦2,500**\n*   **Featured Tier:** **None** of the cards are highlighted as featured. They all appear to have a standard white background without any special border, shadow, or \"Popular\" badge that typically denotes a featured plan.\n*   **Layout Defects / Text Clipping:** Yes, there is significant **text clipping at the top of the page**. The header area (including the full names and potentially prices of the first row of cards) is cut off, making it difficult to read the complete details for the \"Singlet\" and \"Blazer\" categories. The middle card in that row is almost entirely invisible.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790448180,
+  "id": "20260927024247ead691b3efed41d6",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20260927024247ead691b3efed41d6",
+  "usage": {
+    "completion_tokens": 264,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1711,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1975
+  }
+}

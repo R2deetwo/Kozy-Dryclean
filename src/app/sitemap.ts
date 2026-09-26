@@ -27,6 +27,14 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.9,
     },
     {
+      // Phase 64 — plans & pricing merged: the Kozy Circle tiers plus the
+      // full per-item price list on one page.
+      url: `${base}/memberships`,
+      lastModified: now,
+      changeFrequency: 'weekly',
+      priority: 0.9,
+    },
+    {
       url: `${base}/book`,
       lastModified: now,
       changeFrequency: 'monthly',

@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "The page follows the requested section order correctly: navigation, hero with photo, \"How the Circle works,\" the three membership tier cards, navy stats band, per-item price list with Men/Women/Corporate tabs, FAQ, and footer. There are no broken sections, overlaps, or blank areas; all content is fully rendered and properly spaced. The layout is clean and professional throughout the entire page.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790448580,
+  "id": "2026092702493506ac2f2ddc5b4ca4",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026092702493506ac2f2ddc5b4ca4",
+  "usage": {
+    "completion_tokens": 81,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 5553,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 5634
+  }
+}

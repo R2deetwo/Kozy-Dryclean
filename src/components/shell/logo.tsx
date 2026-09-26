@@ -6,7 +6,9 @@ import { cn } from '@/lib/utils'
 interface LogoProps {
   size?: 'sm' | 'md' | 'lg'
   showText?: boolean
-  subtitle?: string
+  /** Optional line under the wordmark. Pass null to render the wordmark only
+   *  (e.g. the compact mobile nav logo); omit for the default subtitle. */
+  subtitle?: string | null
   className?: string
   onClick?: () => void
   /** Render as a Next.js Link (navigation) instead of a <button> (action). */

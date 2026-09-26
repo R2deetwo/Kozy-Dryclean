@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image, here is the information regarding the laundry membership tier cards:\n\n*   **Number of Cards:** There are **3** membership cards displayed.\n*   **Names and Monthly Prices:**\n    *   **The Essentials:** ₦30,000 / month\n    *   **The Household:** ₦50,000 / month\n    *   **The Concierge:** ₦80,000 / month\n*   **Featured/Most Chosen:** **\"The Household\"** is the featured option. It has a yellow/gold border and a \"MOST CHOSEN\" badge at the top.\n*   **Clipping or Defects:** The image appears to be a clean screenshot with **no visible clipping or defects**. All text and elements are fully visible within their respective cards.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790448196,
+  "id": "202609270243113f1743960d664c73",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202609270243113f1743960d664c73",
+  "usage": {
+    "completion_tokens": 166,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1701,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1867
+  }
+}

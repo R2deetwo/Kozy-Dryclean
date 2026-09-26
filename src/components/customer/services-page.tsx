@@ -1,13 +1,16 @@
 'use client'
 
 // =============================================================================
-// ServicesPage — the /services page body (phase 45).
-// The home page was one very long scroll (the client's customer complained);
-// the full pricing tables, atelier story, sneaker restoration and alterations
-// now live here. Home keeps a compact summary grid linking in.
+// ServicesPage — the /services page body (phase 45, re-scoped in phase 64).
+// Home was split for scroll length in phase 45; in phase 64 the pricing
+// tables moved in with the membership plans on /memberships (“Plans &
+// Pricing”, plans first). What remains here is the specialty story: inside
+// the atelier, sneaker restoration, and the in-house tailor — plus a
+// pointer strip up top that routes price-hunters to the merged page.
 // =============================================================================
 
 import { ArrowRight } from 'lucide-react'
+import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { PublicNav } from '@/components/shell/public-nav'
 import { ServicesDetail } from '@/components/customer/services-detail'
@@ -24,20 +27,26 @@ export function ServicesPage() {
       <PublicNav />
 
       {/* Compact page header — navy, in the brand voice, instantly answers
-          "what is this page". No hero image: visitors came for the detail. */}
+          “what is this page”. No hero image: visitors came for the detail. */}
       <section className="bg-navy-gradient py-14 text-white sm:py-16">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
-            Services &amp; pricing
+            Specialty care
           </p>
           <h1 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
-            Everything Kozy Care does — and what it costs.
+            The craft beyond the wash.
           </h1>
           <p className="mt-3 max-w-2xl text-navy-100">
-            Per-item dry cleaning and laundry for men, women and the home, sneaker
-            restoration, in-house alterations, and weight-based programs for hotels and
-            estates. Every price here is the price the server charges at checkout —
-            nothing is estimated twice.
+            Sneaker and trainer restoration, an in-house tailor for alterations and
+            repairs, and a look inside the atelier where every garment is finished.
+            Plans and the full per-item price list live together on{" "}
+            <Link
+              href="/memberships"
+              className="font-semibold text-gold-300 underline decoration-gold-400 decoration-2 underline-offset-4 hover:text-gold-200"
+            >
+              Plans &amp; Pricing
+            </Link>
+            .
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button

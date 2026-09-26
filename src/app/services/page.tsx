@@ -2,15 +2,17 @@ import type { Metadata } from "next";
 import { ServicesPage } from "@/components/customer/services-page";
 
 // =============================================================================
-// /services — split out of the home page in phase 45. Phase 50: local-SEO
-// title/description (Ikoyi/Lekki price searches) + BreadcrumbList structured
-// data so search results can show Home > Services & pricing.
+// /services — split out of the home page in phase 45; re-scoped in phase 64:
+// pricing now lives with the membership plans on /memberships, so this page
+// is the specialty-care story (atelier, sneaker restoration, alterations).
+// BreadcrumbList structured data so search results can show
+// Home > Specialty care. Price-SEO title moved to /memberships.
 // =============================================================================
 
 export const metadata: Metadata = {
-  title: "Dry Cleaning & Laundry Prices in Ikoyi & Lekki | Kozy Care",
+  title: "Sneaker Restoration, Alterations & Atelier Care in Lagos | Kozy Care",
   description:
-    "See every price before you book: per-item dry cleaning and laundry for men, women and the home, sneaker & trainer restoration from ₦5,000, in-house alterations, and per-kilogram corporate programs for hotels and estates across Ikoyi, Lekki and Lagos Island. Free first pickup and delivery.",
+    "Specialty garment care from the Kozy atelier across Ikoyi, Lekki and Lagos Island: sneaker and trainer restoration from ₦5,000, in-house alterations and repairs by our seamstress, and a look inside the studio. Free island-wide pickup and delivery.",
   alternates: { canonical: "/services" },
 };
 
@@ -27,7 +29,7 @@ const breadcrumbSchema = {
     {
       "@type": "ListItem",
       position: 2,
-      name: "Services & pricing",
+      name: "Specialty care",
       item: "https://kozycare.ng/services",
     },
   ],

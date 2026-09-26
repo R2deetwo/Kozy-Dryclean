@@ -1,18 +1,24 @@
 'use client'
 
 // =============================================================================
-// MembershipsClient — The Kozy Circle marketing + join flow (phase 62)
+// MembershipsClient — Plans & Pricing: the Kozy Circle + the full price list
+// (phase 62 → 64)
 // =============================================================================
-// Sections: hero (understated, navy/gold) → how the kit works → the three
-// tiers (middle anchored) → comparison table → the value math → FAQ → join.
-// The join flow lives in-page: signed-out visitors are sent to login first
-// (a membership needs an account by design); members land on their portal.
-// Paystack members activate instantly via the webhook; transfer members
-// attach a receipt and get verified by the team — identical end state.
+// Phase 64 (owner): pricing and the plans are MERGED here — plans first, the
+// per-item price list below. The nav's separate Pricing pill is retired; one
+// Membership button covers both, so the top bar stays uncluttered. Sections:
+// hero (handover photo recycled from the home page) → how the kit works →
+// the three tiers (middle anchored) → the value math → the à-la-carte price
+// list (PricingTables) → FAQ → join. The join flow lives in-page: signed-out
+// visitors are sent to login first (a membership needs an account by design);
+// members land on their portal. Paystack members activate instantly via the
+// webhook; transfer members attach a receipt and get verified by the team —
+// identical end state.
 // =============================================================================
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import NextImage from 'next/image'
 import { useSession } from 'next-auth/react'
 import { motion } from 'framer-motion'
 import {
@@ -45,6 +51,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from '@/hooks/use-toast'
 import { PublicNav } from '@/components/shell/public-nav'
 import { SiteFooter } from './site-footer'
+import { PricingTables } from './pricing-tables'
+import { StickyMobileCta } from './sticky-mobile-cta'
 import { Logo } from '@/components/shell/logo'
 import { formatNaira } from '@/lib/types'
 import {
@@ -73,7 +81,11 @@ export function MembershipsClient() {
     <div className="bg-linen">
       <PublicNav />
 
-      {/* ================= HERO — quiet, confident ================= */}
+      {/* ================= HERO — quiet, confident, with a face ================= */}
+      {/* The handover photo is recycled from the home page's lifestyle band
+          (same asset, browser-cached, no new page weight) — a rider, a bag,
+          a doorstep: the Circle has a human face now. Two-column on desktop
+          like the home hero; the image stacks under the text on phones. */}
       <section className="relative overflow-hidden bg-navy-gradient">
         <div className="pointer-events-none absolute inset-0">
           <div className="absolute -left-32 top-12 h-72 w-72 rounded-full bg-gold-400/10 blur-3xl" />
@@ -88,56 +100,94 @@ export function MembershipsClient() {
           />
         </div>
 
-        <div className="relative mx-auto max-w-4xl px-4 py-16 text-center sm:px-6 lg:py-24">
-          <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30 backdrop-blur">
-            <Sparkles className="h-3 w-3 text-gold-400" />
-            The Kozy Circle · Membership
-          </div>
-          <h1 className="font-serif text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl">
-            Laundry, on a rhythm.
-            <br />
-            <span className="text-gold-gradient">Never on your mind.</span>
-          </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-navy-100/90 sm:text-lg">
-            One monthly plan. We hand you a Kozy Bag or Box, collect it every week, and return
-            everything pressed and packaged. No counting, no itemising — the bag sets the size,
-            the plan sets the price.
-          </p>
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
-            {alreadyMember ? (
-              <Link href="/portal">
+        <div className="relative mx-auto grid max-w-7xl items-center gap-8 px-4 py-12 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:gap-12 lg:py-20">
+          <div className="text-center lg:text-left">
+            <div className="mb-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30 backdrop-blur">
+              <Sparkles className="h-3 w-3 text-gold-400" />
+              The Kozy Circle · Plans &amp; prices
+            </div>
+            <h1 className="font-serif text-4xl font-semibold leading-[1.08] tracking-tight text-white sm:text-5xl">
+              Laundry, on a rhythm.
+              <br />
+              <span className="text-gold-gradient">Never on your mind.</span>
+            </h1>
+            <p className="mx-auto mt-5 max-w-2xl text-base leading-relaxed text-navy-100/90 sm:text-lg lg:mx-0">
+              One monthly plan. We hand you a Kozy Bag or Box, collect it every week, and
+              return everything pressed and packaged. No counting, no itemising — the bag
+              sets the size, the plan sets the price. Prefer to pay per item? The{' '}
+              <a
+                href="#pricing"
+                className="font-semibold text-gold-200 underline decoration-gold-400/60 underline-offset-4 transition hover:text-gold-100"
+              >
+                full price list
+              </a>{' '}
+              is right below.
+            </p>
+            <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
+              {alreadyMember ? (
+                <Link href="/portal">
+                  <Button
+                    size="lg"
+                    className="h-12 rounded-full bg-gold-gradient px-6 text-base font-semibold text-navy shadow-gold hover:opacity-90"
+                  >
+                    <BadgeCheck className="mr-2 h-5 w-5" />
+                    You&apos;re in the Circle — open your portal
+                  </Button>
+                </Link>
+              ) : (
+                <a href="#tiers">
+                  <Button
+                    size="lg"
+                    className="h-12 rounded-full bg-gold-gradient px-6 text-base font-semibold text-navy shadow-gold hover:opacity-90"
+                  >
+                    See the three circles
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </a>
+              )}
+              <Link href="/book">
                 <Button
                   size="lg"
-                  className="h-12 rounded-full bg-gold-gradient px-6 text-base font-semibold text-navy shadow-gold hover:opacity-90"
+                  variant="outline"
+                  className="h-12 rounded-full border-white/30 bg-white/5 px-6 text-base font-medium text-white backdrop-blur hover:bg-white/10 hover:text-white"
                 >
-                  <BadgeCheck className="mr-2 h-5 w-5" />
-                  You&apos;re in the Circle — open your portal
+                  <ShoppingBag className="mr-2 h-4 w-4" /> Or book once, as always
                 </Button>
               </Link>
-            ) : (
-              <a href="#tiers">
-                <Button
-                  size="lg"
-                  className="h-12 rounded-full bg-gold-gradient px-6 text-base font-semibold text-navy shadow-gold hover:opacity-90"
-                >
-                  See the three circles
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </a>
-            )}
-            <Link href="/book">
-              <Button
-                size="lg"
-                variant="outline"
-                className="h-12 rounded-full border-white/30 bg-white/5 px-6 text-base font-medium text-white backdrop-blur hover:bg-white/10 hover:text-white"
-              >
-                <ShoppingBag className="mr-2 h-4 w-4" /> Or book once, as always
-              </Button>
-            </Link>
+            </div>
+            <p className="mt-5 text-xs text-navy-100/70">
+              Cancel any time · your plan runs to the end of the month · the kit is ours to
+              lend
+            </p>
           </div>
-          <p className="mt-5 text-xs text-navy-100/70">
-            Cancel any time · your plan runs to the end of the month · the kit is ours to lend
-          </p>
+
+          {/* Handover photo — recycled from the home page's footer band */}
+          <div className="relative">
+            <div className="relative h-[300px] overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl shadow-navy-900/40 sm:h-[380px] lg:h-[420px]">
+              <NextImage
+                src="/brand/images/laundry-handover.png"
+                alt="A Kozy rider handing a freshly cleaned laundry bag back to a customer at her doorstep"
+                fill
+                priority
+                quality={85}
+                sizes="(min-width: 1024px) 45vw, 100vw"
+                placeholder="blur"
+                blurDataURL="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjEwIj48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiMxNTMwNTAiLz48c3RvcCBvZmZzZXQ9IjEiIHN0b3AtY29sb3I9IiMwQTE5MkYiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSIxMCIgZmlsbD0idXJsKCNnKSIvPjwvc3ZnPg=="
+                className="object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-navy-900/60 via-transparent to-transparent" />
+              <div className="absolute bottom-4 left-4 right-4">
+                <div className="rounded-xl bg-navy/80 px-4 py-3 backdrop-blur ring-1 ring-gold-400/30">
+                  <p className="font-serif text-sm font-semibold text-gold-100">
+                    Your Kozy Bag, on rotation
+                  </p>
+                  <p className="text-[11px] text-navy-100">
+                    Collected every week · returned pressed and packaged
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -383,6 +433,16 @@ export function MembershipsClient() {
         </div>
       </section>
 
+      {/* ================= À-LA-CARTE PRICE LIST (merged, phase 64) ================= */}
+      {/* The owner's merge: plans first (above), the full per-item price list
+          below — same component /services used, same server-managed numbers,
+          #pricing anchor for deep links from the home page and footer. */}
+      <PricingTables
+        onBook={() => {
+          window.location.href = '/book'
+        }}
+      />
+
       {/* ================= FAQ ================= */}
       <section className="border-t border-navy-100 bg-white">
         <div className="mx-auto max-w-3xl px-4 py-14 sm:px-6">
@@ -438,6 +498,11 @@ export function MembershipsClient() {
       </section>
 
       <SiteFooter />
+      <StickyMobileCta
+        onBook={() => {
+          window.location.href = '/book'
+        }}
+      />
 
       {/* ================= JOIN DIALOG ================= */}
       {joinPlan && (

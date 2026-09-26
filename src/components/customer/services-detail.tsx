@@ -1,46 +1,29 @@
 'use client'
 
 // =============================================================================
-// ServicesDetail — the full service detail content (phase 45).
-// Moved off the home page (the client's "the site is a very long scroll"
-// note): the per-item pricing tables, the atelier story, sneaker restoration
-// and alterations now live on /services. The home page keeps a compact
-// summary grid that links here.
-//
-// Nothing functional changed in the move — same pricing tabs, same
-// server-managed numbers (admin edits still reach every visitor), same
-// deep links into the booking wizard.
+// ServicesDetail — the specialty care content (phases 45 → 64).
+// =============================================================================
+// Phase 45 moved the full pricing tables, atelier story, sneaker restoration
+// and alterations off the home page onto /services. Phase 64 (owner): pricing
+// and the membership plans are now MERGED on /memberships — "Plans & Pricing",
+// plans first, price list below — so this page keeps the specialty story:
+// inside the atelier, sneaker restoration, and the in-house tailor. A short
+// pointer strip at the top (keeping the #pricing anchor) routes anyone who
+// arrived via an old "pricing" deep link to the merged page.
 // =============================================================================
 
-import { useState } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import {
   ArrowRight,
-  Building2,
-  CheckCircle2,
-  Droplets,
   Ruler,
   Scissors,
-  Sparkles,
-  Truck,
-  Zap,
+  Tag,
 } from 'lucide-react'
-import {
-  formatNaira,
-  type GarmentCatalogItem,
-} from '@/lib/types'
-import {
-  MEN_CATALOG_GROUPS,
-  WOMEN_CATALOG_GROUPS,
-  LANDING_SHARED_GROUPS,
-  itemsForGroup,
-} from '@/lib/pricing-groups'
-import { useServerPrices, useAppSettings } from '@/lib/hooks'
+import { formatNaira } from '@/lib/types'
+import { useAppSettings } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent } from '@/components/ui/card'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 interface Props {
   onBook: () => void
@@ -50,376 +33,50 @@ interface Props {
 }
 
 export function ServicesDetail({ onBook, onBookShoes }: Props) {
-  const [pricing, setPricing] = useState<'men' | 'women' | 'corporate'>('men')
-  // Server-managed commercial terms (offers, delivery fee, guarantee rules,
-  // alterations pricing, per-kg terms) — admin edits reach every visitor
-  // instantly. The localStorage store is no longer consulted for anything
-  // money-related.
+  // Server-managed commercial terms — alterations pricing lives here; the
+  // per-item price list itself now renders on /memberships (PricingTables).
   const appSettings = useAppSettings()
-  // Live prices from PriceCatalog (what the server charges) — the bundle
-  // defaults are only fallbacks.
-  const serverPrices = useServerPrices()
-  const priceOf = (id: string, fallback: number) =>
-    serverPrices?.[id] ?? fallback
-  // Price cell for the pricing cards — quote-mode items (wedding dress,
-  // couture) read "Quoted"; from-mode items (restoration) read "From ₦X".
-  const priceCell = (g: GarmentCatalogItem) =>
-    g.pricingMode === 'quote' ? (
-      <span className="font-semibold text-gold-600">Quoted</span>
-    ) : g.pricingMode === 'from' ? (
-      <span className="font-semibold text-navy">From {formatNaira(priceOf(g.id, g.price))}</span>
-    ) : (
-      <span className="font-semibold text-navy">{formatNaira(priceOf(g.id, g.price))}</span>
-    )
 
   return (
     <>
       {/* ============================================================
-          PRICING & SERVICES
+          PRICING POINTER — plans & prices merged on /memberships
+          (phase 64). The anchor is kept so old /services#pricing deep
+          links (and Google's index) land somewhere honest instead of
+          nowhere; one click takes the visitor to the merged page.
       ============================================================ */}
-      <section id="pricing" className="bg-white py-20 scroll-mt-20">
+      <section id="pricing" className="border-b border-navy-100 bg-linen-50 py-8 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
-          <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-end">
-            <div>
-              <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
-                Transparent pricing
-              </p>
-              <h2 className="font-serif text-3xl font-semibold tracking-tight text-navy sm:text-4xl">
-                Per-item or per-kilogram.
-              </h2>
-              <p className="mt-2 max-w-xl text-navy-300">
-                Pay by bank transfer{appSettings.paystackAvailable ? ' or card' : ''}. Corporate clients receive a dedicated
-                account manager and itemised monthly statements.
-              </p>
+          <Link
+            href="/memberships#pricing"
+            className="group flex flex-col items-start justify-between gap-3 rounded-2xl border border-gold-200 bg-white p-5 shadow-navy transition-shadow hover:shadow-lg hover:ring-1 hover:ring-gold-200 sm:flex-row sm:items-center"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-100">
+                <Tag className="h-5 w-5 text-gold-600" />
+              </div>
+              <div>
+                <p className="font-serif text-lg font-semibold text-navy">
+                  Looking for prices? They moved in with the plans.
+                </p>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-300">
+                  One page now: the three Kozy Circle monthly plans first, the full
+                  per-item price list below them — men, women, home and the per-kg
+                  corporate program. Specialty care stays right here.
+                </p>
+              </div>
             </div>
-            <Tabs
-              value={pricing}
-              onValueChange={(v) => setPricing(v as 'men' | 'women' | 'corporate')}
-            >
-              <TabsList className="bg-linen-200">
-                <TabsTrigger
-                  value="men"
-                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
-                >
-                  Men
-                </TabsTrigger>
-                <TabsTrigger
-                  value="women"
-                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
-                >
-                  Women
-                </TabsTrigger>
-                <TabsTrigger
-                  value="corporate"
-                  className="data-[state=active]:bg-navy data-[state=active]:text-white"
-                >
-                  <Building2 className="mr-1 h-3 w-3" /> Corporate
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-
-          <Tabs value={pricing} onValueChange={(v) => setPricing(v as 'men' | 'women' | 'corporate')}>
-            {(['men', 'women'] as const).map((tab) => (
-              <TabsContent key={tab} value={tab} className="mt-8">
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {(tab === 'men' ? MEN_CATALOG_GROUPS : WOMEN_CATALOG_GROUPS).map((group) => (
-                    <Card key={group.title} className="border-navy-100 shadow-navy">
-                      <CardContent className="p-5">
-                        <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
-                          {group.title}
-                        </h3>
-                        <ul className="space-y-2">
-                          {itemsForGroup(group).map((g) => (
-                            <li
-                              key={g.id}
-                              className="flex items-center justify-between text-sm"
-                            >
-                              <span className="flex items-center gap-2.5 text-navy/80">
-                                <img
-                                  src={g.icon}
-                                  alt=""
-                                  loading="lazy"
-                                  decoding="async"
-                                  className="h-5 w-5 text-navy"
-                                  style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
-                                />
-                                {g.name}
-                              </span>
-                              {priceCell(g)}
-                            </li>
-                          ))}
-                        </ul>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-
-                {/* Shared categories — home, shoes and extras serve everyone */}
-                <div className="mt-8">
-                  <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-navy-300">
-                    For the home &amp; everything else
-                  </p>
-                  <div className="grid gap-4 md:grid-cols-3">
-                    {LANDING_SHARED_GROUPS.map((group) => (
-                      <Card key={group.title} className="border-navy-100 shadow-navy">
-                        <CardContent className="p-5">
-                          <h3 className="mb-3 font-serif text-sm font-semibold uppercase tracking-wide text-gold-400">
-                            {group.title}
-                          </h3>
-                          <ul className="space-y-2">
-                            {itemsForGroup(group).map((g) => (
-                              <li
-                                key={g.id}
-                                className="flex items-center justify-between text-sm"
-                              >
-                                <span className="flex items-center gap-2.5 text-navy/80">
-                                  <img
-                                    src={g.icon}
-                                    alt=""
-                                    loading="lazy"
-                                    decoding="async"
-                                    className="h-5 w-5 text-navy"
-                                    style={{ filter: 'brightness(0) saturate(100%) invert(13%) sepia(15%) saturate(1500%) hue-rotate(190deg) brightness(95%) contrast(90%)' }}
-                                  />
-                                  {g.name}
-                                </span>
-                                {priceCell(g)}
-                              </li>
-                            ))}
-                          </ul>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-                </div>
-
-                {/* OTHER — wedding dress, couture & bespoke (owner directive):
-                    there was no category for these, so a full-width banner lets
-                    customers know a quote is available. Data comes from the same
-                    OTHER_COUTURE_GROUP the wizard uses — content can't drift. */}
-                <div className="mt-6 overflow-hidden rounded-2xl border border-gold-200 bg-linen-50 shadow-navy">
-                  <div className="flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="flex items-start gap-4">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-100">
-                        <Sparkles className="h-5 w-5 text-gold-600" />
-                      </div>
-                      <div>
-                        <p className="font-serif text-lg font-semibold text-navy">
-                          Something not on the menu?
-                        </p>
-                        <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-300">
-                          Wedding dresses, couture and bespoke pieces are{' '}
-                          <span className="font-medium text-navy">quoted, not priced</span> —
-                          beading, fabric and detail change the work. Book a pickup, we
-                          assess your piece free of charge, and send a quote for your
-                          approval before any work begins.
-                        </p>
-                      </div>
-                    </div>
-                    <Button
-                      onClick={onBook}
-                      variant="outline"
-                      className="shrink-0 rounded-full border-gold-300 bg-white text-navy hover:bg-gold-50"
-                    >
-                      Get a quote <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Express upsell */}
-                <div className="mt-6 flex flex-col items-start justify-between gap-3 rounded-xl bg-navy p-4 text-white ring-1 ring-gold-400/25 sm:flex-row sm:items-center">
-                  <div className="flex items-start gap-3">
-                    <Zap className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
-                    <div>
-                      <p className="text-sm font-semibold">
-                        In a hurry? Express turnaround at checkout.
-                      </p>
-                      <p className="mt-0.5 text-xs text-navy-100/70">
-                        Standard care returns in 3–5 days. Express 48 (+50%) or Express 24
-                        (+100%) jumps the cleaning queue — ideal for last-minute events.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={onBook}
-                    className="shrink-0 rounded-full bg-gold-gradient px-4 text-navy hover:opacity-90"
-                  >
-                    Book express <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </Button>
-                </div>
-
-                {/* Mode of wash pricing — visibility requested by the
-                    client (handwash is the LABOUR premium: every piece is
-                    washed and finished by hand, so it costs MORE than
-                    machine wash, not less). Percent comes live from
-                    AppSetting so admin tuning reflects here instantly. */}
-                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
-                  <div className="flex items-start gap-3">
-                    <Droplets className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
-                    <div>
-                      <p className="text-sm font-semibold text-navy">
-                        Machine or handwash — you choose at checkout.
-                      </p>
-                      <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
-                        Every price above is standard machine wash. Handwash adds{' '}
-                        <span className="font-semibold text-navy">
-                          +{appSettings.handwashSurchargePercent}%
-                        </span>{' '}
-                        to your cleaning subtotal — each piece is washed and finished
-                        by hand, which takes more time and expert care, so it carries
-                        a premium.
-                      </p>
-                    </div>
-                  </div>
-                  <Badge className="shrink-0 bg-gold-100 text-gold-800 hover:bg-gold-100">
-                    Handwash +{appSettings.handwashSurchargePercent}%
-                  </Badge>
-                </div>
-
-                {/* Pickup & delivery pricing — transparency requested by the
-                    client ("I see first delivery is free but I don't see
-                    pricing for deliveries afterwards"). First delivery is
-                    free; every delivery after that is a flat island-wide rate
-                    that admin can tune in Settings. */}
-                <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
-                  <div className="flex items-start gap-3">
-                    <Truck className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
-                    <div>
-                      <p className="text-sm font-semibold text-navy">
-                        Pickup &amp; delivery — first one&apos;s on us.
-                      </p>
-                      <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
-                        Your first pickup and delivery is <span className="font-semibold text-navy">FREE</span>.
-                        After that, every delivery is a flat{' '}
-                        <span className="font-semibold text-navy">{formatNaira(appSettings.deliveryFee)}</span>{' '}
-                        island-wide (Ikoyi to Lekki) — no distance surprises, added at checkout.
-                        Express orders keep the same rate.
-                      </p>
-                    </div>
-                  </div>
-                  <Badge className="shrink-0 bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
-                    First delivery FREE
-                  </Badge>
-                </div>
-              </TabsContent>
-            ))}
-
-            <TabsContent value="corporate" className="mt-8">
-              <div className="grid gap-6 lg:grid-cols-[1.2fr_1fr]">
-                <Card className="overflow-hidden border-navy-100 shadow-navy">
-                  <img
-                    src="/brand/images/b2b-linens.png"
-                    alt="Neatly folded stacks of pristine white hotel linens tied with gold ribbon"
-                    loading="lazy"
-                    decoding="async"
-                    className="h-64 w-full object-cover"
-                  />
-                  <CardContent className="p-6">
-                    <h3 className="font-serif text-xl font-semibold text-navy">
-                      Weight-based corporate program
-                    </h3>
-                    <p className="mt-2 text-sm text-navy-300">
-                      Hotels, estates, gyms, and restaurants rely on Kozy for predictable,
-                      per-kilogram pricing. We weigh at the station, send you a digital
-                      invoice, and route the next delivery.
-                    </p>
-                  </CardContent>
-                </Card>
-
-                <div className="space-y-4">
-                  <Card className="border-navy bg-navy-gradient text-white shadow-navy">
-                    <CardContent className="p-6">
-                      <p className="text-xs uppercase tracking-wider text-gold-200">
-                        Per kilogram
-                      </p>
-                      <p className="mt-1 font-serif text-4xl font-bold text-gold-100">
-                        {formatNaira(appSettings.pricePerKg)}
-                      </p>
-                      <div className="mt-3 divider-gold" />
-                      <p className="mt-3 text-xs text-navy-100">
-                        Minimum charge{' '}
-                        <span className="font-semibold text-white">
-                          {formatNaira(appSettings.pricePerKg * appSettings.minimumKg)}
-                        </span>{' '}
-                        ({appSettings.minimumKg}kg minimum billable weight)
-                      </p>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-navy-100 shadow-navy">
-                    <CardContent className="p-5">
-                      <ul className="space-y-3 text-sm">
-                        {[
-                          'Dedicated account manager & priority routing',
-                          'Itemised monthly statements for finance teams',
-                          'Item-level tagging for chain-of-custody tracking',
-                          'Net-15 invoice terms for verified partners',
-                        ].map((t) => (
-                          <li key={t} className="flex items-start gap-2">
-                            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
-                            <span className="text-navy-300">{t}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <Button
-                        onClick={onBook}
-                        className="mt-5 w-full rounded-full bg-gold-gradient text-navy hover:opacity-90"
-                      >
-                        Request bulk pickup <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
-              </div>
-
-              {/* HOTEL & CORPORATE OFFER — Phase 14. Client directive via PM:
-                  hotels (corporate clients) are already high-value customers
-                  who bring volume, so they earn the better first-order deal:
-                  15% + the 5% picture discount. Wording deliberately targets
-                  the hotel as the business client, not individual guests.
-                  The code is redeemed at checkout in the booking wizard. */}
-              <div className="mt-6 overflow-hidden rounded-2xl bg-navy-gradient p-6 text-white ring-1 ring-gold-400/30">
-                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex items-start gap-4">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gold-400 text-navy">
-                      <Building2 className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className="font-serif text-lg font-semibold">
-                        Hotels &amp; corporate clients — your first order is{' '}
-                        <span className="text-gold-300">{appSettings.hotelGuestDiscountPercent}% off.</span>
-                      </p>
-                      <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-100/85">
-                        Our hotel and corporate partners earn the better deal — you already trust Kozy with your
-                        volumes. Use code{' '}
-                        <span className="rounded bg-white/10 px-1.5 py-0.5 font-mono font-bold text-gold-300 ring-1 ring-gold-400/40">
-                          {appSettings.hotelGuestPromoCode}
-                        </span>{' '}
-                        at checkout for {appSettings.hotelGuestDiscountPercent}% off your first order,{' '}
-                        <span className="font-semibold text-white">plus</span> the 5% picture discount
-                        when you upload photos with the order — that&apos;s up to{' '}
-                        {appSettings.hotelGuestDiscountPercent + 5}% back on your first clean.
-                      </p>
-                    </div>
-                  </div>
-                  <Button
-                    onClick={onBook}
-                    className="shrink-0 rounded-full bg-gold-gradient px-5 text-navy hover:opacity-90"
-                  >
-                    Claim your offer <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
+            <span className="shrink-0 rounded-full bg-gold-gradient px-5 py-2.5 text-xs font-bold text-navy transition group-hover:opacity-90">
+              Plans &amp; prices <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
+            </span>
+          </Link>
         </div>
       </section>
 
       {/* ============================================================
           LIFESTYLE / ATELIER
       ============================================================ */}
-      <section className="bg-navy-gradient py-20 text-white">
+      <section id="atelier" className="bg-navy-gradient py-20 text-white scroll-mt-20">
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
@@ -475,7 +132,7 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
       {/* ============================================================
           SHOE CLEANING & RESTORATION — new service section
       ============================================================ */}
-      <section id="shoe-care" className="bg-navy py-20 text-white">
+      <section id="shoe-care" className="bg-navy py-20 text-white scroll-mt-20">
         <div className="mx-auto max-w-7xl px-4 sm:px-6">
           <div className="grid gap-10 lg:grid-cols-2 items-center">
             <motion.div

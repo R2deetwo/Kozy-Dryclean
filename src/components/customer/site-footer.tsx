@@ -1,10 +1,11 @@
 'use client'
 
 // =============================================================================
-// SiteFooter — the shared footer (home + /services, phase 45).
-// Quick links now point across pages: the pricing / shoe-care / alterations
-// detail lives on /services, the guarantee stays on the home page. Uses
-// real hrefs (not buttons) so it works from any page without prop plumbing.
+// SiteFooter — the shared footer (home + /services + /memberships).
+// Quick links point across pages: plans and the full price list live
+// together on /memberships (phase 64 merge), specialty care detail lives on
+// /services, the guarantee stays on the home page. Uses real hrefs (not
+// buttons) so it works from any page without prop plumbing.
 // =============================================================================
 
 import { useEffect, useState } from 'react'
@@ -177,8 +178,8 @@ export function SiteFooter() {
                 </Link>
               </li>
               <li>
-                <Link href="/services" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
-                  Pricing &amp; services
+                <Link href="/memberships" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
+                  Plans &amp; prices
                 </Link>
               </li>
               <li>
@@ -202,12 +203,12 @@ export function SiteFooter() {
                 </a>
               </li>
               <li>
-                <Link href="/services#pricing" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
+                <Link href="/memberships#pricing" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
                   Corporate programs
                 </Link>
               </li>
               <li>
-                <Link href="/memberships" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
+                <Link href="/memberships#tiers" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
                   The Kozy Circle · monthly plans
                 </Link>
               </li>
