@@ -84,3 +84,9 @@ work/pgdata-tcp/
 work/pg-tcp.log
 work/initdb.log
 work/.s.PGSQL.*.lock
+# Phase 61 QA: local-only artifacts (throwaway TLS certs, browser profile, PG data)
+work/p61-chrome-profile*/
+work/pgembed/
+work/pgdata/
+work/pg.log
+work/p61-push-mock.*

@@ -21,6 +21,7 @@ import {
   UserPlus,
   ShoppingBag,
   Receipt,
+  Bike,
 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { GARMENT_CATALOG, formatNaira, type KozyAppSettings } from '@/lib/types'
@@ -817,6 +818,55 @@ export function SettingsView() {
                     <p className="mt-1 text-xs text-navy-300">
                       Machine wash stays free of surcharge — this is the gentle-care premium
                       for hand-finished pieces.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Rider pay (phase 61) — the rates riders see in their app's Earnings tab */}
+              <Card className="border-navy-100 shadow-navy">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 font-serif text-navy">
+                    <Bike className="h-4 w-4 text-gold-400" /> Rider Pay
+                  </CardTitle>
+                  <p className="text-xs text-navy-300">
+                    What riders earn per completed stop. At 0 the riders' Earnings tab
+                    honestly shows their work without a naira figure — publish rates and it
+                    becomes their live payout ledger (every completed pickup/delivery, rolled
+                    into the Monday payout week).
+                  </p>
+                </CardHeader>
+                <CardContent className="grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor="rider-pickup-rate" className="text-xs uppercase tracking-wide text-navy-300">
+                      Pay per pickup (₦)
+                    </Label>
+                    <Input
+                      id="rider-pickup-rate"
+                      type="number"
+                      min="0"
+                      value={app.riderPickupRate}
+                      onChange={(e) => setApp({ riderPickupRate: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-40"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Counted when the rider swipes <span className="font-medium text-navy">Picked up</span> at the customer's door.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="rider-delivery-rate" className="text-xs uppercase tracking-wide text-navy-300">
+                      Pay per delivery (₦)
+                    </Label>
+                    <Input
+                      id="rider-delivery-rate"
+                      type="number"
+                      min="0"
+                      value={app.riderDeliveryRate}
+                      onChange={(e) => setApp({ riderDeliveryRate: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-40"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Counted when the rider swipes <span className="font-medium text-navy">Delivered</span> — the handover the customer sees.
                     </p>
                   </div>
                 </CardContent>

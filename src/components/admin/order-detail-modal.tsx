@@ -35,6 +35,7 @@ import {
 } from '@/lib/hooks'
 import { formatNaira, formatDateTime, formatDate, type OrderStatus } from '@/lib/types'
 import { getOrderTiming, pacingSentence } from '@/lib/order-timing'
+import { waLink, assignmentBrief } from '@/lib/whatsapp'
 import { OrderPipeline, OrderTimeline } from '@/components/shared/order-pipeline'
 import { DispatchCard } from '@/components/admin/dispatch-card'
 import { Button } from '@/components/ui/button'
@@ -605,6 +606,46 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
                 <span className="text-[#6F88A8]">{driver.name}</span>
                 <a href={`tel:${driver.phone}`} className="inline-flex items-center gap-1 text-xs text-[#0A192F] font-semibold hover:underline"><Phone className="h-3 w-3" /> {driver.phone}</a>
               </div>
+              {/* Phase 61 — the WhatsApp bridge. The stop is already on the
+               * rider's route (their app announces it, and their phone rings
+               * if they turned notifications on). This is the belt-and-braces
+               * nudge the owner asked for: one tap opens WhatsApp with the
+               * job brief pre-typed — no integration, no keys, nothing to
+               * break. If the Meta Cloud API credentials are ever added,
+               * this same brief also goes out automatically. */}
+              {(() => {
+                const leg: 'PICKUP' | 'DELIVERY' = order.status === 'OUT_FOR_DELIVERY' ? 'DELIVERY' : 'PICKUP'
+                const brief = assignmentBrief({
+                  orderNumber: order.orderNumber,
+                  leg,
+                  customerName: customer?.name ?? null,
+                  address:
+                    leg === 'DELIVERY'
+                      ? (order.deliveryAddress || order.pickupAddress)
+                      : order.pickupAddress,
+                  slot:
+                    leg === 'PICKUP'
+                      ? `${order.pickupDate ? formatDate(order.pickupDate) : 'today'} · ${order.pickupTimeSlot ?? ''}`.trim()
+                      : 'next delivery run',
+                })
+                const href = waLink(driver.phone, brief)
+                if (!href) return null
+                return (
+                  <div className="mt-2 border-t border-[#E3BE4F]/40 pt-2">
+                    <p className="text-[11px] leading-snug text-[#6F88A8]">
+                      Their app shows the stop within a minute. For a WhatsApp nudge as well:
+                    </p>
+                    <a
+                      href={href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-2.5 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-500"
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" /> Send the job brief on WhatsApp
+                    </a>
+                  </div>
+                )
+              })()}
             </section>
           )}
 
