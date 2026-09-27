@@ -381,7 +381,7 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
                 icon: Building2,
                 title: 'Corporate & hotels',
                 blurb: 'Weight-based programs with monthly statements and Net-15 terms.',
-                price: `${formatNaira(appSettings.pricePerKg)} per kg`,
+                price: `From ${formatNaira(appSettings.pricePerKg)} per kg`,
               },
             ].map((c) => {
               const Icon = c.icon

@@ -6,6 +6,7 @@ import {
   User as UserIcon, CheckCircle2, XCircle, AlertCircle,
 } from 'lucide-react'
 import { formatNaira, formatDateTime, formatDate } from '@/lib/types'
+import { useAppSettings } from '@/lib/hooks'
 import { OrderPipeline, OrderTimeline } from '@/components/shared/order-pipeline'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -26,6 +27,9 @@ interface Props {
 }
 
 export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
+  // Live app settings (per-kg rate, minimum kg) so the bulk-order rate line
+  // always matches what admin set — was previously hardcoded to ₦800/10kg.
+  const appSettings = useAppSettings()
   // All data comes from the order object (nested includes from the API)
   const customer = order.user
   const driver = order.driver
@@ -125,7 +129,7 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               <div className="rounded-lg bg-[#EEF0F2] p-3 text-sm">
                 {order.finalWeight != null ? (
                   <><p className="text-[#0A192F]">Final weight: <strong>{order.finalWeight}kg</strong></p>
-                  <p className="text-[#6F88A8]">@ ₦800/kg · Minimum 10kg charge applies.</p></>
+                  <p className="text-[#6F88A8]">From {formatNaira(appSettings.pricePerKg)}/kg · Minimum {appSettings.minimumKg}kg charge applies.</p></>
                 ) : <p className="text-amber-700">Awaiting weighing at the station.</p>}
               </div>
             )}

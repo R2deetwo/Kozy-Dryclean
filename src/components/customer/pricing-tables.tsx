@@ -324,7 +324,7 @@ export function PricingTables({ onBook }: Props) {
                 <Card className="border-navy bg-navy-gradient text-white shadow-navy">
                   <CardContent className="p-6">
                     <p className="text-xs uppercase tracking-wider text-gold-200">
-                      Per kilogram
+                      From, per kilogram
                     </p>
                     <p className="mt-1 font-serif text-4xl font-bold text-gold-100">
                       {formatNaira(appSettings.pricePerKg)}

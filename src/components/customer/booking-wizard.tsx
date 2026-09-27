@@ -1676,7 +1676,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                       <p className="font-semibold text-navy">Corporate Bulk Pickup</p>
                     </div>
                     <p className="mt-2 text-sm text-navy-300">
-                      Your order will be priced at <strong>{formatNaira(appSettings.pricePerKg)}/kg</strong>{' '}
+                      Your order will be priced from <strong>{formatNaira(appSettings.pricePerKg)}/kg</strong>{' '}
                       with a {appSettings.minimumKg}kg minimum charge. Our rider will collect your
                       items, weigh them at the station, and we&apos;ll send you the final invoice
                       with payment instructions.
