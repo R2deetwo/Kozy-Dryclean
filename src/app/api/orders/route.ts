@@ -751,7 +751,7 @@ export async function POST(req: Request) {
     // The plan's percentage off dry cleaning, shoes and alterations —
     // composes with the guarantee 5% and the first-order/hotel offers under
     // the same 95% stack cap. Deliberately REPLACES the standing online
-    // discount when it is stronger (a Concierge member's 15% beats the 5%
+    // discount when it is stronger (an Atelier member's 20% beats the 5%
     // registered-customer discount; the weaker online line is simply not
     // applied) so the member's basket reads one clean benefit, not a pile.
     const memberDiscountPct = membershipLive?.plan?.memberDiscountPct ?? 0

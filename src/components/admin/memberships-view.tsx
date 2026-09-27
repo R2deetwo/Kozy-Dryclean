@@ -65,7 +65,7 @@ export function MembershipsView() {
             The Kozy Circle
           </h1>
           <p className="mt-1 text-sm text-navy-300">
-            Monthly memberships measured by the bag and the box — priced here, verified here.
+            Monthly plans measured by the bag, the box — and the atelier. Priced here, verified here.
           </p>
         </div>
       </div>
@@ -154,7 +154,7 @@ function PlansEditor() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {drafts.map((d) => (
           <Card key={d.id} className={cn('shadow-navy', d.isActive ? 'border-navy-100' : 'border-dashed border-navy-200 opacity-70')}>
             <CardContent className="p-5">
@@ -191,7 +191,7 @@ function PlansEditor() {
                 <NumField label="Curtain panels / quarter" value={d.curtainsPerQuarter} onChange={num(d.id, 'curtainsPerQuarter')} />
                 <NumField label="Spring cleans / year" value={d.springCleanPerYear} onChange={num(d.id, 'springCleanPerYear')} />
                 <div className="flex flex-col justify-end gap-1.5 pb-0.5">
-                  <Toggle label="Concierge desk" checked={d.concierge} onChange={(v) => patch(d.id, 'concierge', v)} />
+                  <Toggle label="Designer care (Atelier)" checked={d.concierge} onChange={(v) => patch(d.id, 'concierge', v)} />
                   <Toggle label="Priority windows" checked={d.prioritySlots} onChange={(v) => patch(d.id, 'prioritySlots', v)} />
                 </div>
               </div>
@@ -355,7 +355,7 @@ function SubscribersList() {
                     )}
                     {m.plan?.concierge && (
                       <Badge variant="outline" className="rounded-full border-gold-300 bg-gold-50 text-[10px] text-navy">
-                        <Crown className="mr-1 h-2.5 w-2.5" /> concierge
+                        <Crown className="mr-1 h-2.5 w-2.5" /> atelier
                       </Badge>
                     )}
                   </div>

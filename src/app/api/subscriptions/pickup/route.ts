@@ -13,7 +13,7 @@
 //                         by the membership) and is instantly dispatchable.
 //   kind=duvet|curtain → the tier's quarterly perk (count against the
 //                         quarter's allowance).
-//   kind=spring-clean  → the annual perk (Concierge).
+//   kind=spring-clean  → the annual perk (The Whole Home).
 //
 // First pickup also carries the kit hand-over (rider delivers the Kozy
 // Bag/Box), and the membership's priority flag is stamped on the manifest

@@ -190,7 +190,7 @@ export interface Branch {
 // =====================================================
 export interface MembershipPlan {
   id: string
-  code: string // ESSENTIALS | HOUSEHOLD | CONCIERGE
+  code: string // ESSENTIALS | HOUSEHOLD | WHOLEHOME | ATELIER
   name: string
   tagline: string
   priceMonthly: number

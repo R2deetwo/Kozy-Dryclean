@@ -136,7 +136,7 @@ export function MembershipTab() {
               </Badge>
               {plan?.concierge && (
                 <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gold-300">
-                  <Crown className="h-3 w-3" /> Concierge
+                  <Crown className="h-3 w-3" /> Atelier · designer care
                 </span>
               )}
             </div>
@@ -640,11 +640,11 @@ function JoinCard() {
         <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-navy-300">
           Laundry on a rhythm — a Kozy Bag or Box collected every week, free pickup and delivery,
           and a member discount on everything else.
-          {cheapest ? ` From ${formatNaira(cheapest.priceMonthly)} a month.` : ''}
+          {cheapest ? ` Plans start at ${formatNaira(cheapest.priceMonthly)} a month.` : ''}
         </p>
         <Link href="/memberships" className="mt-4 inline-block">
           <Button className="rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90">
-            Explore the circles <ArrowRight className="ml-2 h-4 w-4" />
+            Explore the plans <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </Link>
       </CardContent>

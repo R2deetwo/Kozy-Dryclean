@@ -18,7 +18,12 @@
 import { db } from '@/lib/db'
 import type { MembershipPlan, Membership } from '@/lib/types'
 
-// ----- Plan defaults (the owner's ladder: 30k / 50k / 80k) -----
+// ----- Plan defaults (phase 66: the owner's ladder, retold in plain words) -----
+// Three plans sized by KIT (bag → box → the whole home) and one plan sized by
+// CARE LEVEL (The Atelier — couture, designer and premium traditional wear).
+// Names and taglines are deliberately plain: a regular person should
+// understand what is on offer without a dictionary. Everything numeric is
+// admin-adjustable at runtime; these are the seeds.
 
 interface PlanSeed {
   code: string
@@ -44,7 +49,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
   {
     code: 'ESSENTIALS',
     name: 'The Essentials',
-    tagline: 'The weekly rhythm — one bag, every week, never think about it again.',
+    tagline: 'One person’s clothes, every week. Bag goes out, clean clothes come back.',
     priceMonthly: 30000,
     sortOrder: 1,
     includedUnits: 4,
@@ -63,7 +68,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
   {
     code: 'HOUSEHOLD',
     name: 'The Household',
-    tagline: 'The whole home on a rhythm — the box, the duvets, the lot.',
+    tagline: 'The whole family’s weekly load in one big box — plus the beds.',
     priceMonthly: 50000,
     sortOrder: 2,
     includedUnits: 4,
@@ -80,9 +85,9 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     prioritySlots: false,
   },
   {
-    code: 'CONCIERGE',
-    name: 'The Concierge',
-    tagline: 'Designer pieces, assessments, and the once-a-year deep clean — handled.',
+    code: 'WHOLEHOME',
+    name: 'The Whole Home',
+    tagline: 'Everything in the house — the box, the duvets, the curtains, and one deep clean a year.',
     priceMonthly: 80000,
     sortOrder: 3,
     includedUnits: 4,
@@ -94,8 +99,27 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     duvetsPerQuarter: 3,
     curtainsPerQuarter: 6,
     springCleanPerYear: 1,
-    concierge: true,
+    concierge: false,
     memberDiscountPct: 15,
+    prioritySlots: true,
+  },
+  {
+    code: 'ATELIER',
+    name: 'The Atelier',
+    tagline: 'Your designer, couture and premium traditional wear — cleaned by hand, only when it needs it.',
+    priceMonthly: 100000,
+    sortOrder: 4,
+    includedUnits: 2,
+    unitKind: 'bag',
+    unitName: 'Atelier Garment Bag',
+    extraUnitPrice: 25000,
+    maxExtraUnits: 2,
+    replacementFee: 15000,
+    duvetsPerQuarter: 0,
+    curtainsPerQuarter: 0,
+    springCleanPerYear: 0,
+    concierge: true,
+    memberDiscountPct: 20,
     prioritySlots: true,
   },
 ]

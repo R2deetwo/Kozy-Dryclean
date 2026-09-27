@@ -5,21 +5,26 @@
 // same seasons, expressed as coupon windows the owner can create in the
 // Marketing tab → Coupons.
 //
-// TIMING RULES (per the client):
+// TIMING RULES (per the client + phase 66):
 //   - DETTY DECEMBER STARTS ON DECEMBER 15 and runs into the new year — its
 //     promo window opens ON the 15th (Dec 15 → Jan 5), NEVER December 1.
 //     Nothing before the week containing December 15 may treat the season
 //     as open (same rule as the newsletter library, weeks 49/50).
-//   - Every other window is keyed to its season's real anchor: Valentine's
-//     Day, Easter Sunday (computed per year — it moves), school resumption,
-//     October 1, the November corporate-prep month.
+//   - SEASONAL WINDOWS OPEN BEFORE THE EVENT, never after: the Independence
+//     window now opens a week BEFORE October 1 (the marketing has to reach
+//     people while they can still book) and closes on the night itself;
+//     Valentine opens two weeks before the 14th; Easter opens two weeks
+//     before Easter Sunday; back-to-school covers August before resumption.
+//   - Every other window is keyed to its season's real anchor: school
+//     resumption, the November corporate-prep month.
 //
 // This is GUIDANCE, not automation: the plan prefills the coupon form and
 // the owner presses Create — coupons are never created automatically, the
 // same approval gate as the newsletter engine. Values/codes are suggestions
-// from the original marketing plan (BACK2WORK, NIGERIA65, CORP20, DETTY15,
-// FRESHSTART, VALENTINE) plus two fillers for the rest of the year; every
-// field is editable in the form before creation.
+// from the original marketing plan (BACK2WORK, NIGERIA65→NIGERIA66…, CORP20,
+// DETTY15, FRESHSTART, VALENTINE) plus two fillers for the rest of the year;
+// every field is editable in the form before creation. The Independence code
+// is year-aware (NIGERIA + years since 1960).
 //
 // All wall-clock math is Africa/Lagos (UTC+1, no DST).
 // =============================================================================
@@ -227,15 +232,15 @@ export function getSeasonalPromoPlan(year: number): PromoPlanEntry[] {
     mk(
       'Independence',
       'Independence Clean',
-      'NIGERIA65',
-      'A green-and-white moment — fixed amount off in the week of October 1.',
+      `NIGERIA${year - 1960}`,
+      `A green-and-white moment — fixed amount off in the week BEFORE October 1, so people can actually book their Independence outfit in time. Closes on the night of the 1st.`,
       'ALL',
       'FIXED',
       650,
-      lagos(year, 10, 1, 0, 0),
-      lagos(year, 10, 7, 23, 59),
-      'Keyed to October 1 — a one-week moment, then the owambe circuit proper begins.',
-      'week 39 (Independence Day)',
+      lagos(year, 9, 24, 0, 0),
+      lagos(year, 10, 1, 23, 59),
+      'Opens a full week BEFORE October 1 — marketing for an event only works while people can still book. The code carries the anniversary number (NIGERIA66 in 2026).',
+      'week 39 (Independence prep — lands the last week of September)',
       { minOrderValue: 5000 }
     ),
     mk(

@@ -74,6 +74,24 @@ import {
 import { Calendar } from '@/components/ui/calendar'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
+import { isoWeekLagos } from '@/lib/newsletter-content'
+
+/** The library entry matching a date's ISO calendar week (falling back to
+ *  the nearest earlier week) — shared by the timeline and the browser
+ *  highlight so every "what's coming" surface follows the calendar. */
+function entryForCalendarWeek(
+  entries: NewsletterLibraryEntry[] | undefined,
+  date: Date
+): NewsletterLibraryEntry | null {
+  if (!entries || entries.length === 0) return null
+  const week = isoWeekLagos(date)
+  let best = entries[0]
+  for (const e of entries) {
+    if (e.week <= week) best = e
+    else break
+  }
+  return best
+}
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
@@ -189,6 +207,9 @@ export function NewsletterEnginePanel() {
   const prepare = usePrepareAutomationDraft()
   const skip = useSkipAutomationDraft()
   const approve = useApproveAutomationCampaign()
+  // Phase 66 — invalidate the campaign list when the library browser drafts
+  // a week directly, so the list shows it immediately.
+  const qc = useQueryClient()
   // Phase 45 — the 52-week plan, so the continuum timeline can name the
   // newsletters that are coming after the one currently waiting.
   const { data: libraryData } = useNewsletterLibrary()
@@ -267,8 +288,11 @@ export function NewsletterEnginePanel() {
       const wanted = Math.max(0, 4 - rows.length)
       for (let k = 0; k < wanted; k++) {
         const date = new Date(slot.getTime() + k * cadenceMs)
+        // Phase 66: calendar sync — each future slot's entry is chosen by
+        // that slot's ISO calendar week (never by a stored pointer), so the
+        // timeline only ever advertises seasonally honest content.
         const entry = entries
-          ? entries[(schedule.currentWeekIndex + k) % (libraryData?.total ?? 52)]
+          ? entryForCalendarWeek(entries, date)
           : k === 0
             ? { week: nextUp.week, season: nextUp.season, subject: nextUp.subject, category: nextUp.category }
             : null
@@ -759,25 +783,16 @@ export function NewsletterEnginePanel() {
           to the campaign-list preview, driven by fetch + srcDoc. */}
       <EmailPreviewDialog target={previewTarget} onClose={() => setPreviewTarget(null)} />
 
-      {/* Library browser */}
+      {/* Library browser — phase 66: the engine itself now follows the
+          CALENDAR (each slot drafts the week it actually falls in), so the
+          browser's job is no longer "pick a starting pointer" — it turns any
+          week's content into an editable campaign the owner can schedule or
+          send whenever they like. */}
       <LibraryBrowser
         open={showLibrary}
         onOpenChange={setShowLibrary}
-        currentWeekIndex={schedule.currentWeekIndex}
-        onPick={(index) =>
-          update.mutate(
-            { currentWeekIndex: index },
-            {
-              onSuccess: () =>
-                toast({
-                  title: 'Starting point saved',
-                  description: 'The next newsletter the engine prepares will use this one.',
-                }),
-              onError: (e) =>
-                toast({ title: 'Could not save', description: e.message, variant: 'destructive' }),
-            }
-          )
-        }
+        nextSlotDate={schedule.nextSlotDate}
+        onDrafted={() => qc.invalidateQueries({ queryKey: ['marketing-campaigns'] })}
       />
 
       {/* Approve confirmation */}
@@ -881,21 +896,56 @@ export function NewsletterEnginePanel() {
 }
 
 // -----------------------------------------------------------------------------
-// Library browser — 52 weeks, pick where the engine starts
+// Library browser — 52 weeks, draft any week as a campaign
 // -----------------------------------------------------------------------------
 function LibraryBrowser({
   open,
   onOpenChange,
-  currentWeekIndex,
-  onPick,
+  nextSlotDate,
+  onDrafted,
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
-  currentWeekIndex: number
-  onPick: (index: number) => void
+  nextSlotDate: string | null
+  onDrafted: () => void
 }) {
   const { data, isLoading } = useNewsletterLibrary()
   const entries = data?.entries ?? []
+  const [busyWeek, setBusyWeek] = useState<number | null>(null)
+
+  const calendarWeekEntry = useMemo(
+    () => entryForCalendarWeek(entries, nextSlotDate ? new Date(nextSlotDate) : new Date()),
+    [entries, nextSlotDate]
+  )
+
+  const draftThis = async (e: NewsletterLibraryEntry) => {
+    setBusyWeek(e.week)
+    try {
+      const res = await fetch('/api/marketing/campaigns', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `Week ${e.week} — ${e.title}`,
+          subject: e.subject,
+          bodyText: e.bodyText,
+          segment: 'ALL',
+          bannerSlug: e.banner,
+        }),
+      })
+      const body = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(body?.error ?? 'Could not create the draft')
+      toast({
+        title: 'Draft created',
+        description: `"${e.subject}" is waiting in the campaign list — edit it, schedule it, or send it whenever you like.`,
+      })
+      onOpenChange(false)
+      onDrafted()
+    } catch (err: any) {
+      toast({ title: 'Could not create the draft', description: err?.message, variant: 'destructive' })
+    } finally {
+      setBusyWeek(null)
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -904,9 +954,11 @@ function LibraryBrowser({
           <DialogTitle>The 52-week content plan</DialogTitle>
           <DialogDescription>
             A full year of newsletters, sequenced to the Nigerian calendar — harmattan,
-            Valentine, Easter, rainy season, back-to-school, Independence, the Owambe
-            circuit and Detty December. Press &ldquo;Start here&rdquo; to make any week the
-            engine&rsquo;s next pickup.
+            Valentine, Easter, rainy season, back-to-school, Independence prep, the
+            Owambe circuit and Detty December. The engine now follows the calendar
+            automatically (seasonal emails always land before their event). Press
+            &ldquo;Draft this&rdquo; to turn any week into a campaign you can edit,
+            schedule or send yourself.
           </DialogDescription>
         </DialogHeader>
         <div className="max-h-[420px] overflow-y-auto pr-1">
@@ -923,19 +975,20 @@ function LibraryBrowser({
                         {e.category}
                       </Badge>
                       <span className="text-[11px] text-navy-300">{e.season}</span>
-                      {i === currentWeekIndex && (
-                        <Badge className="bg-gold-100 text-gold-700">next up</Badge>
+                      {calendarWeekEntry?.week === e.week && (
+                        <Badge className="bg-gold-100 text-gold-700">next in the calendar</Badge>
                       )}
                     </div>
                     <p className="mt-0.5 truncate text-sm text-navy">{e.subject}</p>
                   </div>
                   <Button
                     size="sm"
-                    variant={i === currentWeekIndex ? 'secondary' : 'outline'}
-                    disabled={i === currentWeekIndex}
-                    onClick={() => onPick(i)}
+                    variant="outline"
+                    disabled={busyWeek === e.week}
+                    onClick={() => draftThis(e)}
                   >
-                    {i === currentWeekIndex ? 'Selected' : 'Start here'}
+                    {busyWeek === e.week && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                    Draft this
                   </Button>
                 </div>
               ))}

@@ -5,10 +5,20 @@
 // written for a Lagos audience and sequenced to the Nigerian year:
 // harmattan whites, Valentine, Easter, rainy season, Children's Day,
 // back-to-school, Independence, the Oct–Dec wedding/Owambe circuit and
-// Detty December. Timing rule (per the client): DETTY DECEMBER STARTS ON
-// DECEMBER 15 and runs into the new year — prep emails before the 15th must
-// say the start date explicitly, and nothing before Week 50 (the week that
-// contains December 15) may claim the season has already opened.
+// Detty December.
+//
+// TIMING RULES (phase 66, per the owner):
+//   - SEASONAL EMAILS LAND BEFORE THEIR EVENT, never after: Independence
+//     prep sits in week 39 (late September), the Valentine pushes in weeks
+//     6–7, Christmas prep in week 48, the Detty December playbook in week
+//     50 — each says what is COMING, never what already passed.
+//   - DETTY DECEMBER STARTS ON DECEMBER 15 and runs into the new year —
+//     prep emails must say the date explicitly; nothing before the week of
+//     the 15th may claim the season has OPENED (only week 51 onwards may).
+//   - CALENDAR SYNC: the automation engine picks the entry matching the
+//     send slot's ISO calendar week (getNewsletterEntryForDate) — content
+//     follows the calendar, so a seasonal email can never drift onto an
+//     off-season date.
 //
 // The engine (Marketing tab → "Your newsletter engine") turns these into
 // draft campaigns on the owner's cadence — the owner previews, edits if
@@ -69,7 +79,7 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
     subject: 'New year. Fresh clothes. Clean start. 🎉',
     banner: 'seasonal-newyear',
     bodyText:
-      'Happy New Year from all of us at Kozy Care!\n\nA new year deserves a fresh start — and that includes what is hanging in your wardrobe. The December parties are over, and somewhere in there is a favourite outfit that saw one party too many.\n\nBring it in this week and we will return it looking like January just gave it a new life.\n\n**Free pickup and delivery** — you do not even have to leave the house.\n\nhttps://kozycare.ng\n\nTo a spotless year ahead!',
+      'As the year turns: a fresh one deserves a fresh wardrobe. The December parties are over (or very nearly) — and somewhere in there is a favourite outfit that saw one party too many.\n\nBring it in this week and we will return it looking like January just gave it a new life.\n\n**Free pickup and delivery** — you do not even have to leave the house.\n\nhttps://kozycare.ng\n\nTo a spotless year ahead!',
   },
   {
     week: 2,
@@ -124,23 +134,23 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   },
   {
     week: 7,
-    season: 'Early February',
-    category: 'TIP',
-    title: 'Lipstick and wine stains',
-    subject: 'Spilled wine on date night? Read this first.',
-    banner: 'tips-fabric',
-    bodyText:
-      'Valentine\'s week survival guide, stain edition:\n\n**Lipstick on a collar** — do not rub. Dab gently with a little makeup remover on cotton wool, then leave the rest to a proper clean.\n\n**Wine on a dress** — cold water only, never hot. Hot water cooks the pigment into the fibre. Blot from the edge inward so the stain does not spread.\n\n**Perfume on silk** — stop everything and bring it to us. Silk punishes home experiments.\n\nThe rule under all three: **blot, do not scrub.**\n\nAnd when in doubt — https://kozycare.ng — we handle the rest.',
-  },
-  {
-    week: 8,
-    season: 'Mid February',
+    season: 'Valentine week',
     category: 'PROMO',
     title: 'Valentine couples push',
     subject: 'Two outfits, one pickup, zero stress',
     banner: 'seasonal-valentine',
     bodyText:
-      'Valentine\'s week is our busiest pickup week of the first quarter — couples sending date-night outfits together.\n\nA kind reminder:\n\n**Book your pickup early this week.** The closer to the 14th, the fuller the route gets.\n\nOne pickup takes both outfits. One delivery brings them back pressed, on a day you choose — ready for dinner.\n\nhttps://kozycare.ng\n\n(And if you are single and thriving? Your best shirt deserves the same energy.)',
+      'Valentine\'s week is here — and it is our busiest pickup week of the first quarter. Couples sending date-night outfits together, all at once.\n\nA kind reminder:\n\n**Book your pickup early this week.** The closer to the 14th, the fuller the route gets.\n\nOne pickup takes both outfits. One delivery brings them back pressed, on a day you choose — ready for dinner.\n\nhttps://kozycare.ng\n\n(And if you are single and thriving? Your best shirt deserves the same energy.)',
+  },
+  {
+    week: 8,
+    season: 'Mid February',
+    category: 'TIP',
+    title: 'Lipstick and wine stains',
+    subject: 'So the date went well. The outfit kept the receipts.',
+    banner: 'tips-fabric',
+    bodyText:
+      'The morning-after guide, stain edition:\n\n**Lipstick on a collar** — do not rub. Dab gently with a little makeup remover on cotton wool, then leave the rest to a proper clean.\n\n**Wine on a dress** — cold water only, never hot. Hot water cooks the pigment into the fibre. Blot from the edge inward so the stain does not spread.\n\n**Perfume on silk** — stop everything and bring it to us. Silk punishes home experiments.\n\nThe rule under all three: **blot, do not scrub.**\n\nAnd when in doubt — https://kozycare.ng — we handle the rest.',
   },
   {
     week: 9,
@@ -278,13 +288,13 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   // -------------------------------------------------------------------- JUNE
   {
     week: 22,
-    season: 'Early June',
-    category: 'SEASONAL',
-    title: 'Democracy Day note',
-    subject: 'Democracy Day — small businesses, big hearts',
+    season: 'Late May',
+    category: 'TIP',
+    title: 'How to air clothes properly',
+    subject: 'Airing clothes — the 10-minute habit',
     banner: 'hero-navy-gold',
     bodyText:
-      'Happy Democracy Day!\n\nWe will keep this one short. Kozy Care is a Nigerian business, built and run here — every pickup, every press, every delivery is work done by people in this economy.\n\nOn a day like this, we just want to say thank you. Your patronage is what keeps a small Lagos business growing.\n\nIf there is anything we can do better — reply to this email. A real person reads it.\n\nhttps://kozycare.ng',
+      'Not every worn garment needs washing — but every worn garment needs air.\n\nThe ten-minute habit:\n\n**Hang worn clothes in open air** (balcony, doorway, anywhere with movement) **for 30–60 minutes before returning them to the wardrobe.** Body moisture escapes, odours lift, and the garment earns another wear.\n\nWhy it matters: clothes returned warm and worn into a dark closet is exactly how "that smell" starts.\n\nWool, suits and agbada especially thrive on airing between wears — it is the closest thing to a free refresh.\n\nhttps://kozycare.ng',
   },
   {
     week: 23,
@@ -298,13 +308,13 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   },
   {
     week: 24,
-    season: 'Mid June',
-    category: 'TIP',
-    title: 'How to air clothes properly',
-    subject: 'Airing clothes — the 10-minute habit',
+    season: 'Democracy Day week',
+    category: 'SEASONAL',
+    title: 'Democracy Day note',
+    subject: 'Democracy Day — small businesses, big hearts',
     banner: 'hero-navy-gold',
     bodyText:
-      'Not every worn garment needs washing — but every worn garment needs air.\n\nThe ten-minute habit:\n\n**Hang worn clothes in open air** (balcony, doorway, anywhere with movement) **for 30–60 minutes before returning them to the wardrobe.** Body moisture escapes, odours lift, and the garment earns another wear.\n\nWhy it matters: clothes returned warm and worn into a dark closet is exactly how "that smell" starts.\n\nWool, suits and agbada especially thrive on airing between wears — it is the closest thing to a free refresh.\n\nhttps://kozycare.ng',
+      'Happy Democracy Day!\n\nWe will keep this one short. Kozy Care is a Nigerian business, built and run here — every pickup, every press, every delivery is work done by people in this economy.\n\nOn a day like this, we just want to say thank you. Your patronage is what keeps a small Lagos business growing.\n\nIf there is anything we can do better — reply to this email. A real person reads it.\n\nhttps://kozycare.ng',
   },
   {
     week: 25,
@@ -370,13 +380,13 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   },
   {
     week: 31,
-    season: 'Mid August (movable)',
-    category: 'SEASONAL',
-    title: 'Eid Mubarak',
-    subject: 'Eid Mubarak from Kozy Care 🌙',
+    season: 'Mid August',
+    category: 'SERVICE',
+    title: 'Festive wear — kaftans, bubus & celebration dressing',
+    subject: 'Your kaftan deserves better than "just wash it"',
     banner: 'seasonal-eid',
     bodyText:
-      '**Eid Mubarak!**\n\nTo everyone celebrating — may your prayers be accepted, your tables be full, and your kaftans be immaculate.\n\nEid outfits are some of the most beautiful garments we handle all year: the lace, the embroidery, the carefully chosen kaftans and bubus. If yours carried the day and now carries the memories (and the food stains), send it in — we will treat it with the care it has earned.\n\nhttps://kozycare.ng\n\nEid Mubarak once more, from the whole Kozy Care family.',
+      'Celebration clothes — kaftans, bubus, embroidered lace, the outfits that greet Sallah, owambe and Friday prayers — are some of the most beautiful garments we handle, and the most mishandled.\n\nOrdinary washing is exactly what they do not want:\n\n- **Handled by fabric, not by machine setting** — delicate treatment that suits the weave and the embroidery\n- **Colour-safe care** — the deep hues that made you buy them stay deep\n- **Careful finishing** — structure and texture preserved, not flattened\n\n(When Sallah and the festive dates arrive, we send a proper greeting too — this is the year-round care that keeps those outfits ready.)\n\nhttps://kozycare.ng',
   },
   {
     week: 32,
@@ -396,7 +406,7 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
     subject: 'School uniforms sorted — one pickup, whole term',
     banner: 'promo-gold',
     bodyText:
-      'Resumption week is here — and with it, the annual discovery of how much children grew.\n\nAs you shop for the new set, let us handle the old set:\n\n- Uniforms and cardigans collected with **free pickup and delivery**\n- Whites properly whitened, not just washed\n- Repeat pickups through the term on your schedule\n\nA clean start to the school year costs less energy than you think.\n\nhttps://kozycare.ng\n\nGood luck to all the parents this week. You have earned the calm.',
+      'Resumption is around the corner — and with it, the annual discovery of how much children grew.\n\nAs you shop for the new set, let us handle the old set:\n\n- Uniforms and cardigans collected with **free pickup and delivery**\n- Whites properly whitened, not just washed\n- Repeat pickups through the term on your schedule\n\nA clean start to the school year costs less energy than you think.\n\nhttps://kozycare.ng\n\nGood luck to all the parents this week. You have earned the calm.',
   },
   {
     week: 34,
@@ -431,7 +441,7 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   },
   {
     week: 37,
-    season: 'Late September',
+    season: 'Mid September',
     category: 'SEASONAL',
     title: 'Wedding season is coming',
     subject: 'Wedding season is coming. You are on the list.',
@@ -452,13 +462,13 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   // ------------------------------------------------------------------- OCTOBER
   {
     week: 39,
-    season: 'Early October',
+    season: 'Late September',
     category: 'SEASONAL',
-    title: 'Independence Day',
-    subject: 'Happy Independence Day, Nigeria 🇳🇬',
+    title: 'Independence Day — green & white, ready early',
+    subject: 'Oct 1 is almost here. Green and white, ready? 🇳🇬',
     banner: 'seasonal-independence',
     bodyText:
-      'Happy Independence Day from everyone at Kozy Care!\n\nOctober 1st always brings out the green and white — and this year, if you are stepping out in the national colours, step out properly: the white pressed crisp, the green deep and fresh.\n\nIt is a small thing, but there is a certain feeling in wearing your country\'s colours well.\n\nIf the outfit is not quite there yet, **Express is from 24 hours** — there is still time.\n\nhttps://kozycare.ng\n\nGreen white green. Happy Independence, Nigeria.',
+      'October 1st is days away — and you already know the assignment: step out in the green and white, properly.\n\nThe white pressed crisp, not creamed. The green deep, not dulled. National colours reward preparation — **send the outfit in this week** and it comes back before the flag flies.\n\n**Express is from 24 hours** if you are reading this late. (No judgement — December is coming.)\n\nBook your pickup: https://kozycare.ng\n\nGreen white green. See you on the 1st.',
   },
   {
     week: 40,
@@ -519,7 +529,7 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
     subject: 'Detty December starts December 15. One month to prepare.',
     banner: 'promo-gold',
     bodyText:
-      'Detty December starts on **December 15** — one month from now — and the calendar is already assembling itself. Every weekend from the 15th will want an outfit.\n\nThe calm way to prepare:\n\n1. **List the outfits** you know Detty December will demand — parties, events, church, outings\n2. **Send them all now** — one pickup, everything refreshed before the season starts\n3. **Save Express for the season itself** — from the 15th, the calendar moves faster than you do\n\nThe people who enjoy Detty December most are never the ones ironing on Friday evening.\n\nhttps://kozycare.ng',
+      'Detty December starts on **December 15** — and the calendar is already assembling itself faster than any planner admits. Every weekend from the 15th will want an outfit.\n\nThe calm way to prepare:\n\n1. **List the outfits** you know Detty December will demand — parties, events, church, outings\n2. **Send them all now** — one pickup, everything refreshed before the season starts\n3. **Save Express for the season itself** — from the 15th, the calendar moves faster than you do\n\nThe people who enjoy Detty December most are never the ones ironing on Friday evening.\n\nhttps://kozycare.ng',
   },
   {
     week: 46,
@@ -544,13 +554,13 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   // ----------------------------------------------------------------- DECEMBER
   {
     week: 48,
-    season: 'Early December',
+    season: 'Late November',
     category: 'SEASONAL',
-    title: 'Merry Christmas',
-    subject: 'Merry Christmas from Kozy Care 🎄',
+    title: 'Christmas prep — the house and the outfits',
+    subject: 'Christmas is a month out. Start with the wardrobe.',
     banner: 'seasonal-christmas',
     bodyText:
-      'Merry Christmas from all of us at Kozy Care!\n\nHowever you are spending it — church in your Sunday best, rice at three different houses, or a quiet day with family — we hope your outfit feels as good as the day.\n\nThank you for another year of trusting us with the clothes that matter to you. It is a privilege we do not take lightly.\n\nWe are working through the season (with adjusted hours on public holidays — we will keep you posted) and **Express is standing by** for the event that appeared out of nowhere.\n\nhttps://kozycare.ng\n\nMerry Christmas! 🎄',
+      'Christmas is a month away — which makes this the quiet week that decides how calm yours feels.\n\nThe early list:\n\n- **The outfits** — church, dinners, family photos: refreshed now, not in the December rush\n- **The house** — duvets, curtains, guest linens: one pickup, a fresh house for visitors\n- **The children** — their Christmas best deserves the same care as yours\n\nEverything sent this week returns before December fills up. When the carols start, you will already be ready.\n\nhttps://kozycare.ng\n\nOne calm week now, a calm Christmas after.',
   },
   {
     week: 49,
@@ -564,33 +574,33 @@ export const NEWSLETTER_LIBRARY: NewsletterEntry[] = [
   },
   {
     week: 50,
-    season: 'Mid December',
+    season: 'Early December',
     category: 'SERVICE',
-    title: 'Express during Detty December',
-    subject: 'Detty December: event tonight, outfit ready tomorrow',
+    title: 'The Detty December playbook',
+    subject: 'Detty December opens on the 15th. Here is your playbook.',
     banner: 'service-express',
     bodyText:
-      'Detty December is officially open — from **December 15** into the new year, the season where plans change at 4pm and the event is tonight.\n\nThis is what **Express, from 24 hours** was built for:\n\n- Book before noon → collected today → back tomorrow, pressed and ready\n- Perfect for the outfit that "will be fine" and then was not\n- Same premium finishing — Express changes the clock, never the quality\n\nKeep this email saved. The season will make you use it.\n\nhttps://kozycare.ng\n\nParty responsibly. Dress immaculately.',
+      'Detty December opens on **December 15** — one week from now. The season where plans change at 4pm and the event is tonight.\n\nSave this email. It is the playbook:\n\n- **Send the known outfits now** — everything December will ask of your wardrobe, one pickup, before the season starts\n- **Book before noon on the day** → collected today → back tomorrow, pressed and ready\n- **Express changes the clock, never the quality** — same premium finishing at speed\n\nFrom the 15th, the calendar moves faster than you do. The people who enjoy Detty December most are never the ones ironing at 6pm.\n\nhttps://kozycare.ng\n\nParty responsibly. Dress immaculately.',
   },
   {
     week: 51,
-    season: 'Late December',
+    season: 'Mid December',
     category: 'SEASONAL',
-    title: 'New Year\'s Eve outfits',
-    subject: 'Cross into the new year looking like the new year',
-    banner: 'seasonal-newyear',
+    title: 'Merry Christmas — Detty December is open',
+    subject: 'Merry Christmas from Kozy Care 🎄',
+    banner: 'seasonal-christmas',
     bodyText:
-      'One more outfit before the year ends — the one that carries you across midnight.\n\nThe NYE outfit has a job: photographs, fireworks, hugs, the first hour of a brand-new year. It deserves to start at its best.\n\n**Express is running through the week** — send it now, wear it into the new year.\n\nhttps://kozycare.ng\n\nSee you on the other side. Happy New Year from Kozy Care! ✨',
+      'Merry Christmas from all of us at Kozy Care — and yes: Detty December is officially open.\n\nHowever you are spending the day — church in your Sunday best, rice at three different houses, or a quiet day with family — we hope your outfit feels as good as the day.\n\nThank you for another year of trusting us with the clothes that matter to you. It is a privilege we do not take lightly.\n\nWe are working through the season (adjusted hours on public holidays — watch your confirmations) and **Express is standing by** for the event that appeared out of nowhere.\n\nhttps://kozycare.ng\n\nMerry Christmas! 🎄',
   },
   {
     week: 52,
     season: 'Late December',
     category: 'SEASONAL',
-    title: 'Holiday hours + January prep',
-    subject: 'Holiday hours — and one smart move before January',
-    banner: 'seasonal-christmas',
+    title: 'New Year\'s Eve outfits + the January smart move',
+    subject: 'Cross into the new year looking like the new year',
+    banner: 'seasonal-newyear',
     bodyText:
-      'Two things before the year ends:\n\n**1. Holiday hours.** Collections pause on the public holidays and resume between them — book around the quiet days, and watch your confirmation for exact slots. Express keeps running on working days.\n\n**2. The smart January move.** The first week of January is our second-busiest week of the year (all of December\'s outfits arrive at once). Send yours in **this week** and January-you will not queue behind the rush.\n\nhttps://kozycare.ng\n\nThank you for this year. Next year, more of the same care.',
+      'Two things before the year ends:\n\n**1. The NYE outfit.** The one that carries you across midnight — photographs, fireworks, hugs, the first hour of a brand-new year. It deserves to start at its best. **Express is running all week** — send it now, wear it into the new year.\n\n**2. Holiday hours.** Collections pause on the public holidays and resume between them — book around the quiet days, and watch your confirmation for exact slots.\n\nAnd the smart January move: the first week of January is our second-busiest week of the year (all of December\'s outfits arrive at once). Send yours in **this week** and January-you will not queue behind the rush.\n\nhttps://kozycare.ng\n\nSee you on the other side. Happy New Year from Kozy Care! ✨',
   },
 ]
 
@@ -602,4 +612,35 @@ export function getNewsletterEntry(index: number): NewsletterEntry {
 }
 
 export const NEWSLETTER_LIBRARY_TOTAL = NEWSLETTER_LIBRARY.length
+
+// -----------------------------------------------------------------------------
+// Calendar sync (phase 66)
+// -----------------------------------------------------------------------------
+const LAGOS_OFFSET_MIN = 60
+
+/** ISO-8601 week number (1-53) of a date, computed in Africa/Lagos wall clock. */
+export function isoWeekLagos(date: Date): number {
+  const d = new Date(date.getTime() + LAGOS_OFFSET_MIN * 60_000)
+  // ISO rule: the Thursday of the current week decides the week's year.
+  // Normalize to midnight so the time-of-day never leaks into the day count
+  // (a 09:00 slot on Jan 4 must read week 1, not week 2).
+  const day = d.getUTCDay() || 7
+  const thursday = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + (4 - day)))
+  const jan1 = new Date(Date.UTC(thursday.getUTCFullYear(), 0, 1))
+  const week = Math.floor((thursday.getTime() - jan1.getTime()) / 86_400_000 / 7) + 1
+  return Math.min(53, Math.max(1, week))
+}
+
+/** The library entry whose week matches the calendar week of a send slot.
+ *  Falls back to the nearest earlier week (a 53-week year reads week 52) so
+ *  the content is always seasonally honest for the send date. */
+export function getNewsletterEntryForDate(slot: Date): NewsletterEntry {
+  const week = isoWeekLagos(slot)
+  let best = NEWSLETTER_LIBRARY[0]
+  for (const entry of NEWSLETTER_LIBRARY) {
+    if (entry.week <= week) best = entry
+    else break
+  }
+  return best
+}
 

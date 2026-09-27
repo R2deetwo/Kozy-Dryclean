@@ -26,7 +26,7 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { sendEmail } from '@/lib/email'
 import { formatNaira } from '@/lib/types'
-import { getNewsletterEntry, NEWSLETTER_BANNERS, NEWSLETTER_LIBRARY_TOTAL } from '@/lib/newsletter-content'
+import { getNewsletterEntryForDate, NEWSLETTER_BANNERS, NEWSLETTER_LIBRARY, NEWSLETTER_LIBRARY_TOTAL } from '@/lib/newsletter-content'
 
 // -----------------------------------------------------------------------------
 // Base URL
@@ -632,7 +632,13 @@ export async function ensureNextAutoDraft(force = false) {
     return null // not close enough — nothing to prepare yet
   }
 
-  const entry = getNewsletterEntry(sched.currentWeekIndex)
+  // Phase 66 (owner): CALENDAR SYNC — the entry is chosen by the slot's ISO
+  // calendar week, never by the stored pointer. A seasonal email (Independence
+  // prep, Detty December playbook…) can therefore never drift onto an
+  // off-season date: content follows the calendar. currentWeekIndex stays in
+  // sync as a mirror so the admin panel's library highlight stays truthful,
+  // but it no longer drives drafting.
+  const entry = getNewsletterEntryForDate(slot)
   const campaign = await db.newsletterCampaign.create({
     data: {
       name: `Week ${entry.week} — ${entry.title}`,
@@ -649,14 +655,20 @@ export async function ensureNextAutoDraft(force = false) {
       bannerSlug: entry.banner,
     },
   })
-  // Advance: content pointer +1, next slot +cadence (rhythm holds even if
-  // this draft is skipped — the engine never stacks a second one). The
-  // pin only ever applied to the owner's chosen first slot — clear it.
+  // Advance: next slot +cadence, and the pointer mirrors the CALENDAR entry
+  // for that next slot (so the panel's "next up" and library highlight both
+  // read honestly). The pin only ever applied to the owner's chosen first
+  // slot — clear it.
+  const nextSlot = new Date(slot.getTime() + sched.cadenceWeeks * 7 * 86_400_000)
+  const nextCalendarIndex = Math.max(
+    0,
+    NEWSLETTER_LIBRARY.indexOf(getNewsletterEntryForDate(nextSlot))
+  )
   await db.marketingSchedule.update({
     where: { id: 'main' },
     data: {
-      currentWeekIndex: (sched.currentWeekIndex + 1) % NEWSLETTER_LIBRARY_TOTAL,
-      nextSlotDate: new Date(slot.getTime() + sched.cadenceWeeks * 7 * 86_400_000),
+      currentWeekIndex: nextCalendarIndex,
+      nextSlotDate: nextSlot,
       slotPinned: false,
     },
   })
@@ -690,7 +702,9 @@ export async function getAutomationState() {
       select: { id: true, name: true, subject: true, sentAt: true, sentCount: true },
     }),
   ])
-  const upcoming = getNewsletterEntry(sched.currentWeekIndex)
+  // Phase 66: nextUp mirrors the calendar too — the entry the NEXT slot will
+  // carry, so the panel never advertises an off-season email again.
+  const upcoming = getNewsletterEntryForDate(sched.nextSlotDate ?? new Date())
   return {
     schedule: {
       enabled: sched.enabled,
