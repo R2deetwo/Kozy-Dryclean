@@ -1521,3 +1521,24 @@ Stage Summary:
 - Couture is now a SEPARATE specialist service, not a tier: three kit-sized plans + "Couture Care" on /services (industry-modeled: named division, assessment-first, hand-cleaned, hand-finished, protective covers, quoted per piece, member discount on the quote). Persona 4 and a pointer band route there from /memberships.
 - Local QA fully green (build + DOM + VLM). NOT YET LIVE: needs a fresh Vercel token from the owner (old ones should be rotated anyway — pasted repeatedly in chat). Then: deploy → run scripts/p67_prod_migration.ts against the decrypted prod DATABASE_URL → verify live markers (0 "The Atelier", "See Couture Care", /services couture section).
 - Owner standing items: CRON_SECRET (SgbsGqNt4Ytha3vnxzjDR4bZMdfD) + VAPID keys (work/p61-vapid-keys.json) still to be pasted in the Vercel dashboard.
+
+---
+Task ID: 68
+Agent: Super Z (main agent)
+Task: Per-kg "From" pricing, ship the blocked phase-67 commit with the owner's fresh token, retire the leftover ATELIER row in prod, report cron/VAPID status
+
+Work Log:
+- Answered the owner's per-kg question: the N800/kg rate was inherited from the original codebase (B2B_PRICING in types.ts — pricePerKg 800, minimumKg 10, minimumCharge 8000), not factored by us; it is admin-adjustable in Settings and billed as final weight x rate with a 10kg minimum.
+- "From" positioning shipped (commit 5a805a9): landing Corporate & hotels card now "From N800 per kg"; memberships pricing-tables corporate tab label "From, per kilogram" above the N800 figure; booking wizard "priced from N800/kg"; customer order-detail-modal bulk rate line made DYNAMIC (was hardcoded "N800/kg · 10kg" — a real bug if admin ever changes the rate) and now reads "From {rate}/kg · Minimum {kg}kg". Invoices/SMS keep exact figures (transactional surfaces must stay factual).
+- tsc 0, eslint 0, bun run build green.
+- Token vcp_0gMi... verified via project GET (200) and deployed to prod (kozy-dryclean-n3bul2v3m — EXIT 0). This shipped the previously-blocked phase-67 commit d8db6ac: couture as separate specialist service, 3 simplified tiers (Essentials/Household/Whole Home), ICP persona routing, newsletter cadence panel copy.
+- PROD BUG FOUND + FIXED: /api/subscriptions/plans returned FOUR plans — the retired ATELIER tier (100k, isActive true) was live in the prod DB, seeded by the phase-66 ladder migration (createdAt 2026-09-27T15:54:23Z); the phase-67 code removal couldn't delete the row (getPlans only seeds/updates, never removes). The public /memberships page was rendering 4 tier cards client-side.
+- Fix (scripts/p68_retire_atelier.js): signed in as the battery admin, confirmed 0 total subscriptions / 0 ATELIER subscribers, PUT /api/subscriptions/plans {id, isActive:false} (partial edit — savePlans only touches present fields, verified in source). Deactivation chosen over delete: the admin plan editor shows inactive rows as dashed "Hidden" cards with a toggle, so the owner keeps control. Public GET now: ESSENTIALS/HOUSEHOLD/WHOLEHOME live, ATELIER hidden.
+- Live verification (scripts/p68_live_check.js): 12/12 PASS — "From N800 per kg" on landing, 3 tiers only (no Concierge/Atelier), corporate tab "From, per kilogram" + N800 + minimum line, Couture Care + "Quoted, never flat-priced" on /services, 0 page errors. VLM on the per-kg navy card: 9/10 (label reads as starting rate, N800 prominent, minimum legible).
+- Env status checks: /api/marketing/cron unauth'd returns "Unauthorized" (not "locked") — CRON_SECRET IS set on prod, the daily 08:00 Lagos newsletter check is armed. /api/push/key as admin returns available:false — VAPID keys NOT set; rider stop-push disabled until the owner pastes them.
+
+Stage Summary:
+- Per-kg pricing now reads "From" everywhere customer-facing, with the order-detail rate line dynamic (bug fix).
+- Phase 67 is LIVE on kozycare.ng; the leftover Atelier tier is retired (hidden) with 0 subscribers; verified end-to-end.
+- CRON_SECRET already configured on prod; VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY still pending owner paste (values in work/p61-vapid-keys.json, also pasted in chat).
+- Fresh token works; old pasted tokens should still be rotated by the owner when convenient.
