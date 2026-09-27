@@ -1,0 +1,31 @@
+1) The grid is **not** showing exactly three plans. In fact, the screenshot is missing the plan cards entirely (Essentials, Household, Whole Home). There is no fourth "Atelier" plan visible, but the primary three-plan requirement is not met in this view.
+
+2) The persona card section ("Find yourself below") is also missing from this specific screenshot. However, there is a "Couture Care" pointer card present that explicitly routes users to that specialist service for designer wear, which aligns with the intent for the "wardrobe investment" persona.
+
+3) Yes, the couture pointer card is highly readable with a clear gold border and is well-placed in the layout where the plans should have been, sitting just above the navy value band.
+
+4) The page has significant missing content (the core plans and personas are gone), which is a major functional failure. However, the visible elements (hero, typography, pricing list, FAQ) are well-aligned and polished. Polish: 4/10.
+
+---
+
+1) Yes, the section clearly reads as a premium specialist service rather than a membership plan. The "Priced per piece" badge and the "Quoted, never flat-priced" note effectively communicate that this is an à la carte, high-touch offering. The 4-step process is highly legible, with clear numbered circles and distinct headings for each stage (Assessed first, Cleaned by hand, etc.).
+
+2) Yes, the two buttons are styled consistently with the site's premium theme. The "Book a couture pickup" button uses the brand's signature gold fill, while the "Call to discuss it first" button uses a subtle outline style. This creates a clear visual hierarchy between the primary and secondary actions.
+
+3) No, nothing overlaps or clips the craftsman photo; it is well-contained within its frame. The section's polish is a solid 9/10. The typography is elegant, the spacing is generous, and the dark navy background makes the gold accents pop, creating a very high-end, trustworthy feel.
+
+---
+
+1) Yes, the Couture Care section stacks cleanly. The text and process steps are readable, the craftsman photo is properly contained without distortion, and there is no horizontal overflow.
+
+2) The gold "Book Pickup Now" button and the outline call button are both tappable-sized. They are not clipped by the screen edges and appear to have sufficient padding for touch targets.
+
+3) No elements are overflowing the 390px width; all content, including images and text blocks, stays within the mobile viewport boundaries. I rate the mobile polish a 7/10. The layout is functional and clean, though the large empty spaces between sections could be better utilized for a more premium feel.
+
+---
+
+1) Yes, the three plan cards (Classic, Circle, Atelier) are stacked in a single, readable column. The prices and perks are clearly legible. There is no fourth "Atelier" card; the "Atelier" tier is the third and final option in the stack.
+
+2) Yes, the persona strip ("Find yourself below") and the couture pointer card ("Designer, couture or premium traditional wear?") both stack cleanly into a single vertical column without any horizontal overflow or layout breaks.
+
+3) Yes, the top navigation is contained within one tidy row with no text overflow. The mobile polish is excellent; the typography remains elegant, spacing is generous, and the hierarchy is clear. I would rate the mobile polish a 9/10.

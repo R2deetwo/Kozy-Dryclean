@@ -1,15 +1,17 @@
 'use client'
 
 // =============================================================================
-// ServicesDetail — the specialty care content (phases 45 → 64).
+// ServicesDetail — the specialty care content (phases 45 → 64 → 67).
 // =============================================================================
 // Phase 45 moved the full pricing tables, atelier story, sneaker restoration
 // and alterations off the home page onto /services. Phase 64 (owner): pricing
 // and the membership plans are now MERGED on /memberships — "Plans & Pricing",
-// plans first, price list below — so this page keeps the specialty story:
-// inside the atelier, sneaker restoration, and the in-house tailor. A short
-// pointer strip at the top (keeping the #pricing anchor) routes anyone who
-// arrived via an old "pricing" deep link to the merged page.
+// plans first, price list below — so this page keeps the specialty story.
+// Phase 67 (owner): couture, designer and premium traditional wear is its own
+// NAMED SPECIALIST SERVICE — Couture Care — not a membership tier (industry
+// pattern: Jeeves, Margaret's, Hallak). A short pointer strip at the top
+// (keeping the #pricing anchor) routes anyone who arrived via an old
+// "pricing" deep link to the merged page.
 // =============================================================================
 
 import Link from 'next/link'
@@ -62,7 +64,8 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
                 <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-300">
                   One page now: the three Kozy Circle monthly plans first, the full
                   per-item price list below them — men, women, home and the per-kg
-                  corporate program. Specialty care stays right here.
+                  corporate program. Specialty care stays right here — and couture
+                  pieces are always quoted after a free assessment, never flat-priced.
                 </p>
               </div>
             </div>
@@ -74,53 +77,106 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
       </section>
 
       {/* ============================================================
-          LIFESTYLE / ATELIER
+          COUTURE CARE — the specialist service (phase 67, owner directive)
+          Couture, designer and premium traditional wear is deliberately NOT
+          a membership tier — the industry pattern (Jeeves of Belgravia's
+          couture division, Margaret's The Couture Cleaner, Hallak's
+          inspection-first process) is a NAMED SPECIALIST SERVICE priced per
+          piece: assess first (fabric tests, beading/sequins identified),
+          hand-clean, hand-finish, return protected — quoted for approval
+          before any work begins. The old #atelier anchor is kept inside the
+          section so existing deep links still land here.
       ============================================================ */}
-      <section id="atelier" className="bg-navy-gradient py-20 text-white scroll-mt-20">
+      <section id="couture" className="bg-navy-gradient py-20 text-white scroll-mt-20">
+        <span id="atelier" className="block scroll-mt-20" aria-hidden />
         <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-2">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
           >
-            <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
-              Inside the atelier
-            </p>
-            <h2 className="font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
-              A workspace engineered for fabric care.
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="mb-0 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+                Couture Care — the specialist service
+              </p>
+              <Badge className="bg-gold-400 text-navy hover:bg-gold-400">
+                Priced per piece
+              </Badge>
+            </div>
+            <h2 className="mt-3 font-serif text-3xl font-semibold tracking-tight sm:text-4xl">
+              For the pieces you don&rsquo;t trust to just anyone.
             </h2>
             <p className="mt-4 max-w-xl text-navy-100">
-              Every Kozy atelier features commercial-grade equipment, dedicated zones for
-              silks, wools, and traditional fabrics, and a finishing station staffed by
-              trained pressers. Nothing leaves the floor untagged.
+              Designer and couture pieces. Aso-oke and lace. Agbada with hand-sewn
+              beadwork. Bridal gowns and heirloom silks. Some clothes are worth more
+              than a ticket — so they get their own service, their own specialists,
+              and their own process.
             </p>
 
-            <ul className="mt-6 space-y-3 text-sm">
+            <ol className="mt-6 space-y-3 text-sm">
               {[
-                'Per-fabric detergent protocols (silk, wool, ankara, agbada)',
-                'Stain bar with pre-treatment consultation',
-                'Steam-only finishing for delicate structures',
-                'Sealed garment bags for return delivery',
-              ].map((t) => (
-                <li key={t} className="flex items-start gap-3">
-                  <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-gold-400" />
-                  <span className="text-navy-100">{t}</span>
+                {
+                  t: 'Assessed first, always',
+                  d: 'Every piece is inspected before anything touches it — fabric and trim tested, beading, sequins and leather trim identified, and the process chosen for that exact piece.',
+                },
+                {
+                  t: 'Cleaned by hand',
+                  d: 'Fabric-specific detergents and gentle hand-cleaning in dedicated zones for silks, wools and traditional fabrics — never the same cycle as everything else.',
+                },
+                {
+                  t: 'Finished by hand',
+                  d: 'Steam-only finishing for delicate structures, seams pressed by hand, shape and drape preserved — nothing leaves the floor untagged.',
+                },
+                {
+                  t: 'Returned protected',
+                  d: 'Sealed in protective garment covers and delivered to your door — the same free island-wide pickup and delivery as everything else.',
+                },
+              ].map((s, i) => (
+                <li key={s.t} className="flex items-start gap-3">
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gold-400 text-[11px] font-bold text-navy">
+                    {i + 1}
+                  </span>
+                  <span>
+                    <span className="font-semibold text-white">{s.t}</span>
+                    <span className="text-navy-100"> — {s.d}</span>
+                  </span>
                 </li>
               ))}
-            </ul>
+            </ol>
 
-            <Button
-              onClick={onBook}
-              className="mt-7 rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
-            >
-              Book your first pickup <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
+            {/* Pricing posture: quote-first, assessment-first — the same
+                honest pattern as wedding dresses, sneaker restorations and
+                alterations (owner directive), and how the couture divisions
+                of premium cleaners price. */}
+            <p className="mt-6 rounded-xl border border-gold-400/30 bg-white/5 p-4 text-sm leading-relaxed text-white/90">
+              <span className="font-semibold text-gold-300">Quoted, never flat-priced</span> —
+              beading, fabric and detail change the work. The assessment is free with
+              your pickup: we inspect the piece, send you a quote, and nothing begins
+              until you approve it. If a piece is too delicate to treat safely, we
+              say so honestly — no charge, no wasted collection. Circle members get
+              their plan discount on the final quote.
+            </p>
+
+            <div className="mt-7 flex flex-wrap gap-3">
+              <Button
+                onClick={onBook}
+                className="rounded-full bg-gold-gradient px-6 text-navy hover:opacity-90"
+              >
+                Book a couture pickup <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+              <a
+                href="tel:+2348031755230"
+                className="inline-flex h-10 items-center rounded-full border border-white/30 bg-white/5 px-5 text-sm font-medium text-white backdrop-blur transition hover:bg-white/10"
+              >
+                Call to discuss it first
+              </a>
+            </div>
           </motion.div>
 
           <div className="overflow-hidden rounded-2xl ring-1 ring-gold-400/30 shadow-2xl">
             <img
               src="/brand/images/atelier-craftsman.png"
-              alt="Kozy master presser finishing a premium garment at the steam station"
+              alt="Kozy master presser hand-finishing a premium garment at the steam station"
               loading="lazy"
               decoding="async"
               className="h-full w-full object-cover"

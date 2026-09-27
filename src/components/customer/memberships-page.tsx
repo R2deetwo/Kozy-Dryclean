@@ -5,14 +5,15 @@
 // (phase 62 → 64)
 // =============================================================================
 // Phase 64 (owner): pricing and the plans are MERGED here — plans first, the
-// per-item price list below. Phase 66 (owner): plain language throughout, a
-// visible FIND-YOUR-PLAN persona strip (the ideal customer profiles, named),
-// and a four-plan ladder — three sized by kit (Essentials bag → Household
-// box → Whole Home) plus THE ATELIER, sized by care level: couture, designer
-// and premium traditional wear, hand-finished. Sections:
+// per-item price list below. Phase 66 (owner): plain language throughout and
+// a visible FIND-YOUR-PLAN persona strip (the ideal customer profiles, named).
+// Phase 67 (owner): three plans sized by kit (Essentials bag → Household box
+// → Whole Home) — couture and designer wear is NOT a tier, it is the separate
+// Couture Care specialist service on /services, routed from the persona strip
+// and a pointer band after the plans. Sections:
 // hero (recycled handover photo) → how the plan works → find your plan →
-// the four plans → the value math → the per-item price list (PricingTables)
-// → FAQ → join. The join flow lives in-page: signed-out
+// the three plans → couture pointer → the value math → the per-item price list
+// (PricingTables) → FAQ → join. The join flow lives in-page: signed-out
 // visitors are sent to login first (a membership needs an account by design);
 // members land on their portal. Paystack members activate instantly via the
 // webhook; transfer members attach a receipt and get verified by the team —
@@ -258,8 +259,10 @@ export function MembershipsClient() {
 
       {/* ================= FIND YOUR PLAN — the ideal customers, by name ================= */}
       {/* The owner asked for the ideal customer profiles to be VISIBLE in the
-          arrangement, not just implied: four one-glance personas, each
-          pointing straight at the plan built for it. */}
+          arrangement, not just implied: four one-glance personas. Three point
+          straight at the plan built for them; the fourth (the designer-wardrobe
+          owner) routes to Couture Care — the separate specialist service, not
+          a bigger plan (phase 67). */}
       <section className="border-b border-navy-100 bg-white">
         <div className="mx-auto max-w-6xl px-4 py-12 sm:px-6">
           <div className="text-center">
@@ -276,29 +279,29 @@ export function MembershipsClient() {
                 icon: Briefcase,
                 label: '“Always in work clothes”',
                 line: 'Shirts and suits, Monday to Friday. One weekly bag keeps up.',
-                plan: 'The Essentials',
+                cta: 'Start with The Essentials',
                 href: '#tier-essentials',
               },
               {
                 icon: Users,
                 label: '“Dressing a whole family”',
                 line: 'Everyone’s weekly load — school, work, weekend — plus the beds.',
-                plan: 'The Household',
+                cta: 'Start with The Household',
                 href: '#tier-household',
               },
               {
                 icon: Home,
                 label: '“Running a full home”',
                 line: 'Duvets, curtains and a yearly deep clean, all inside one plan.',
-                plan: 'The Whole Home',
+                cta: 'Start with The Whole Home',
                 href: '#tier-wholehome',
               },
               {
                 icon: Crown,
                 label: '“My wardrobe is the investment”',
-                line: 'Couture, designer and premium traditional wear — cared for by hand.',
-                plan: 'The Atelier',
-                href: '#tier-atelier',
+                line: 'Designer, couture and premium traditional wear — a specialist service, priced per piece.',
+                cta: 'See Couture Care — a separate service',
+                href: '/services#couture',
               },
             ].map((p, i) => (
               <motion.a
@@ -316,7 +319,7 @@ export function MembershipsClient() {
                 <p className="mt-3 font-serif text-base font-semibold text-navy">{p.label}</p>
                 <p className="mt-1.5 text-xs leading-relaxed text-navy-300">{p.line}</p>
                 <p className="mt-3 text-[11px] font-semibold text-gold-700">
-                  Start with {p.plan}
+                  {p.cta}
                   <ArrowRight className="ml-1 inline h-3 w-3 transition group-hover:translate-x-0.5" />
                 </p>
               </motion.a>
@@ -345,7 +348,7 @@ export function MembershipsClient() {
               <Loader2 className="h-6 w-6 animate-spin text-navy-300" />
             </div>
           ) : (
-            <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+            <div className="mt-10 grid gap-6 md:grid-cols-3">
               {activePlans.map((plan, i) => {
                 const featured = plan.code === 'HOUSEHOLD'
                 const tier = TIER_PRESENTATION[plan.code] ?? TIER_PRESENTATION.__default
@@ -397,16 +400,12 @@ export function MembershipsClient() {
 
                         <div className="mt-3 rounded-xl bg-navy-50 p-2.5 text-center ring-1 ring-navy-100">
                           <p className="text-[11px] font-semibold text-navy">
-                            {plan.concierge
-                              ? `${plan.includedUnits} couture pickups a month`
-                              : `${plan.includedUnits} × ${plan.unitName} pickups a month`}
+                            {`${plan.includedUnits} × ${plan.unitName} pickups a month`}
                           </p>
                           <p className="mt-0.5 text-[10px] leading-relaxed text-navy-300">
-                            {plan.concierge
-                              ? 'Cleaned when it needs it — hand-finished, returned in protective covers'
-                              : plan.unitKind === 'bag'
-                                ? 'The long laundry bag — your weekly wash & fold'
-                                : 'The big box — the whole household, weekly'}
+                            {plan.unitKind === 'bag'
+                              ? 'The long laundry bag — your weekly wash & fold'
+                              : 'The big box — the whole household, weekly'}
                           </p>
                         </div>
 
@@ -422,32 +421,23 @@ export function MembershipsClient() {
                               Extra {plan.unitKind}s when you need them — {formatNaira(plan.extraUnitPrice)} each
                             </Perk>
                           )}
-                          {plan.concierge ? (
-                            <>
-                              <Perk included>Every piece assessed before treatment</Perk>
-                              <Perk included>First pick of pickup times</Perk>
-                            </>
-                          ) : (
-                            <>
-                              <Perk included={plan.duvetsPerQuarter > 0}>
-                                {plan.duvetsPerQuarter > 0
-                                  ? `${plan.duvetsPerQuarter} duvet washes free, every 3 months`
-                                  : 'Duvet washing — starts with The Household'}
-                              </Perk>
-                              <Perk included={plan.curtainsPerQuarter > 0}>
-                                {plan.curtainsPerQuarter > 0
-                                  ? `Curtains cleaned free — ${plan.curtainsPerQuarter} panels every 3 months`
-                                  : 'Curtains — starts with The Whole Home'}
-                              </Perk>
-                              <Perk included={plan.springCleanPerYear > 0}>
-                                {plan.springCleanPerYear > 0
-                                  ? 'One whole-home deep clean, every year'
-                                  : 'Yearly deep clean — The Whole Home'}
-                              </Perk>
-                              {plan.prioritySlots && (
-                                <Perk included>First pick of pickup times</Perk>
-                              )}
-                            </>
+                          <Perk included={plan.duvetsPerQuarter > 0}>
+                            {plan.duvetsPerQuarter > 0
+                              ? `${plan.duvetsPerQuarter} duvet washes free, every 3 months`
+                              : 'Duvet washing — starts with The Household'}
+                          </Perk>
+                          <Perk included={plan.curtainsPerQuarter > 0}>
+                            {plan.curtainsPerQuarter > 0
+                              ? `Curtains cleaned free — ${plan.curtainsPerQuarter} panels every 3 months`
+                              : 'Curtains — starts with The Whole Home'}
+                          </Perk>
+                          <Perk included={plan.springCleanPerYear > 0}>
+                            {plan.springCleanPerYear > 0
+                              ? 'One whole-home deep clean, every year'
+                              : 'Yearly deep clean — The Whole Home'}
+                          </Perk>
+                          {plan.prioritySlots && (
+                            <Perk included>First pick of pickup times</Perk>
                           )}
                         </ul>
 
@@ -485,6 +475,43 @@ export function MembershipsClient() {
               })}
             </div>
           )}
+        </div>
+      </section>
+
+      {/* ================= COUTURE POINTER — the service that is not a plan ================= */}
+      {/* Phase 67 (owner): couture and designer wear is NOT a fourth tier — it
+          is the separate Couture Care specialist service on /services. This
+          quiet band sits right where the retired tier used to be, so the
+          designer-wardrobe persona (ICP 4) still finds a home on the page
+          without the plans pretending to size it. */}
+      <section className="border-b border-navy-100 bg-linen-100/60 py-10">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6">
+          <Link
+            href="/services#couture"
+            className="group flex flex-col items-start justify-between gap-4 rounded-2xl border border-gold-200 bg-white p-5 shadow-navy transition-shadow hover:shadow-lg hover:ring-1 hover:ring-gold-200 sm:flex-row sm:items-center"
+          >
+            <div className="flex items-start gap-4">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-navy-800 text-gold-300">
+                <Crown className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="font-serif text-lg font-semibold text-navy">
+                  Designer, couture or premium traditional wear?
+                </p>
+                <p className="mt-1 max-w-2xl text-sm leading-relaxed text-navy-300">
+                  That is not a bigger plan — it is a different craft.{' '}
+                  <span className="font-medium text-navy">Couture Care</span> is our
+                  specialist service: every piece assessed before treatment, cleaned and
+                  finished by hand, returned in protective covers, and quoted for your
+                  approval before any work begins. Circle members get their plan discount
+                  on the quote.
+                </p>
+              </div>
+            </div>
+            <span className="shrink-0 rounded-full bg-gold-gradient px-5 py-2.5 text-xs font-bold text-navy transition group-hover:opacity-90">
+              See Couture Care <ArrowRight className="ml-1 inline h-3.5 w-3.5" />
+            </span>
+          </Link>
         </div>
       </section>
 
@@ -536,8 +563,8 @@ export function MembershipsClient() {
           <div className="mt-8 space-y-6">
             {[
               {
-                q: 'What counts as “couture” for The Atelier?',
-                a: 'Designer pieces, aso-oke and lace, agbada, bridal and anything delicate enough that you would rather ask first. Atelier pieces are assessed before every treatment, hand-finished, and returned in protective covers. If you are unsure, send it with your next pickup — the studio will tell you which plan (or per-item care) suits it.',
+                q: 'What about couture, designer or premium traditional wear?',
+                a: 'That is Couture Care — its own specialist service, not a bigger plan. Designer pieces, aso-oke and lace, agbada, bridal: every piece is assessed before treatment, cleaned and finished by hand, returned in protective covers, and quoted for your approval before any work begins. Circle members get their plan discount on the quote. If you are unsure, send it with your next pickup — the studio will tell you honestly whether it needs the specialists or the normal wash.',
               },
               {
                 q: 'What if my bag is not full — or overflowing?',
@@ -613,7 +640,6 @@ const TIER_PRESENTATION: Record<string, { icon: LucideIcon; who: string }> = {
   ESSENTIALS: { icon: ShoppingBag, who: 'For one busy person' },
   HOUSEHOLD: { icon: Users, who: 'For a family' },
   WHOLEHOME: { icon: Home, who: 'For a full house — beds, curtains, all' },
-  ATELIER: { icon: Crown, who: 'For couture & designer wardrobes' },
   __default: { icon: Package, who: 'A Kozy Circle plan' },
 }
 
@@ -717,9 +743,7 @@ function JoinDialog({
                 Join {plan.name}
               </DialogTitle>
               <DialogDescription>
-                {plan.concierge
-                  ? `${plan.includedUnits} couture pickups a month · free delivery · `
-                  : `${plan.includedUnits} × ${plan.unitName} pickups a month · free delivery · `}
+                {`${plan.includedUnits} × ${plan.unitName} pickups a month · free delivery · `}
                 {plan.memberDiscountPct}% off everything else
               </DialogDescription>
             </DialogHeader>

@@ -14,7 +14,6 @@
 
 import { useMemo, useState } from 'react'
 import {
-  Crown,
   Loader2,
   Save,
   Users,
@@ -154,13 +153,12 @@ function PlansEditor() {
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         {drafts.map((d) => (
           <Card key={d.id} className={cn('shadow-navy', d.isActive ? 'border-navy-100' : 'border-dashed border-navy-200 opacity-70')}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  {d.concierge && <Crown className="h-4 w-4 text-gold-500" />}
                   <p className="font-serif text-lg font-semibold text-navy">{d.name}</p>
                 </div>
                 <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-navy-300">
@@ -191,7 +189,6 @@ function PlansEditor() {
                 <NumField label="Curtain panels / quarter" value={d.curtainsPerQuarter} onChange={num(d.id, 'curtainsPerQuarter')} />
                 <NumField label="Spring cleans / year" value={d.springCleanPerYear} onChange={num(d.id, 'springCleanPerYear')} />
                 <div className="flex flex-col justify-end gap-1.5 pb-0.5">
-                  <Toggle label="Designer care (Atelier)" checked={d.concierge} onChange={(v) => patch(d.id, 'concierge', v)} />
                   <Toggle label="Priority windows" checked={d.prioritySlots} onChange={(v) => patch(d.id, 'prioritySlots', v)} />
                 </div>
               </div>
@@ -351,11 +348,6 @@ function SubscribersList() {
                     {m.cancelAtPeriodEnd && (
                       <Badge variant="outline" className="rounded-full border-amber-200 text-[10px] text-amber-700">
                         not renewing
-                      </Badge>
-                    )}
-                    {m.plan?.concierge && (
-                      <Badge variant="outline" className="rounded-full border-gold-300 bg-gold-50 text-[10px] text-navy">
-                        <Crown className="mr-1 h-2.5 w-2.5" /> atelier
                       </Badge>
                     )}
                   </div>

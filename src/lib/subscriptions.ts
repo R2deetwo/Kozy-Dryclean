@@ -18,12 +18,14 @@
 import { db } from '@/lib/db'
 import type { MembershipPlan, Membership } from '@/lib/types'
 
-// ----- Plan defaults (phase 66: the owner's ladder, retold in plain words) -----
-// Three plans sized by KIT (bag → box → the whole home) and one plan sized by
-// CARE LEVEL (The Atelier — couture, designer and premium traditional wear).
-// Names and taglines are deliberately plain: a regular person should
-// understand what is on offer without a dictionary. Everything numeric is
-// admin-adjustable at runtime; these are the seeds.
+// ----- Plan defaults (phase 66 → 67: the owner's ladder, retold in plain words) -----
+// Three plans sized by KIT (bag → box → the whole home). Couture, designer
+// and premium traditional wear is deliberately NOT a plan — it is the
+// separate Couture Care specialist service on /services (assessed, quoted
+// and hand-finished per piece; Circle members get their plan discount on
+// the quote). Names and taglines are deliberately plain: a regular person
+// should understand what is on offer without a dictionary. Everything
+// numeric is admin-adjustable at runtime; these are the seeds.
 
 interface PlanSeed {
   code: string
@@ -101,25 +103,6 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     springCleanPerYear: 1,
     concierge: false,
     memberDiscountPct: 15,
-    prioritySlots: true,
-  },
-  {
-    code: 'ATELIER',
-    name: 'The Atelier',
-    tagline: 'Your designer, couture and premium traditional wear — cleaned by hand, only when it needs it.',
-    priceMonthly: 100000,
-    sortOrder: 4,
-    includedUnits: 2,
-    unitKind: 'bag',
-    unitName: 'Atelier Garment Bag',
-    extraUnitPrice: 25000,
-    maxExtraUnits: 2,
-    replacementFee: 15000,
-    duvetsPerQuarter: 0,
-    curtainsPerQuarter: 0,
-    springCleanPerYear: 0,
-    concierge: true,
-    memberDiscountPct: 20,
     prioritySlots: true,
   },
 ]

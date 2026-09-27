@@ -457,7 +457,7 @@ export function NewsletterEnginePanel() {
             </div>
             <div>
               <span className="font-semibold text-navy">4. You press Approve</span> — it goes
-              out on the day. Nothing sends without your approval.
+              out on the rhythm you set above. Nothing sends without your approval.
             </div>
           </div>
 
@@ -706,7 +706,8 @@ export function NewsletterEnginePanel() {
                     What&rsquo;s coming up next
                   </div>
                   <span className="text-[11px] text-navy-300">
-                    Every {schedule.cadenceWeeks === 1 ? 'week' : `${schedule.cadenceWeeks} weeks`} on{' '}
+                    Your rhythm, set by you: every{' '}
+                    {schedule.cadenceWeeks === 1 ? 'week' : `${schedule.cadenceWeeks} weeks`} on{' '}
                     {DAYS[schedule.dayOfWeek]} at {schedule.sendTime} (Lagos)
                   </span>
                 </div>
@@ -744,7 +745,11 @@ export function NewsletterEnginePanel() {
                 </ol>
                 <p className="mt-2 border-t border-navy-50 pt-2 text-[11px] leading-relaxed text-navy-300">
                   &hellip;and it keeps rolling. Each one is drafted a few days before its day and
-                  always waits for your approval first — nothing sends on its own.
+                  always waits for your approval first — nothing sends on its own. A daily
+                  8:00am (Lagos) check delivers whatever is due that morning — with your{' '}
+                  {schedule.cadenceWeeks === 1 ? 'weekly' : `every-${schedule.cadenceWeeks}-weeks`}
+                  rhythm, that is one newsletter {schedule.cadenceWeeks === 1 ? 'a week' : `every ${schedule.cadenceWeeks} weeks`},
+                  not one every day. Change the rhythm any time above.
                 </p>
               </div>
 

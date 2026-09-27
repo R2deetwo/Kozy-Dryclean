@@ -2,17 +2,18 @@ import type { Metadata } from "next";
 import { ServicesPage } from "@/components/customer/services-page";
 
 // =============================================================================
-// /services — split out of the home page in phase 45; re-scoped in phase 64:
-// pricing now lives with the membership plans on /memberships, so this page
-// is the specialty-care story (atelier, sneaker restoration, alterations).
-// BreadcrumbList structured data so search results can show
-// Home > Specialty care. Price-SEO title moved to /memberships.
+// /services — split out of the home page in phase 45; re-scoped in phase 64
+// (pricing lives with the membership plans on /memberships) and phase 67
+// (couture, designer and premium traditional wear is its own specialist
+// SERVICE here — Couture Care — not a membership tier). BreadcrumbList
+// structured data so search results can show Home > Specialty care.
+// Price-SEO title lives on /memberships.
 // =============================================================================
 
 export const metadata: Metadata = {
-  title: "Sneaker Restoration, Alterations & Atelier Care in Lagos | Kozy Care",
+  title: "Couture & Designer Garment Care, Sneaker Restoration & Alterations in Lagos | Kozy Care",
   description:
-    "Specialty garment care from the Kozy atelier across Ikoyi, Lekki and Lagos Island: sneaker and trainer restoration from ₦5,000, in-house alterations and repairs by our seamstress, and a look inside the studio. Free island-wide pickup and delivery.",
+    "Specialist garment care from the Kozy atelier across Ikoyi, Lekki and Lagos Island: Couture Care for designer, couture and premium traditional wear — assessed, hand-finished and quoted per piece — plus sneaker and trainer restoration from ₦5,000 and in-house alterations and repairs. Free island-wide pickup and delivery.",
   alternates: { canonical: "/services" },
 };
 

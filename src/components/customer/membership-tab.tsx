@@ -13,7 +13,6 @@ import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import {
   Sparkles,
-  Crown,
   Package,
   RefreshCcw,
   BedDouble,
@@ -134,11 +133,6 @@ export function MembershipTab() {
                       ? 'Awaiting payment verification'
                       : 'Active'}
               </Badge>
-              {plan?.concierge && (
-                <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-gold-300">
-                  <Crown className="h-3 w-3" /> Atelier · designer care
-                </span>
-              )}
             </div>
           </div>
 

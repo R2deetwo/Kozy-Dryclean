@@ -1,11 +1,12 @@
 'use client'
 
 // =============================================================================
-// ServicesPage — the /services page body (phase 45, re-scoped in phase 64).
+// ServicesPage — the /services page body (phase 45, re-scoped in 64 + 67).
 // Home was split for scroll length in phase 45; in phase 64 the pricing
 // tables moved in with the membership plans on /memberships (“Plans &
-// Pricing”, plans first). What remains here is the specialty story: inside
-// the atelier, sneaker restoration, and the in-house tailor — plus a
+// Pricing”, plans first). Phase 67: couture, designer and premium
+// traditional wear is offered here as its own specialist service — Couture
+// Care — alongside sneaker restoration and the in-house tailor, plus a
 // pointer strip up top that routes price-hunters to the merged page.
 // =============================================================================
 
@@ -37,9 +38,11 @@ export function ServicesPage() {
             The craft beyond the wash.
           </h1>
           <p className="mt-3 max-w-2xl text-navy-100">
-            Sneaker and trainer restoration, an in-house tailor for alterations and
-            repairs, and a look inside the atelier where every garment is finished.
-            Plans and the full per-item price list live together on{" "}
+            Couture Care for designer, couture and premium traditional wear — a
+            specialist service, assessed and quoted per piece. Sneaker and trainer
+            restoration, an in-house tailor for alterations and repairs, and a look
+            inside the atelier where every garment is finished. Plans and the full
+            per-item price list live together on{" "}
             <Link
               href="/memberships"
               className="font-semibold text-gold-300 underline decoration-gold-400 decoration-2 underline-offset-4 hover:text-gold-200"
