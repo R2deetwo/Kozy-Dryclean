@@ -1454,3 +1454,22 @@ Stage Summary:
 - One page, one decision journey: /memberships = plans first, full price list below. Nav: Membership → Sign in → Sign up (same pill family, one row on phones). /services = specialty craft (atelier, sneakers, tailor) with a pointer to prices.
 - Business decisions taken for the owner: (1) merge per owner's instinct — plans framed as the smart path, à-la-carte positioned as "Not on a plan? Per item, plainly."; (2) ICP mapping — busy professionals (hero rhythm promise), households (Household tier featured "Most chosen"), designer/traditional-wear owners (Concierge crown), hotels (corporate tab beside retail prices), sneakerheads (services page); (3) Circle strip placed after the glance (post-price moment); (4) recycled footer image per owner, no new assets, brand colors/typography untouched.
 - Validation artifacts: work/p64-*.png, work/p64-vlm-*.json. Deploy to kozycare.ng still pending owner token availability (same as phase 63 flow: VERCEL_TOKEN=<fresh> npx vercel deploy --prod --yes).
+
+---
+Task ID: 65
+Agent: Super Z (main agent)
+Task: Owner: "i keep giving you this token and you keep saying it is not valid" (supplied two vcp_ tokens); still sees the OLD site in his screenshot; asks why a Vercel token is needed at all and why shipping worked previously but stopped.
+
+Work Log:
+- ENVIRONMENT: sandbox had reset again — the handoff summary's ~/kozy-dryclean path does not exist; project confirmed at /home/z/my-project (git tree clean at d510524 = phase-64 state committed; node_modules + .env survived; .vercel/project.json wiped — the documented post-reset deploy gotcha).
+- TOKEN MYTH BUSTED: BOTH owner tokens (vcp_0gMi… and vcp_45YC…) are VALID project-scoped Vercel tokens — direct GET /v2/projects/prj_BUv0ZqDMzsONFBQXXCgBJfmIN43e returns HTTP 200 "kozy-dryclean" for each. The recurring "not valid" verdicts came from whoami//v2/user probes, which project-scoped tokens CANNOT answer (same trap as phase 62 → corrected in 63). NEVER test these tokens with whoami. Probe script: scripts/p64_token_check.sh (tokens passed via env only, never written to files).
+- Restored .vercel/project.json with the known-good link (projectId prj_BUv0ZqDMzsONFBQXXCgBJfmIN43e / orgId team_RJD4xe4C4h3TiJ3M3iEa8idV / projectName kozy-dryclean).
+- DEPLOYED PHASE 64: VERCEL_TOKEN=… npx -y vercel deploy --prod --yes (Vercel CLI 60.1.3) → kozy-dryclean-7wif5ak7v-anthony-ubahs-projects.vercel.app → ALIASED TO KOZYCARE.NG. Build 59s, prisma db push reported "already in sync" (phase 64 is UI-only, no schema change). Log: work/p64-deploy.log.
+- LIVE VERIFICATION (curl markers, before → after): /memberships 40,759B → 75,136B with "Per item, plainly." present + laundry-handover.png referenced + new title "Laundry Membership Plans & Dry Cleaning Prices in Lagos | Kozy Care"; home now carries the Kozy Circle strip + /memberships#pricing deep links; /services re-titled "Sneaker Restoration, Alterations & Atelier Care in Lagos" with plans pointer; nav pills confirmed in live HTML (<span class="sm:hidden">Plans</span> + <span class="hidden sm:inline">Membership</span>); recycled image asset serves HTTP 200 image/png (855KB).
+- VLM on LIVE screenshots (scripts/vlm_p64_live_qa.mjs → work/p64-vlm-live-reviews.txt): mobile 390px top bar = ONE tidy row, navy Plans pill matches the Sign in/Sign up family, nothing clipped, 9/10; desktop /memberships hero photo (laundry handover with branded K bag) visible + premium, 9/10. Screenshots: work/p64_live_{desktop_home,mobile_home,mobile_memberships,desktop_memberships}.png.
+- Told the owner: hard-refresh / incognito to bypass browser cache; both tokens should be rotated later (pasted repeatedly in chat); the token still cannot WRITE env vars, so VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY must be pasted by him in the Vercel dashboard (values in work/p61-vapid-keys.json).
+
+Stage Summary:
+- PHASE 64 IS LIVE ON KOZYCARE.NG: /memberships = Plans first + full per-item price list below (recycled footer photo in hero), nav = Membership → Sign in → Sign up in one pill family ("Plans" on mobile), /services = specialty care, mobile verified at 390px on the live site.
+- The owner was RIGHT all along: his tokens were valid; the blocker was a wrong validation method on my side. Deploy recipe is now proven and simple: restore .vercel/project.json → VERCEL_TOKEN=<owner token> npx -y vercel deploy --prod --yes.
+- Still open for the owner: VAPID keys in the dashboard (rider push), "Week 38" newsletter auto-sends Oct 8 09:00 Lagos (preview or delete), token rotation when convenient.
