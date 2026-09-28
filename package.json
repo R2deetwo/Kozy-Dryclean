@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev -p 3000 2>&1 | tee dev.log",
     "build": "prisma generate && next build",
-    "build:vercel": "prisma db push --accept-data-loss || echo '[db-push] schema sync FAILED — check the Supabase schema manually; continuing build' ; bun run build",
+    "build:vercel": "prisma migrate deploy || echo 'MIGRATE-DEPLOY FAILED - check _prisma_migrations on prod; continuing build' ; bun run build",
     "postinstall": "prisma generate",
     "start": "NODE_ENV=production bun .next/standalone/server.js 2>&1 | tee server.log",
     "lint": "eslint .",

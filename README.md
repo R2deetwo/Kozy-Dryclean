@@ -108,14 +108,28 @@ straight through the REST API:
 
 ```bash
 # 1. Commit + push to GitHub (main = the record of truth)
-# 2. Ship it:
-VERCEL_TOKEN=vcp_... python3 scripts/deploy_prod.py
-#    sha-per-file manifest → POST /v2/files → POST /v13/deployments
-#    (files as an ARRAY of {file, sha}) → poll READY → kozycare.ng updates.
+# 2. Ship it (CLI recipe — works today):
+VERCEL_TOKEN=vcp_... npx -y vercel deploy --prod --yes
+#    (needs .vercel/project.json restored; the REST direct-upload fallback
+#     lives in scripts/deploy_prod.py but its digest format is unresolved)
 ```
 
 - Vercel project: `kozy-dryclean` · build `bun run build:vercel`
-  (`prisma db push` + `next build` — the schema auto-syncs on every deploy).
+  (`prisma migrate deploy` + `next build` — schema changes ship as reviewed
+  migrations; the accept-data-loss `db push` era ended phase 71).
+
+### Database migrations (phase 71)
+
+- `prisma/migrations/20260928000000_init/` is the BASELINE — it matches the
+  live prod schema exactly (verified by an empty `migrate diff` before
+  baselining) and is marked applied on prod (`_prisma_migrations`).
+- Workflow: change `prisma/schema.prisma` → `npx prisma migrate dev --name x`
+  (local, generates + applies the migration) → commit BOTH files → deploy;
+  Vercel's `prisma migrate deploy` applies it via `DIRECT_URL`.
+- Never use `prisma db push` against prod again — it bypasses the migration
+  history and can accept data loss. (`db:push` stays in package.json as a
+  local-only escape hatch.)
+- Migration status: `DATABASE_URL=$DIRECT_URL npx prisma migrate status`.
 - Domains: `kozycare.ng` (primary) · `www.kozycare.ng` → apex (308) ·
   `kozy-dryclean.vercel.app` (legacy).
 - All secrets live in Vercel environment settings — never in the repository.
