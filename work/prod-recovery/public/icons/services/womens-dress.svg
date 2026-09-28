@@ -1,0 +1,10 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Dress (women's day dress — sleeveless, deep V-neck, gold waist belt, knee-length A-line) -->
+  <!-- Distinct from Ankara Gown (boat neck + short sleeves + outlined diamond tiles + straighter fit) -->
+  <!-- and from Lace / Aso-Ebi Gown (long sleeves + scoop neck + gold lace dots + floor length). -->
+  <path d="M12 5 L9.5 6 L8.5 8 L9.8 10.5 L11.5 13 L5.5 26 L26.5 26 L20.5 13 L22.2 10.5 L23.5 8 L22.5 6 L20 5 L16 11 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" fill="none"/>
+  <!-- Gold waist belt seam at the fitted waist -->
+  <line x1="11.5" y1="13" x2="20.5" y2="13" stroke="#D4AF37" strokeWidth="1.4" strokeLinecap="round"/>
+  <!-- Belt buckle dot -->
+  <circle cx="16" cy="13" r="0.9" fill="#D4AF37"/>
+</svg>

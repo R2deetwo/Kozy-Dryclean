@@ -1,0 +1,12 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Leather Shoes (loafer-style leather shoe side profile) -->
+  <!-- Smooth upper curve, no laces, distinctive loafer strap across vamp. Thin leather sole. -->
+  <!-- Leather shoe upper outline (smooth curve, loafer-style) -->
+  <path d="M3 21 L4 17 L7 15 L9 14 L18 14 L22 16 L25 18 L25 21 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Thin leather sole -->
+  <path d="M3 21 L25 21 L25 23 L3 23 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Loafer strap across vamp (distinctive leather-shoe cue, gold accent) -->
+  <path d="M10 16 L17 16" stroke="#D4AF37" strokeWidth="1.4" stroke-linecap="round"/>
+  <!-- Strap slit detail (small vertical line) -->
+  <line x1="13.5" y1="15" x2="13.5" y2="17" stroke="#D4AF37" strokeWidth="1" stroke-linecap="round"/>
+</svg>

@@ -1,0 +1,13 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Iro & Buba (two-piece: loose buba blouse + wrap-skirt iro) -->
+  <!-- Two visually distinct, separate-but-adjacent shapes. Iro has visible diagonal wrap fold. -->
+  <!-- BUBA (top): loose blouse with short dropped sleeves, boat neck -->
+  <path d="M12 4 L10 5 L6 7 L6 11 L10 11 L9 16 L23 16 L22 11 L26 11 L26 7 L22 5 L20 4 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <path d="M12 4 L20 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+  <!-- IRO (bottom): wrap skirt with diagonal fold line indicating the wrap overlap -->
+  <path d="M7 16 L25 16 L25 30 L7 30 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <!-- Diagonal fold line showing the wrap crossing -->
+  <path d="M16 16 L12 30" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+  <!-- Gold accent at the wrap crossing point -->
+  <circle cx="14" cy="20" r="0.9" fill="#D4AF37"/>
+</svg>

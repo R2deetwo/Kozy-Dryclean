@@ -1,0 +1,11 @@
+# Public landing page — allow indexing
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /driver
+Disallow: /portal
+Disallow: /api/
+Disallow: /payment/callback
+
+# Sitemap
+Sitemap: https://kozycare.ng/sitemap.xml

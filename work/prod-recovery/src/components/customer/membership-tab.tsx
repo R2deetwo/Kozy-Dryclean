@@ -1,0 +1,676 @@
+'use client'
+
+// =============================================================================
+// MembershipTab — the member's home inside the customer portal (phase 62)
+// =============================================================================
+// Shows the live plan, the usage meters for the current cycle / quarter /
+// year, and the one-tap member pickup booking (bag/box pickups + the tier's
+// included perk services). Non-members see a quiet join card instead.
+// =============================================================================
+
+import { useEffect, useMemo, useState } from 'react'
+import Link from 'next/link'
+import { useSession } from 'next-auth/react'
+import {
+  Sparkles,
+  Package,
+  RefreshCcw,
+  BedDouble,
+  Layers,
+  Sun,
+  Footprints,
+  CalendarClock,
+  ArrowRight,
+  Loader2,
+  ShieldCheck,
+  XCircle,
+  Undo2,
+  PlusCircle,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { toast } from '@/hooks/use-toast'
+import { formatNaira, formatDate } from '@/lib/types'
+import {
+  useMyMembership,
+  useMembershipCancel,
+  useMembershipPickup,
+  useMembershipPlans,
+} from '@/lib/hooks'
+
+const TIME_SLOTS = [
+  '08:00 - 09:00',
+  '09:00 - 10:00',
+  '09:00 - 10:00',
+  '10:00 - 11:00',
+  '11:00 - 12:00',
+  '13:00 - 14:00',
+  '14:00 - 15:00',
+  '15:00 - 16:00',
+  '16:00 - 17:00',
+].filter((v, i, a) => a.indexOf(v) === i)
+
+function tomorrowISO(): string {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return d.toISOString().slice(0, 10)
+}
+
+export function MembershipTab() {
+  const { data, isLoading, refetch } = useMyMembership()
+  const cancelMutation = useMembershipCancel()
+  const [booking, setBooking] = useState<'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | null>(null)
+  const [confirmCancel, setConfirmCancel] = useState(false)
+  // Prefill the pickup address from the profile the booking wizard also
+  // reads (best-effort — an empty field is a perfectly good prompt).
+  const [defaultAddress, setDefaultAddress] = useState('')
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/users/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.user?.address) setDefaultAddress(d.user.address)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const membership = data?.membership
+  const usage = data?.usage
+  const plan = membership?.plan
+  const status = data?.effectiveStatus ?? membership?.status ?? 'PENDING_ACTIVATION'
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center py-10">
+        <Loader2 className="h-6 w-6 animate-spin text-navy-300" />
+      </div>
+    )
+  }
+
+  // ----- Not a member (yet) — a quiet, classy invitation -----
+  if (!membership) {
+    return <JoinCard />
+  }
+
+  const statusTone: Record<string, string> = {
+    ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    EXPIRING: 'bg-amber-50 text-amber-700 border-amber-200',
+    PAST_DUE: 'bg-amber-50 text-amber-700 border-amber-200',
+    PENDING_ACTIVATION: 'bg-gold-50 text-navy border-gold-300',
+    LAPSED: 'bg-navy-50 text-navy-300 border-navy-200',
+    CANCELLED: 'bg-navy-50 text-navy-300 border-navy-200',
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* ===== The membership card ===== */}
+      <Card className="overflow-hidden border-navy-100 shadow-navy">
+        <div className="bg-navy-gradient px-5 py-5 text-white sm:px-6">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-gold-400" />
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-300">
+                  Kozy Circle · {plan?.name ?? 'Membership'}
+                </p>
+              </div>
+              <p className="mt-1.5 font-serif text-2xl font-semibold">
+                {formatNaira(membership.pricePaid || plan?.priceMonthly || 0)}
+                <span className="text-sm font-normal text-navy-100/70"> / month</span>
+              </p>
+            </div>
+            <div className="flex flex-col items-end gap-2">
+              <Badge variant="outline" className={`rounded-full border ${statusTone[status] ?? statusTone.ACTIVE} bg-white/95`}>
+                {status === 'EXPIRING'
+                  ? 'Ending soon — not renewing'
+                  : status === 'PAST_DUE'
+                    ? 'Renewal pending'
+                    : status === 'PENDING_ACTIVATION'
+                      ? 'Awaiting payment verification'
+                      : 'Active'}
+              </Badge>
+            </div>
+          </div>
+
+          {membership.periodEnd && status !== 'PENDING_ACTIVATION' && (
+            <p className="mt-3 flex items-center gap-1.5 text-xs text-navy-100/80">
+              <CalendarClock className="h-3.5 w-3.5 text-gold-400" />
+              {membership.cancelAtPeriodEnd
+                ? `Runs until ${formatDate(membership.periodEnd)} — then rests`
+                : `Renews ${formatDate(membership.periodEnd)}`}
+            </p>
+          )}
+          {status === 'PENDING_ACTIVATION' && (
+            <p className="mt-3 text-xs leading-relaxed text-navy-100/80">
+              We received your membership — the moment your payment is verified, your month starts
+              and your rider schedules the kit hand-over. (Card payments verify themselves
+              instantly; transfers take a human glance.)
+            </p>
+          )}
+        </div>
+
+        {/* ===== Usage meters ===== */}
+        {usage && plan && (
+          <CardContent className="p-5 sm:p-6">
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
+              This month
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <UsageMeter
+                icon={Package}
+                label={`${plan.unitName} pickups`}
+                used={usage.unitsUsed}
+                total={plan.includedUnits}
+                suffix={usage.unitsRemaining === 0 && usage.extraRemaining > 0 ? ` · ${usage.extraRemaining} extra left` : undefined}
+              />
+              {plan.shoesPerMonth > 0 && (
+                <UsageMeter
+                  icon={Footprints}
+                  label="Shoe cleans (this month)"
+                  used={usage.shoesUsed}
+                  total={plan.shoesPerMonth}
+                />
+              )}
+              {plan.duvetsPerQuarter > 0 && (
+                <UsageMeter
+                  icon={BedDouble}
+                  label="Duvet washes (this quarter)"
+                  used={usage.duvetsUsed}
+                  total={plan.duvetsPerQuarter}
+                />
+              )}
+              {plan.curtainsPerQuarter > 0 && (
+                <UsageMeter
+                  icon={Layers}
+                  label="Curtain care (this quarter)"
+                  used={usage.curtainsUsed}
+                  total={plan.curtainsPerQuarter}
+                />
+              )}
+              {plan.springCleanPerYear > 0 && (
+                <UsageMeter
+                  icon={Sun}
+                  label="Spring clean (this year)"
+                  used={usage.springCleanUsed}
+                  total={plan.springCleanPerYear}
+                />
+              )}
+            </div>
+
+            {/* ===== Book pickups / perks ===== */}
+            {status !== 'LAPSED' && status !== 'CANCELLED' && (
+              <div className="mt-5 grid gap-2 sm:grid-cols-2">
+                <Button
+                  onClick={() => setBooking('unit')}
+                  disabled={status === 'PENDING_ACTIVATION'}
+                  className="rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
+                >
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  Book a {plan.unitKind} pickup
+                </Button>
+                <div className="flex flex-wrap gap-2">
+                  {plan.shoesPerMonth > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBooking('shoes')}
+                      disabled={status === 'PENDING_ACTIVATION' || usage.shoesRemaining === 0}
+                      className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+                    >
+                      <Footprints className="mr-1.5 h-3.5 w-3.5" /> Shoe clean
+                      {usage.shoesRemaining === 0 && ' (month used)'}
+                    </Button>
+                  )}
+                  {plan.duvetsPerQuarter > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBooking('duvet')}
+                      disabled={status === 'PENDING_ACTIVATION' || usage.duvetsRemaining === 0}
+                      className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+                    >
+                      <BedDouble className="mr-1.5 h-3.5 w-3.5" /> Duvet wash
+                      {usage.duvetsRemaining === 0 && ' (quarter used)'}
+                    </Button>
+                  )}
+                  {plan.curtainsPerQuarter > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBooking('curtain')}
+                      disabled={status === 'PENDING_ACTIVATION' || usage.curtainsRemaining === 0}
+                      className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+                    >
+                      <Layers className="mr-1.5 h-3.5 w-3.5" /> Curtain care
+                      {usage.curtainsRemaining === 0 && ' (quarter used)'}
+                    </Button>
+                  )}
+                  {plan.springCleanPerYear > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBooking('spring-clean')}
+                      disabled={status === 'PENDING_ACTIVATION' || usage.springCleanRemaining === 0}
+                      className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+                    >
+                      <Sun className="mr-1.5 h-3.5 w-3.5" /> Spring clean
+                      {usage.springCleanRemaining === 0 && ' (used this year)'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ===== Kit state ===== */}
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-linen-100 p-3 text-xs text-navy-300">
+              <ShieldCheck className="h-4 w-4 shrink-0 text-gold-600" />
+              {membership.kitState === 'PENDING_DELIVERY'
+                ? `Your ${plan.unitName} rides along with your first member pickup — hand-over on the spot.`
+                : membership.kitState === 'WITH_MEMBER'
+                  ? `Your ${plan.unitName} is with you. Keep it coming back full — that's the whole system.`
+                  : 'Your kit has been returned. Thank you for closing the loop cleanly.'}
+            </div>
+
+            {/* ===== Cancel / undo ===== */}
+            {status !== 'PENDING_ACTIVATION' && status !== 'LAPSED' && status !== 'CANCELLED' && (
+              <div className="mt-4 text-right">
+                {membership.cancelAtPeriodEnd ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={async () => {
+                      try {
+                        await cancelMutation.mutateAsync('cancel-undo')
+                        toast({
+                          title: 'Glad you stayed',
+                          description: 'Your membership will keep renewing as before.',
+                        })
+                      } catch (e: any) {
+                        toast({ title: 'Could not undo', description: e?.message, variant: 'destructive' })
+                      }
+                    }}
+                    className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                  >
+                    <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo — keep my membership
+                  </Button>
+                ) : (
+                  <button
+                    onClick={() => setConfirmCancel(true)}
+                    className="text-xs text-navy-300 underline-offset-2 transition hover:text-rose-500 hover:underline"
+                  >
+                    Cancel membership (runs to month end)
+                  </button>
+                )}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* ===== Booking dialog ===== */}
+      {booking && plan && (
+        <MemberPickupDialog
+          kind={booking}
+          plan={{
+            unitName: plan.unitName,
+            unitKind: plan.unitKind,
+            extraUnitPrice: plan.extraUnitPrice,
+            maxExtraUnits: plan.maxExtraUnits,
+          }}
+          defaultAddress={defaultAddress}
+          remaining={
+            booking === 'unit'
+              ? (usage?.unitsRemaining ?? 0) + (usage?.extraRemaining ?? 0)
+              : booking === 'shoes'
+                ? usage?.shoesRemaining ?? 0
+                : booking === 'duvet'
+                  ? usage?.duvetsRemaining ?? 0
+                  : booking === 'curtain'
+                    ? usage?.curtainsRemaining ?? 0
+                    : usage?.springCleanRemaining ?? 0
+          }
+          onClose={() => setBooking(null)}
+          onBooked={() => {
+            setBooking(null)
+            refetch()
+          }}
+        />
+      )}
+
+      {/* ===== Cancel confirm ===== */}
+      <Dialog open={confirmCancel} onOpenChange={(o) => !o && setConfirmCancel(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-lg text-navy">Rest your membership?</DialogTitle>
+            <DialogDescription>
+              It stays fully active until {membership.periodEnd ? formatDate(membership.periodEnd) : 'the end of your paid month'} —
+              every pickup, every perk. Then it simply does not renew. Your {plan?.unitName ?? 'kit'}{' '}
+              comes home with the final delivery.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmCancel(false)}
+              className="flex-1 rounded-full border-navy-200 text-navy"
+            >
+              Keep it
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                try {
+                  await cancelMutation.mutateAsync('cancel')
+                  setConfirmCancel(false)
+                  toast({
+                    title: 'Membership set to rest',
+                    description: 'Active to the end of your paid month — no further charges.',
+                  })
+                } catch (e: any) {
+                  toast({ title: 'Could not cancel', description: e?.message, variant: 'destructive' })
+                }
+              }}
+              className="flex-1 rounded-full"
+            >
+              <XCircle className="mr-1.5 h-4 w-4" /> Cancel
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// =====================================================
+// Usage meter — a quiet progress row
+// =====================================================
+function UsageMeter({
+  icon: Icon,
+  label,
+  used,
+  total,
+  suffix,
+}: {
+  icon: any
+  label: string
+  used: number
+  total: number
+  suffix?: string
+}) {
+  const pct = total > 0 ? Math.min(100, (used / total) * 100) : 100
+  return (
+    <div className="rounded-xl border border-navy-100 bg-white p-3">
+      <div className="flex items-center justify-between">
+        <span className="flex items-center gap-1.5 text-xs font-medium text-navy">
+          <Icon className="h-3.5 w-3.5 text-gold-600" /> {label}
+        </span>
+        <span className="font-mono text-xs text-navy-300">
+          {used}/{total}
+        </span>
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-navy-100">
+        <div
+          className="h-full rounded-full bg-gold-gradient transition-all"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {suffix && <p className="mt-1.5 text-[10px] text-navy-300">{suffix}</p>}
+    </div>
+  )
+}
+
+// =====================================================
+// Member pickup dialog — one-tap booking
+// =====================================================
+function MemberPickupDialog({
+  kind,
+  plan,
+  defaultAddress,
+  remaining,
+  onClose,
+  onBooked,
+}: {
+  kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes'
+  plan: { unitName: string; unitKind: string; extraUnitPrice: number; maxExtraUnits: number }
+  defaultAddress: string
+  remaining: number
+  onClose: () => void
+  onBooked: () => void
+}) {
+  const pickup = useMembershipPickup()
+  const [address, setAddress] = useState(defaultAddress)
+  const [date, setDate] = useState(tomorrowISO())
+  const [slot, setSlot] = useState(TIME_SLOTS[1])
+  const [count, setCount] = useState(1)
+  const [note, setNote] = useState('')
+
+  const kindCopy: Record<string, { title: string; desc: string; countLabel?: string; max: number }> = {
+    unit: {
+      title: `Book a ${plan.unitKind} pickup`,
+      desc: `Leave your ${plan.unitName} ready — the rider collects, and it returns washed, folded and pressed.`,
+      countLabel: `${plan.unitName}s this pickup`,
+      max: Math.max(1, Math.min(plan.maxExtraUnits + 1, remaining)),
+    },
+    shoes: {
+      title: 'Book your shoe clean',
+      desc: 'Included with your plan this month — sneakers and casual shoes hand-cleaned, deodorized and returned. (Suede, leather and embellished pairs use our specialist service with your member discount.)',
+      countLabel: 'Pairs this pickup',
+      max: Math.max(1, Math.min(4, remaining)),
+    },
+    duvet: {
+      title: 'Book your duvet wash',
+      desc: 'Included with your plan this quarter — freshened, aired and returned.',
+      countLabel: 'Duvets',
+      max: Math.max(1, remaining),
+    },
+    curtain: {
+      title: 'Book curtain care',
+      desc: 'Included with your plan this quarter — taken down, treated, pressed and rehung-ready.',
+      countLabel: 'Panels',
+      max: Math.max(1, remaining),
+    },
+    'spring-clean': {
+      title: 'Book the spring clean',
+      desc: 'Your once-a-year deep service — rugs and heavy household materials, collected and treated.',
+      max: 1,
+    },
+  }
+  const copy = kindCopy[kind]
+  const includedLeft = kind === 'unit' ? Math.max(0, remaining - plan.maxExtraUnits) : remaining
+  const extras = kind === 'unit' ? Math.max(0, count - Math.min(count, includedLeft)) : 0
+  const extraCharge = extras * plan.extraUnitPrice
+
+  const onBook = async () => {
+    if (!address.trim() || address.trim().length < 8) {
+      toast({
+        title: 'Pickup address needed',
+        description: 'Where should the rider meet you? (house number, street, area)',
+        variant: 'destructive',
+      })
+      return
+    }
+    try {
+      const res = await pickup.mutateAsync({
+        kind,
+        count: kind === 'spring-clean' ? 1 : count,
+        pickupAddress: address.trim(),
+        pickupDate: new Date(date + 'T00:00:00').toISOString(),
+        pickupTimeSlot: slot,
+        ...(note.trim() ? { note: note.trim() } : {}),
+      })
+      onBooked()
+      toast({
+        title: res.duplicate ? 'Already booked' : 'Pickup booked',
+        description:
+          extraCharge > 0
+            ? `Scheduled for ${formatDate(res.order.pickupDate)} · ${slot}. ${extras} extra ${plan.unitKind}${extras === 1 ? '' : 's'} — ${formatNaira(extraCharge)} pays with this order.`
+            : `Scheduled for ${formatDate(res.order.pickupDate)} · ${slot} — covered by your plan, nothing to pay.`,
+      })
+    } catch (e: any) {
+      toast({
+        title: 'Could not book',
+        description: e?.message ?? 'Please try again in a moment.',
+        variant: 'destructive',
+      })
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-lg text-navy">{copy.title}</DialogTitle>
+          <DialogDescription>{copy.desc}</DialogDescription>
+        </DialogHeader>
+
+        <div className="mt-1 space-y-3">
+          {copy.countLabel && copy.max > 1 && (
+            <div>
+              <label className="text-xs font-medium text-navy">{copy.countLabel}</label>
+              <div className="mt-1.5 flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCount((c) => Math.max(1, c - 1))}
+                  className="h-8 w-8 rounded-full p-0"
+                >
+                  −
+                </Button>
+                <span className="w-8 text-center font-mono text-sm font-semibold text-navy">{count}</span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCount((c) => Math.min(copy.max, c + 1))}
+                  className="h-8 w-8 rounded-full p-0"
+                >
+                  +
+                </Button>
+                {kind === 'unit' && extras > 0 && (
+                  <span className="text-[11px] text-amber-700">
+                    {extras} extra × {formatNaira(plan.extraUnitPrice)}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div>
+            <label className="text-xs font-medium text-navy">Pickup address</label>
+            <textarea
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="House number, street, area, landmark"
+              rows={2}
+              className="mt-1.5 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm text-navy placeholder:text-navy-300 focus:border-gold-400 focus:outline-none"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs font-medium text-navy">Date</label>
+              <input
+                type="date"
+                value={date}
+                min={tomorrowISO()}
+                onChange={(e) => setDate(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm text-navy focus:border-gold-400 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-navy">Window</label>
+              <select
+                value={slot}
+                onChange={(e) => setSlot(e.target.value)}
+                className="mt-1.5 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm text-navy focus:border-gold-400 focus:outline-none"
+              >
+                {TIME_SLOTS.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs font-medium text-navy">Note for the rider (optional)</label>
+            <input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="Gate code, call on arrival…"
+              className="mt-1.5 w-full rounded-xl border border-navy-200 bg-white px-3 py-2 text-sm text-navy placeholder:text-navy-300 focus:border-gold-400 focus:outline-none"
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <p className="text-xs text-navy-300">
+            {extraCharge > 0 ? (
+              <>
+                Extras on this pickup: <strong className="text-navy">{formatNaira(extraCharge)}</strong>{' '}
+                (payable with the order)
+              </>
+            ) : (
+              'Covered by your plan — nothing to pay.'
+            )}
+          </p>
+        </div>
+        <Button
+          onClick={onBook}
+          disabled={pickup.isPending}
+          className="mt-2 w-full rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
+        >
+          {pickup.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Booking…
+            </>
+          ) : (
+            <>
+              <PlusCircle className="mr-2 h-4 w-4" /> Book it
+            </>
+          )}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// =====================================================
+// Join card — for portal visitors without a membership
+// =====================================================
+function JoinCard() {
+  const { data: plans } = useMembershipPlans(true)
+  const cheapest = useMemo(
+    () =>
+      (plans ?? [])
+        .filter((p) => p.isActive)
+        .sort((a, b) => a.priceMonthly - b.priceMonthly)[0],
+    [plans]
+  )
+
+  return (
+    <Card className="border-navy-100 shadow-navy">
+      <CardContent className="p-6 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-navy-800 text-gold-300">
+          <Sparkles className="h-6 w-6" />
+        </div>
+        <p className="mt-3 font-serif text-xl font-semibold text-navy">The Kozy Circle</p>
+        <p className="mx-auto mt-2 max-w-md text-sm leading-relaxed text-navy-300">
+          Laundry on a rhythm — a Kozy Bag or Box collected every week, free pickup and delivery,
+          and a member discount on everything else.
+          {cheapest ? ` Plans start at ${formatNaira(cheapest.priceMonthly)} a month.` : ''}
+        </p>
+        <Link href="/memberships" className="mt-4 inline-block">
+          <Button className="rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90">
+            Explore the plans <ArrowRight className="ml-2 h-4 w-4" />
+          </Button>
+        </Link>
+      </CardContent>
+    </Card>
+  )
+}

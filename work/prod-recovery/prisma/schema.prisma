@@ -1,0 +1,1134 @@
+// Kozy Drycleaning and Laundry Services - Database Schema
+// Implements the relational structure described in the master prompt.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// =====================================================
+// USERS — authentication & RBAC
+// =====================================================
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  phone         String
+  address       String?
+  role          Role     @default(B2C)
+  company       String?
+  // Auth fields
+  passwordHash  String?
+  emailVerified DateTime?
+  // Staff-access lifecycle (phase 31): 'ACTIVE' | 'PAUSED' | 'REVOKED'.
+  // Soft state — pausing or revoking a staff member never destroys their
+  // audit trail (StatusEvent actor links, payment verifier trail). Only
+  // console roles (ADMIN/STAFF/DRIVER) are policed against this field; a
+  // customer's value is ignored. Enforced at login (authorize rejects) and
+  // on every console API call via the cached live check in src/lib/auth.ts.
+  accessStatus  String   @default("ACTIVE")
+  // Phase 32: set when an admin invites a staff member (or resets their
+  // password) — the credentials email is the only place the system password
+  // appears, so the console asks for a personally chosen password at the
+  // next sign-in and clears this flag. Read by /api/users/me (the console
+  // heartbeat) and cleared by POST /api/users/me/password.
+  mustChangePassword Boolean @default(false)
+  // ----- Marketing (phase 36) -----
+  // Master opt-out for marketing/newsletter emails. Every campaign send
+  // excludes users with marketingOptIn=false — the one-click unsubscribe
+  // link in every campaign email clears this flag. Transactional emails
+  // (booking confirmations, payment verification, password resets) are
+  // NEVER affected by this flag.
+  marketingOptIn  Boolean  @default(true)
+  // Discount tracking
+  signupDiscountUsed Boolean @default(false)
+  // ----- Milestones & referrals (phase 52 / loyalty since phase 53) -----
+  // Number of service-milestone appreciation emails already sent to this
+  // customer (0 = none, 1 = the first ten-wash card, 2 = the second...).
+  // Advances via compare-and-set at the moment each milestone email is sent,
+  // so a dragged-back and re-delivered order can never re-trigger it, and
+  // loyal customers who crossed the line before the feature existed get
+  // their moment on the NEXT delivery instead of never.
+  lastMilestoneSent Int     @default(0)
+  // Referral thank-you credit balance (naira). Granted when a friend's
+  // first referred order is DELIVERED; applied automatically (and only) to
+  // this customer's next retail order at checkout. The remainder survives
+  // if the order was smaller than the balance.
+  referralCredit    Float   @default(0)
+  // ----- Rider dispatch (phase 69) -----
+  // FULL_TIME riders are auto-assigned new pickups at booking (the system
+  // picks the best-placed one and notifies them instantly); PART_TIME riders
+  // work the broadcast pool — every new pickup pings them and the first to
+  // claim it gets the stop. Set from Team → Riders in the console. Null for
+  // non-drivers and legacy rider rows (treated as PART_TIME).
+  employmentType    String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  orders             Order[]
+  payments           Payment[]
+  drivenOrders       Order[]             @relation("DriverOrders")
+  verificationTokens VerificationToken[]
+  statusEvents       StatusEvent[]
+  // Reviews authored by this user (as customer)
+  reviews            Review[]
+  // Reviews this user has approved (as admin)
+  approvedReviews    Review[]            @relation("ReviewApprover")
+  // Order anomalies authored by this user (phase 32 — admin eyes only)
+  anomaliesAuthored  OrderAnomaly[]      @relation("AnomalyActor")
+  // Last known GPS position (rider geofencing) — one row per driver
+  driverLocation     DriverLocation?
+  // ----- Rider incidents (phase 55) -----
+  // Problems this rider reported mid-route (damage / loss / theft / …).
+  incidentsReported  RiderIncident[]    @relation("RiderIncidents")
+  // ----- Referrals (phase 52) -----
+  // This customer's personal referral code (one max — created when they
+  // reach the 10-order service milestone).
+  referralCode      ReferralCode?
+  // ----- Rider recruitment (phase 54) -----
+  // DRIVER account created when a rider application is approved.
+  riderApplications     RiderApplication[]      @relation("RiderApplications")
+  // Applications this admin reviewed/decided (audit trail).
+  reviewedRiderApps     RiderApplication[]      @relation("RiderApplicationReviews")
+  // ----- Rider push subscriptions (phase 61) -----
+  // Each browser/device where this rider turned on stop notifications.
+  // A rider may have several (phone + tablet); all are pinged on assignment.
+  pushSubscriptions   PushSubscription[]      @relation("PushSubscriptions")
+  // ----- Branch assignment (phase 62) -----
+  // For DRIVER accounts: their home branch (Ogombo / Chevron Drive). Used by
+  // dispatch suggestions as a branch-affinity bonus. Plain scalar string —
+  // resolved via the branches lookup, deliberately not a foreign key.
+  branchId            String?
+  // ----- Memberships (phase 62) -----
+  // The customer's Kozy Circle memberships (history preserved — one live,
+  // cancelled/lapsed ones remain for the record).
+  subscriptions       Subscription[]
+}
+
+enum Role {
+  ADMIN
+  // Phase 31: back-office staff (invited by a super admin). Signs into the
+  // SAME Atelier Console as admins, restricted to the operational side
+  // (orders, payment verification, customers, notifications, feedback) —
+  // never pricing, the discount engine, finances, reviews or staff admin.
+  // Only admins can create/pause/revoke STAFF accounts (see /api/staff).
+  STAFF
+  DRIVER
+  B2C
+  B2B
+}
+
+// =====================================================
+// ORDERS — central hub for laundry batch lifecycle
+// =====================================================
+model Order {
+  id                String         @id @default(cuid())
+  // Human-readable ID like #KZ-1024
+  orderNumber       String         @unique
+  userId            String
+  driverId          String?
+  user              User           @relation(fields: [userId], references: [id])
+  driver            User?          @relation("DriverOrders", fields: [driverId], references: [id])
+  status            OrderStatus    @default(REQUESTED)
+  type              OrderType
+  // For B2B: weight (kg) entered by admin
+  finalWeight       Float?
+  // Computed total in naira
+  totalPrice        Float?
+  // B2C condition-capture guarantee
+  guaranteeActive   Boolean        @default(false)
+  // Turnaround tier: STANDARD (3–5 days) / EXPRESS_48 / EXPRESS_24.
+  // Express surcharge is baked into totalPrice at creation time.
+  serviceSpeed      String         @default("STANDARD")
+  // Mode of wash chosen by the customer (retail orders): HANDWASH carries a
+  // per-item surcharge, MACHINE is standard. Null for KG/corporate orders.
+  modeOfWash        String?
+  // Offer code redeemed at checkout (e.g. HOTEL15 for hotel guests).
+  // Null when no code was used.
+  promoCode         String?
+  // Delivery fee charged on this order (naira). 0 when the order qualified
+  // for the free first delivery; the going rate for subsequent deliveries
+  // is admin-configurable in AppSetting (delivery_fee).
+  deliveryFee       Float?  @default(0)
+  // Per-item manifest snapshot for B2C, JSON-stringified
+  itemsManifest     String?
+  // Alterations (Phase 17): the customer's description of the alteration
+  // work, captured at booking ("navy trousers — take the waist in 2 inches").
+  // Required whenever the manifest contains an alterations item — the
+  // seamstress works from this note; riders never measure at the door.
+  alterationNotes   String?
+  // Logistics
+  pickupAddress     String
+  pickupDate        DateTime
+  pickupTimeSlot    String
+  deliveryAddress   String?
+  deliveryDate      DateTime?
+  // Audit timestamps for the pipeline
+  pickedUpAt        DateTime?
+  atStationAt       DateTime?
+  processingAt      DateTime?
+  finishingAt       DateTime?
+  outForDeliveryAt  DateTime?
+  deliveredAt       DateTime?
+  // ----- Rider dispatch audit (phase 69) -----
+  // assignedAt = when a full-time rider was auto-assigned (or a claim landed).
+  // acceptedAt = when that rider acknowledged the assignment / tapped Accept —
+  // the gap between the two is the rider's response time, which feeds the
+  // response-time leaderboard and the monthly bonus pool conversation.
+  assignedAt        DateTime?
+  acceptedAt        DateTime?
+  // ----- Stage-email dedup (phase 24, client request) -----
+  // Highest PIPELINE_STAGES index the customer has ALREADY been emailed
+  // about (the booking-confirmation email counts as stage 0 "Requested").
+  // A status email is sent ONLY when the new stage index is strictly
+  // greater than this value — so dragging a Kanban card backwards and
+  // forwards again can never re-send an earlier stage's email, and no
+  // customer ever receives an email implying their items went backwards.
+  lastNotifiedStage Int            @default(0)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  // ----- Membership (phase 62: The Kozy Circle) -----
+  // The subscription this order was placed against (member bag/box pickups
+  // and included perk services). Plain scalar — resolved client-side via the
+  // subscriptions API, same lightweight pattern as the branch fields below.
+  subscriptionId    String?
+  // ----- Branch routing (phase 62: Ogombo / Chevron Drive) -----
+  // The branch this order's pickup is assigned to (server-side at creation
+  // from the pickup address's service zone; admins can re-route). Plain
+  // scalar string, resolved via the branches lookup — deliberately NOT a
+  // foreign key so branch rows can be edited without touching order history.
+  branchId          String?
+  // ----- Kozy Network fulfillment (phase 62) -----
+  // Set when an approved network partner (an independent operator running
+  // under the Kozy brand) processes this order instead of an in-house branch.
+  // Revenue-share statements derive from delivered orders carrying this id.
+  fulfilledByPartnerId String?
+
+  media             GarmentMedia[]
+  payments          Payment[]
+  statusEvents      StatusEvent[]
+  // Odd-movement flags (phase 32) — visible to ADMINS only, never staff
+  anomalies         OrderAnomaly[]
+  // Rider-reported problems on this order (phase 55 — admin eyes only;
+  // the customer-facing remedy is communicated separately)
+  riderIncidents    RiderIncident[]
+  // Customer feedback (one-to-one — one review per order)
+  review            Review?
+  // Phase 53 — the loyalty offer ("after 10 washes, the 11th is free"):
+  // set when this order was placed as the customer's earned complimentary
+  // service (they had completed 10 paid services at booking time). A
+  // delivered complimentary order does NOT count as a punch on the next
+  // card — only paid services count toward the next ten.
+  loyaltyFree       Boolean        @default(false)
+  // Phase 52: set when this order was placed with a friend's referral code
+  // (first order only) — the thank-you credit grant hangs off this row.
+  referralRedemption ReferralRedemption?
+  // Coupons redeemed on this order (phase 36 — usually 0 or 1)
+  couponUsages      DiscountUsage[]
+
+  @@index([userId])
+  @@index([driverId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([orderNumber])
+}
+
+enum OrderStatus {
+  REQUESTED
+  PAYMENT_PENDING_VERIFICATION
+  PAYMENT_VERIFIED
+  PICKED_UP
+  AT_STATION
+  PROCESSING
+  FINISHING
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderType {
+  ITEM
+  KG
+}
+
+// =====================================================
+// NOTIFICATION_EVENT — in-app operations feed for the admins
+// =====================================================
+// Every admin alert (new signup, new order, transfer pending, feedback,
+// rider application, test send) is recorded here at the same moment the
+// alert emails go out, WITH the per-recipient delivery result. This gives
+// the business owner an in-app record that survives spam-folder mishaps:
+// even if an email is junk-mailed, the event — and whether Brevo accepted
+// the send — is visible in Admin → Notifications.
+model NotificationEvent {
+  id          String    @id @default(cuid())
+  // NEW_SIGNUP | NEW_ORDER | TRANSFER_PENDING | FEEDBACK | RIDER_APPLICATION | TEST
+  type        String
+  title       String
+  body        String    @db.Text
+  // JSON payload for deep links / details (orderNumber, userEmail, ...)
+  data        String?   @db.Text
+  // Admin console link (e.g. "kanban", "payments")
+  linkTab     String?
+  // JSON array of alert recipients attempted
+  recipients  String?   @db.Text
+  // NONE | DISABLED | SENT | PARTIAL | FAILED — email delivery outcome
+  emailStatus String    @default("NONE")
+  // Per-recipient results + error detail, JSON
+  emailDetail String?   @db.Text
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([readAt])
+  @@index([type])
+}
+
+// =====================================================
+// GARMENT_MEDIA — B2C condition-capture photos
+// =====================================================
+model GarmentMedia {
+  id        String   @id @default(cuid())
+  orderId   String
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  imageUrl  String
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@index([orderId])
+}
+
+// =====================================================
+// STAGED PHOTOS (phase 51) — pre-order upload staging
+// =====================================================
+// Condition photos used to ride along INSIDE the order POST body as base64
+// data URLs, which capped uploads at 6 photos (Vercel's 4.5MB request limit
+// would reject a 30-photo basket). Now the wizard uploads each compressed
+// photo to /api/media/stage the moment it is selected; the order POST only
+// references the staged IDs, and this table holds them until the order is
+// created (the rows are then moved into GarmentMedia and deleted here).
+//
+// RETENTION: unclaimed rows are purged 24h after createdAt by the same
+// sweep that expires GarmentMedia 24h after delivery (lib/media.ts).
+model StagedPhoto {
+  id        String   @id @default(cuid())
+  // Client-generated scoping token: only an order POST presenting BOTH the
+  // id AND this token can claim the row (ids alone are unguessable cuids,
+  // the token is cheap defence in depth).
+  token     String
+  // Compact JPEG data URL (adaptive client compression, ~150-200KB each)
+  data      String
+  // Byte length of the data URL for quick size telemetry
+  bytes     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([createdAt])
+}
+
+// =====================================================
+// PAYMENTS — manual transfer receipts + Paystack hooks
+// =====================================================
+model Payment {
+  id          String          @id @default(cuid())
+  orderId     String
+  order       Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  amount      Float
+  method      PaymentMethod
+  status      PaymentStatus   @default(PENDING)
+  // URL to uploaded receipt screenshot (manual flow)
+  receiptUrl  String?
+  // Paystack dedicated virtual account reference
+  paystackRef String?
+  verifiedAt  DateTime?
+  verifiedById String?
+  verifier    User?           @relation(fields: [verifiedById], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+  @@index([paystackRef])
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  PAYSTACK
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+// =====================================================
+// STATUS_EVENT — audit trail for the order pipeline
+// =====================================================
+model StatusEvent {
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  actorId   String?
+  actor      User?       @relation(fields: [actorId], references: [id])
+  createdAt DateTime    @default(now())
+
+  @@index([orderId])
+  @@index([actorId])
+}
+
+// =====================================================
+// ORDER ANOMALY (phase 32) — odd movements on the kanban, seen by
+// super admins only. Staff never read this table through any API.
+// =====================================================
+// Raised server-side when a STAFF account moves an order oddly or attempts
+// a blocked/destructive action:
+//   BACKWARD_MOVE    — pipeline regression (e.g. Processing → Requested)
+//   STAGE_SKIP       — forward jump past an intermediate stage
+//   UNPAID_DELIVERY  — order moved to Delivered with no VERIFIED payment
+//   BLOCKED_ACTION   — attempted price override / cancel / verified-payment
+//                      edit / payment-claim deletion (rejected with 403)
+// The point (client directive): staff must not be able to destroy records
+// or hide that money has come in "without approval" — every such attempt,
+// successful or blocked, leaves a flag the OWNER can see and the staff
+// member cannot.
+model OrderAnomaly {
+  id         String    @id @default(cuid())
+  orderId    String
+  order      Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  kind       String
+  fromStatus String?
+  toStatus   String?
+  actorId    String?
+  actor      User?     @relation("AnomalyActor", fields: [actorId], references: [id])
+  // Human sentence, e.g. "Amaka moved #KZ-123 Processing → Requested"
+  detail     String?
+  createdAt  DateTime  @default(now())
+
+  @@index([orderId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+// =====================================================
+// VERIFICATION_TOKEN — email verification flow
+// =====================================================
+model VerificationToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expires   DateTime
+  createdAt DateTime @default(now())
+}
+
+// =====================================================
+// DISCOUNT — admin-managed discounts & promo coupons
+// =====================================================
+// Phase 36: the discount engine grew coupon powers. The model keeps its
+// original role (percentage policy rows + the HOTEL15-style first-order
+// offer codes) and now also carries full coupon rules. Checkout pricing
+// (src/app/api/orders) remains the single source of truth — the admin
+// console and the public validate endpoint share the same rule checks
+// through src/lib/marketing.ts.
+//
+// appliesTo semantics:
+//   ALL         — any customer, any order (a general coupon)
+//   SIGNUP      — NOT a coupon: an on/off gate row for the standard
+//                 first-order discount (percentage comes from AppSetting)
+//   FIRST_ORDER — valid only on the customer's first order (hotel/corporate
+//                 offer codes)
+//   B2C / B2B   — retail-only / corporate-only coupons
+model Discount {
+  id          String   @id @default(cuid())
+  name        String   // "Signup Discount", "Weekend Promo", etc.
+  code        String?  @unique // optional promo code
+  type        String   @default("PERCENTAGE") // PERCENTAGE, FIXED
+  value       Float    // 5 = 5% or 500 = ₦500
+  active      Boolean  @default(true)
+  appliesTo   String   @default("ALL") // ALL, SIGNUP, FIRST_ORDER, B2C, B2B
+  description String?
+  // ----- Coupon rules (phase 36; null/0 = no restriction) -----
+  // Minimum service subtotal (₦) the basket must reach to use the code.
+  minOrderValue  Float?
+  // Cap on the discount amount (₦) for PERCENTAGE coupons.
+  maxDiscount    Float?
+  // Total redemptions allowed across all customers (null = unlimited).
+  maxUsesTotal   Int?
+  // Redemptions allowed per customer (null = unlimited).
+  maxUsesPerUser Int?
+  // Live counter of redemptions (incremented on each successful checkout).
+  currentUses    Int      @default(0)
+  // Validity window (null = unbounded on that side).
+  startDate      DateTime?
+  endDate        DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // One row per redemption — the audit trail for usage limits and the
+  // admin's "how much did this promo cost me" analytics.
+  usages      DiscountUsage[]
+
+  @@index([appliesTo])
+  @@index([active])
+}
+
+// =====================================================
+// DISCOUNT_USAGE — per-redemption tracking (phase 36)
+// =====================================================
+// Written at checkout when a coupon is actually applied to an order.
+// Feeds: per-user usage limits, the coupon's currentUses counter and the
+// Marketing tab's redemption analytics.
+model DiscountUsage {
+  id             String   @id @default(cuid())
+  discountId     String
+  discount       Discount @relation(fields: [discountId], references: [id], onDelete: Cascade)
+  userId         String
+  // Snapshot of the customer email at redemption time (survives user deletion)
+  userEmail      String
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Actual ₦ amount saved on this order
+  discountAmount Float
+  createdAt      DateTime @default(now())
+
+  @@unique([discountId, userId, orderId])
+  @@index([discountId])
+  @@index([userId])
+  @@index([orderId])
+  @@index([createdAt])
+}
+
+// =====================================================
+// NEWSLETTER_CAMPAIGN — scheduled marketing emails (phase 36)
+// =====================================================
+// Lifecycle: DRAFT → (schedule) SCHEDULED → (due / Send Now) SENDING → SENT
+// A SENDING campaign that was interrupted can be resumed — recipients are
+// only ever created once per campaign (unique on [campaignId, email]) and
+// only PENDING rows are sent.
+model NewsletterCampaign {
+  id          String   @id @default(cuid())
+  name        String   // internal name: "March Promo", "Detty December"
+  subject     String   // email subject line
+  htmlContent String   @db.Text // email body HTML (wrapped in the Kozy template on send)
+  // Target audience: ALL | B2C | B2B | INACTIVE (no order in the last 60 days
+  // — includes signed-up customers who never booked)
+  segment     String   @default("ALL")
+  status      String   @default("DRAFT") // DRAFT | SCHEDULED | SENDING | SENT | CANCELLED
+  scheduledAt DateTime?
+  // Phase 40: newsletter automation — 'manual' campaigns were written by
+  // hand; 'automation' campaigns were drafted by the engine from the 52-week
+  // content library and wait for the owner's approval (never auto-sent).
+  source      String   @default("manual") // manual | automation
+  // The cadence slot this automation draft belongs to (next occurrence of
+  // dayOfWeek + sendTime). Approving sets status SCHEDULED for this date.
+  slotDate    DateTime?
+  // Email header banner (see /marketing/banners/ + src/lib/newsletter-content.ts)
+  bannerSlug  String?
+  // Phase 40: the plain-text source of the message (what the composer or
+  // the content library produced) — kept alongside the converted HTML so
+  // any DRAFT/SCHEDULED campaign stays editable in the plain-text editor.
+  bodyText    String? @db.Text
+  // Phase 37: the owner must send himself a test copy before a live blast
+  // (send route refuses live sends until this is set) — accident guard.
+  testSentAt  DateTime?
+  sentAt      DateTime?
+  sentCount   Int      @default(0)
+  openCount   Int      @default(0)
+  clickCount  Int      @default(0)
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  recipients  NewsletterRecipient[]
+
+  @@index([status])
+  @@index([scheduledAt])
+  @@index([createdAt])
+  @@index([source, status])
+}
+
+// =====================================================
+// MARKETING_SCHEDULE — the newsletter engine settings (phase 40)
+// =====================================================
+// Singleton row (id='main') holding the owner's automation preferences:
+// cadence, send day/time (Africa/Lagos), which week of the 52-week content
+// library is next, and the slot date the engine is working towards.
+// The engine DRAFTS campaigns on this rhythm — it never sends without the
+// owner approving each one (approve → SCHEDULED → the daily cron/lazy
+// scheduler delivers it, exactly like any hand-scheduled campaign).
+model MarketingSchedule {
+  id       String @id @default("main")
+  enabled  Boolean @default(false)
+  // Weeks between newsletters: 1 = weekly, 2 = every 2 weeks (default),
+  // 4 = monthly. Switchable any time (promo seasons → weekly).
+  cadenceWeeks Int @default(2)
+  // 0 = Sunday … 6 = Saturday (default 4 = Thursday)
+  dayOfWeek Int @default(4)
+  // Send time in Africa/Lagos, 'HH:mm' 24h (default 09:00)
+  sendTime  String @default("09:00")
+  // Index (0-51) into NEWSLETTER_LIBRARY — the entry the next automation
+  // draft will use. Advances by one each time a draft is created.
+  currentWeekIndex Int @default(0)
+  // The slot the engine is currently working towards. Advanced by the
+  // cadence each time a draft is created (so the rhythm holds even if the
+  // owner skips a week).
+  nextSlotDate DateTime?
+  // True when nextSlotDate was hand-picked from the calendar ("start on a
+  // specific date"): a still-future pinned slot is kept even inside the
+  // 24h minimum-lead window, send-time edits re-time it (same date), and
+  // the pin is cleared once the engine advances past that first slot.
+  slotPinned Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// =====================================================
+// NEWSLETTER_RECIPIENT — per-email delivery & engagement tracking
+// =====================================================
+// One row per (campaign, email) — email is the natural key so a customer
+// and a footer subscriber with the same address can never be double-sent.
+// userId is a snapshot string (no FK): campaign history must survive
+// customer deletion. The tracking pixel + click redirects update
+// openedAt/clickedAt.
+model NewsletterRecipient {
+  id          String   @id @default(cuid())
+  campaignId  String
+  campaign    NewsletterCampaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  // Snapshot — null for footer subscribers who never created an account
+  userId      String?
+  email       String
+  // "customer" = a B2C/B2B account holder; "subscriber" = footer signup
+  source      String   @default("customer")
+  sentAt      DateTime?
+  // Tracking-pixel / link-redirect timestamps (first event only)
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  // PENDING | SENT | FAILED — per-recipient delivery result
+  deliveryStatus String @default("PENDING")
+  createdAt   DateTime @default(now())
+
+  @@unique([campaignId, email])
+  @@index([campaignId])
+  @@index([email])
+  @@index([deliveryStatus])
+}
+
+// =====================================================
+// NEWSLETTER_SUBSCRIBER — footer signup list (phase 36)
+// =====================================================
+// Prospects and past customers who opted in from the landing-page footer
+// WITHOUT creating an account. Campaigns with segment ALL include these
+// addresses. One-click unsubscribe sets optIn=false (row is kept for the
+// audit trail; sends always filter on optIn).
+model NewsletterSubscriber {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  name        String?
+  // Where the signup came from: "footer" | "campaign" | "manual"
+  source      String   @default("footer")
+  optIn       Boolean  @default(true)
+  unsubscribedAt DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([optIn])
+}
+
+// =====================================================
+// RIDER_APPLICATION — driver recruitment applications
+// Phase 54: this table is now the full onboarding pipeline.
+//   Public: /join-riders collects the application -> the rider gets a
+//   confirmation email/SMS with their reference code (refCode).
+//   Admin: the console's Riders tab reviews it -> APPROVE creates (or
+//   links) a DRIVER account, emails the rider their credentials +
+//   onboarding steps, and records userId + reviewedAt. REJECT keeps the
+//   row for the audit trail with an internal decisionNote.
+// =====================================================
+model RiderApplication {
+  id            String   @id @default(cuid())
+  // Short human reference like KZR-7F2K, generated at submission — shown
+  // to the rider in their confirmation email and to the admin in the
+  // review list (nobody should quote a 25-char cuid on a phone call).
+  refCode       String?  @unique
+  fullName      String
+  email         String?
+  phone         String
+  altPhone      String?
+  address       String
+  lga           String   // preferred area
+  bikeModel     String
+  bikeYear      String
+  licenseNumber String
+  availability  String   @default("full-time")
+  experience    String?
+  consent       Boolean  @default(false)
+  status        String   @default("PENDING") // PENDING, REVIEWED, APPROVED, REJECTED
+  // The DRIVER account created at approval (null until approved).
+  userId        String?
+  user          User?    @relation("RiderApplications", fields: [userId], references: [id])
+  // Who decided + when (audit trail for the owner).
+  reviewedById  String?
+  reviewedBy    User?    @relation("RiderApplicationReviews", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  // Internal-only note on the decision (e.g. why a rejection happened).
+  // Never shown to the applicant — the team communicates declines themselves.
+  decisionNote  String?
+  createdAt     DateTime @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// =====================================================
+// PRICE_CATALOG — server-side canonical pricing
+// =====================================================
+model PriceCatalog {
+  id        String   @id @default(cuid())
+  itemKey   String   @unique // matches GARMENT_CATALOG id (shirt, trouser, etc.)
+  label     String
+  unitPrice Float
+  category  String
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
+  @@index([active])
+}
+
+// =====================================================
+// APP_SETTING — server-side key/value settings (admin-managed)
+// =====================================================
+// Bank account details, delivery fee, handwash surcharge, guarantee
+// thresholds and offer percentages live HERE (not localStorage) so an
+// admin edit instantly reaches every visitor — the persisted zustand
+// copy was per-browser and never propagated (client-reported bug).
+model AppSetting {
+  key       String   @id // e.g. "bank_name", "delivery_fee"
+  value     String // JSON-encoded value
+  updatedAt DateTime @updatedAt
+}
+
+// =====================================================
+// REFERRAL_CODE (phase 52) — a customer's personal sharing code
+// =====================================================
+// The referral system is deliberately SILENT and premium: nothing on the
+// public site advertises it. A code is minted only when a customer reaches
+// the 10-delivered-orders service milestone, and it surfaces exactly three
+// places — the milestone email, the private /milestone page, and a quiet
+// card in their portal (never shown below the milestone).
+// Mechanics: the friend enters the code in the booking wizard's offer-code
+// field on their FIRST order and receives the friend courtesy percentage
+// (AppSetting referral_friend_discount_percent, default 10). When that
+// order is DELIVERED, the referrer's thank-you credit (AppSetting
+// referral_reward_amount, default ₦2,000) lands on their account and is
+// applied automatically to their next retail order. No points, no tiers,
+// no public leaderboard — gratitude, not commission.
+model ReferralCode {
+  id        String   @id @default(cuid())
+  // One code per customer (the referrer)
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // Uppercase, e.g. "AMAKA-742" — first name plus 3 digits (readable,
+  // personal, not guessable at scale). Uniqueness enforced; generation
+  // retries on the (unlikely) collision.
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  redemptions ReferralRedemption[]
+
+  @@index([code])
+}
+
+// =====================================================
+// REFERRAL_REDEMPTION (phase 52) — one row per referred first order
+// =====================================================
+// Written when a friend's first order is placed with a referral code; the
+// thank-you credit is granted exactly once when that order is DELIVERED
+// (rewardGrantedAt set). Kept separate from DiscountUsage so referral
+// activity never clutters the admin discount console — this table is the
+// referral audit trail (who referred whom, how much was given and granted).
+model ReferralRedemption {
+  id       String   @id @default(cuid())
+  codeId   String
+  code     ReferralCode @relation(fields: [codeId], references: [id], onDelete: Cascade)
+  orderId  String   @unique
+  order    Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  friendEmail String
+  friendName  String?
+  // ₦ the friend actually saved on this order (the courtesy applied)
+  friendDiscountAmount Float @default(0)
+  // Set when the friend's order was DELIVERED and the referrer's credit
+  // was granted — the once-only guard for the reward.
+  rewardGrantedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([codeId])
+  @@index([createdAt])
+}
+
+// =====================================================
+// FEEDBACK — general reviews & complaints from the site form
+// =====================================================
+// Complements Review (which is tied to a delivered order): Feedback lets
+// ANY visitor — including prospects and hotel partners — send a review,
+// question or complaint without an order number.
+model Feedback {
+  id          String   @id @default(cuid())
+  // REVIEW | COMPLAINT | QUESTION
+  type        String   @default("REVIEW")
+  name        String
+  email       String
+  phone       String?
+  // Optional reference: an order number (KZ-…) or a hotel/estate name
+  reference   String?
+  rating      Float? // optional 1–5 for reviews
+  message     String
+  // Admin workflow: NEW → IN_PROGRESS → RESOLVED (+ admin note)
+  status      String   @default("NEW")
+  adminNote   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}
+
+// =====================================================
+// DRIVER_LOCATION — rider geofencing (last known GPS ping)
+// =====================================================
+// Riders ping their GPS position from the driver app; the server
+// checks the distance to the nearest service zone (see src/lib/geo.ts)
+// and gates order activity/notifications accordingly:
+//   - Inside a service zone   -> full route activity
+//   - Outside all zones       -> order activity paused (banner in app)
+//   - Stale/missing ping      -> legacy behaviour (no filtering)
+model DriverLocation {
+  id        String   @id @default(cuid())
+  driverId  String   @unique
+  driver    User     @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  lat       Float
+  lng       Float
+  // Name of the nearest service zone at the last ping (e.g. "Lekki")
+  zone      String?
+  updatedAt DateTime @updatedAt
+
+  @@index([driverId])
+}
+
+// =====================================================
+// RIDER INCIDENT — a rider-reported problem on an order
+// (phase 55, the "what if the rider steals / damages /
+// misplaces the items?" backbone)
+// =====================================================
+// Public display rules:
+//   none — admin console only. The CUSTOMER is never shown
+//   incident rows; how the team communicates a remedy is a
+//   separate decision (call, guarantee claim, refund).
+//
+// Lifecycle: a rider reports from the rider app (DAMAGE /
+// LOSS / THEFT / ACCIDENT / OTHER + description). The
+// admins get an urgent alert email + a notifications-feed
+// entry immediately; resolving (or escalating to a
+// customer remedy) is recorded in resolvedAt / resolution
+// by an admin from the Riders tab.
+model RiderIncident {
+  id          String    @id @default(cuid())
+  orderId     String
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  driverId    String
+  driver      User      @relation("RiderIncidents", fields: [driverId], references: [id], onDelete: Cascade)
+  // DAMAGE | LOSS | THEFT | ACCIDENT | OTHER (String, not enum, so adding
+  // a kind needs no migration — same convention as accessStatus)
+  kind        String
+  description String    @db.Text
+  // Where it happened, free text: "pickup at the customer's gate" etc.
+  atStop      String?
+  createdAt   DateTime  @default(now())
+  // ----- Resolution (admin) -----
+  resolvedAt  DateTime?
+  // What was done: "re-cleaned and re-delivered", "guarantee claim paid",
+  // "police report filed, rider's contract ended"…
+  resolution  String?
+
+  @@index([orderId])
+  @@index([driverId])
+  @@index([createdAt])
+  @@index([resolvedAt])
+}
+
+// =====================================================
+// PUSH SUBSCRIPTION (phase 61) — rider stop notifications
+// =====================================================
+// Web-Push endpoint registrations (RFC 8291) created by the rider app when
+// the rider turns on notifications (Account → Notifications). One row per
+// browser/device. When the team assigns a stop, /api/orders/[id] PATCH sends
+// a push to every one of the rider's subscriptions — the rider's phone wakes
+// up with the assignment EVEN IF THE BROWSER IS CLOSED (Android/Chrome; iOS
+// requires the app to be added to the home screen first).
+// Expired/revoked endpoints (410 from the push service) are deleted on sight
+// so the table never accumulates dead rows.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("PushSubscriptions", fields: [userId], references: [id], onDelete: Cascade)
+  // The full Web-Push subscription object (endpoint + keys + auth), stored
+  // as JSON — exactly the shape webpush.sendNotification accepts.
+  endpoint  String   @unique
+  payload   String
+  // Device label shown in the rider's Account screen ("Chrome on Android")
+  device    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+// =====================================================
+// REVIEW — customer feedback on completed orders
+// =====================================================
+// Public display rules:
+//   - Only reviews with isApproved=true AND rating >= 4.5 are shown on the
+//     customer landing page testimonials carousel.
+//   - All reviews (including low ratings and unapproved) are visible to admins
+//     in the moderation view, so the company can still see negative feedback
+//     internally and act on it (contact customer, address driver issues, etc.)
+model Review {
+  id          String   @id @default(cuid())
+  orderId     String   @unique // one review per order
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  driverId    String?  // optional — present if user rated the driver specifically
+  // 1-5 stars (allows halves: 4.5, 5.0, etc.)
+  rating      Float
+  comment     String
+  // Public display name on the testimonials carousel (defaults to user.name
+  // but admin can edit, e.g., "Tunde A., Lekki")
+  displayName String?
+  // Location shown next to the testimonial (e.g., "Lekki Phase 1")
+  displayLocation String?
+  // Moderation: only approved reviews with rating >= 4.5 show publicly
+  isApproved  Boolean  @default(false)
+  approvedAt  DateTime?
+  approvedById String?
+  approver    User?    @relation("ReviewApprover", fields: [approvedById], references: [id])
+  // Soft-hide: even if approved, admin can hide without deleting
+  isHidden    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([driverId])
+  @@index([isApproved])
+  @@index([rating])
+}
+
+// =====================================================
+// BRANCH (phase 62) — physical processing locations
+// =====================================================
+// The business runs two locations today (Ogombo — the HQ — and Chevron
+// Drive). Every order's pickup is assigned to a branch server-side at
+// creation: the pickup address's service zone decides it, falling back to
+// the nearest branch by GPS distance. Orders carry branchId as a plain
+// scalar; admins can re-route from the order modal, and the console gets a
+// global branch switcher + per-branch health monitoring.
+model Branch {
+  id        String   @id @default(cuid())
+  name      String   @unique // "Ogombo"
+  slug      String   @unique // "ogombo"
+  address   String
+  phone     String?
+  // JSON array of SERVICE_ZONES names this branch owns
+  // (e.g. ["Lekki","Ikoyi","Victoria Island"]) — drives assignment.
+  zoneNames String   @default("[]")
+  lat       Float    @default(6.5)
+  lng       Float    @default(3.4)
+  isActive  Boolean  @default(true)
+  // Exactly one branch should be the default (fallback for unmatched
+  // addresses). Enforced in the API layer, not the DB.
+  isDefault Boolean  @default(false)
+  // COMPANY | FRANCHISE (phase 69). Company branches are navy in the
+  // console; franchise branches render gold with a partner chip — the
+  // owner's franchise-tracking ask. A partner site runs under Kozy Care
+  // standards with a revenue split; company sites are ours end-to-end.
+  ownershipType String @default("COMPANY")
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+}
+
+// =====================================================
+// SUBSCRIPTION_PLAN (phase 62) — The Kozy Circle tiers
+// =====================================================
+// Admin-priced monthly membership tiers. Volume is regulated by physical
+// kits (Kozy Bag / Kozy Box) the business provides — the bag IS the unit, so
+// nobody counts garments at the door. Every number here is admin-editable
+// from Memberships → Plans; price edits also sync a Paystack recurring Plan
+// (best-effort, when PAYSTACK_SECRET_KEY is configured).
+model SubscriptionPlan {
+  id        String   @id @default(cuid())
+  // ESSENTIALS | HOUSEHOLD | CONCIERGE
+  code      String   @unique
+  name      String // "The Essentials"
+  tagline   String   @default("")
+  priceMonthly Int // naira
+  sortOrder Int      @default(0)
+  isActive  Boolean  @default(true)
+  // ----- Included volume per monthly cycle -----
+  includedUnits Int // bag/box pickups per month (4 = weekly cadence)
+  // bag | box — drives the marketing copy ("measured by the bag")
+  unitKind     String @default("bag")
+  unitName     String @default("Kozy Bag")
+  // Extra units beyond the included allowance (the margin builder —
+  // "pay extra for up to two more").
+  extraUnitPrice Int  @default(5000)
+  maxExtraUnits  Int  @default(2)
+  // Kit replacement fee when a cancelled member keeps the bag/box.
+  replacementFee Int  @default(5000)
+  // ----- Included perks (counts per period; 0 = not included) -----
+  duvetsPerQuarter   Int     @default(0)
+  curtainsPerQuarter Int     @default(0)
+  springCleanPerYear Int     @default(0)
+  // Pairs of shoes cleaned per MONTHLY cycle (phase 70 — the shoe perk).
+  // One "pair" = the standard sneaker/canvas clean (upper, midsole, laces,
+  // deodorize); premium materials (suede, nubuck, leather, embellished)
+  // stay with the à-la-carte specialist service at the member discount.
+  // Monthly: resets with the cycle, exactly like the bag/box units.
+  shoesPerMonth      Int     @default(0)
+  // Concierge channel: designer pieces are assessed and treated by the
+  // concierge desk (Tier 3's signature perk).
+  concierge          Boolean @default(false)
+  // Percentage off every à-la-carte service (dry cleaning, shoes,
+  // alterations) — composes with the existing server-side pricing engine.
+  memberDiscountPct  Int     @default(5)
+  // Priority pickup windows (first slots of the day).
+  prioritySlots      Boolean @default(false)
+  // Paystack recurring plan code — synced when an admin saves the plan and
+  // keys are configured. Null = manual/transfer renewals only.
+  paystackPlanCode   String?
+  subscriptions      Subscription[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([isActive])
+  @@index([sortOrder])
+}
+
+// =====================================================
+// SUBSCRIPTION (phase 62) — one member's membership
+// =====================================================
+// One ACTIVE subscription per customer (enforced in the API). The cycle
+// engine: periodStart/periodEnd define the current monthly cycle; usage
+// counters (unitsUsed, duvetsUsed, …) belong to that cycle and reset on
+// renewal. Payment mirrors the Payment-table lifecycle but lives HERE
+// (bank-transfer verification + Paystack refs) so membership money never
+// pollutes the order pipeline or the Kanban board.
+//
+// Statuses:
+//   PENDING_ACTIVATION — subscribed, payment not yet verified (transfer)
+//   ACTIVE             — paid & running (periodEnd in the future)
+//   EXPIRING           — ACTIVE + cancelAtPeriodEnd (kept for the customer's
+//                        clarity; computed at read time, never stored)
+//   PAST_DUE           — period ended while a transfer renewal was pending
+//   LAPSED             — ended, not renewed (history preserved)
+//   CANCELLED          — cancelled by member or admin
+model Subscription {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User @relation(fields: [userId], references: [id])
+  planId      String
+  plan        SubscriptionPlan @relation(fields: [planId], references: [id])
+  status      String   @default("PENDING_ACTIVATION")
+  periodStart DateTime?
+  periodEnd   DateTime?
+  // Naira actually paid for the CURRENT cycle (equals plan price unless the
+  // admin adjusted it — e.g. a founding-member discount).
+  pricePaid   Int      @default(0)
+  // BANK_TRANSFER | PAYSTACK
+  paymentMethod String?
+  // Transfer receipt screenshot (downscaled data URL), shown to the admin
+  // in the Memberships → Subscribers verification list.
+  transferReceipt String?
+  // Paystack reference for the CURRENT cycle's charge: "SUB-{id}" for the
+  // initial charge, then renewal events extend the period. Unique per row
+  // so the webhook can find it idempotently.
+  paystackRef String?  @unique
+  // Paystack recurring-subscription codes (present once the first charge
+  // succeeds with a plan attached — Paystack auto-creates the subscription).
+  paystackSubscriptionCode String?
+  paystackEmailToken       String?
+  // ----- Usage counters (belong to the CURRENT cycle / quarter / year) -----
+  unitsUsed      Int @default(0) // bag/box pickups consumed this cycle
+  extraUnitsUsed Int @default(0)
+  shoesUsed      Int @default(0) // shoe-clean pairs consumed this cycle
+  duvetsUsed     Int @default(0) // this calendar quarter
+  curtainsUsed   Int @default(0)
+  springCleanUsed Int @default(0) // this calendar year
+  // Reset bookmarks — when the counters were last zeroed (renewal resets
+  // units; quarter/year rolls reset the perk counters lazily at read time).
+  usageCycleKey String? // "2026-09-01" — the cycle the unit counters belong to
+  usageQuarterKey String? // "2026-Q3"
+  usageYearKey    String? // "2026"
+  // ----- Kit lifecycle -----
+  // PENDING_DELIVERY -> WITH_MEMBER -> RETURNED | REPLACED (fee charged)
+  kitState      String   @default("PENDING_DELIVERY")
+  kitDeliveredAt DateTime?
+  // ----- Cancellation -----
+  cancelAtPeriodEnd Boolean  @default(false)
+  cancelledAt  DateTime?
+  cancelledReason String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([status])
+  @@index([periodEnd])
+}
+
+// =====================================================
+// PARTNER (phase 62) — the Kozy Network
+// =====================================================
+// An independent laundry operator running UNDER the Kozy brand: Kozy brings
+// demand + technology + brand; the partner brings processing capacity.
+// Applications arrive from the public /partners page; approval happens in
+// the admin Partners view. Orders tagged fulfilledByPartnerId derive the
+// revenue-share ledger (partner keeps revenueSharePartnerPct of delivered
+// order value; Kozy keeps the rest).
+//
+// v1 scope: application + approval + branch assignment + share % + derived
+// ledger. Partner self-serve portal logins are deliberately phase 2 — no
+// new auth surface is opened until the first partner is signed.
+model Partner {
+  id           String   @id @default(cuid())
+  businessName String
+  contactName  String
+  email        String   @unique
+  phone        String
+  address      String
+  // Their story: equipment, staff, throughput, existing clients.
+  capacityNotes String? @db.Text
+  // The branch hub they hang off (plain scalar, like orders/riders).
+  branchId     String?
+  // PENDING | APPROVED | SUSPENDED | REJECTED
+  status       String   @default("PENDING")
+  // Revenue split — the partner's share of delivered order value (%).
+  revenueSharePartnerPct Int @default(70)
+  reviewedAt   DateTime?
+  reviewNote   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([status])
+  @@index([createdAt])
+}

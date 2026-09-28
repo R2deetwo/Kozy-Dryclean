@@ -1,0 +1,6 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Singlet (tank top) -->
+  <path d="M11 5 L8 7 L7 11 L9 12 L9 27 L23 27 L23 12 L25 11 L24 7 L21 5 L18 7 C18 8 17 8.5 16 8.5 C15 8.5 14 8 14 7 L11 5 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" fill="none"/>
+  <path d="M14 5 C14 8 15 8.5 16 8.5 C17 8.5 18 8 18 5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" fill="none"/>
+  <line x1="12" y1="16" x2="20" y2="16" stroke="#D4AF37" strokeWidth="1.2" strokeLinecap="round"/>
+</svg>

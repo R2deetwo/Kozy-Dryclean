@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Kozy Care — Platform & Business Audit</title>
+<style>
+  @page { size: 794px 1123px; margin: 0; }
+  html, body { margin: 0; padding: 0; background: #f1f0ef; }
+  .cover { position: relative; width: 794px; height: 1123px; background: #f1f0ef;
+           border: none; outline: none; box-shadow: none; }
+
+  /* Layer 1 — background grid (clipped) */
+  .layer1 { position: absolute; inset: 0; overflow: hidden; z-index: 1; }
+  .grid {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(102,92,63,0.05) 0.5px, transparent 0.5px),
+      linear-gradient(90deg, rgba(102,92,63,0.05) 0.5px, transparent 0.5px);
+    background-size: 50px 50px;
+  }
+  .watermark {
+    position: absolute; right: 40px; bottom: 90px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 150px; font-weight: 700; color: rgba(102,92,63,0.05);
+    letter-spacing: 6px; line-height: 1;
+  }
+
+  /* Layer 2 — structure */
+  .layer2 { position: absolute; inset: 0; z-index: 2; }
+  .anchor-line {
+    position: absolute; left: 95px; top: 112px; bottom: 112px;
+    width: 6px; background: #665c3f;
+  }
+
+  /* Layer 3 — content (left edge = 95 + 40 = 135px, 2U from the thick line) */
+  .layer3 { position: absolute; inset: 0; z-index: 3; }
+  .kicker {
+    position: absolute; left: 145px; top: 168px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 16px; letter-spacing: 4px; color: rgba(34,33,31,0.6);
+    text-transform: uppercase;
+  }
+  .hero {
+    position: absolute; left: 145px; top: 300px; max-width: 560px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 62px; font-weight: 700; color: #22211f; line-height: 1.12;
+  }
+  .hero .gold { color: #87702b; }
+  .summary {
+    position: absolute; left: 145px; top: 560px; max-width: 470px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 16.5px; line-height: 1.62; color: rgba(34,33,31,0.85);
+  }
+  .meta {
+    position: absolute; left: 145px; top: 830px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 18px; color: rgba(34,33,31,0.85); line-height: 1.7;
+  }
+  .meta .label { font-size: 12px; letter-spacing: 2.5px; color: rgba(34,33,31,0.5);
+                 text-transform: uppercase; }
+  .footer {
+    position: absolute; left: 145px; bottom: 132px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 14px; letter-spacing: 3px; color: rgba(34,33,31,0.55);
+    text-transform: uppercase;
+  }
+  .badge {
+    position: absolute; right: 60px; bottom: 128px;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: 12px; letter-spacing: 2px; color: #665c3f;
+    border: 1px solid rgba(102,92,63,0.4); border-radius: 999px;
+    padding: 8px 18px; text-transform: uppercase; background: rgba(237,237,234,0.9);
+  }
+</style>
+</head>
+<body>
+<div class="cover">
+  <div class="layer1"><div class="grid"></div><div class="watermark">K</div></div>
+  <div class="layer2"><div class="anchor-line"></div></div>
+  <div class="layer3">
+    <div class="kicker">Platform &amp; Business Audit · September 2026</div>
+    <div class="badge">Phase 70 Release</div>
+    <div class="hero">Kozy<br>Care<br><span class="gold">Audit Report</span></div>
+    <div class="summary">
+      A full examination of the kozycare.ng platform after the phase-70 release: the
+      Shoe Club launch, branch numbers reset, rider web-push activation, security posture,
+      production operations, and the commercial position against the Lagos market —
+      closing with a ranked action list and a 30-60-90 plan.
+    </div>
+    <div class="meta">
+      <div class="label">Prepared for</div>
+      <div>Chigozie Ubah · Founder, Kozy Care</div>
+      <div class="label" style="margin-top:14px;">Date</div>
+      <div>28 September 2026 · Lagos, Nigeria</div>
+    </div>
+    <div class="footer">Kozycare.ng · Uncompromising Care</div>
+  </div>
+</div>
+</body>
+</html>

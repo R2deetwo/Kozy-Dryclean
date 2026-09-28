@@ -1,0 +1,7 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Duvet (puffy) -->
+  <path d="M4 12 C4 9 7 8 10 8 L22 8 C25 8 28 9 28 12 L28 22 C28 25 25 26 22 26 L10 26 C7 26 4 25 4 22 Z" stroke="currentColor" strokeWidth="1.6" fill="none"/>
+  <path d="M7 12 C9 13 11 13 13 12 M15 12 C17 13 19 13 21 12 M23 12 C25 13 26 13 26 12" stroke="#D4AF37" strokeWidth="1" strokeLinecap="round" fill="none"/>
+  <line x1="4" y1="17" x2="28" y2="17" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 3"/>
+  <line x1="4" y1="22" x2="28" y2="22" stroke="currentColor" strokeWidth="0.8" strokeDasharray="2 3"/>
+</svg>

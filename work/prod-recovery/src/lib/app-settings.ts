@@ -1,0 +1,232 @@
+// =============================================================================
+// Server-side app settings — AppSetting table (single source of truth)
+// =============================================================================
+// Why this exists (client-reported bug): bank details and commercial terms
+// used to live in the localStorage-persisted zustand store, so an admin edit
+// only reached the ADMIN's browser — every other visitor kept seeing the
+// stale defaults baked into the bundle. AppSetting moves all of it to the
+// database: the public GET below is what the storefront reads, and an admin
+// PUT updates it for EVERYONE instantly.
+//
+// Seeding is self-healing and idempotent: getAppSettings() upserts any
+// missing key with the code default on first read, so a fresh database (or a
+// new environment) is populated without a separate migration step.
+// =============================================================================
+
+import { db } from '@/lib/db'
+import {
+  type KozyAppSettings,
+  defaultAppSettings,
+} from '@/lib/types'
+
+/** Canonical key list — also drives admin Settings validation. */
+export const APP_SETTING_KEYS = [
+  'bank_name',
+  'account_name',
+  'account_number',
+  'contact_phone',
+  'contact_email',
+  'admin_alerts_email',
+  'admin_alerts_new_signup',
+  'admin_alerts_new_order',
+  'admin_alerts_payment_pending',
+  'delivery_fee',
+  'handwash_surcharge_percent',
+  'guarantee_min_garments',
+  'guarantee_min_order_value',
+  'first_order_discount_percent',
+  'hotel_guest_discount_percent',
+  'hotel_guest_promo_code',
+  'referral_friend_discount_percent',
+  'referral_reward_amount',
+  'online_order_discount_percent',
+  'alterations_from_price',
+  'price_per_kg',
+  'minimum_kg',
+  'rider_pickup_rate',
+  'rider_delivery_rate',
+] as const
+
+export type AppSettingKey = (typeof APP_SETTING_KEYS)[number]
+
+/** Map DB rows onto the typed settings shape. */
+function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings {
+  const map = new Map(rows.map((r) => [r.key, r.value]))
+  const num = (key: AppSettingKey, fallback: number) => {
+    const raw = map.get(key)
+    if (raw === undefined) return fallback
+    const parsed = Number(JSON.parse(raw))
+    return Number.isFinite(parsed) ? parsed : fallback
+  }
+  const str = (key: AppSettingKey, fallback: string) => {
+    const raw = map.get(key)
+    if (raw === undefined) return fallback
+    try {
+      const parsed = JSON.parse(raw)
+      return typeof parsed === 'string' ? parsed : fallback
+    } catch {
+      return fallback
+    }
+  }
+  const bool = (key: AppSettingKey, fallback: boolean) => {
+    const raw = map.get(key)
+    if (raw === undefined) return fallback
+    try {
+      const parsed = JSON.parse(raw)
+      return typeof parsed === 'boolean' ? parsed : fallback
+    } catch {
+      return fallback
+    }
+  }
+  const d = defaultAppSettings()
+  return {
+    bankName: str('bank_name', d.bankName),
+    accountName: str('account_name', d.accountName),
+    accountNumber: str('account_number', d.accountNumber),
+    contactPhone: str('contact_phone', d.contactPhone),
+    contactEmail: str('contact_email', d.contactEmail),
+    adminAlertsEmail: str('admin_alerts_email', d.adminAlertsEmail),
+    adminAlertsNewSignup: bool('admin_alerts_new_signup', d.adminAlertsNewSignup),
+    adminAlertsNewOrder: bool('admin_alerts_new_order', d.adminAlertsNewOrder),
+    adminAlertsPaymentPending: bool('admin_alerts_payment_pending', d.adminAlertsPaymentPending),
+    deliveryFee: num('delivery_fee', d.deliveryFee),
+    handwashSurchargePercent: num('handwash_surcharge_percent', d.handwashSurchargePercent),
+    guaranteeMinGarments: num('guarantee_min_garments', d.guaranteeMinGarments),
+    guaranteeMinOrderValue: num('guarantee_min_order_value', d.guaranteeMinOrderValue),
+    firstOrderDiscountPercent: num('first_order_discount_percent', d.firstOrderDiscountPercent),
+    hotelGuestDiscountPercent: num('hotel_guest_discount_percent', d.hotelGuestDiscountPercent),
+    hotelGuestPromoCode: str('hotel_guest_promo_code', d.hotelGuestPromoCode),
+    referralFriendDiscountPercent: num('referral_friend_discount_percent', d.referralFriendDiscountPercent),
+    referralRewardAmount: num('referral_reward_amount', d.referralRewardAmount),
+    onlineOrderDiscountPercent: num('online_order_discount_percent', d.onlineOrderDiscountPercent),
+    alterationsFromPrice: num('alterations_from_price', d.alterationsFromPrice),
+    pricePerKg: num('price_per_kg', d.pricePerKg),
+    minimumKg: num('minimum_kg', d.minimumKg),
+    riderPickupRate: num('rider_pickup_rate', d.riderPickupRate),
+    riderDeliveryRate: num('rider_delivery_rate', d.riderDeliveryRate),
+    // Not a DB setting — derived from the server env at the API layer. The
+    // false here is a placeholder so this DB-mapped object satisfies the
+    // type; callers that care use the /api/settings/app response, which
+    // overwrites it with the real value.
+    paystackAvailable: false,
+  }
+}
+
+/**
+ * Read the settings, upserting defaults for any missing key so the table
+ * self-seeds on first access. Callers wrap in try/catch — a settings failure
+ * must never break an order; fall back to `defaultAppSettings()`.
+ */
+export async function getAppSettings(): Promise<KozyAppSettings> {
+  try {
+    const rows = await db.appSetting.findMany()
+    const existing = new Set(rows.map((r) => r.key))
+    const d = defaultAppSettings()
+    const seed: Record<AppSettingKey, string> = {
+      bank_name: JSON.stringify(d.bankName),
+      account_name: JSON.stringify(d.accountName),
+      account_number: JSON.stringify(d.accountNumber),
+      contact_phone: JSON.stringify(d.contactPhone),
+      contact_email: JSON.stringify(d.contactEmail),
+      admin_alerts_email: JSON.stringify(d.adminAlertsEmail),
+      admin_alerts_new_signup: JSON.stringify(d.adminAlertsNewSignup),
+      admin_alerts_new_order: JSON.stringify(d.adminAlertsNewOrder),
+      admin_alerts_payment_pending: JSON.stringify(d.adminAlertsPaymentPending),
+      delivery_fee: JSON.stringify(d.deliveryFee),
+      handwash_surcharge_percent: JSON.stringify(d.handwashSurchargePercent),
+      guarantee_min_garments: JSON.stringify(d.guaranteeMinGarments),
+      guarantee_min_order_value: JSON.stringify(d.guaranteeMinOrderValue),
+      first_order_discount_percent: JSON.stringify(d.firstOrderDiscountPercent),
+      hotel_guest_discount_percent: JSON.stringify(d.hotelGuestDiscountPercent),
+      hotel_guest_promo_code: JSON.stringify(d.hotelGuestPromoCode),
+      referral_friend_discount_percent: JSON.stringify(d.referralFriendDiscountPercent),
+      referral_reward_amount: JSON.stringify(d.referralRewardAmount),
+      online_order_discount_percent: JSON.stringify(d.onlineOrderDiscountPercent),
+      alterations_from_price: JSON.stringify(d.alterationsFromPrice),
+      price_per_kg: JSON.stringify(d.pricePerKg),
+      minimum_kg: JSON.stringify(d.minimumKg),
+      rider_pickup_rate: JSON.stringify(d.riderPickupRate),
+      rider_delivery_rate: JSON.stringify(d.riderDeliveryRate),
+    }
+    const missing = (Object.keys(seed) as AppSettingKey[]).filter((k) => !existing.has(k))
+    if (missing.length > 0) {
+      // Best-effort seed — concurrent first requests may race; upsert makes
+      // that harmless.
+      await Promise.all(
+        missing.map((key) =>
+          db.appSetting.upsert({
+            where: { key },
+            update: {},
+            create: { key, value: seed[key] },
+          })
+        )
+      )
+      const fresh = await db.appSetting.findMany()
+      return rowsToSettings(fresh)
+    }
+    return rowsToSettings(rows)
+  } catch {
+    // DB unavailable (e.g. build-time prerender) — code defaults keep every
+    // surface rendering correct values.
+    return defaultAppSettings()
+  }
+}
+
+/** Persist a partial update. Only known keys are accepted (validated by the
+ *  API route before calling this). */
+export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<KozyAppSettings> {
+  const map: Partial<Record<AppSettingKey, string>> = {}
+  if (patch.bankName !== undefined) map.bank_name = JSON.stringify(patch.bankName)
+  if (patch.accountName !== undefined) map.account_name = JSON.stringify(patch.accountName)
+  if (patch.accountNumber !== undefined) map.account_number = JSON.stringify(patch.accountNumber)
+  if (patch.contactPhone !== undefined) map.contact_phone = JSON.stringify(patch.contactPhone)
+  if (patch.contactEmail !== undefined) map.contact_email = JSON.stringify(patch.contactEmail)
+  if (patch.adminAlertsEmail !== undefined)
+    map.admin_alerts_email = JSON.stringify(patch.adminAlertsEmail.trim())
+  if (patch.adminAlertsNewSignup !== undefined)
+    map.admin_alerts_new_signup = JSON.stringify(patch.adminAlertsNewSignup)
+  if (patch.adminAlertsNewOrder !== undefined)
+    map.admin_alerts_new_order = JSON.stringify(patch.adminAlertsNewOrder)
+  if (patch.adminAlertsPaymentPending !== undefined)
+    map.admin_alerts_payment_pending = JSON.stringify(patch.adminAlertsPaymentPending)
+  if (patch.deliveryFee !== undefined) map.delivery_fee = JSON.stringify(Math.round(patch.deliveryFee))
+  if (patch.handwashSurchargePercent !== undefined)
+    map.handwash_surcharge_percent = JSON.stringify(patch.handwashSurchargePercent)
+  if (patch.guaranteeMinGarments !== undefined)
+    map.guarantee_min_garments = JSON.stringify(Math.round(patch.guaranteeMinGarments))
+  if (patch.guaranteeMinOrderValue !== undefined)
+    map.guarantee_min_order_value = JSON.stringify(Math.round(patch.guaranteeMinOrderValue))
+  if (patch.firstOrderDiscountPercent !== undefined)
+    map.first_order_discount_percent = JSON.stringify(patch.firstOrderDiscountPercent)
+  if (patch.hotelGuestDiscountPercent !== undefined)
+    map.hotel_guest_discount_percent = JSON.stringify(patch.hotelGuestDiscountPercent)
+  if (patch.hotelGuestPromoCode !== undefined)
+    map.hotel_guest_promo_code = JSON.stringify(patch.hotelGuestPromoCode.toUpperCase().trim())
+  if (patch.referralFriendDiscountPercent !== undefined)
+    map.referral_friend_discount_percent = JSON.stringify(patch.referralFriendDiscountPercent)
+  if (patch.referralRewardAmount !== undefined)
+    map.referral_reward_amount = JSON.stringify(Math.round(patch.referralRewardAmount))
+  if (patch.onlineOrderDiscountPercent !== undefined)
+    map.online_order_discount_percent = JSON.stringify(patch.onlineOrderDiscountPercent)
+  if (patch.alterationsFromPrice !== undefined)
+    map.alterations_from_price = JSON.stringify(Math.round(patch.alterationsFromPrice))
+  if (patch.pricePerKg !== undefined)
+    map.price_per_kg = JSON.stringify(Math.round(patch.pricePerKg))
+  if (patch.minimumKg !== undefined)
+    map.minimum_kg = JSON.stringify(Math.round(patch.minimumKg))
+  if (patch.riderPickupRate !== undefined)
+    map.rider_pickup_rate = JSON.stringify(Math.max(0, Math.round(patch.riderPickupRate)))
+  if (patch.riderDeliveryRate !== undefined)
+    map.rider_delivery_rate = JSON.stringify(Math.max(0, Math.round(patch.riderDeliveryRate)))
+
+  await Promise.all(
+    (Object.keys(map) as AppSettingKey[]).map((key) =>
+      db.appSetting.upsert({
+        where: { key },
+        update: { value: map[key]! },
+        create: { key, value: map[key]! },
+      })
+    )
+  )
+  return getAppSettings()
+}

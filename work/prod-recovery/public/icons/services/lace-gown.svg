@@ -1,0 +1,27 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Kozy: Lace / Aso-Ebi Gown (floor-length fitted gown — long tapered sleeves, rounded scoop neck, -->
+  <!-- scattered gold lace dots). Same family as the Dress but clearly fancier at a glance: sleeves, -->
+  <!-- deeper hem, and embellishment. Dots are FILLED gold specks vs Ankara Gown's outlined diamond tiles. -->
+  <path d="M12 4 L9.5 5 L5.8 7 L7 12.3 L9.1 11.6 L10 9.8 L11.5 13 L6.5 29 L25.5 29 L20.5 13 L22 9.8 L22.9 11.6 L25 12.3 L26.2 7 L22.5 5 L20 4 C19 7 17.6 8.8 16 8.8 C14.4 8.8 13 7 12 4 Z" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" strokeLinecap="round" fill="none"/>
+  <!-- Lace embellishment: scattered gold dots (filled) -->
+  <circle cx="13.2" cy="6.6" r="0.7" fill="#D4AF37"/>
+  <circle cx="18.6" cy="6.2" r="0.7" fill="#D4AF37"/>
+  <circle cx="12" cy="10.2" r="0.7" fill="#D4AF37"/>
+  <circle cx="19.8" cy="10.4" r="0.7" fill="#D4AF37"/>
+  <circle cx="7.4" cy="9.4" r="0.6" fill="#D4AF37"/>
+  <circle cx="24.6" cy="9.4" r="0.6" fill="#D4AF37"/>
+  <circle cx="14.5" cy="15.5" r="0.7" fill="#D4AF37"/>
+  <circle cx="17.8" cy="15.8" r="0.7" fill="#D4AF37"/>
+  <circle cx="10.5" cy="19" r="0.7" fill="#D4AF37"/>
+  <circle cx="14" cy="19.5" r="0.7" fill="#D4AF37"/>
+  <circle cx="18" cy="19.5" r="0.7" fill="#D4AF37"/>
+  <circle cx="21.5" cy="19" r="0.7" fill="#D4AF37"/>
+  <circle cx="9" cy="23.5" r="0.7" fill="#D4AF37"/>
+  <circle cx="12.5" cy="24" r="0.7" fill="#D4AF37"/>
+  <circle cx="16" cy="23.8" r="0.7" fill="#D4AF37"/>
+  <circle cx="19.5" cy="24" r="0.7" fill="#D4AF37"/>
+  <circle cx="23" cy="23.5" r="0.7" fill="#D4AF37"/>
+  <circle cx="11" cy="27" r="0.7" fill="#D4AF37"/>
+  <circle cx="16" cy="27.2" r="0.7" fill="#D4AF37"/>
+  <circle cx="21" cy="27" r="0.7" fill="#D4AF37"/>
+</svg>

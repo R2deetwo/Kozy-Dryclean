@@ -1,0 +1,325 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-outfit);
+  --font-serif: var(--font-playfair);
+  --font-mono: var(--font-geist-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* Kozy brand colors — registered directly in @theme for Tailwind v4 */
+  --color-navy-50: #E8ECF2;
+  --color-navy-100: #C8D2DF;
+  --color-navy-200: #9FB1C7;
+  --color-navy-300: #6F88A8;
+  --color-navy-400: #3F5F88;
+  --color-navy-500: #1B3A5F;
+  --color-navy-600: #102740;
+  --color-navy-700: #0A192F;
+  --color-navy-800: #07101F;
+  --color-navy-900: #040A14;
+  --color-navy: #0A192F;
+
+  --color-gold-50: #FBF5E0;
+  --color-gold-100: #F7EBBF;
+  --color-gold-200: #EFD87E;
+  --color-gold-300: #E3BE4F;
+  --color-gold-400: #D4AF37;
+  --color-gold-500: #B8962B;
+  --color-gold-600: #947621;
+  --color-gold-700: #6B541A;
+  --color-gold-800: #4A3A12;
+  --color-gold-900: #2D2410;
+  --color-gold: #D4AF37;
+
+  --color-linen-50: #FFFFFF;
+  --color-linen-100: #F8F9FA;
+  --color-linen-200: #EEF0F2;
+  --color-linen-300: #E2E5E9;
+  --color-linen-400: #CCD1D8;
+  --color-linen-500: #B0B7C2;
+  --color-linen: #F8F9FA;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.5rem;
+  /* Kozy — Crisp Linen base */
+  --background: #F8F9FA;
+  --foreground: #0A192F;
+  --card: #FFFFFF;
+  --card-foreground: #0A192F;
+  --popover: #FFFFFF;
+  --popover-foreground: #0A192F;
+  /* Kozy — Midnight Navy primary */
+  --primary: #0A192F;
+  --primary-foreground: #F8F9FA;
+  /* Kozy — Champagne Gold accent */
+  --secondary: #FBF5E0;
+  --secondary-foreground: #6B541A;
+  --muted: #EEF0F2;
+  --muted-foreground: #6F88A8;
+  --accent: #D4AF37;
+  --accent-foreground: #0A192F;
+  --destructive: #C9362C;
+  --border: #E2E5E9;
+  --input: #E2E5E9;
+  --ring: #D4AF37;
+  --chart-1: #0A192F;
+  --chart-2: #D4AF37;
+  --chart-3: #6F88A8;
+  --chart-4: #B8962B;
+  --chart-5: #1B3A5F;
+  --sidebar: #0A192F;
+  --sidebar-foreground: #F8F9FA;
+  --sidebar-primary: #D4AF37;
+  --sidebar-primary-foreground: #0A192F;
+  --sidebar-accent: #102740;
+  --sidebar-accent-foreground: #F8F9FA;
+  --sidebar-border: #1B3A5F;
+  --sidebar-ring: #D4AF37;
+}
+
+.dark {
+  --background: #0A192F;
+  --foreground: #F8F9FA;
+  --card: #102740;
+  --card-foreground: #F8F9FA;
+  --popover: #102740;
+  --popover-foreground: #F8F9FA;
+  --primary: #D4AF37;
+  --primary-foreground: #0A192F;
+  --secondary: #1B3A5F;
+  --secondary-foreground: #F8F9FA;
+  --muted: #1B3A5F;
+  --muted-foreground: #9FB1C7;
+  --accent: #D4AF37;
+  --accent-foreground: #0A192F;
+  --destructive: #E57368;
+  --border: #1B3A5F;
+  --input: #1B3A5F;
+  --ring: #D4AF37;
+  --chart-1: #D4AF37;
+  --chart-2: #6F88A8;
+  --chart-3: #1B3A5F;
+  --chart-4: #9FB1C7;
+  --chart-5: #FBF5E0;
+  --sidebar: #07101F;
+  --sidebar-foreground: #F8F9FA;
+  --sidebar-primary: #D4AF37;
+  --sidebar-primary-foreground: #0A192F;
+  --sidebar-accent: #1B3A5F;
+  --sidebar-accent-foreground: #F8F9FA;
+  --sidebar-border: #1B3A5F;
+  --sidebar-ring: #D4AF37;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    /* Phase-33 cross-device hardening: iOS Safari auto-inflates text in
+     * landscape on some sites (text-size-adjust) — pin it so the console
+     * and landing render identically on iPhone, iPad and Android. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "ss01", "cv11";
+  }
+  /* Kozy gold-link underline on focus */
+  a:focus-visible {
+    @apply outline-2 outline-offset-2;
+    outline-color: #D4AF37;
+  }
+
+  /* Phase 47: Tailwind v4's preflight gives <button> the native arrow
+   * cursor. Web users expect the finger pointer over anything clickable —
+   * the client flagged the header logo ("users may not know it goes back
+   * to the home page"), and the same confusion applied to every button
+   * site-wide (hero CTAs, Sign in/up, wizard, console). Restore the
+   * pointer for every ENABLED button; disabled controls keep their own
+   * cursor (utilities still win over this base-layer rule). */
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* Phase-33: horizontal menu rows (console tabs) — momentum scrolling on iOS
+ * and no visible scrollbar on any platform; discoverability comes from the
+ * JS-driven edge fade + chevron in the console header instead. */
+.nav-scroll {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.nav-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Phase-33: iOS Safari's 100vh includes the space behind the collapsed URL
+ * bar, so a 100vh-tall board loses its bottom edge behind the toolbar. dvh
+ * tracks the *visible* height; 100vh stays as the fallback for older
+ * browsers. Used by the admin kanban board. Mobile subtracts the phase-33
+ * mobile console header (~6rem: identity row + tab row) plus the notch
+ * safe-area; desktop subtracts the 3.5rem console header. */
+.dvh-board {
+  height: calc(100vh - 6rem - env(safe-area-inset-top, 0px));
+}
+@supports (height: 100dvh) {
+  .dvh-board {
+    height: calc(100dvh - 6rem - env(safe-area-inset-top, 0px));
+  }
+}
+.dvh-board-lg {
+  height: calc(100vh - 3.5rem);
+}
+@supports (height: 100dvh) {
+  .dvh-board-lg {
+    height: calc(100dvh - 3.5rem);
+  }
+}
+
+/* Kozy utility classes */
+.text-gold-gradient {
+  background: linear-gradient(135deg, #E3BE4F 0%, #D4AF37 50%, #B8962B 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+.bg-navy-gradient {
+  background: linear-gradient(135deg, #0A192F 0%, #102740 60%, #1B3A5F 100%);
+}
+
+.bg-gold-gradient {
+  background: linear-gradient(135deg, #E3BE4F 0%, #D4AF37 50%, #B8962B 100%);
+}
+
+.shadow-gold {
+  box-shadow: 0 4px 14px -2px rgba(212, 175, 55, 0.35);
+}
+
+.shadow-navy {
+  box-shadow: 0 4px 14px -2px rgba(10, 25, 47, 0.18);
+}
+
+/* Premium thin gold divider */
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(to right, transparent, #D4AF37, transparent);
+}
+
+/* ============================================================
+   First-paint motion + loading skeletons (phase 42)
+   ------------------------------------------------------------
+   Why: the landing used framer-motion entrance animations with
+   initial opacity:0. Those styles ship in the server HTML, so on
+   a slow phone the page painted EMPTY until the JS bundle
+   downloaded, parsed and hydrated — "loaded but stuck".
+   The hero entrance now runs on CSS, which starts the moment
+   the stylesheet loads: same polish, zero JS dependency.
+   Below-fold scroll reveals stay on framer-motion (hydration
+   there is masked by being off-screen).
+   ============================================================= */
+@keyframes kozy-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Hero entrance — pure CSS so first paint is complete without JS */
+.animate-fade-up {
+  animation: kozy-fade-up 0.5s ease-out both;
+}
+.animate-fade-up-delay-1 {
+  animation: kozy-fade-up 0.5s ease-out 0.12s both;
+}
+.animate-fade-up-delay-2 {
+  animation: kozy-fade-up 0.5s ease-out 0.24s both;
+}
+
+/* Route-loading skeletons (book/admin/portal/login/signup/review
+   loading.tsx — the dark driver app uses Tailwind animate-pulse instead) */
+@keyframes kozy-shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+.kozy-skeleton {
+  border-radius: 0.5rem;
+  background: linear-gradient(
+    110deg,
+    rgba(15, 35, 64, 0.06) 8%,
+    rgba(212, 175, 55, 0.14) 18%,
+    rgba(15, 35, 64, 0.06) 33%
+  );
+  background-size: 200% 100%;
+  animation: kozy-shimmer 1.6s linear infinite;
+}
+
+/* Respect users who ask for less motion (also masks the
+   prefers-reduced-motion note in how-it-works.tsx) */
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-up-delay-1,
+  .animate-fade-up-delay-2 {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+  .kozy-skeleton {
+    animation: none;
+  }
+  .kozy-sticky-cta {
+    transition: none;
+  }
+}

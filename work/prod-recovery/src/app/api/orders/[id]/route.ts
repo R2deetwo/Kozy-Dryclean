@@ -1,0 +1,693 @@
+// =============================================================================
+// GET /api/orders/[id] — get a single order by ID
+// PATCH /api/orders/[id] — update an order's status/driver/weight
+// =============================================================================
+// RBAC rules:
+//   GET:
+//     - ADMIN: can view any order
+//     - STAFF (phase 31): can view any order — order detail is operational
+//     - DRIVER: can view only orders assigned to them (driverId === session.user?.id)
+//     - B2C/B2B: can view only their own orders (userId === session.user?.id)
+//   PATCH:
+//     - ADMIN: can change anything (status, driverId, finalWeight, totalPrice)
+//     - STAFF (phase 31): can change status, driverId and finalWeight (the
+//               server prices KG orders itself from admin-controlled rates),
+//               but can NEVER set totalPrice directly — price integrity is
+//               admin-only, per the client's "no price setting for staff"
+//               directive.
+//     - DRIVER: can change ONLY the status, and ONLY to 'PICKED_UP' or 'DELIVERED',
+//               and ONLY on orders assigned to them (driverId === session.user?.id)
+//     - B2C/B2B: cannot PATCH orders at all (403)
+// =============================================================================
+
+import { NextResponse, after } from 'next/server'
+import { db } from '@/lib/db'
+import { getSession, requireSession, verifyLiveAccess } from '@/lib/auth'
+import { UpdateOrderSchema } from '@/lib/schemas'
+import { notifyOrderStatus, notifyInvoiceReady } from '@/lib/notifications'
+import { STAGE_RANK } from '@/lib/types'
+import { getAppSettings } from '@/lib/app-settings'
+import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
+import { detectAnomalies, logAnomaly } from '@/lib/anomalies'
+import { scheduleMediaPurge } from '@/lib/media'
+import { processDeliveryMilestones } from '@/lib/referrals'
+import { pushToUser } from '@/lib/webpush'
+import { sendWhatsApp, assignmentBrief } from '@/lib/whatsapp'
+import { notifyRiderAssignment, dispatchNewOrder, RIDER_DISPATCH_STATUSES } from '@/lib/rider-dispatch'
+
+// ----- GET /api/orders/[id] -----
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const { id } = await params
+
+  // ----- Staff live-access check (phase 31) -----
+  if (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') {
+    const blocked = await verifyLiveAccess(session)
+    if (blocked) {
+      return new NextResponse(blocked.body, {
+        status: blocked.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
+  const order = await db.order.findUnique({
+    where: { id },
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true, role: true, address: true } },
+      driver: { select: { id: true, name: true, phone: true } },
+      payments: true,
+      media: true,
+      statusEvents: { orderBy: { createdAt: 'asc' } },
+    },
+  })
+
+  if (!order) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+  }
+
+  // RBAC: check ownership/assignment
+  if (session.user?.role === 'B2C' || session.user?.role === 'B2B') {
+    if (order.userId !== session.user?.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  } else if (session.user?.role === 'DRIVER') {
+    if (order.driverId !== session.user?.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+  }
+  // ADMIN and STAFF: no restriction
+
+  // Phase 32: odd-movement flags for the kanban card / detail modal — ADMIN
+  // sessions only. Staff payloads never contain them (client directive:
+  // staff must not see the flags).
+  if (session.user?.role === 'ADMIN') {
+    ;(order as any).anomalies = await db.orderAnomaly.findMany({
+      where: { orderId: id },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { id: true, name: true, email: true } } },
+    })
+  }
+
+  return NextResponse.json({ order })
+}
+
+// ----- PATCH /api/orders/[id] -----
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await requireSession()
+
+  const { id } = await params
+
+  // ----- Staff live-access check (phase 31) -----
+  if (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') {
+    const blocked = await verifyLiveAccess(session)
+    if (blocked) {
+      return new NextResponse(blocked.body, {
+        status: blocked.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
+  const order = await db.order.findUnique({ where: { id } })
+  if (!order) {
+    return NextResponse.json({ error: 'Order not found' }, { status: 404 })
+  }
+
+  const body = await req.json()
+  const parsed = UpdateOrderSchema.safeParse(body)
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: parsed.error.flatten() },
+      { status: 400 }
+    )
+  }
+
+  // ----- Phase 69: rider dispatch actions (claim / acknowledge) -----
+  // These run BEFORE the driver RBAC gate by design: claim targets orders
+  // with NO driver yet (the old gate 403'd exactly this case — the rider
+  // could never touch an unassigned order), and acknowledge targets the
+  // rider's OWN order. Both are compare-and-set safe.
+  const action = typeof (body as any)?.action === 'string' ? (body as any).action : null
+  if (session.user?.role === 'DRIVER' && (action === 'claim' || action === 'acknowledge')) {
+    if (action === 'claim') {
+      // Race-safe: only one rider can ever win — the update matches ONLY
+      // while the order is still unclaimed and dispatchable.
+      const won = await db.order.updateMany({
+        where: { id, driverId: null, status: { in: [...RIDER_DISPATCH_STATUSES] } },
+        data: { driverId: session.user.id, assignedAt: new Date(), acceptedAt: new Date() },
+      })
+      if (won.count === 0) {
+        return NextResponse.json(
+          {
+            error: 'CLAIM_LOST',
+            message:
+              'Another rider just took this pickup — it happens! The next one is yours.',
+          },
+          { status: 409 }
+        )
+      }
+      const claimed = await db.order.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          payments: true,
+        },
+      })
+      // The claiming rider gets the same assignment brief (push + WhatsApp)
+      // so the customer's phone number is on their screen in seconds —
+      // the "rider called me within minutes" standard.
+      after(async () => {
+        try {
+          const rider = await db.user.findUnique({
+            where: { id: session.user!.id },
+            select: { phone: true },
+          })
+          await notifyRiderAssignment(
+            claimed!,
+            session.user!.id,
+            rider?.phone,
+            claimed?.user?.name
+          )
+        } catch (e) {
+          console.error('[dispatch] claim notification failed:', e)
+        }
+      })
+      ;(claimed as any).mediaCount = 0
+      return NextResponse.json({ order: claimed })
+    }
+
+    // acknowledge — the response-time tap on an auto-assigned stop
+    if (order.driverId === session.user.id && !order.acceptedAt) {
+      await db.order.update({ where: { id }, data: { acceptedAt: new Date() } })
+      const fresh = await db.order.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          payments: true,
+        },
+      })
+      ;(fresh as any).mediaCount = 0
+      return NextResponse.json({ order: fresh })
+    }
+    return NextResponse.json({ error: 'Nothing to acknowledge' }, { status: 409 })
+  }
+
+  // ----- RBAC enforcement -----
+  if (session.user?.role === 'B2C' || session.user?.role === 'B2B') {
+    // Customers cannot modify orders at all
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  if (session.user?.role === 'DRIVER') {
+    // Drivers can only update status on orders assigned to them
+    if (order.driverId !== session.user?.id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+    // Claim/acknowledge actions were already handled above; a plain PATCH
+    // from a rider is a status move on their own stop.
+    // Drivers can only set status to PICKED_UP or DELIVERED
+    const allowedStatuses = ['PICKED_UP', 'DELIVERED']
+    if (parsed.data.status && !allowedStatuses.includes(parsed.data.status)) {
+      return NextResponse.json(
+        { error: 'Drivers can only set status to PICKED_UP or DELIVERED' },
+        { status: 403 }
+      )
+    }
+    // Drivers cannot change driverId, finalWeight, or totalPrice
+    if (parsed.data.driverId !== undefined || parsed.data.finalWeight !== undefined || parsed.data.totalPrice !== undefined) {
+      return NextResponse.json(
+        { error: 'Drivers cannot modify driver assignment, weight, or price' },
+        { status: 403 }
+      )
+    }
+
+    // ----- Geofence guard -----
+    // A rider with a fresh GPS ping on file cannot confirm a pickup/delivery
+    // while they are far from the stop's service zone. Generous margin
+    // (ACTION_MAX_DISTANCE_KM) so normal GPS drift never blocks real work.
+    // No ping / stale ping / lookup error -> guard skipped (feature is additive).
+    if (parsed.data.status) {
+      try {
+        const loc = await db.driverLocation.findUnique({
+          where: { driverId: session.user.id },
+        })
+        const fresh =
+          loc && Date.now() - loc.updatedAt.getTime() < GEO.PING_STALE_MINUTES * 60 * 1000
+        if (loc && fresh) {
+          const zone = zoneFromAddress(order.pickupAddress)
+          if (zone) {
+            const distanceKm = haversineKm(loc.lat, loc.lng, zone.lat, zone.lng)
+            if (distanceKm > GEO.ACTION_MAX_DISTANCE_KM) {
+              return NextResponse.json(
+                {
+                  error: 'GEOFENCE_TOO_FAR',
+                  message: `You're about ${Math.round(distanceKm)} km from this stop's area (${zone.name}). Move within ${GEO.ACTION_MAX_DISTANCE_KM} km to confirm.`,
+                },
+                { status: 403 }
+              )
+            }
+          }
+        }
+      } catch {
+        // Geofence table unavailable — skip the guard
+      }
+    }
+  }
+  // ----- STAFF restrictions (phase 31 / phase 32) -----
+  // Staff run the pipeline: status moves, driver assignment, and recording
+  // the actual weighed kilos are all operational facts. The ONLY things they
+  // cannot do are set totalPrice directly (the server prices every KG order
+  // itself from the admin-controlled per-kg rate + discount) and CANCEL an
+  // order — cancellation wipes revenue off the board, which is a manager
+  // decision (client directive: staff must never destroy records or hide
+  // that money has come in "without approval"). Attempted-but-blocked
+  // actions are still logged as anomalies so the owner sees the attempt.
+  if (session.user?.role === 'STAFF') {
+    if (parsed.data.totalPrice !== undefined) {
+      await logAnomaly({
+        orderId: id,
+        kind: 'BLOCKED_ACTION',
+        actorId: session.user?.id,
+        detail: `Staff attempted to set the price of order #${order.orderNumber}${parsed.data.totalPrice != null ? ` to ₦${parsed.data.totalPrice.toLocaleString()}` : ''} — blocked, managers only.`,
+      })
+      return NextResponse.json(
+        {
+          error: 'FORBIDDEN_PRICE_OVERRIDE',
+          message:
+            'Staff accounts cannot set prices directly. Record the weight instead — the price is calculated from the current rates. Ask a manager for price changes.',
+        },
+        { status: 403 }
+      )
+    }
+    if (parsed.data.status === 'CANCELLED' && order.status !== 'CANCELLED') {
+      await logAnomaly({
+        orderId: id,
+        kind: 'BLOCKED_ACTION',
+        actorId: session.user?.id,
+        fromStatus: order.status,
+        toStatus: 'CANCELLED',
+        detail: `Staff attempted to CANCEL order #${order.orderNumber} — blocked, managers only.`,
+      })
+      return NextResponse.json(
+        {
+          error: 'FORBIDDEN_STAFF_CANCEL',
+          message:
+            'Cancelling an order removes it from the pipeline and affects revenue — a manager needs to do this. Ask your manager to cancel the order instead.',
+        },
+        { status: 403 }
+      )
+    }
+  }
+  // ADMIN: can change anything — no restriction
+
+  // ----- Apply the update -----
+  const updateData: any = {}
+  if (parsed.data.status !== undefined) {
+    updateData.status = parsed.data.status
+
+    // ----- Stage-email dedup (phase 24, client request) -----
+    // The customer is emailed about a pipeline stage ONLY the first time the
+    // order moves STRICTLY FORWARD past it. Updating lastNotifiedStage in the
+    // SAME write as the status makes this race-free: dragging a card back and
+    // forward again can never re-send an earlier stage's email, and no email
+    // ever tells the customer their items went backwards.
+    const newRank = STAGE_RANK[parsed.data.status] ?? -1
+    if (newRank > order.lastNotifiedStage) updateData.lastNotifiedStage = newRank
+
+    // Auto-set timestamp fields when status changes
+    if (parsed.data.status === 'PICKED_UP' && !order.pickedUpAt) updateData.pickedUpAt = new Date()
+    if (parsed.data.status === 'AT_STATION' && !order.atStationAt) updateData.atStationAt = new Date()
+    if (parsed.data.status === 'PROCESSING' && !order.processingAt) updateData.processingAt = new Date()
+    if (parsed.data.status === 'FINISHING' && !order.finishingAt) updateData.finishingAt = new Date()
+    if (parsed.data.status === 'OUT_FOR_DELIVERY' && !order.outForDeliveryAt) updateData.outForDeliveryAt = new Date()
+    if (parsed.data.status === 'DELIVERED' && !order.deliveredAt) {
+      updateData.deliveredAt = new Date()
+      if (!order.deliveryDate) updateData.deliveryDate = new Date()
+    }
+    // Phase 69: a rider acting on their stop counts as acceptance — the
+    // response-time clock stops at their first real move, even if they
+    // never tapped the Accept button on the card.
+    if (
+      session.user?.role === 'DRIVER' &&
+      parsed.data.status &&
+      !order.acceptedAt &&
+      order.driverId === session.user?.id
+    ) {
+      updateData.acceptedAt = new Date()
+    }
+  }
+  if (parsed.data.driverId !== undefined) updateData.driverId = parsed.data.driverId
+
+  // ----- Phase 62: branch re-routing + partner fulfillment (ADMIN only) -----
+  // Re-routing decides which physical hub processes the order — a capacity
+  // decision, not an operational one, so staff keep their existing powers
+  // untouched. Partner tagging feeds the revenue-share ledger, equally an
+  // owner decision. Both are logged as status events for the audit trail.
+  if (
+    (parsed.data.branchId !== undefined || parsed.data.fulfilledByPartnerId !== undefined) &&
+    session.user?.role !== 'ADMIN'
+  ) {
+    return NextResponse.json(
+      {
+        error: 'FORBIDDEN_ROUTING',
+        message: 'Branch re-routing and partner fulfillment are manager decisions.',
+      },
+      { status: 403 }
+    )
+  }
+  let routingNote: string | null = null
+  if (parsed.data.branchId !== undefined && parsed.data.branchId !== order.branchId) {
+    updateData.branchId = parsed.data.branchId
+    if (parsed.data.branchId) {
+      const branch = await db.branch.findUnique({ where: { id: parsed.data.branchId } })
+      routingNote = `Re-routed to ${branch?.name ?? 'another branch'} by ${session.user?.name ?? 'admin'}`
+    } else {
+      routingNote = `Branch cleared by ${session.user?.name ?? 'admin'}`
+    }
+  }
+  if (
+    parsed.data.fulfilledByPartnerId !== undefined &&
+    parsed.data.fulfilledByPartnerId !== order.fulfilledByPartnerId
+  ) {
+    updateData.fulfilledByPartnerId = parsed.data.fulfilledByPartnerId
+    if (parsed.data.fulfilledByPartnerId) {
+      const partner = await db.partner.findUnique({ where: { id: parsed.data.fulfilledByPartnerId } })
+      routingNote = routingNote
+        ? `${routingNote} · fulfilled by ${partner?.businessName ?? 'partner'} (${partner?.revenueSharePartnerPct ?? 70}% share)`
+        : `Fulfilled by ${partner?.businessName ?? 'partner'} (${partner?.revenueSharePartnerPct ?? 70}% share) by ${session.user?.name ?? 'admin'}`
+    } else {
+      routingNote = routingNote
+        ? `${routingNote} · partner fulfillment cleared`
+        : `Partner fulfillment cleared by ${session.user?.name ?? 'admin'}`
+    }
+  }
+  if (routingNote) {
+    try {
+      await db.statusEvent.create({
+        data: { orderId: id, status: order.status, note: routingNote, actorId: session.user?.id },
+      })
+    } catch {
+      /* trail is best-effort */
+    }
+  }
+  if (parsed.data.finalWeight !== undefined) {
+    updateData.finalWeight = parsed.data.finalWeight
+    // Auto-calculate totalPrice for KG orders when weight is set — priced
+    // with the server-side per-kg settings the admin edits in Settings →
+    // Pricing (previously hardcoded ₦800/10kg here, so admin price edits
+    // never reached the invoice the customer received).
+    const settings = await getAppSettings()
+    const billableKg = Math.max(parsed.data.finalWeight ?? 0, settings.minimumKg)
+    // Phase-30: the permanent online-order discount also lands on the bulk
+    // invoice — the client's "5% off all orders made online". The wizard is
+    // the only order-creation path, so a KG order owned by a B2B account
+    // was self-placed online. (An explicit admin totalPrice below still
+    // wins — this auto-calc never overrides a manual price.)
+    const kgOwner = await db.user.findUnique({
+      where: { id: order.userId },
+      select: { role: true },
+    })
+    const kgOnlinePct =
+      kgOwner && kgOwner.role !== 'ADMIN'
+        ? Math.max(0, Math.min(settings.onlineOrderDiscountPercent, 50))
+        : 0
+    updateData.totalPrice = Math.round(
+      billableKg * settings.pricePerKg * (1 - kgOnlinePct / 100)
+    )
+  }
+  if (parsed.data.totalPrice !== undefined) updateData.totalPrice = parsed.data.totalPrice
+
+  const updated = await db.order.update({
+    where: { id },
+    data: updateData,
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+      driver: { select: { id: true, name: true, phone: true } },
+      payments: true,
+      // Phase 51: count-only media on console updates — the detail modal
+      // fetches full photos on open via GET /api/orders/[id].
+      media: { select: { id: true } },
+    },
+  })
+
+  // Phase 32: odd-movement flags ride along for ADMIN callers only — staff
+  // must never see them (client directive). Fetched separately so the typed
+  // include above stays intact for the notification helpers.
+  if (session.user?.role === 'ADMIN') {
+    ;(updated as any).anomalies = await db.orderAnomaly.findMany({
+      where: { orderId: id },
+      orderBy: { createdAt: 'desc' },
+      include: { actor: { select: { id: true, name: true, email: true } } },
+    })
+  }
+
+  // ----- Consistency guard (console status -> PAYMENT_VERIFIED) -----
+  // When an admin or staff member moves an order to PAYMENT_VERIFIED via the
+  // dropdown or a drag, any PENDING/REJECTED bank-transfer payment on it is
+  // auto-verified. Without this, the order says "paid" while the payment
+  // queue still flags the receipt — the exact ghost state that confused the
+  // pipeline before (real-world case: an order at PAYMENT_VERIFIED whose
+  // receipt was still marked REJECTED).
+  if (
+    parsed.data.status === 'PAYMENT_VERIFIED' &&
+    (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') &&
+    order.status !== 'PAYMENT_VERIFIED'
+  ) {
+    const unverified = (updated.payments ?? []).filter(
+      (p: any) => p.method === 'BANK_TRANSFER' && p.status !== 'VERIFIED'
+    )
+    if (unverified.length > 0) {
+      await db.payment.updateMany({
+        where: { id: { in: unverified.map((p: any) => p.id) } },
+        data: {
+          status: 'VERIFIED',
+          verifiedAt: new Date(),
+          verifiedById: session.user?.id,
+        },
+      })
+      const fresh = await db.order.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          payments: true,
+          media: { select: { id: true } },
+        },
+      })
+      if (fresh) Object.assign(updated, fresh)
+    }
+  }
+
+  // Log the status change as a StatusEvent
+  if (parsed.data.status) {
+    await db.statusEvent.create({
+      data: {
+        orderId: id,
+        status: parsed.data.status,
+        actorId: session.user?.id,
+      },
+    })
+
+    // ----- Odd-movement flags (phase 32, STAFF moves only) -----
+    // Backwards moves, stage skips and unpaid deliveries leave an anomaly
+    // row the ADMIN sees on the kanban (card flag + modal) — staff never
+    // read this data through any API. Owner moves are their own business.
+    if (session.user?.role === 'STAFF' && parsed.data.status !== order.status) {
+      const hasVerifiedPayment = await db.payment.findFirst({
+        where: { orderId: id, status: 'VERIFIED' },
+        select: { id: true },
+      })
+      const kinds = detectAnomalies({
+        orderNumber: order.orderNumber,
+        from: order.status,
+        to: parsed.data.status,
+        hasVerifiedPayment: Boolean(hasVerifiedPayment),
+        amountDue: order.totalPrice,
+      })
+      const actorName = session.user?.name ?? 'A staff member'
+      for (const kind of kinds) {
+        await logAnomaly({
+          orderId: id,
+          kind,
+          actorId: session.user?.id,
+          fromStatus: order.status,
+          toStatus: parsed.data.status,
+          detail:
+            kind === 'UNPAID_DELIVERY'
+              ? `${actorName} moved order #${order.orderNumber} to Delivered with no verified payment (${order.totalPrice != null ? `₦${order.totalPrice.toLocaleString()} due` : 'amount pending weighing'}).`
+              : `${actorName} moved order #${order.orderNumber} ${order.status.replace(/_/g, ' ').toLowerCase()} → ${parsed.data.status.replace(/_/g, ' ').toLowerCase()}.`,
+        })
+      }
+    }
+
+    // Email + SMS the customer about the status change — after the response
+    // so the admin's dropdown/drag feels instant (email providers take
+    // seconds). notifyOrderStatus never throws, so it can't break the update.
+    //
+    // PHASE 54 CADENCE: notifyOrderStatus itself now gates WHICH statuses
+    // email the customer (awaiting payment, ready to pick up, finishing,
+    // out for delivery, delivered + cancelled). Requested / picked up /
+    // at station / processing are quiet — the owner asked that customers
+    // not be messaged at every step, and the portal shows live status.
+    //
+    // STAGE-EMAIL DEDUP: only pipeline stages the customer has NOT been
+    // emailed about yet (strictly forward), plus non-pipeline statuses
+    // (PAYMENT_PENDING_VERIFICATION / CANCELLED — event-driven, not progress).
+    // A backwards or repeat move is logged in the timeline but SILENT — the
+    // customer must never receive an email implying their order regressed,
+    // nor a duplicate for a stage they were already told about. The rank
+    // still advances through quiet stages so a later re-move stays silent
+    // too.
+    const notifyRank = STAGE_RANK[parsed.data.status] ?? -1
+    const statusChanged = parsed.data.status !== order.status
+    const shouldEmailCustomer =
+      statusChanged && (notifyRank === -1 || notifyRank > order.lastNotifiedStage)
+
+    if (shouldEmailCustomer) {
+      after(async () => {
+        try {
+          await notifyOrderStatus(updated, parsed.data.status!)
+        } catch (e) {
+          console.error('Status-change notification failed:', e)
+        }
+      })
+    }
+
+    // ----- Phase 52: service milestones on first genuine delivery -----
+    // deliveredAt is set exactly once per order (never reset by a drag-back),
+    // so this is the once-only trigger for BOTH the 10-order appreciation
+    // email and the referral thank-you credit (when THIS order was a
+    // friend's referred first order). Runs post-response; every step inside
+    // is compare-and-set guarded and never throws.
+    const isFirstGenuineDelivery = parsed.data.status === 'DELIVERED' && !order.deliveredAt
+    if (isFirstGenuineDelivery) {
+      after(async () => {
+        try {
+          await processDeliveryMilestones(id)
+        } catch (e) {
+          console.error('Delivery milestone processing failed:', e)
+        }
+      })
+    }
+  }
+
+  // ----- Bulk invoice email (admin recorded the weight) -----
+  // The order modal has always toasted "Weight recorded — invoice sent";
+  // now the email/SMS genuinely goes out, priced with the live per-kg
+  // settings. Only fires the FIRST time a weight is recorded on a KG order
+  // (re-weighing updates the total silently unless it is also the first).
+  if (
+    parsed.data.finalWeight !== undefined &&
+    order.type === 'KG' &&
+    order.finalWeight === null &&
+    updated.totalPrice
+  ) {
+    const settings = await getAppSettings()
+    const billableKg = Math.max(parsed.data.finalWeight ?? 0, settings.minimumKg)
+    // Phase-30: tell the customer which online discount shaped the invoice
+    // so the "amount due" never looks arbitrary against kg × rate.
+    const invoiceOwner = await db.user.findUnique({
+      where: { id: order.userId },
+      select: { role: true },
+    })
+    const invoiceOnlinePct =
+      invoiceOwner && invoiceOwner.role !== 'ADMIN'
+        ? Math.max(0, Math.min(settings.onlineOrderDiscountPercent, 50))
+        : 0
+    const invoiceTotal = updated.totalPrice ?? billableKg * settings.pricePerKg
+    after(async () => {
+      try {
+        await notifyInvoiceReady(updated, billableKg, invoiceTotal, invoiceOnlinePct)
+      } catch (e) {
+        console.error('Invoice-ready notification failed:', e)
+      }
+    })
+  }
+
+  // Phase 51: photos of DELIVERED orders expire 24h after delivery — the
+  // status change is one of the natural moments to run the (throttled)
+  // retention sweep, alongside the daily cron and list loads.
+  scheduleMediaPurge()
+
+  // ----- Rider assignment notifications (phase 61) -----
+  // The moment a stop is assigned, the rider's own devices announce it:
+  //   1. Web Push to every device where they turned notifications on — the
+  //      phone wakes even with the browser closed (the answer to "do they
+  //      have to be on the website to see a ride come in?": NO).
+  //   2. WhatsApp via the Meta Cloud API when (and only when) the owner
+  //      adds WHATSAPP_TOKEN + WHATSAPP_PHONE_NUMBER_ID — until then this
+  //      leg is a logged no-op and the console's one-tap wa.me bridge does
+  //      the WhatsApp job instead. Either way the assignment itself never
+  //      waits on a notification channel.
+  if (parsed.data.driverId !== undefined && parsed.data.driverId !== order.driverId && parsed.data.driverId) {
+    const riderId = parsed.data.driverId
+    const leg: 'PICKUP' | 'DELIVERY' =
+      (parsed.data.status ?? order.status) === 'OUT_FOR_DELIVERY' ? 'DELIVERY' : 'PICKUP'
+    const address = leg === 'PICKUP' ? updated.pickupAddress : (updated.deliveryAddress || updated.pickupAddress)
+    const slot =
+      leg === 'PICKUP'
+        ? `${new Date(updated.pickupDate).toDateString()} · ${updated.pickupTimeSlot}`
+        : 'next delivery run'
+    const customerName = (updated as any).user?.name ?? 'customer'
+    after(async () => {
+      try {
+        await pushToUser(riderId, {
+          title: `New ${leg === 'PICKUP' ? 'pickup' : 'delivery'} assigned`,
+          body: `${customerName} — ${address}. Open the app for the 3 steps.`,
+          url: '/driver',
+          tag: `stop-${updated.id}`,
+        })
+        await sendWhatsApp(
+          (updated as any).driver?.phone,
+          assignmentBrief({
+            orderNumber: updated.orderNumber,
+            leg,
+            customerName,
+            address,
+            slot,
+          })
+        )
+      } catch (e) {
+        console.error('[notify] assignment notification failed:', e)
+      }
+    })
+  }
+
+  ;(updated as any).mediaCount = (updated as any).media?.length ?? 0
+  delete (updated as any).media
+
+  // ----- Phase 69: payment verified → dispatch the waiting order -----
+  // The owner's exact repro: a transfer order sits unassigned while payment
+  // is pending; admin verifies the money and pushes the order forward — NOW
+  // that same moment hands the pickup to a full-time rider (or broadcasts it
+  // to the claim pool). Transfer-verified orders no longer wait for a manual
+  // console assignment.
+  if (
+    (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') &&
+    parsed.data.status === 'PAYMENT_VERIFIED' &&
+    !updated.driverId
+  ) {
+    after(async () => {
+      try {
+        await dispatchNewOrder(updated as Parameters<typeof dispatchNewOrder>[0])
+      } catch (e) {
+        console.error('[dispatch] post-verification dispatch failed:', e)
+      }
+    })
+  }
+
+  return NextResponse.json({ order: updated })
+}
