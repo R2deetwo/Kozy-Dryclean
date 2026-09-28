@@ -117,6 +117,10 @@ VERCEL_TOKEN=vcp_... npx -y vercel deploy --prod --yes
 - Vercel project: `kozy-dryclean` · build `bun run build:vercel`
   (`prisma migrate deploy` + `next build` — schema changes ship as reviewed
   migrations; the accept-data-loss `db push` era ended phase 71).
+- Domains: `kozycare.ng` (primary) · `www.kozycare.ng` → apex (308) ·
+  `kozy-dryclean.vercel.app` (legacy).
+- All secrets live in Vercel environment settings — never in the repository.
+  GitHub push protection is enabled and has caught accidental leaks before.
 
 ### Database migrations (phase 71)
 
@@ -130,10 +134,28 @@ VERCEL_TOKEN=vcp_... npx -y vercel deploy --prod --yes
   history and can accept data loss. (`db:push` stays in package.json as a
   local-only escape hatch.)
 - Migration status: `DATABASE_URL=$DIRECT_URL npx prisma migrate status`.
-- Domains: `kozycare.ng` (primary) · `www.kozycare.ng` → apex (308) ·
-  `kozy-dryclean.vercel.app` (legacy).
-- All secrets live in Vercel environment settings — never in the repository.
-  GitHub push protection is enabled and has caught accidental leaks before.
+
+### Ops runbook (audit P1 items, phase 71)
+
+- **Backups — rehearsed 2026-09-28**: `python3 scripts/backup_rehearsal.py`
+  exports every prod table (306 rows / 29 tables at rehearsal time) into one
+  timestamped `.sql` in `work/backups/`, then RESTORES it into a scratch
+  database and verifies row counts — proving the backup actually works.
+  Ritual: run it weekly (or before risky changes) and file the `.sql` in
+  cloud storage; Supabase's platform backups are the second line, this is
+  the independent copy. `... backup_rehearsal.py dump` skips the rehearsal
+  when you only need the export. The restore recipe is embedded in every
+  backup file's header (migrate deploy + psql -f).
+- **Rate limiting — Upstash Redis is LIVE**: `UPSTASH_REDIS_REST_URL` /
+  `UPSTASH_REDIS_REST_TOKEN` are set on prod (verified: shared-counter 429s
+  observed across instances). The limiter fails OPEN if Redis hiccups —
+  by design, so checkout never bricks.
+- **SMS — needs `TERMII_API_KEY`**: the Termii integration is coded and
+  env-gated (Brevo email is live; SMS activates the moment the key lands in
+  Vercel env). Get the key at termii.com → Settings → API keys, add it as
+  `TERMII_API_KEY`, and request sender-ID approval for "Kozy" (Termii
+  requires it for custom senders; until approved the generic route works).
+  `TERMII_SENDER_ID` / `TERMII_CHANNEL` are already set. Then redeploy once.
 
 ## Repository map
 
@@ -148,7 +170,9 @@ src/lib/                 types (GARMENT_CATALOG), subscriptions (plans + Shoe Cl
 prisma/schema.prisma     Users, Orders, Payments, Branches (ownership + stats epoch),
                          SubscriptionPlan (KIT/SHOES families) + Subscription, riders,
                          marketing tables, reviews, loyalty, referrals
-scripts/                 ops + brand-kit generators (see scripts/kozy-brand/)
+prisma/migrations/       baseline + future migrations (deploy runs migrate deploy)
+scripts/                 ops (backup_rehearsal.py, deploy, t7x migrations/verifiers)
+                         + brand-kit generators (see scripts/kozy-brand/)
 public/brand/            K mark, OG image, photography, service icons
 worklog.md               chronological build record (start here for "why")
 HANDOVER.md              the current handover document
