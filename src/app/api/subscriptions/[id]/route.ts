@@ -154,6 +154,7 @@ export async function PATCH(
         data: {
           unitsUsed: 0,
           extraUnitsUsed: 0,
+          shoesUsed: 0,
           duvetsUsed: 0,
           curtainsUsed: 0,
           springCleanUsed: 0,

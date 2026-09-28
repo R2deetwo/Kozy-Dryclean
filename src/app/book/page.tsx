@@ -12,7 +12,7 @@
 // "Book shoe care" CTA so shoe customers land on the shoe list, not garments.
 // =============================================================================
 
-import { Suspense, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { motion } from 'framer-motion'
@@ -49,6 +49,15 @@ export default function BookPage() {
   // Server-side settings — the old localStorage read could show a
   // placeholder bank account on the payment-success screen (audit).
   const settings = useAppSettings()
+
+  // The confirmation replaces the wizard mid-scroll (the submit button sits
+  // low on the payment step) — jump to the top so the customer meets the
+  // "Your pickup is booked!" headline, not a random middle of the page.
+  useEffect(() => {
+    if (placedOrder) {
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    }
+  }, [placedOrder])
 
   // ===== Post-booking success screen =====
   if (placedOrder) {

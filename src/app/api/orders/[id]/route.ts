@@ -33,6 +33,7 @@ import { scheduleMediaPurge } from '@/lib/media'
 import { processDeliveryMilestones } from '@/lib/referrals'
 import { pushToUser } from '@/lib/webpush'
 import { sendWhatsApp, assignmentBrief } from '@/lib/whatsapp'
+import { notifyRiderAssignment, dispatchNewOrder, RIDER_DISPATCH_STATUSES } from '@/lib/rider-dispatch'
 
 // ----- GET /api/orders/[id] -----
 export async function GET(
@@ -132,6 +133,78 @@ export async function PATCH(
     )
   }
 
+  // ----- Phase 69: rider dispatch actions (claim / acknowledge) -----
+  // These run BEFORE the driver RBAC gate by design: claim targets orders
+  // with NO driver yet (the old gate 403'd exactly this case — the rider
+  // could never touch an unassigned order), and acknowledge targets the
+  // rider's OWN order. Both are compare-and-set safe.
+  const action = typeof (body as any)?.action === 'string' ? (body as any).action : null
+  if (session.user?.role === 'DRIVER' && (action === 'claim' || action === 'acknowledge')) {
+    if (action === 'claim') {
+      // Race-safe: only one rider can ever win — the update matches ONLY
+      // while the order is still unclaimed and dispatchable.
+      const won = await db.order.updateMany({
+        where: { id, driverId: null, status: { in: [...RIDER_DISPATCH_STATUSES] } },
+        data: { driverId: session.user.id, assignedAt: new Date(), acceptedAt: new Date() },
+      })
+      if (won.count === 0) {
+        return NextResponse.json(
+          {
+            error: 'CLAIM_LOST',
+            message:
+              'Another rider just took this pickup — it happens! The next one is yours.',
+          },
+          { status: 409 }
+        )
+      }
+      const claimed = await db.order.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          payments: true,
+        },
+      })
+      // The claiming rider gets the same assignment brief (push + WhatsApp)
+      // so the customer's phone number is on their screen in seconds —
+      // the "rider called me within minutes" standard.
+      after(async () => {
+        try {
+          const rider = await db.user.findUnique({
+            where: { id: session.user!.id },
+            select: { phone: true },
+          })
+          await notifyRiderAssignment(
+            claimed!,
+            session.user!.id,
+            rider?.phone,
+            claimed?.user?.name
+          )
+        } catch (e) {
+          console.error('[dispatch] claim notification failed:', e)
+        }
+      })
+      ;(claimed as any).mediaCount = 0
+      return NextResponse.json({ order: claimed })
+    }
+
+    // acknowledge — the response-time tap on an auto-assigned stop
+    if (order.driverId === session.user.id && !order.acceptedAt) {
+      await db.order.update({ where: { id }, data: { acceptedAt: new Date() } })
+      const fresh = await db.order.findUnique({
+        where: { id },
+        include: {
+          user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+          driver: { select: { id: true, name: true, phone: true } },
+          payments: true,
+        },
+      })
+      ;(fresh as any).mediaCount = 0
+      return NextResponse.json({ order: fresh })
+    }
+    return NextResponse.json({ error: 'Nothing to acknowledge' }, { status: 409 })
+  }
+
   // ----- RBAC enforcement -----
   if (session.user?.role === 'B2C' || session.user?.role === 'B2B') {
     // Customers cannot modify orders at all
@@ -143,6 +216,8 @@ export async function PATCH(
     if (order.driverId !== session.user?.id) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
+    // Claim/acknowledge actions were already handled above; a plain PATCH
+    // from a rider is a status move on their own stop.
     // Drivers can only set status to PICKED_UP or DELIVERED
     const allowedStatuses = ['PICKED_UP', 'DELIVERED']
     if (parsed.data.status && !allowedStatuses.includes(parsed.data.status)) {
@@ -261,6 +336,17 @@ export async function PATCH(
     if (parsed.data.status === 'DELIVERED' && !order.deliveredAt) {
       updateData.deliveredAt = new Date()
       if (!order.deliveryDate) updateData.deliveryDate = new Date()
+    }
+    // Phase 69: a rider acting on their stop counts as acceptance — the
+    // response-time clock stops at their first real move, even if they
+    // never tapped the Accept button on the card.
+    if (
+      session.user?.role === 'DRIVER' &&
+      parsed.data.status &&
+      !order.acceptedAt &&
+      order.driverId === session.user?.id
+    ) {
+      updateData.acceptedAt = new Date()
     }
   }
   if (parsed.data.driverId !== undefined) updateData.driverId = parsed.data.driverId
@@ -582,6 +668,26 @@ export async function PATCH(
 
   ;(updated as any).mediaCount = (updated as any).media?.length ?? 0
   delete (updated as any).media
+
+  // ----- Phase 69: payment verified → dispatch the waiting order -----
+  // The owner's exact repro: a transfer order sits unassigned while payment
+  // is pending; admin verifies the money and pushes the order forward — NOW
+  // that same moment hands the pickup to a full-time rider (or broadcasts it
+  // to the claim pool). Transfer-verified orders no longer wait for a manual
+  // console assignment.
+  if (
+    (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') &&
+    parsed.data.status === 'PAYMENT_VERIFIED' &&
+    !updated.driverId
+  ) {
+    after(async () => {
+      try {
+        await dispatchNewOrder(updated as Parameters<typeof dispatchNewOrder>[0])
+      } catch (e) {
+        console.error('[dispatch] post-verification dispatch failed:', e)
+      }
+    })
+  }
 
   return NextResponse.json({ order: updated })
 }

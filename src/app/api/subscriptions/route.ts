@@ -62,6 +62,7 @@ export async function GET(req: Request) {
             {
               unitsUsed: r.unitsUsed,
               extraUnitsUsed: r.extraUnitsUsed,
+              shoesUsed: r.shoesUsed,
               duvetsUsed: r.duvetsUsed,
               curtainsUsed: r.curtainsUsed,
               springCleanUsed: r.springCleanUsed,

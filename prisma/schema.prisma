@@ -60,6 +60,13 @@ model User {
   // this customer's next retail order at checkout. The remainder survives
   // if the order was smaller than the balance.
   referralCredit    Float   @default(0)
+  // ----- Rider dispatch (phase 69) -----
+  // FULL_TIME riders are auto-assigned new pickups at booking (the system
+  // picks the best-placed one and notifies them instantly); PART_TIME riders
+  // work the broadcast pool — every new pickup pings them and the first to
+  // claim it gets the stop. Set from Team → Riders in the console. Null for
+  // non-drivers and legacy rider rows (treated as PART_TIME).
+  employmentType    String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -168,6 +175,13 @@ model Order {
   finishingAt       DateTime?
   outForDeliveryAt  DateTime?
   deliveredAt       DateTime?
+  // ----- Rider dispatch audit (phase 69) -----
+  // assignedAt = when a full-time rider was auto-assigned (or a claim landed).
+  // acceptedAt = when that rider acknowledged the assignment / tapped Accept —
+  // the gap between the two is the rider's response time, which feeds the
+  // response-time leaderboard and the monthly bonus pool conversation.
+  assignedAt        DateTime?
+  acceptedAt        DateTime?
   // ----- Stage-email dedup (phase 24, client request) -----
   // Highest PIPELINE_STAGES index the customer has ALREADY been emailed
   // about (the booking-confirmation email counts as stage 0 "Requested").
@@ -942,6 +956,11 @@ model Branch {
   // Exactly one branch should be the default (fallback for unmatched
   // addresses). Enforced in the API layer, not the DB.
   isDefault Boolean  @default(false)
+  // COMPANY | FRANCHISE (phase 69). Company branches are navy in the
+  // console; franchise branches render gold with a partner chip — the
+  // owner's franchise-tracking ask. A partner site runs under Kozy Care
+  // standards with a revenue split; company sites are ours end-to-end.
+  ownershipType String @default("COMPANY")
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -981,6 +1000,12 @@ model SubscriptionPlan {
   duvetsPerQuarter   Int     @default(0)
   curtainsPerQuarter Int     @default(0)
   springCleanPerYear Int     @default(0)
+  // Pairs of shoes cleaned per MONTHLY cycle (phase 70 — the shoe perk).
+  // One "pair" = the standard sneaker/canvas clean (upper, midsole, laces,
+  // deodorize); premium materials (suede, nubuck, leather, embellished)
+  // stay with the à-la-carte specialist service at the member discount.
+  // Monthly: resets with the cycle, exactly like the bag/box units.
+  shoesPerMonth      Int     @default(0)
   // Concierge channel: designer pieces are assessed and treated by the
   // concierge desk (Tier 3's signature perk).
   concierge          Boolean @default(false)
@@ -1046,6 +1071,7 @@ model Subscription {
   // ----- Usage counters (belong to the CURRENT cycle / quarter / year) -----
   unitsUsed      Int @default(0) // bag/box pickups consumed this cycle
   extraUnitsUsed Int @default(0)
+  shoesUsed      Int @default(0) // shoe-clean pairs consumed this cycle
   duvetsUsed     Int @default(0) // this calendar quarter
   curtainsUsed   Int @default(0)
   springCleanUsed Int @default(0) // this calendar year

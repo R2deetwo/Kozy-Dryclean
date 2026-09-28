@@ -281,6 +281,99 @@ export function useUpdateOrder() {
   })
 }
 
+// ----- Rider dispatch (phase 69) -----
+/** The claim pool: unclaimed pickups this rider can take (broadcast lane). */
+export function useAvailableOrders(options?: {
+  enabled?: boolean
+  refetchInterval?: number | false
+}) {
+  return useQuery({
+    queryKey: ['orders', 'available'],
+    queryFn: async () => {
+      const res = await fetch('/api/orders?available=1')
+      if (!res.ok) throw new Error('Failed to fetch available pickups')
+      const data = await res.json()
+      return (data.items ?? []) as ApiOrder[]
+    },
+    staleTime: 5 * 1000,
+    ...options,
+  })
+}
+
+/** Claim an available pickup (race-safe server-side; 409 = someone was faster). */
+export function useClaimOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'claim' }),
+      })
+      const err = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(err.message || err.error || 'Claim failed')
+      return err.order as ApiOrder
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+/** Acknowledge an auto-assigned stop — the response-time tap. */
+export function useAcknowledgeOrder() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`/api/orders/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'acknowledge' }),
+      })
+      const err = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(err.message || err.error || 'Failed')
+      return err.order as ApiOrder
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['orders'] })
+    },
+  })
+}
+
+/** The response-time leaderboard (rider app + Team → Riders). */
+export interface DriverStatsRow {
+  id: string
+  name: string
+  employmentType: 'FULL_TIME' | 'PART_TIME'
+  active: boolean
+  assignments: number
+  accepted: number
+  pendingAck: number
+  avgResponseMin: number | null
+  claims: number
+  rank: number
+}
+export function useDriverStats(options?: { refetchInterval?: number | false }) {
+  return useQuery({
+    queryKey: ['driver-stats'],
+    queryFn: async () => {
+      const res = await fetch('/api/driver-stats')
+      if (!res.ok) throw new Error('Failed to fetch rider stats')
+      const data = await res.json()
+      return data as {
+        windowDays: number
+        board: DriverStatsRow[]
+        myIndex: number
+        myId: string | null
+        teamAvgResponseMin: number | null
+      }
+    },
+    staleTime: 30 * 1000,
+    retry: 1,
+    ...options,
+  })
+}
+
 // ----- Payments -----
 export function usePayments(options?: {
   fetchAll?: boolean
@@ -1243,6 +1336,7 @@ export interface ApiMembershipPlan {
   duvetsPerQuarter: number
   curtainsPerQuarter: number
   springCleanPerYear: number
+  shoesPerMonth: number
   concierge: boolean
   memberDiscountPct: number
   prioritySlots: boolean
@@ -1254,6 +1348,8 @@ export interface ApiMembershipUsage {
   unitsRemaining: number
   extraUnitsUsed: number
   extraRemaining: number
+  shoesUsed: number
+  shoesRemaining: number
   duvetsUsed: number
   duvetsRemaining: number
   curtainsUsed: number
@@ -1274,6 +1370,7 @@ export interface ApiMembership {
   cancelAtPeriodEnd: boolean
   unitsUsed: number
   extraUnitsUsed: number
+  shoesUsed: number
   duvetsUsed: number
   curtainsUsed: number
   springCleanUsed: number
@@ -1404,7 +1501,7 @@ export function useMembershipPickup() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: {
-      kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean'
+      kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes'
       count?: number
       pickupAddress: string
       pickupDate: string
@@ -1480,6 +1577,9 @@ export interface ApiBranch {
   lng: number
   isActive: boolean
   isDefault: boolean
+  /** Phase 69: COMPANY | FRANCHISE — franchise sites render gold with a
+   *  partner chip in the console. */
+  ownershipType?: 'COMPANY' | 'FRANCHISE'
   sortOrder: number
 }
 
@@ -1585,14 +1685,22 @@ export function usePartnerDecision() {
 /** ADMIN: assign a rider to their home branch. */
 export function useRiderBranchAssign() {
   return useMutation({
-    mutationFn: async (input: { userId: string; branchId: string | null }) => {
+    mutationFn: async (input: {
+      userId: string
+      branchId?: string | null
+      employmentType?: 'FULL_TIME' | 'PART_TIME' | null
+    }) => {
       const res = await fetch(`/api/users/${input.userId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branchId: input.branchId }),
+        body: JSON.stringify(
+          input.employmentType !== undefined
+            ? { employmentType: input.employmentType }
+            : { branchId: input.branchId ?? null }
+        ),
       })
       const data = await res.json().catch(() => ({}))
-      if (!res.ok) throw new Error(data.error || 'Could not assign the branch')
+      if (!res.ok) throw new Error(data.error || 'Could not save the rider setting')
       return data
     },
   })

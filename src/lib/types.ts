@@ -180,6 +180,9 @@ export interface Branch {
   lng: number
   isActive: boolean
   isDefault: boolean
+  // COMPANY (ours end-to-end) | FRANCHISE (a partner site under Kozy Care
+  // standards — gold treatment + partner chip in the console).
+  ownershipType: 'COMPANY' | 'FRANCHISE'
   sortOrder: number
   createdAt: string
   updatedAt: string
@@ -205,6 +208,7 @@ export interface MembershipPlan {
   duvetsPerQuarter: number
   curtainsPerQuarter: number
   springCleanPerYear: number
+  shoesPerMonth: number
   concierge: boolean
   memberDiscountPct: number
   prioritySlots: boolean
@@ -232,6 +236,7 @@ export interface Membership {
   // Usage snapshot (current cycle / quarter / year)
   unitsUsed: number
   extraUnitsUsed: number
+  shoesUsed: number
   duvetsUsed: number
   curtainsUsed: number
   springCleanUsed: number

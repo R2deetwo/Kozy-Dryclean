@@ -49,6 +49,7 @@ export async function GET() {
           {
             unitsUsed: row.unitsUsed,
             extraUnitsUsed: row.extraUnitsUsed,
+            shoesUsed: row.shoesUsed,
             duvetsUsed: row.duvetsUsed,
             curtainsUsed: row.curtainsUsed,
             springCleanUsed: row.springCleanUsed,

@@ -28,6 +28,7 @@ interface BranchSeed {
   lat: number
   lng: number
   isDefault: boolean
+  ownershipType: 'COMPANY' | 'FRANCHISE'
   sortOrder: number
 }
 
@@ -45,6 +46,7 @@ export const DEFAULT_BRANCHES: BranchSeed[] = [
     lat: 6.4683,
     lng: 3.5673,
     isDefault: true,
+    ownershipType: 'COMPANY',
     sortOrder: 1,
   },
   {
@@ -56,6 +58,7 @@ export const DEFAULT_BRANCHES: BranchSeed[] = [
     lat: 6.4392,
     lng: 3.4712,
     isDefault: false,
+    ownershipType: 'COMPANY',
     sortOrder: 2,
   },
 ]
@@ -79,6 +82,7 @@ export function rowToBranch(row: any): Branch {
     lng: row.lng,
     isActive: Boolean(row.isActive),
     isDefault: Boolean(row.isDefault),
+    ownershipType: row.ownershipType === 'FRANCHISE' ? 'FRANCHISE' : 'COMPANY',
     sortOrder: row.sortOrder,
     createdAt: row.createdAt?.toISOString?.() ?? String(row.createdAt),
     updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt),

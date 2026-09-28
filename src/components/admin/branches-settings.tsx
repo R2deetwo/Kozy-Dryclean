@@ -179,6 +179,39 @@ export function BranchesTab() {
                 Default fallback branch
               </label>
             </div>
+
+            {/* Phase 69 — ownership. COMPANY = ours end-to-end; FRANCHISE =
+                partner-run under Kozy Care standards (gold treatment in the
+                console, revenue-share ledger via the Partners tab). */}
+            <div className="rounded-xl border border-navy-100 bg-linen-50/60 p-3">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-navy-300">
+                Ownership
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {(['COMPANY', 'FRANCHISE'] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => patch(b.id, 'ownershipType', t)}
+                    className={cn(
+                      'rounded-full border px-3 py-1 text-[11px] font-medium transition',
+                      (b.ownershipType ?? 'COMPANY') === t
+                        ? t === 'FRANCHISE'
+                          ? 'border-gold-400 bg-gold-100 text-gold-800'
+                          : 'border-navy bg-navy text-white'
+                        : 'border-navy-200 bg-white text-navy-300 hover:border-gold-300'
+                    )}
+                  >
+                    {t === 'COMPANY' ? 'Company site' : 'Franchise · partner-run'}
+                  </button>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[10px] leading-snug text-navy-300">
+                Franchise branches run under the Kozy Care standard by an approved partner —
+                they show gold with a partner chip across the console and feed the
+                revenue-share ledger.
+              </p>
+            </div>
           </CardContent>
         </Card>
       ))}

@@ -42,6 +42,7 @@ interface PlanSeed {
   duvetsPerQuarter: number
   curtainsPerQuarter: number
   springCleanPerYear: number
+  shoesPerMonth: number
   concierge: boolean
   memberDiscountPct: number
   prioritySlots: boolean
@@ -63,6 +64,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     duvetsPerQuarter: 0,
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
+    shoesPerMonth: 1,
     concierge: false,
     memberDiscountPct: 5,
     prioritySlots: false,
@@ -82,6 +84,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     duvetsPerQuarter: 3,
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
+    shoesPerMonth: 3,
     concierge: false,
     memberDiscountPct: 10,
     prioritySlots: false,
@@ -101,6 +104,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     duvetsPerQuarter: 3,
     curtainsPerQuarter: 6,
     springCleanPerYear: 1,
+    shoesPerMonth: 5,
     concierge: false,
     memberDiscountPct: 15,
     prioritySlots: true,
@@ -128,6 +132,7 @@ export function rowToPlan(row: any): MembershipPlan {
     duvetsPerQuarter: row.duvetsPerQuarter,
     curtainsPerQuarter: row.curtainsPerQuarter,
     springCleanPerYear: row.springCleanPerYear,
+    shoesPerMonth: row.shoesPerMonth ?? 0,
     concierge: row.concierge,
     memberDiscountPct: row.memberDiscountPct,
     prioritySlots: row.prioritySlots,
@@ -207,6 +212,7 @@ export async function savePlans(
       'duvetsPerQuarter',
       'curtainsPerQuarter',
       'springCleanPerYear',
+      'shoesPerMonth',
       'memberDiscountPct',
     ] as const
     for (const k of numericKeys) {
@@ -279,17 +285,19 @@ export function effectiveUsage(
   sub: {
     unitsUsed: number
     extraUnitsUsed: number
+    shoesUsed: number
     duvetsUsed: number
     curtainsUsed: number
     springCleanUsed: number
     usageQuarterKey?: string | null
     usageYearKey?: string | null
   },
-  plan: { includedUnits: number; maxExtraUnits: number; duvetsPerQuarter: number; curtainsPerQuarter: number; springCleanPerYear: number }
+  plan: { includedUnits: number; maxExtraUnits: number; shoesPerMonth: number; duvetsPerQuarter: number; curtainsPerQuarter: number; springCleanPerYear: number }
 ) {
   const quarterRolled = (sub.usageQuarterKey ?? '') !== quarterKey()
   const yearRolled = (sub.usageYearKey ?? '') !== yearKey()
   const unitsUsed = sub.unitsUsed
+  const shoesUsed = sub.shoesUsed ?? 0
   const duvetsUsed = quarterRolled ? 0 : sub.duvetsUsed
   const curtainsUsed = quarterRolled ? 0 : sub.curtainsUsed
   const springCleanUsed = yearRolled ? 0 : sub.springCleanUsed
@@ -298,6 +306,8 @@ export function effectiveUsage(
     unitsRemaining: Math.max(0, plan.includedUnits - unitsUsed),
     extraUnitsUsed: sub.extraUnitsUsed,
     extraRemaining: Math.max(0, plan.maxExtraUnits - sub.extraUnitsUsed),
+    shoesUsed,
+    shoesRemaining: Math.max(0, plan.shoesPerMonth - shoesUsed),
     duvetsUsed,
     duvetsRemaining: Math.max(0, plan.duvetsPerQuarter - duvetsUsed),
     curtainsUsed,
@@ -321,6 +331,7 @@ export function rowToMembership(row: any): Membership {
     cancelAtPeriodEnd: Boolean(row.cancelAtPeriodEnd),
     unitsUsed: row.unitsUsed,
     extraUnitsUsed: row.extraUnitsUsed,
+    shoesUsed: row.shoesUsed ?? 0,
     duvetsUsed: row.duvetsUsed,
     curtainsUsed: row.curtainsUsed,
     springCleanUsed: row.springCleanUsed,
@@ -372,6 +383,7 @@ export async function activateOrRenewSubscription(
       // (their bookmarks are stamped so effectiveUsage can compute).
       unitsUsed: 0,
       extraUnitsUsed: 0,
+      shoesUsed: 0,
       usageCycleKey: cycleKey(periodStart),
       usageQuarterKey: quarterKey(),
       usageYearKey: yearKey(),

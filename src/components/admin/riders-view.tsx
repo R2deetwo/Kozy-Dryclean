@@ -41,6 +41,7 @@ import {
   AlertTriangle,
   Building2,
   Loader2,
+  Timer,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -62,6 +63,7 @@ import {
   useRiderDecision,
   useBranches,
   useRiderBranchAssign,
+  useDriverStats,
   type ApiRiderApplication,
   type ApiRiderRosterEntry,
   type ApiRiderIncident,
@@ -627,8 +629,11 @@ export function RidersView() {
 
                   {/* Phase 62 — home branch. Dispatch suggestions score
                    * same-branch riders higher, and the branch health cards
-                   * count riders on duty per location. */}
+                   * count riders on duty per location.
+                   * Phase 69 — employment type + response-time rank. */}
                   <RiderBranchSelect riderId={r.id} branchId={(r as any).branchId ?? null} />
+                  <RiderEmploymentSelect riderId={r.id} employmentType={(r as any).employmentType ?? null} />
+                  <RiderResponseStat riderId={r.id} />
                 </CardContent>
               </Card>
             ))}
@@ -805,6 +810,90 @@ export function RidersView() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// =====================================================
+// RIDER EMPLOYMENT TYPE (phase 69)
+// =====================================================
+// FULL_TIME riders are auto-assigned new pickups at booking; PART_TIME
+// riders work the broadcast & claim pool (first to accept wins the stop).
+// The owner's dispatch design — the two lanes stay explicit in the console.
+function RiderEmploymentSelect({
+  riderId,
+  employmentType,
+}: {
+  riderId: string
+  employmentType: string | null
+}) {
+  const assign = useRiderBranchAssign()
+  const [value, setValue] = useState(employmentType ?? '')
+  const [lastType, setLastType] = useState(employmentType)
+  if (employmentType !== lastType) {
+    setLastType(employmentType)
+    setValue(employmentType ?? '')
+  }
+
+  return (
+    <div className="mt-2.5">
+      <label className="text-[10px] font-semibold uppercase tracking-wide text-navy-300">
+        Dispatch lane
+      </label>
+      <div className="mt-1 flex items-center gap-2">
+        <Timer className="h-3.5 w-3.5 shrink-0 text-gold-600" />
+        <select
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value)
+            assign.mutate({
+              userId: riderId,
+              employmentType: (e.target.value || null) as 'FULL_TIME' | 'PART_TIME' | null,
+            })
+          }}
+          disabled={assign.isPending}
+          className="h-8 w-full rounded-lg border border-navy-200 bg-white px-2 text-xs text-navy focus:border-gold-400 focus:outline-none"
+        >
+          <option value="">Not set (treated as part-time)</option>
+          <option value="FULL_TIME">Full-time — auto-assigned</option>
+          <option value="PART_TIME">Part-time — claim pool</option>
+        </select>
+        {assign.isPending && <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-navy-300" />}
+      </div>
+      <p className="mt-1 text-[10px] leading-snug text-navy-300">
+        Full-timers receive new pickups automatically (nearest / lightest load wins);
+        part-timers get pinged and race to claim.
+      </p>
+    </div>
+  )
+}
+
+// =====================================================
+// RIDER RESPONSE STAT (phase 69)
+// =====================================================
+// The rider's average accept time + team rank — the accept-fast league,
+// visible where the owner manages riders.
+function RiderResponseStat({ riderId }: { riderId: string }) {
+  const { data: stats } = useDriverStats({ refetchInterval: 60000 })
+  const row = stats?.board?.find((r) => r.id === riderId)
+  if (!row) return null
+  const fmt = (m: number | null) => (m == null ? '—' : m < 1 ? '<1 min' : `${m} min`)
+  return (
+    <div className="mt-2.5 flex items-center justify-between rounded-lg bg-linen-100 px-3 py-2">
+      <span className="flex items-center gap-1.5 text-[11px] text-navy-300">
+        <Timer className="h-3 w-3" /> Avg accept
+      </span>
+      <span className="text-[11px] font-semibold text-navy">
+        {fmt(row.avgResponseMin)}
+        {stats && stats.board.length > 1 && (
+          <span className="ml-1.5 font-normal text-navy-300">#{row.rank} of {stats.board.length}</span>
+        )}
+        {row.pendingAck > 0 && (
+          <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-700">
+            {row.pendingAck} waiting to accept
+          </span>
+        )}
+      </span>
     </div>
   )
 }

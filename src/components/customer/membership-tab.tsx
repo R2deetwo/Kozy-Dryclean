@@ -18,6 +18,7 @@ import {
   BedDouble,
   Layers,
   Sun,
+  Footprints,
   CalendarClock,
   ArrowRight,
   Loader2,
@@ -60,7 +61,7 @@ function tomorrowISO(): string {
 export function MembershipTab() {
   const { data, isLoading, refetch } = useMyMembership()
   const cancelMutation = useMembershipCancel()
-  const [booking, setBooking] = useState<'unit' | 'duvet' | 'curtain' | 'spring-clean' | null>(null)
+  const [booking, setBooking] = useState<'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | null>(null)
   const [confirmCancel, setConfirmCancel] = useState(false)
   // Prefill the pickup address from the profile the booking wizard also
   // reads (best-effort — an empty field is a perfectly good prompt).
@@ -167,6 +168,14 @@ export function MembershipTab() {
                 total={plan.includedUnits}
                 suffix={usage.unitsRemaining === 0 && usage.extraRemaining > 0 ? ` · ${usage.extraRemaining} extra left` : undefined}
               />
+              {plan.shoesPerMonth > 0 && (
+                <UsageMeter
+                  icon={Footprints}
+                  label="Shoe cleans (this month)"
+                  used={usage.shoesUsed}
+                  total={plan.shoesPerMonth}
+                />
+              )}
               {plan.duvetsPerQuarter > 0 && (
                 <UsageMeter
                   icon={BedDouble}
@@ -205,6 +214,18 @@ export function MembershipTab() {
                   Book a {plan.unitKind} pickup
                 </Button>
                 <div className="flex flex-wrap gap-2">
+                  {plan.shoesPerMonth > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setBooking('shoes')}
+                      disabled={status === 'PENDING_ACTIVATION' || usage.shoesRemaining === 0}
+                      className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+                    >
+                      <Footprints className="mr-1.5 h-3.5 w-3.5" /> Shoe clean
+                      {usage.shoesRemaining === 0 && ' (month used)'}
+                    </Button>
+                  )}
                   {plan.duvetsPerQuarter > 0 && (
                     <Button
                       size="sm"
@@ -305,11 +326,13 @@ export function MembershipTab() {
           remaining={
             booking === 'unit'
               ? (usage?.unitsRemaining ?? 0) + (usage?.extraRemaining ?? 0)
-              : booking === 'duvet'
-                ? usage?.duvetsRemaining ?? 0
-                : booking === 'curtain'
-                  ? usage?.curtainsRemaining ?? 0
-                  : usage?.springCleanRemaining ?? 0
+              : booking === 'shoes'
+                ? usage?.shoesRemaining ?? 0
+                : booking === 'duvet'
+                  ? usage?.duvetsRemaining ?? 0
+                  : booking === 'curtain'
+                    ? usage?.curtainsRemaining ?? 0
+                    : usage?.springCleanRemaining ?? 0
           }
           onClose={() => setBooking(null)}
           onBooked={() => {
@@ -412,7 +435,7 @@ function MemberPickupDialog({
   onClose,
   onBooked,
 }: {
-  kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean'
+  kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes'
   plan: { unitName: string; unitKind: string; extraUnitPrice: number; maxExtraUnits: number }
   defaultAddress: string
   remaining: number
@@ -432,6 +455,12 @@ function MemberPickupDialog({
       desc: `Leave your ${plan.unitName} ready — the rider collects, and it returns washed, folded and pressed.`,
       countLabel: `${plan.unitName}s this pickup`,
       max: Math.max(1, Math.min(plan.maxExtraUnits + 1, remaining)),
+    },
+    shoes: {
+      title: 'Book your shoe clean',
+      desc: 'Included with your plan this month — sneakers and casual shoes hand-cleaned, deodorized and returned. (Suede, leather and embellished pairs use our specialist service with your member discount.)',
+      countLabel: 'Pairs this pickup',
+      max: Math.max(1, Math.min(4, remaining)),
     },
     duvet: {
       title: 'Book your duvet wash',

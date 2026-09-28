@@ -152,9 +152,9 @@ export const StagePhotoSchema = z.object({
 //   unit        — a bag/box pickup (included allowance first, extras billed)
 //   duvet / curtain / spring-clean — the tier's included perk services
 export const MemberPickupSchema = z.object({
-  kind: z.enum(['unit', 'duvet', 'curtain', 'spring-clean']),
+  kind: z.enum(['unit', 'duvet', 'curtain', 'spring-clean', 'shoes']),
   // How many bags/boxes this pickup collects (kind=unit) or how many perk
-  // items to include (duvet/curtain counts; spring-clean is always 1).
+  // items to include (duvet/curtain/shoe counts; spring-clean is always 1).
   count: z.number().int().min(1).max(4).optional().default(1),
   pickupAddress: z.string().trim().min(8, 'Pickup address is required').max(400),
   pickupDate: z.string().min(1, 'Pickup date is required'),

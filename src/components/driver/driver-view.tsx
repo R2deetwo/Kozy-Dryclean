@@ -26,13 +26,18 @@ import {
   History as HistoryIcon,
   Wallet,
   User as UserIcon,
+  Zap,
+  Timer,
+  Trophy,
+  Smartphone,
 } from 'lucide-react'
 import { useSession } from 'next-auth/react'
-import { useOrders, useUpdateOrder } from '@/lib/hooks'
+import { useOrders, useUpdateOrder, useAvailableOrders, useClaimOrder, useAcknowledgeOrder, useDriverStats } from '@/lib/hooks'
 import { formatDate } from '@/lib/types'
 import { orderDistanceKm } from '@/lib/geo'
 import { getOrderTiming, formatDue } from '@/lib/order-timing'
 import { cn } from '@/lib/utils'
+import { toast } from '@/hooks/use-toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -146,6 +151,39 @@ export function DriverView() {
   })
   const updateOrderMutation = useUpdateOrder()
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined)
+
+  // ----- Dispatch (phase 69): the claim pool + response stats -----
+  // Available-now = pickups with no rider yet (broadcast lane). Every rider
+  // sees them; the first to tap Claim gets the stop. Polls alongside the
+  // route so a fresh booking surfaces within seconds.
+  const { data: availableOrders } = useAvailableOrders({
+    enabled: !ordersPaused,
+    refetchInterval: 15000,
+  })
+  const claimMutation = useClaimOrder()
+  const ackMutation = useAcknowledgeOrder()
+  const { data: driverStats } = useDriverStats({ refetchInterval: 60000 })
+
+  const onClaim = (o: any) => {
+    claimMutation.mutate(o.id, {
+      onSuccess: () => {
+        try {
+          const steps = JSON.parse(localStorage.getItem('kozy-rider-onboarding') ?? '{}')
+          steps.claimed = true
+          localStorage.setItem('kozy-rider-onboarding', JSON.stringify(steps))
+        } catch {
+          /* non-blocking */
+        }
+        toast({
+          title: 'Stop is yours',
+          description: `#${o.orderNumber} — call ${o.user?.name ?? 'the customer'} to say you're coming.`,
+        })
+      },
+      onError: (e: Error) => {
+        toast({ title: 'Missed it', description: e.message, variant: 'destructive' })
+      },
+    })
+  }
 
   // The API already filters orders to the logged-in driver (RBAC).
   // Phase 59: the route list shows only ACTIONABLE stops — a picked-up
@@ -327,6 +365,12 @@ export function DriverView() {
         {/* ----- Tab content ----- */}
         {tab === 'route' && (
           <>
+            {/* Rider onboarding checklist (phase 69) — the coach in the app.
+                Install → notifications → first claim. Dismissable; steps
+                self-check off (claim completes on the first successful
+                Claim tap above). */}
+            <RiderOnboardingChecklist availableCount={(availableOrders ?? []).length} onGoAccount={() => setTab('account')} />
+
             {/* Stats */}
             <div className="mb-4 grid grid-cols-3 gap-2">
               <div className="rounded-xl bg-slate-800 p-3 text-center">
@@ -350,8 +394,39 @@ export function DriverView() {
               </div>
             </div>
 
+            {/* Response-time strip (phase 69) — the accept-fast leaderboard.
+                Rank + own average + the team board one tap away. */}
+            <ResponseTimeStrip stats={driverStats} myId={session?.user?.id ?? null} />
+
             {/* Geofence status (paused / location-off) */}
             <DriverGeofenceBanner state={geofence} />
+
+            {/* ----- Available now (phase 69): the claim pool ----- */}
+            {!ordersPaused && (availableOrders ?? []).length > 0 && (
+              <section className="mb-5">
+                <div className="mb-2 flex items-center justify-between">
+                  <h2 className="flex items-center gap-2 text-base font-bold">
+                    <Zap className="h-4 w-4 text-gold-400" /> Available now
+                    <span className="relative flex h-2 w-2">
+                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gold-400 opacity-75" />
+                      <span className="relative inline-flex h-2 w-2 rounded-full bg-gold-400" />
+                    </span>
+                  </h2>
+                  <span className="text-[11px] text-slate-400">first to accept gets the stop</span>
+                </div>
+                <ul className="space-y-3">
+                  {(availableOrders ?? []).map((o: any) => (
+                    <AvailableStopCard
+                      key={o.id}
+                      order={o}
+                      geofence={geofence}
+                      onClaim={() => onClaim(o)}
+                      claiming={claimMutation.isPending && claimMutation.variables === o.id}
+                    />
+                  ))}
+                </ul>
+              </section>
+            )}
 
             {/* Route header */}
             <div className="mb-3 flex items-center justify-between">
@@ -392,6 +467,23 @@ export function DriverView() {
                     index={i + 1}
                     geofence={geofence}
                     onOpen={() => setSelectedId(o.id)}
+                    needsAck={
+                      o.status === 'PAYMENT_VERIFIED' &&
+                      !(o as any).acceptedAt &&
+                      !!(o as any).assignedAt
+                    }
+                    acknowledging={ackMutation.isPending && ackMutation.variables === o.id}
+                    onAcknowledge={() =>
+                      ackMutation.mutate(o.id, {
+                        onSuccess: () =>
+                          toast({
+                            title: 'Accepted',
+                            description: 'Response time recorded — fast accepts climb the board.',
+                          }),
+                        onError: (e: Error) =>
+                          toast({ title: 'Could not accept', description: e.message, variant: 'destructive' }),
+                      })
+                    }
                   />
                 ))}
               </ul>
@@ -644,11 +736,17 @@ function DriverStopCard({
   index,
   geofence,
   onOpen,
+  needsAck = false,
+  acknowledging = false,
+  onAcknowledge,
 }: {
   order: any
   index: number
   geofence: { lat?: number; lng?: number }
   onOpen: () => void
+  needsAck?: boolean
+  acknowledging?: boolean
+  onAcknowledge?: () => void
 }) {
   const customer = order.user
   const isPickup = order.status === 'PAYMENT_VERIFIED'
@@ -670,11 +768,19 @@ function DriverStopCard({
   const dueText = timing ? formatDue(timing.dueAt) : null
 
   return (
-    <motion.button
+    <motion.div
       onClick={onOpen}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
       whileTap={{ scale: 0.98 }}
       className={cn(
-        'relative w-full overflow-hidden rounded-2xl p-4 text-left shadow-lg',
+        'relative w-full cursor-pointer overflow-hidden rounded-2xl p-4 text-left shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold-400',
         isPickup && 'bg-gradient-to-br from-navy to-navy-500',
         isDrop && 'bg-gradient-to-br from-cyan-600 to-blue-700'
       )}
@@ -750,7 +856,25 @@ function DriverStopCard({
           Bulk laundry — {order.finalWeight ? `${order.finalWeight}kg` : 'weigh at station'}
         </div>
       )}
-    </motion.button>
+
+      {/* Phase 69: the Accept tap on a fresh assignment. Response time is
+          measured from assignment to this tap (or the first status move) —
+          fast accepts climb the team board. */}
+      {needsAck && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onAcknowledge?.()
+          }}
+          disabled={acknowledging}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gold-400 py-2.5 text-sm font-bold text-navy transition active:scale-[0.98] hover:bg-gold-300 disabled:opacity-60"
+        >
+          <Check className="h-4 w-4" />
+          {acknowledging ? 'Accepting…' : 'Accept — I’m on it'}
+        </button>
+      )}
+    </motion.div>
   )
 }
 
@@ -1328,6 +1452,284 @@ function SwipeToConfirm({
           <ChevronRight className="h-6 w-6" />
         )}
       </motion.div>
+    </div>
+  )
+}
+
+// =============================================================================
+// Phase 69 — the dispatch surfaces: claim pool, response stats, onboarding
+// =============================================================================
+
+/** A claimable pickup — visually distinct from assigned stops (outlined,
+ * gold action) so "mine to do" vs "mine to take" reads at a glance. */
+function AvailableStopCard({
+  order,
+  geofence,
+  onClaim,
+  claiming,
+}: {
+  order: any
+  geofence: { lat?: number; lng?: number }
+  onClaim: () => void
+  claiming: boolean
+}) {
+  const customer = order.user
+  const addr = order.pickupAddress
+  const stop =
+    geofence.lat != null && geofence.lng != null
+      ? orderDistanceKm(geofence.lat, geofence.lng, addr)
+      : null
+  const waitingMin = order.createdAt
+    ? Math.max(0, Math.floor((Date.now() - new Date(order.createdAt).getTime()) / 60000))
+    : null
+
+  return (
+    <motion.li layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="w-full rounded-2xl border border-gold-400/30 bg-slate-800 p-4 shadow-lg">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Badge className="bg-gold-400/15 text-gold-300 hover:bg-gold-400/15">
+              <Zap className="mr-1 h-3 w-3" /> Open pickup
+            </Badge>
+            {waitingMin != null && waitingMin > 0 && (
+              <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-semibold text-amber-200">
+                waiting {waitingMin >= 60 ? `${Math.floor(waitingMin / 60)}h ${waitingMin % 60}m` : `${waitingMin} min`}
+              </span>
+            )}
+          </div>
+          <span className="font-mono text-[10px] text-slate-500">#{order.orderNumber}</span>
+        </div>
+
+        <p className="mt-2.5 text-base font-bold text-white">{customer?.name ?? 'Customer'}</p>
+        <p className="mt-1 flex items-start gap-1 text-xs text-slate-400">
+          <MapPin className="mt-0.5 h-3 w-3 shrink-0" />
+          {addr}
+        </p>
+
+        <div className="mt-2.5 flex items-center justify-between text-xs text-slate-400">
+          <span className="flex items-center gap-1">
+            <Clock className="h-3 w-3" /> Slot {order.pickupTimeSlot}
+          </span>
+          {stop && (
+            <span className="flex items-center gap-1 rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+              <MapPin className="h-2.5 w-2.5" /> {stop.zone} · {stop.distanceKm} km away
+            </span>
+          )}
+        </div>
+
+        {order.type === 'ITEM' && (() => {
+          try {
+            const items = JSON.parse(order.itemsManifest || '[]')
+            if (items.length === 0) return null
+            const count = items.reduce((s: number, i: any) => s + i.quantity, 0)
+            return <p className="mt-2 text-xs text-slate-500">{count} item{count === 1 ? '' : 's'}</p>
+          } catch { return null }
+        })()}
+        {order.type === 'KG' && (
+          <p className="mt-2 text-xs text-slate-500">Bulk laundry — weighed at the station</p>
+        )}
+
+        <button
+          type="button"
+          onClick={onClaim}
+          disabled={claiming}
+          className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-gold-400 py-2.5 text-sm font-bold text-navy transition active:scale-[0.98] hover:bg-gold-300 disabled:opacity-60"
+        >
+          <Check className="h-4 w-4" />
+          {claiming ? 'Claiming…' : 'Claim this pickup'}
+        </button>
+        <p className="mt-1.5 text-center text-[10px] text-slate-500">
+          Call the customer as soon as you claim — that call is the Kozy standard.
+        </p>
+      </div>
+    </motion.li>
+  )
+}
+
+/** Response-time strip + collapsible team board (the accept-fast league). */
+function ResponseTimeStrip({
+  stats,
+  myId,
+}: {
+  stats?: {
+    windowDays: number
+    board: Array<{
+      id: string
+      name: string
+      avgResponseMin: number | null
+      rank: number
+      accepted: number
+    }>
+    teamAvgResponseMin: number | null
+  } | undefined
+  myId: string | null
+}) {
+  const [open, setOpen] = useState(false)
+  if (!stats || stats.board.length === 0) return null
+  const me = myId ? stats.board.find((r) => r.id === myId) : undefined
+  const fmt = (m: number | null) => (m == null ? '—' : m < 1 ? '<1 min' : `${m} min`)
+
+  return (
+    <div className="mb-4 rounded-xl border border-gold-400/20 bg-gold-400/5 p-3.5">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between text-left"
+      >
+        <span className="flex items-center gap-2 text-sm font-bold text-gold-300">
+          <Timer className="h-4 w-4" /> Response time
+        </span>
+        <span className="text-xs text-amber-100/70">
+          {me
+            ? `${fmt(me.avgResponseMin)} avg · #${me.rank} of ${stats.board.length}`
+            : stats.teamAvgResponseMin != null
+              ? `team ${fmt(stats.teamAvgResponseMin)} avg`
+              : 'no data yet'}
+          <ChevronRight className={cn('ml-1 inline h-3 w-3 transition', open && 'rotate-90')} />
+        </span>
+      </button>
+      <p className="mt-1 text-[10px] leading-snug text-amber-100/50">
+        Fast accepts climb the board — the monthly bonus pool starts here.
+        {' '}Tap for the team league ({stats.windowDays}-day window).
+      </p>
+
+      {open && (
+        <ul className="mt-3 space-y-1.5">
+          {stats.board.map((r) => (
+            <li
+              key={r.id}
+              className={cn(
+                'flex items-center justify-between rounded-lg px-2.5 py-1.5 text-xs',
+                r.id === myId ? 'bg-gold-400/15 text-gold-200' : 'text-slate-300'
+              )}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                {r.rank === 1 ? (
+                  <Trophy className="h-3.5 w-3.5 shrink-0 text-gold-400" />
+                ) : (
+                  <span className="w-3.5 shrink-0 text-center text-[10px] text-slate-500">{r.rank}</span>
+                )}
+                <span className="truncate font-medium">{r.name}</span>
+              </span>
+              <span className="shrink-0 tabular-nums">
+                {fmt(r.avgResponseMin)} <span className="text-slate-500">· {r.accepted} accepted</span>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+/** First-launch coach: install → notifications → first claim. */
+function RiderOnboardingChecklist({
+  availableCount,
+  onGoAccount,
+}: {
+  availableCount: number
+  onGoAccount: () => void
+}) {
+  const [steps, setSteps] = useState<{ installed?: boolean; notified?: boolean; claimed?: boolean; dismissed?: boolean } | null>(null)
+
+  // Hydrate from localStorage on the first CLIENT render — the same
+  // adjust-during-render pattern this file uses for the new-stop baseline
+  // (the lint rule forbids setState inside effects; render-time adjustment
+  // with a null sentinel is the React-documented alternative).
+  if (steps === null && typeof window !== 'undefined') {
+    try {
+      setSteps(JSON.parse(localStorage.getItem('kozy-rider-onboarding') ?? '{}'))
+    } catch {
+      setSteps({})
+    }
+  }
+
+  // Standalone display-mode = installed (checked per render — cheap, and
+  // covers the rider installing while the app is open).
+  const standalone =
+    typeof window !== 'undefined' &&
+    (window.matchMedia?.('(display-mode: standalone)').matches ||
+      (window.navigator as any).standalone === true)
+
+  if (!steps || steps.dismissed) return null
+  const installed = standalone || steps.installed
+  const done = (installed ? 1 : 0) + (steps.notified ? 1 : 0) + (steps.claimed ? 1 : 0)
+  if (done === 3) return null
+
+  const markNotified = () => {
+    setSteps((s) => {
+      const next = { ...(s ?? {}), notified: true }
+      localStorage.setItem('kozy-rider-onboarding', JSON.stringify(next))
+      return next
+    })
+    onGoAccount()
+  }
+  const dismiss = () => {
+    setSteps((s) => {
+      const next = { ...(s ?? {}), dismissed: true }
+      localStorage.setItem('kozy-rider-onboarding', JSON.stringify(next))
+      return next
+    })
+  }
+
+  return (
+    <div className="mb-4 rounded-xl border border-cyan-400/20 bg-slate-800 p-4">
+      <div className="flex items-start justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-bold text-white">
+          <Smartphone className="h-4 w-4 text-cyan-400" /> Set up your rider app
+        </p>
+        <button
+          type="button"
+          onClick={dismiss}
+          className="text-[10px] text-slate-500 underline underline-offset-2 hover:text-slate-300"
+        >
+          hide
+        </button>
+      </div>
+      <ul className="mt-2.5 space-y-2 text-xs">
+        <li className="flex items-center justify-between gap-2">
+          <span className={installed ? 'text-slate-500 line-through' : 'text-slate-300'}>
+            1. Install the app on your home screen
+          </span>
+          {!installed && (
+            <button
+              type="button"
+              onClick={onGoAccount}
+              className="shrink-0 rounded-full bg-cyan-500/15 px-3 py-1 text-[10px] font-semibold text-cyan-300"
+            >
+              Account → Install
+            </button>
+          )}
+          {installed && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+        </li>
+        <li className="flex items-center justify-between gap-2">
+          <span className={steps.notified ? 'text-slate-500 line-through' : 'text-slate-300'}>
+            2. Turn on notifications (test message)
+          </span>
+          {!steps.notified && (
+            <button
+              type="button"
+              onClick={markNotified}
+              className="shrink-0 rounded-full bg-cyan-500/15 px-3 py-1 text-[10px] font-semibold text-cyan-300"
+            >
+              Account → Notifications
+            </button>
+          )}
+          {steps.notified && <Check className="h-3.5 w-3.5 text-emerald-400" />}
+        </li>
+        <li className="flex items-center justify-between gap-2">
+          <span className={steps.claimed ? 'text-slate-500 line-through' : 'text-slate-300'}>
+            3. Claim your first pickup
+          </span>
+          {!steps.claimed ? (
+            <span className="shrink-0 text-[10px] text-slate-500">
+              {availableCount > 0 ? `${availableCount} waiting below` : 'one will appear here'}
+            </span>
+          ) : (
+            <Check className="h-3.5 w-3.5 text-emerald-400" />
+          )}
+        </li>
+      </ul>
     </div>
   )
 }

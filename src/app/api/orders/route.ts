@@ -54,6 +54,7 @@ import {
 import { checkReferralEligibility, recordReferralRedemption } from '@/lib/referrals'
 import { getLoyaltyState } from '@/lib/loyalty'
 import { assignBranchForAddress } from '@/lib/branches'
+import { availableOrdersForDriver, dispatchNewOrder, escalateUnclaimedOrders } from '@/lib/rider-dispatch'
 import { effectiveStatus } from '@/lib/subscriptions'
 
 // Positive-integer env override with a safe default (phase-29): lets the
@@ -204,6 +205,25 @@ export async function GET(req: Request) {
     } catch {
       geofence = { status: 'error' } // degrade gracefully
     }
+  }
+
+  // ----- Dispatch (phase 69) -----
+  // (a) RIDER available pool: unclaimed pickups the rider can claim — the
+  //     broadcast & claim lane. Queried by the rider app alongside the route.
+  if (session.user?.role === 'DRIVER' && searchParams.get('available') === '1') {
+    const me = await db.user.findUnique({
+      where: { id: session.user.id },
+      select: { branchId: true },
+    })
+    const available = await availableOrdersForDriver(me?.branchId)
+    return NextResponse.json({ items: available })
+  }
+
+  // (b) Console board loads (ADMIN/STAFF) drive the escalation ladder —
+  //     an unclaimed order aging past 5/10/15 minutes raises admin events.
+  //     Throttled internally to one scan per minute.
+  if (session.user?.role === 'ADMIN' || session.user?.role === 'STAFF') {
+    escalateUnclaimedOrders().catch(() => {})
   }
 
   return NextResponse.json({ items: orders, nextCursor, ...(geofence ? { geofence } : {}) })
@@ -1078,6 +1098,15 @@ export async function POST(req: Request) {
         await notifyAdminTransferPending(order)
       } else {
         await notifyAdminNewOrder(order)
+      }
+
+      // ----- Phase 69: dispatch to a rider -----
+      // Only PAYMENT_VERIFIED orders dispatch (member-covered one-tap bookings
+      // land here instantly). REQUESTED card orders wait for the Paystack
+      // webhook, transfer orders for admin verification — both of those
+      // trigger dispatch at the moment the money clears.
+      if ((order as any).status === 'PAYMENT_VERIFIED') {
+        await dispatchNewOrder(order as Parameters<typeof dispatchNewOrder>[0])
       }
 
       // ----- Phase 52: referral redemption trail -----

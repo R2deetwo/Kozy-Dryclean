@@ -73,6 +73,11 @@ export function BranchHealth() {
             new Date(p.verifiedAt ?? p.createdAt) >= weekAgo
         )
         .reduce((s, p) => s + (p.amount ?? 0), 0)
+      // Phase 69: all-time revenue — after the Chevron backfill this is the
+      // honest "every naira this hub ever earned" figure.
+      const allTimeRevenue = (payments ?? [])
+        .filter((p) => p.status === 'VERIFIED' && p.orderId && orderIds.has(p.orderId))
+        .reduce((s, p) => s + (p.amount ?? 0), 0)
       const riders = (users ?? []).filter((u) => u.role === 'DRIVER' && (u as any).branchId === branch.id)
       const ordersWithNoBranch = (orders ?? []).filter((o) => !o.branchId && o.status !== 'CANCELLED').length
 
@@ -90,6 +95,8 @@ export function BranchHealth() {
         unassignedToday: unassignedToday.length,
         awaitingPayment: awaitingPayment.length,
         weekRevenue,
+        allTimeRevenue,
+        allTimeOrders: branchOrders.filter((o) => o.status !== 'CANCELLED').length,
         riders: riders.length,
         alerts,
       }
@@ -121,13 +128,30 @@ export function BranchHealth() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         {stats.map((s) => (
-          <Card key={s.branch.id} className="shadow-navy">
+          <Card
+            key={s.branch.id}
+            className={cn(
+              'shadow-navy',
+              // Phase 69: franchise branches are ringed gold — partner-run
+              // sites read differently from company hubs at a glance.
+              s.branch.ownershipType === 'FRANCHISE' && 'ring-2 ring-gold-300'
+            )}
+          >
             <CardContent className="p-5">
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <div className="flex items-center gap-2">
                     <MapPin className="h-4 w-4 text-gold-600" />
                     <p className="font-serif text-lg font-semibold text-navy">{s.branch.name}</p>
+                    {s.branch.ownershipType === 'FRANCHISE' ? (
+                      <Badge className="rounded-full bg-gold-100 text-[9px] text-gold-800 hover:bg-gold-100">
+                        FRANCHISE · partner site
+                      </Badge>
+                    ) : (
+                      <Badge variant="outline" className="rounded-full text-[9px] text-navy-300">
+                        company
+                      </Badge>
+                    )}
                     {s.branch.isDefault && (
                       <Badge variant="outline" className="rounded-full text-[9px] text-navy-300">
                         default
@@ -165,6 +189,13 @@ export function BranchHealth() {
                 />
                 <Stat icon={Wallet} label="Revenue (7d)" value={formatNaira(s.weekRevenue)} />
               </div>
+
+              {/* Phase 69: the all-time line — where the Chevron backfill lands. */}
+              <p className="mt-2.5 text-[11px] text-navy-300">
+                All-time: <span className="font-semibold text-navy">{s.allTimeOrders}</span>{' '}
+                order{s.allTimeOrders === 1 ? '' : 's'} ·{' '}
+                <span className="font-semibold text-navy">{formatNaira(s.allTimeRevenue)}</span> earned
+              </p>
 
               <div className="mt-3 flex items-center gap-1.5 text-xs text-navy-300">
                 <Bike className="h-3.5 w-3.5 text-gold-600" />

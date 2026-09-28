@@ -23,6 +23,7 @@ import {
   BedDouble,
   Layers,
   Sun,
+  Footprints,
   RefreshCcw,
   Receipt,
   Ban,
@@ -188,6 +189,7 @@ function PlansEditor() {
                 <NumField label="Duvets / quarter" value={d.duvetsPerQuarter} onChange={num(d.id, 'duvetsPerQuarter')} />
                 <NumField label="Curtain panels / quarter" value={d.curtainsPerQuarter} onChange={num(d.id, 'curtainsPerQuarter')} />
                 <NumField label="Spring cleans / year" value={d.springCleanPerYear} onChange={num(d.id, 'springCleanPerYear')} />
+                <NumField label="Shoe pairs / month" value={d.shoesPerMonth} onChange={num(d.id, 'shoesPerMonth')} />
                 <div className="flex flex-col justify-end gap-1.5 pb-0.5">
                   <Toggle label="Priority windows" checked={d.prioritySlots} onChange={(v) => patch(d.id, 'prioritySlots', v)} />
                 </div>
@@ -365,6 +367,9 @@ function SubscribersList() {
                 {m.usage && m.plan && (
                   <div className="flex flex-wrap items-center gap-2 text-[11px]">
                     <UsageChip icon={Package} used={m.usage.unitsUsed} total={m.plan.includedUnits} label={m.plan.unitKind} />
+                    {m.plan.shoesPerMonth > 0 && (
+                      <UsageChip icon={Footprints} used={m.usage.shoesUsed} total={m.plan.shoesPerMonth} label="shoes/mo" />
+                    )}
                     {m.plan.duvetsPerQuarter > 0 && (
                       <UsageChip icon={BedDouble} used={m.usage.duvetsUsed} total={m.plan.duvetsPerQuarter} label="duvets/q" />
                     )}

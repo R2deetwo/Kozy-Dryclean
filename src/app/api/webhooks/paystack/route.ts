@@ -22,6 +22,7 @@ import crypto from 'crypto'
 import { db } from '@/lib/db'
 import { notifyPaymentVerified, notifyMembershipActive } from '@/lib/notifications'
 import { activateOrRenewSubscription } from '@/lib/subscriptions'
+import { dispatchNewOrder } from '@/lib/rider-dispatch'
 
 export async function POST(req: Request) {
   // ----- 1. Verify the Paystack signature -----
@@ -152,6 +153,16 @@ async function handleChargeSuccess(data: any) {
       data: { status: 'PAYMENT_VERIFIED' },
     })
 
+    // Phase 69: the money just cleared — dispatch the pickup to a rider
+    // (auto-assign a full-timer, or ping the claim pool). Fire-and-forget.
+    const paidOrder = await db.order.findUnique({
+      where: { id: existing.orderId },
+      select: { id: true, orderNumber: true, branchId: true, pickupAddress: true, pickupDate: true, pickupTimeSlot: true, status: true, userId: true, driverId: true },
+    })
+    if (paidOrder && !paidOrder.driverId) {
+      dispatchNewOrder(paidOrder).catch(() => {})
+    }
+
     await notify(existing.orderId)
 
     return NextResponse.json({ ok: true, message: 'Payment verified' })
@@ -192,6 +203,18 @@ async function handleChargeSuccess(data: any) {
     where: { id: order.id },
     data: { status: 'PAYMENT_VERIFIED' },
   })
+
+  // Phase 69: money cleared → dispatch (auto-assign / claim pool).
+  dispatchNewOrder({
+    id: order.id,
+    orderNumber: order.orderNumber,
+    branchId: order.branchId,
+    pickupAddress: order.pickupAddress,
+    pickupDate: order.pickupDate,
+    pickupTimeSlot: order.pickupTimeSlot,
+    status: 'PAYMENT_VERIFIED',
+    userId: order.userId,
+  }).catch(() => {})
 
   // Log as a status event
   await db.statusEvent.create({

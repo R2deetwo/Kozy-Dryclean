@@ -421,6 +421,11 @@ export function MembershipsClient() {
                               Extra {plan.unitKind}s when you need them — {formatNaira(plan.extraUnitPrice)} each
                             </Perk>
                           )}
+                          <Perk included={plan.shoesPerMonth > 0}>
+                            {plan.shoesPerMonth > 0
+                              ? `${plan.shoesPerMonth} pair${plan.shoesPerMonth === 1 ? '' : 's'} of shoes cleaned every month`
+                              : 'Shoe care — à-la-carte, with your member discount'}
+                          </Perk>
                           <Perk included={plan.duvetsPerQuarter > 0}>
                             {plan.duvetsPerQuarter > 0
                               ? `${plan.duvetsPerQuarter} duvet washes free, every 3 months`

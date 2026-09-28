@@ -309,6 +309,24 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   // a clear "not available at the moment" note — the customer is steered to
   // bank transfer instead of selecting card and hitting a dead end.
   const paystackAvailable = appSettings.paystackAvailable === true
+
+  // ----- Scroll to the top on every step change (phase 70) -----
+  // Owner note: moving between wizard steps kept the OLD scroll position, so
+  // a customer deep in a long step list landed mid-page on the next step.
+  // Every step transition now starts at the top of the page — the flow reads
+  // top-to-bottom like a fresh page, matching how Next.js route changes
+  // behave (instant, not smooth — a long smooth glide feels slower than the
+  // step itself). The stepRef guard skips the mount render (a fresh load is
+  // already at the top) while still catching a draft restore that re-enters
+  // at a later step (setStep happens after mount, so the values differ).
+  const stepRef = useRef(step)
+  useEffect(() => {
+    if (stepRef.current !== step) {
+      stepRef.current = step
+      window.scrollTo({ top: 0, behavior: 'auto' })
+    }
+  }, [step])
+
   useEffect(() => {
     if (!paystackAvailable && paymentMethod === 'PAYSTACK') {
       setPaymentMethod('BANK_TRANSFER')
@@ -1497,7 +1515,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
               ? 'Your receipt is in the verification queue.'
               : 'Please complete your transfer to confirm payment.'
             : 'Complete your card payment to confirm.'
-        }`,
+        } A rider will confirm your pickup shortly.`,
       })
 
       setTimeout(() => onComplete(order, { guestAccountCreated: !!data.guestAccountCreated }), 300)

@@ -14,6 +14,10 @@
 //   kind=duvet|curtain → the tier's quarterly perk (count against the
 //                         quarter's allowance).
 //   kind=spring-clean  → the annual perk (The Whole Home).
+//   kind=shoes         → the tier's monthly shoe-clean pairs (phase 70).
+//                         One pair = the standard sneaker/canvas clean;
+//                         premium materials stay à-la-carte. Resets with
+//                         the monthly cycle, exactly like bag/box units.
 //
 // First pickup also carries the kit hand-over (rider delivers the Kozy
 // Bag/Box), and the membership's priority flag is stamped on the manifest
@@ -33,6 +37,7 @@ const PERK_LABEL: Record<string, { id: string; name: (plan: string) => string }>
   duvet: { id: 'member_perk_duvet', name: (p) => `Duvet wash — included (${p})` },
   curtain: { id: 'member_perk_curtain', name: (p) => `Curtain care — included (${p})` },
   'spring-clean': { id: 'member_perk_spring', name: (p) => `Spring clean — rugs & heavy materials (${p})` },
+  shoes: { id: 'member_perk_shoes', name: (p) => `Shoe clean — included (${p})` },
 }
 
 export async function POST(req: Request) {
@@ -161,6 +166,15 @@ export async function POST(req: Request) {
         { status: 400 }
       )
     }
+    if (kind === 'shoes' && count > usage.shoesRemaining) {
+      return NextResponse.json(
+        {
+          error: 'PERK_EXCEEDED',
+          message: `Your plan includes ${plan.shoesPerMonth} shoe clean${plan.shoesPerMonth === 1 ? '' : 's'} per month — ${usage.shoesRemaining} left this month. (Premium materials — suede, leather, embellished — are booked separately with your member discount.)`,
+        },
+        { status: 400 }
+      )
+    }
     perkCount = kind === 'spring-clean' ? 1 : count
     items = [
       {
@@ -282,6 +296,11 @@ export async function POST(req: Request) {
     const rolled = (sub.usageQuarterKey ?? '') !== quarterKey()
     usagePatch.duvetsUsed = (rolled ? 0 : sub.duvetsUsed) + perkCount
     usagePatch.usageQuarterKey = quarterKey()
+  } else if (kind === 'shoes') {
+    // Monthly-cycle perk: same semantics as bag/box units — the counter
+    // resets at renewal (activateOrRenewSubscription), never lazily.
+    usagePatch.shoesUsed = (sub.shoesUsed ?? 0) + perkCount
+    usagePatch.usageCycleKey = sub.periodStart ? sub.usageCycleKey ?? 'seed' : 'seed'
   } else if (kind === 'curtain') {
     const rolled = (sub.usageQuarterKey ?? '') !== quarterKey()
     usagePatch.curtainsUsed = (rolled ? 0 : sub.curtainsUsed) + perkCount

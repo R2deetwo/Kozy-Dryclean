@@ -42,12 +42,15 @@ async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResp
 }
 
 // =============================================================================
-// PATCH /api/users/[id] — ADMIN: assign a rider to their home branch
+// PATCH /api/users/[id] — ADMIN: rider branch + employment-type assignment
 // =============================================================================
 // Phase 62: drivers get a home branch (Ogombo / Chevron Drive). Dispatch
 // suggestions score branch-affinity, and the branch health cards count
 // riders on duty per branch. DRIVER accounts only — a branch on any other
 // role is meaningless and quietly ignored.
+// Phase 69: employmentType — FULL_TIME riders are auto-assigned new pickups
+// at booking; PART_TIME riders work the broadcast & claim pool. Both fields
+// are partial: send one, the other, or both.
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -64,25 +67,45 @@ export async function PATCH(
   }
   if (user.role !== 'DRIVER') {
     return NextResponse.json(
-      { error: 'Branch assignment applies to rider accounts only.' },
+      { error: 'Branch and employment-type assignment applies to rider accounts only.' },
       { status: 400 }
     )
   }
 
+  const data: Record<string, unknown> = {}
+
   // null clears the assignment; a string must reference a real branch.
-  let branchId: string | null = null
-  if (typeof body?.branchId === 'string' && body.branchId) {
-    const branch = await db.branch.findUnique({ where: { id: body.branchId } })
-    if (!branch) {
-      return NextResponse.json({ error: 'Branch not found' }, { status: 400 })
+  if (body?.branchId !== undefined) {
+    let branchId: string | null = null
+    if (typeof body?.branchId === 'string' && body.branchId) {
+      const branch = await db.branch.findUnique({ where: { id: body.branchId } })
+      if (!branch) {
+        return NextResponse.json({ error: 'Branch not found' }, { status: 400 })
+      }
+      branchId = branch.id
     }
-    branchId = branch.id
+    data.branchId = branchId
+  }
+
+  // Employment type: FULL_TIME (auto-assigned) | PART_TIME (claim pool).
+  // Null/absent leaves it untouched.
+  if (body?.employmentType === 'FULL_TIME' || body?.employmentType === 'PART_TIME') {
+    data.employmentType = body.employmentType
+  } else if (body?.employmentType === null) {
+    data.employmentType = null
+  }
+
+  if (Object.keys(data).length === 0) {
+    return NextResponse.json(
+      { error: 'Nothing to update — send branchId and/or employmentType.' },
+      { status: 400 }
+    )
   }
 
   const updated = await db.user.update({
     where: { id },
-    data: { branchId },
-    select: { id: true, name: true, role: true, branchId: true },
+    data,
+    select: { id: true, name: true, role: true, branchId: true, employmentType: true },
   })
 
   return NextResponse.json({ user: updated })

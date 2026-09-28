@@ -1,10 +1,18 @@
 // =============================================================================
 // GET /api/branches — the processing hubs (Ogombo, Chevron Drive, …)
-// PUT /api/branches — ADMIN edits (zones, addresses, default, active)
+// PUT /api/branches — ADMIN edits (zones, addresses, default, active,
+//                       ownershipType: COMPANY | FRANCHISE)
+// POST /api/branches — ADMIN maintenance actions (phase 69 backfill)
 // =============================================================================
 // GET is console-readable (STAFF included — riders/orders reference branch
 // names and staff run the board). The table self-seeds the owner's two
 // locations on first read.
+//
+// POST { action: 'backfill-orders', branchId } — one-time (idempotent)
+// attribution: every order with NO branch yet is attributed to the given
+// branch (the owner's directive: ALL current earnings belong to Chevron
+// Drive — every order to date was processed there). Re-running affects zero
+// rows because reruns only match branchId-null orders.
 // =============================================================================
 
 import { NextResponse } from 'next/server'
@@ -73,6 +81,9 @@ export async function PUT(req: Request) {
     if (Number.isFinite(Number(edit.lng))) data.lng = Number(edit.lng)
     if (typeof edit.isActive === 'boolean') data.isActive = edit.isActive
     if (typeof edit.isDefault === 'boolean') data.isDefault = edit.isDefault
+    if (edit.ownershipType === 'COMPANY' || edit.ownershipType === 'FRANCHISE') {
+      data.ownershipType = edit.ownershipType
+    }
     if (Number.isFinite(Number(edit.sortOrder))) data.sortOrder = Math.round(Number(edit.sortOrder))
 
     if (existingIds.has(edit.id)) {
@@ -101,6 +112,7 @@ export async function PUT(req: Request) {
             lng: Number.isFinite(Number(edit.lng)) ? Number(edit.lng) : 3.4,
             isActive: edit.isActive !== false,
             isDefault: edit.isDefault === true,
+            ownershipType: edit.ownershipType === 'FRANCHISE' ? 'FRANCHISE' : 'COMPANY',
             sortOrder: Number.isFinite(Number(edit.sortOrder)) ? Math.round(Number(edit.sortOrder)) : 99,
           },
         })
@@ -112,4 +124,47 @@ export async function PUT(req: Request) {
 
   const fresh = await db.branch.findMany({ orderBy: [{ sortOrder: 'asc' }, { name: 'asc' }] })
   return NextResponse.json({ branches: fresh.map(rowToBranch) })
+}
+
+// ----- POST /api/branches — maintenance actions (ADMIN only) -----
+export async function POST(req: Request) {
+  let session
+  try {
+    session = await requireRole('ADMIN')
+  } catch (e: any) {
+    if (e instanceof Response) {
+      return new NextResponse(e.body, {
+        status: e.status,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
+  const body = await req.json().catch(() => ({}))
+
+  // ---- backfill-orders: attribute every branch-less order to one branch ----
+  // The owner's call (phase 69): ALL current orders and earnings belong to
+  // Chevron Drive — every wash to date was processed there. Idempotent: a
+  // second run matches zero rows.
+  if (body?.action === 'backfill-orders') {
+    const target = typeof body.branchId === 'string' ? body.branchId : null
+    const branch = target ? await db.branch.findUnique({ where: { id: target } }) : null
+    if (!branch) {
+      return NextResponse.json({ error: 'branchId must reference an existing branch' }, { status: 400 })
+    }
+    const res = await db.order.updateMany({
+      where: { branchId: null },
+      data: { branchId: branch.id },
+    })
+    const remaining = await db.order.count({ where: { branchId: null } })
+    return NextResponse.json({
+      action: 'backfill-orders',
+      branch: { id: branch.id, name: branch.name },
+      attributed: res.count,
+      remainingUnattributed: remaining,
+    })
+  }
+
+  return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }

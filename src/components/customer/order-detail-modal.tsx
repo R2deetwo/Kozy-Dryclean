@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import {
-  MapPin, Calendar, Clock, Phone, Shield, Truck, Receipt, Zap, Scissors,
+  MapPin, Calendar, Clock, Phone, Shield, Truck, Receipt, Zap, Scissors, Bike,
   User as UserIcon, CheckCircle2, XCircle, AlertCircle,
 } from 'lucide-react'
 import { formatNaira, formatDateTime, formatDate } from '@/lib/types'
@@ -103,6 +103,16 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
           <section>
             <h3 className="mb-2 text-sm font-semibold text-[#0A192F]">Order progress</h3>
             <OrderPipeline order={order} />
+            {/* Phase 69: the rider-matching reassurance. Early-stage order
+                with no rider attached yet — say so plainly, the way the owner
+                wants customers to hear it (no live matching feed by design). */}
+            {!order.driverId &&
+              !['DELIVERED', 'CANCELLED', 'OUT_FOR_DELIVERY'].includes(order.status) && (
+                <p className="mt-2 flex items-center gap-1.5 rounded-lg bg-[#FBF5E0]/70 px-3 py-2 text-xs text-[#8a6d1a] ring-1 ring-[#E3BE4F]/40">
+                  <Bike className="h-3.5 w-3.5 shrink-0" />
+                  A rider will confirm your pickup shortly — usually within minutes.
+                </p>
+              )}
           </section>
 
           <Separator />
