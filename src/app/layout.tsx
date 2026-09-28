@@ -97,6 +97,40 @@ export default function RootLayout({
         {/* Vercel Web Analytics — pageview data shows in the Vercel dashboard
             (Project → Analytics) once Web Analytics is enabled for the project. */}
         <script defer src="/_vercel/insights/script.js" />
+        {/* Google tags (GA4 + Google Ads) — loaded ONLY when the office sets
+            the env IDs in Vercel: NEXT_PUBLIC_GA_ID (GA4 measurement ID)
+            and/or NEXT_PUBLIC_GOOGLE_ADS_ID (AW-…). The signup conversion
+            itself fires on /signup-success using
+            NEXT_PUBLIC_GOOGLE_ADS_SIGNUP_LABEL. Until the IDs are set this
+            block renders nothing — zero third-party weight. */}
+        {(process.env.NEXT_PUBLIC_GA_ID || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID) && (
+          <>
+            <script
+              async
+              src={`https://www.googletagmanager.com/gtag/js?id=${
+                process.env.NEXT_PUBLIC_GA_ID || process.env.NEXT_PUBLIC_GOOGLE_ADS_ID
+              }`}
+            />
+            <script
+              dangerouslySetInnerHTML={{
+                __html: [
+                  'window.dataLayer = window.dataLayer || [];',
+                  'function gtag(){dataLayer.push(arguments);}',
+                  "window.gtag = window.gtag || gtag;",
+                  "gtag('js', new Date());",
+                  process.env.NEXT_PUBLIC_GA_ID
+                    ? `gtag('config', '${process.env.NEXT_PUBLIC_GA_ID}');`
+                    : '',
+                  process.env.NEXT_PUBLIC_GOOGLE_ADS_ID
+                    ? `gtag('config', '${process.env.NEXT_PUBLIC_GOOGLE_ADS_ID}');`
+                    : '',
+                ]
+                  .filter(Boolean)
+                  .join(''),
+              }}
+            />
+          </>
+        )}
       </head>
       <body
         className={`${outfit.variable} ${playfair.variable} font-sans antialiased bg-background text-foreground`}

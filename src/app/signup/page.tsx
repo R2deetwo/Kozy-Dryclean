@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle, CheckCircle2, PencilLine } from 'lucide-react'
+import { ArrowLeft, Mail, Lock, User, Phone, Eye, EyeOff, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,8 +36,9 @@ function SignupForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   // Prefill from the booking wizard's member gate (email known there) and
-  // carry the return destination through to the login page, so after email
-  // verification + sign-in the customer lands back on their saved booking.
+  // carry the return destination through to the success page and login, so
+  // after email verification + sign-in the customer lands back on their
+  // saved booking.
   const callbackUrl = safePath(searchParams.get('callbackUrl'))
 
   const [name, setName] = useState(searchParams.get('name') || '')
@@ -50,64 +51,6 @@ function SignupForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [emailError, setEmailError] = useState('')
-  const [success, setSuccess] = useState(false)
-  const [resending, setResending] = useState(false)
-  const [resendMessage, setResendMessage] = useState('')
-  // Rescue flow: if the verification email never arrives (usually a typo in
-  // the address), the customer can correct it right here — the account is
-  // still unverified, so the email is safely updatable.
-  const [fixingEmail, setFixingEmail] = useState(false)
-  const [fixedEmail, setFixedEmail] = useState('')
-  const [fixing, setFixing] = useState(false)
-  const [fixMessage, setFixMessage] = useState('')
-  const [fixError, setFixError] = useState('')
-  const [activeEmail, setActiveEmail] = useState('')
-
-  const handleResend = async () => {
-    setResending(true)
-    setResendMessage('')
-    try {
-      const res = await fetch('/api/auth/resend-verification', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: activeEmail || email }),
-      })
-      const data = await res.json()
-      setResendMessage(data.message || data.error || 'Something went wrong.')
-    } catch {
-      setResendMessage('Network error. Please try again.')
-    }
-    setResending(false)
-  }
-
-  const handleFixEmail = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setFixError('')
-    setFixMessage('')
-    if (!isValidEmail(fixedEmail)) {
-      setFixError(EMAIL_HELP)
-      return
-    }
-    setFixing(true)
-    try {
-      const res = await fetch('/api/auth/update-unverified-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentEmail: email, newEmail: fixedEmail.trim() }),
-      })
-      const data = await res.json()
-      if (!res.ok) {
-        setFixError(data.message || data.error || 'Could not update the email.')
-      } else {
-        setActiveEmail(data.email || fixedEmail.trim())
-        setFixMessage(data.message || `Verification email sent to ${fixedEmail.trim()}.`)
-        setFixingEmail(false)
-      }
-    } catch {
-      setFixError('Network error. Please try again.')
-    }
-    setFixing(false)
-  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -146,111 +89,20 @@ function SignupForm() {
         }
         setLoading(false)
       } else {
-        setActiveEmail(email.trim())
-        setSuccess(true)
-        setLoading(false)
+        // Phase 73 — success now lands on its OWN URL (/signup-success) so
+        // signup conversion tracking (Google Ads, GA funnels) has a distinct
+        // destination. The rescue kit (resend, fix the address, login CTA)
+        // lives on that page; the callbackUrl rides along.
+        router.push(
+          `/signup-success?email=${encodeURIComponent(email.trim())}${
+            callbackUrl ? `&callbackUrl=${encodeURIComponent(callbackUrl)}` : ''
+          }`
+        )
       }
     } catch (e: any) {
       setError('Network error. Please check your connection and try again.')
       setLoading(false)
     }
-  }
-
-  if (success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-linen px-4 py-8">
-        <Card className="w-full max-w-md border-navy-100 shadow-navy">
-          <CardContent className="p-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gold-100">
-              <CheckCircle2 className="h-7 w-7 text-gold-600" />
-            </div>
-            <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Check your email</h1>
-            <p className="text-sm text-navy-300 mb-2">
-              We&apos;ve sent a verification link to <strong className="text-navy">{activeEmail || email}</strong>.
-            </p>
-            <p className="text-xs text-navy-300 mb-4">
-              Click the link to activate your account, then sign in.
-              <br />
-              <strong className="text-navy">Didn&apos;t get it?</strong> Check your spam folder — or fix the address below.
-            </p>
-
-            <div className="mb-6">
-              <button
-                onClick={handleResend}
-                disabled={resending}
-                className="text-xs text-[#0A192F] font-semibold hover:underline disabled:opacity-50"
-              >
-                {resending ? 'Sending...' : 'Resend verification email'}
-              </button>
-              {resendMessage && (
-                <p className="mt-2 text-xs text-navy-300">{resendMessage}</p>
-              )}
-            </div>
-
-            {/* Wrong-email rescue: typos like "name@gmail" (no .com) are the
-                #1 reason verification emails never arrive — the customer can
-                correct the address right here, no support call needed. */}
-            <div className="mb-6 rounded-lg border border-navy-100 bg-linen-100 p-4 text-left">
-              <p className="flex items-center gap-1.5 text-xs font-semibold text-navy">
-                <PencilLine className="h-3.5 w-3.5 text-gold-600" />
-                Wrong email address?
-              </p>
-              {fixingEmail ? (
-                <form onSubmit={handleFixEmail} className="mt-2 space-y-2">
-                  <Input
-                    type="email"
-                    value={fixedEmail}
-                    onChange={(e) => setFixedEmail(e.target.value)}
-                    placeholder="correct.email@example.com"
-                    autoFocus
-                    required
-                  />
-                  {fixError && (
-                    <p className="text-xs text-rose-600">{fixError}</p>
-                  )}
-                  <div className="flex gap-2">
-                    <Button type="submit" disabled={fixing} className="flex-1 bg-gold-gradient text-navy hover:opacity-90 text-xs h-9">
-                      {fixing ? 'Updating…' : 'Save & resend link'}
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => { setFixingEmail(false); setFixError('') }} className="text-xs h-9">
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
-              ) : (
-                <>
-                  <p className="mt-1 text-xs text-navy-300">
-                    Typed your address wrong? Correct it and we&apos;ll resend the verification link.
-                  </p>
-                  <button
-                    onClick={() => { setFixingEmail(true); setFixedEmail(activeEmail || email); setFixError('') }}
-                    className="mt-2 text-xs font-semibold text-[#0A192F] hover:underline"
-                  >
-                    Fix my email address
-                  </button>
-                </>
-              )}
-              {fixMessage && (
-                <p className="mt-2 rounded bg-emerald-50 px-2 py-1.5 text-xs text-emerald-700">{fixMessage}</p>
-              )}
-            </div>
-
-            <Button
-              onClick={() =>
-                router.push(
-                  `/login?email=${encodeURIComponent(activeEmail || email)}${
-                    callbackUrl ? `&callbackUrl=${encodeURIComponent(callbackUrl)}` : ''
-                  }`
-                )
-              }
-              className="bg-gold-gradient text-navy hover:opacity-90 w-full"
-            >
-              Go to login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   return (

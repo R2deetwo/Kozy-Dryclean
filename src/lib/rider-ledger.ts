@@ -13,13 +13,138 @@
 // =============================================================================
 
 import { db } from '@/lib/db'
-import { zoneFromAddress } from '@/lib/geo'
+import { zoneFromAddress, haversineKm, type ServiceZone } from '@/lib/geo'
 import { pickupSlotWindow, TURNAROUND_DUE_MS } from '@/lib/order-timing'
 import { getAppSettings } from '@/lib/app-settings'
+import { getBranches } from '@/lib/branches'
+import type { KozyAppSettings } from '@/lib/types'
 
 // The delivery-run promise (mirrors order-timing's RUN_DUE — kept local
 // because that constant is not exported; the value IS the promise).
 const RUN_DUE = 60 * 60_000
+
+// Distance pay uses straight-line km × this factor — Lagos roads wind, so
+// the crow-flies number under-pays the actual ride. 1.3 is the usual
+// road-network approximation for the island/mainland corridors.
+const ROAD_FACTOR = 1.3
+
+const round1 = (n: number) => Math.round(n * 10) / 10
+
+/** The office's full rider-rate card (phase 73) — base per stop PLUS the
+ *  distance top-up terms. One shape so the rider screen, the payout desk
+ *  and the application roster can never disagree about what a leg pays. */
+export interface RiderRates {
+  pickup: number
+  delivery: number
+  /** ₦ per whole km beyond freeKm (0 disables distance pay entirely). */
+  perKm: number
+  /** Kilometres included in the base rate before the top-up starts. */
+  freeKm: number
+  /** Maximum ₦ of distance top-up per leg (payroll safety). */
+  cap: number
+  published: boolean
+}
+
+/** Build the rate card from DB settings — the single rates constructor. */
+export function riderRatesFromSettings(settings: KozyAppSettings | null): RiderRates {
+  const pickup = settings?.riderPickupRate ?? 0
+  const delivery = settings?.riderDeliveryRate ?? 0
+  return {
+    pickup,
+    delivery,
+    perKm: settings?.riderPerKmRate ?? 0,
+    freeKm: settings?.riderFreeKm ?? 0,
+    cap: settings?.riderDistanceCap ?? 0,
+    published: Boolean(settings && (pickup > 0 || delivery > 0)),
+  }
+}
+
+/** Distance from the order's branch to the stop's zone centre (km, road
+ *  factor applied, 0.1 precision). null = unknowable (no branch link or
+ *  no zone match) → the leg pays base only; never blocks pay. */
+function stopDistanceKm(
+  branch: { lat: number; lng: number } | null,
+  zone: ServiceZone | null
+): number | null {
+  if (!branch || !zone) return null
+  return round1(haversineKm(branch.lat, branch.lng, zone.lat, zone.lng) * ROAD_FACTOR)
+}
+
+/** Branch coordinates keyed by branch id — the lookup the scalar Order.branchId
+ *  resolves through (branchId is deliberately not a foreign key). */
+export interface BranchCoords {
+  id: string
+  name: string
+  lat: number
+  lng: number
+}
+
+export async function branchCoordsMap(): Promise<Map<string, BranchCoords>> {
+  try {
+    const branches = await getBranches()
+    return new Map(
+      branches.map((b) => [b.id, { id: b.id, name: b.name, lat: b.lat, lng: b.lng }])
+    )
+  } catch {
+    return new Map()
+  }
+}
+
+/** Price one leg at the published rates: base + per-km top-up beyond the
+ *  free kilometres, capped. Whole naira — the ledger never shows kobo. */
+export function legPay(
+  base: number,
+  rates: Pick<RiderRates, 'perKm' | 'freeKm' | 'cap'>,
+  distanceKm: number | null
+): { amount: number; distancePay: number } {
+  if (base <= 0) return { amount: 0, distancePay: 0 }
+  if (distanceKm === null || rates.perKm <= 0) return { amount: base, distancePay: 0 }
+  const billableKm = Math.max(0, Math.ceil(distanceKm - rates.freeKm))
+  const amount = Math.round(base + Math.min(rates.cap, billableKm * rates.perKm))
+  return { amount, distancePay: amount - base }
+}
+
+/** Price a single leg from raw order fields — the ONE pricing path shared by
+ *  the rider's ledger, the earned-total balance math and the admin roster,
+ *  so no surface can ever price a leg differently from another. */
+export function priceLeg(
+  order: {
+    pickupAddress: string
+    deliveryAddress?: string | null
+    branchId?: string | null
+  },
+  status: 'PICKED_UP' | 'DELIVERED',
+  rates: RiderRates,
+  branches?: Map<string, BranchCoords>
+): {
+  address: string
+  zoneName: string | null
+  branchName: string | null
+  distanceKm: number | null
+  amount: number
+  distancePay: number
+} {
+  const isPickup = status === 'PICKED_UP'
+  const address = isPickup
+    ? order.pickupAddress
+    : order.deliveryAddress || order.pickupAddress
+  const zone = zoneFromAddress(address) ?? null
+  const branch = order.branchId ? branches?.get(order.branchId) ?? null : null
+  const distanceKm = stopDistanceKm(branch, zone)
+  const { amount, distancePay } = legPay(
+    isPickup ? rates.pickup : rates.delivery,
+    rates,
+    distanceKm
+  )
+  return {
+    address,
+    zoneName: zone?.name ?? null,
+    branchName: branch?.name ?? null,
+    distanceKm,
+    amount,
+    distancePay,
+  }
+}
 
 export interface RiderLeg {
   orderId: string
@@ -31,11 +156,16 @@ export interface RiderLeg {
   customerPhone?: string | null
   address: string
   zone: string | null
+  /** Branch → stop-zone distance in km (road factor applied), or null when
+   *  it can't be reconstructed — that leg pays the base rate only. */
+  distanceKm: number | null
+  /** Naira earned for this leg at today's published rates (base + distance). */
+  amount: number
+  /** The distance component of `amount` (0 when within the free km). */
+  distancePay: number
   /** onTime true/false, or null when the clock can't be reconstructed */
   onTime: boolean | null
   orderStatus: string
-  /** Naira earned for this leg (rates set by the office; 0 = unpublished) */
-  amount: number
 }
 
 /** Monday 00:00 West Africa Time (Lagos, UTC+1) — the payout week boundary. */
@@ -51,16 +181,13 @@ export function weekStartWAT(now = new Date()): Date {
 /** Fetch the rider's completed legs (newest first) + published rates. */
 export async function getRiderLegs(userId: string, opts?: { limit?: number }): Promise<{
   legs: RiderLeg[]
-  rates: { pickup: number; delivery: number; published: boolean }
+  rates: RiderRates
 }> {
   const limit = Math.min(Math.max(opts?.limit ?? 100, 1), 200)
 
   const settings = await getAppSettings().catch(() => null)
-  const rates = {
-    pickup: settings?.riderPickupRate ?? 0,
-    delivery: settings?.riderDeliveryRate ?? 0,
-    published: Boolean(settings && (settings.riderPickupRate > 0 || settings.riderDeliveryRate > 0)),
-  }
+  const rates = riderRatesFromSettings(settings)
+  const branches = await branchCoordsMap()
 
   const events = await db.statusEvent.findMany({
     where: { actorId: userId, status: { in: ['PICKED_UP', 'DELIVERED'] } },
@@ -74,6 +201,7 @@ export async function getRiderLegs(userId: string, opts?: { limit?: number }): P
           status: true,
           pickupAddress: true,
           deliveryAddress: true,
+          branchId: true,
           pickupDate: true,
           pickupTimeSlot: true,
           outForDeliveryAt: true,
@@ -94,10 +222,7 @@ export async function getRiderLegs(userId: string, opts?: { limit?: number }): P
     seen.add(key)
 
     const isPickup = e.status === 'PICKED_UP'
-    const address = isPickup
-      ? e.order.pickupAddress
-      : e.order.deliveryAddress || e.order.pickupAddress
-    const zone = zoneFromAddress(address)?.name ?? null
+    const priced = priceLeg(e.order, e.status as "PICKED_UP" | "DELIVERED", rates, branches)
 
     // On-time, on the board's own clocks:
     //  pickup  → swiped before the END of the customer's chosen slot
@@ -117,11 +242,13 @@ export async function getRiderLegs(userId: string, opts?: { limit?: number }): P
       completedAt: e.createdAt.toISOString(),
       customerName: e.order.user?.name ?? 'customer',
       customerPhone: e.order.user?.phone ?? null,
-      address,
-      zone,
+      address: priced.address,
+      zone: priced.zoneName,
+      distanceKm: priced.distanceKm,
+      amount: priced.amount,
+      distancePay: priced.distancePay,
       onTime,
       orderStatus: e.order.status,
-      amount: isPickup ? rates.pickup : rates.delivery,
     })
     if (legs.length >= limit) break
   }
@@ -130,7 +257,7 @@ export async function getRiderLegs(userId: string, opts?: { limit?: number }): P
 }
 
 /** Roll up the ledger into the payout-week summary the Earnings tab shows. */
-export function summarizeLegs(legs: RiderLeg[], rates: { pickup: number; delivery: number }) {
+export function summarizeLegs(legs: RiderLeg[], rates: RiderRates) {
   const weekStart = weekStartWAT()
   let week = 0
   let weekLegs = 0
@@ -183,33 +310,46 @@ export interface PayoutRow {
 }
 
 /** All-time earned for a rider at today's published rates — the SAME dedupe
- *  rule the per-leg ledger uses ((order, leg) pairs, latest swipe wins), but
- *  computed over every event rather than a page of them. Used by the admin
- *  payout desk and the balance math; the itemised tab view keeps getRiderLegs. */
+ *  rule the per-leg ledger uses ((order, leg) pairs, latest swipe wins), and
+ *  the SAME distance math (branch → stop zone, road factor, capped top-up),
+ *  so the balance can never drift from the itemised ledger. Used by the
+ *  admin payout desk and the balance math; the itemised tab view keeps
+ *  getRiderLegs. */
 export async function getRiderEarnedTotal(
   userId: string,
-  rates: { pickup: number; delivery: number }
+  rates: RiderRates
 ): Promise<{ earned: number; pickups: number; deliveries: number }> {
   const events = await db.statusEvent.findMany({
     where: { actorId: userId, status: { in: ['PICKED_UP', 'DELIVERED'] } },
-    select: { orderId: true, status: true, createdAt: true },
+    select: {
+      orderId: true,
+      status: true,
+      createdAt: true,
+      order: {
+        select: {
+          pickupAddress: true,
+          deliveryAddress: true,
+          branchId: true,
+        },
+      },
+    },
     orderBy: { createdAt: 'desc' },
   })
+  const branches = await branchCoordsMap()
   const seen = new Set<string>()
+  let earned = 0
   let pickups = 0
   let deliveries = 0
   for (const e of events) {
     const key = `${e.orderId}:${e.status}`
     if (seen.has(key)) continue
     seen.add(key)
+    const priced = priceLeg(e.order, e.status as "PICKED_UP" | "DELIVERED", rates, branches)
+    earned += priced.amount
     if (e.status === 'PICKED_UP') pickups++
     else deliveries++
   }
-  return {
-    earned: pickups * rates.pickup + deliveries * rates.delivery,
-    pickups,
-    deliveries,
-  }
+  return { earned, pickups, deliveries }
 }
 
 /** The money side: payouts actually recorded for a rider, plus the balance
@@ -218,7 +358,7 @@ export async function getRiderEarnedTotal(
  *  lowered — the desk shows it plainly rather than hiding it. */
 export async function getRiderPayoutSummary(
   userId: string,
-  rates: { pickup: number; delivery: number },
+  rates: RiderRates,
   opts?: { limit?: number }
 ): Promise<{
   paidTotal: number

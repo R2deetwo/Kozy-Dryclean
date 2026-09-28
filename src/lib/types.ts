@@ -626,12 +626,20 @@ export interface KozyAppSettings {
   // reached this browser's localStorage).
   pricePerKg: number
   minimumKg: number
-  // Rider pay (phase 61 → 72) — naira per completed stop, set by the office
+  // Rider pay (phase 61 → 73) — naira per completed stop, set by the office
   // in Settings → Rider pay. Drives the rider app's Earnings tab and the
   // payout desk's balances; 0/0 means "rates not published yet" (riders see
   // their completed work, never a fabricated number).
   riderPickupRate: number
   riderDeliveryRate: number
+  // Distance top-up (phase 73) — pay varies with how far a stop is from the
+  // rider's branch: base + perKm × every whole km past freeKm, capped at
+  // `riderDistanceCap` so a mainland run can never blow the payroll. The
+  // distance is branch → stop-zone centre (straight line × 1.3 road factor).
+  // freeKm absorbs the near-hub stops that dominate the batched runs.
+  riderPerKmRate: number
+  riderFreeKm: number
+  riderDistanceCap: number
   // Card payments (Paystack) — NOT stored in the DB: derived server-side
   // from the presence of PAYSTACK_SECRET_KEY on each /api/settings/app
   // read. When false, checkout greys the card option out and transfer is
@@ -672,16 +680,19 @@ export function defaultAppSettings(): KozyAppSettings {
     // Bulk pricing defaults mirror the live AppSetting values.
     pricePerKg: B2B_PRICING.pricePerKg,
     minimumKg: B2B_PRICING.minimumKg,
-    // Rider pay (phase 72): defaults now publish sensible Lagos per-stop
-    // rates so the pay pipeline works end-to-end on day one — ₦500 per
-    // pickup + ₦500 per delivery = ₦1,000 per completed order, which is
-    // 7–12% of a typical ₦8k–15k order for BOTH legs (within the normal
-    // last-mile labour share) and batched stops make it cheaper per stop.
-    // The office can change either rate any time in Settings → Rider pay;
-    // changing rates re-prices the computed ledger (past payouts are
-    // already-recorded money and never move).
-    riderPickupRate: 500,
-    riderDeliveryRate: 500,
+    // Rider pay (phase 73): ₦1,500 per pickup + ₦1,500 per delivery — the
+    // owner's starting rates — plus a distance top-up so longer legs pay
+    // more: ₦150 for every whole km past the first 4 km (branch → stop,
+    // straight-line × 1.3 road factor), capped at ₦1,800 of distance pay per
+    // leg. Near-hub island stops pay the base; a far mainland run tops out
+    // around ₦3,300. The office can change all of this any time in
+    // Settings → Rider pay; changing rates re-prices the computed ledger
+    // (past payouts are already-recorded money and never move).
+    riderPickupRate: 1500,
+    riderDeliveryRate: 1500,
+    riderPerKmRate: 150,
+    riderFreeKm: 4,
+    riderDistanceCap: 1800,
     // Pessimistic client default — the server response overrides it with
     // the real env-derived value. Greyed out beats a broken card checkout.
     paystackAvailable: false,

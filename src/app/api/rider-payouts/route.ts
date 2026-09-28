@@ -15,7 +15,7 @@ import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { getAppSettings } from '@/lib/app-settings'
-import { getRiderPayoutSummary } from '@/lib/rider-ledger'
+import { getRiderPayoutSummary, riderRatesFromSettings } from '@/lib/rider-ledger'
 import { notifyRiderPayout, logStaffEvent } from '@/lib/notifications'
 
 async function requireAdmin(): Promise<ReturnType<typeof requireRole> | NextResponse> {
@@ -57,12 +57,10 @@ export async function POST(req: Request) {
   }
   const amount = Math.round(amountRaw)
 
-  // Live balance at the moment of settling (what the desk is paying against).
+  // Live balance at the moment of settling (what the desk is paying against)
+  // — the full phase-73 rate card: base per stop + distance top-up.
   const settings = await getAppSettings()
-  const rates = {
-    pickup: settings?.riderPickupRate ?? 0,
-    delivery: settings?.riderDeliveryRate ?? 0,
-  }
+  const rates = riderRatesFromSettings(settings)
   const before = await getRiderPayoutSummary(riderId, rates)
 
   const payout = await db.riderPayout.create({

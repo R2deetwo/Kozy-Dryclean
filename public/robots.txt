@@ -1,11 +1,18 @@
-# Public landing page — allow indexing
+# Public marketing pages — allow indexing
 User-agent: *
 Allow: /
 Disallow: /admin
 Disallow: /driver
+Disallow: /partner
 Disallow: /portal
 Disallow: /api/
 Disallow: /payment/callback
+# Utility / conversion pages — no organic value, keep the index clean
+Disallow: /review
+Disallow: /signup-success
+Disallow: /verify-email
+Disallow: /reset-password
+Disallow: /forgot-password
 
 # Sitemap
 Sitemap: https://kozycare.ng/sitemap.xml

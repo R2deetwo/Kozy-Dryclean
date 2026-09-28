@@ -67,6 +67,13 @@ export function MembershipsClient() {
 
   const [joinPlan, setJoinPlan] = useState<ApiMembershipPlan | null>(null)
 
+  // Phase 73 — a lingering rider/partner/team session must NEVER surface as
+  // “Billed to” in the join dialog. Only genuine customer sessions (B2C/B2B)
+  // count as signed-in here; everything else gets the dialog's account step.
+  const sessionRole = typeof session?.user?.role === 'string' ? session.user.role : null
+  const isCustomerSession =
+    status === 'authenticated' && (sessionRole === 'B2C' || sessionRole === 'B2B')
+
   // Phase 70: only the KIT family renders here — the tiers grid is the
   // laundry ladder. The standalone Shoe Club (family=SHOES) is sold from the
   // /services shoe-care section, never as a fourth card here.
@@ -462,10 +469,9 @@ export function MembershipsClient() {
                               })
                               return
                             }
-                            if (status !== 'authenticated') {
-                              window.location.href = '/login?callbackUrl=/memberships'
-                              return
-                            }
+                            // Signed-out and non-customer sessions are handled
+                            // INSIDE the dialog now (account step) — no more
+                            // blind redirects that lose the plan context.
                             setJoinPlan(plan)
                           }}
                           className={
@@ -639,7 +645,10 @@ export function MembershipsClient() {
         <JoinDialog
           plan={joinPlan}
           onClose={() => setJoinPlan(null)}
-          sessionEmail={session?.user?.email ?? null}
+          sessionEmail={isCustomerSession ? session?.user?.email ?? null : null}
+          sessionRole={sessionRole}
+          authStatus={status}
+          returnTo="/memberships"
         />
       )}
     </div>

@@ -24,8 +24,10 @@ interface LedgerRow {
   leg: 'PICKUP' | 'DELIVERY'
   completedAt: string
   zone: string | null
+  distanceKm: number | null
   onTime: boolean | null
   amount: number
+  distancePay: number
 }
 
 interface PayoutRow {
@@ -39,7 +41,7 @@ interface PayoutRow {
 
 interface Earnings {
   published: boolean
-  rates: { pickup: number; delivery: number }
+  rates: { pickup: number; delivery: number; perKm: number; freeKm: number; cap: number }
   summary: {
     week: number
     weekLegs: number
@@ -210,8 +212,8 @@ export function DriverEarningsTab() {
         </div>
       </div>
 
-      {/* Published rates */}
-      <div className="flex items-center justify-center gap-3 rounded-xl bg-slate-800/60 px-4 py-2.5 text-xs text-slate-300">
+      {/* Published rates — base per stop + the distance terms */}
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-xl bg-slate-800/60 px-4 py-2.5 text-xs text-slate-300">
         <span className="flex items-center gap-1">
           <Package className="h-3 w-3 text-gold-400" /> {naira(data.rates.pickup)} / pickup
         </span>
@@ -219,6 +221,14 @@ export function DriverEarningsTab() {
         <span className="flex items-center gap-1">
           <Truck className="h-3 w-3 text-cyan-400" /> {naira(data.rates.delivery)} / delivery
         </span>
+        {data.rates.perKm > 0 && (
+          <>
+            <span className="text-slate-600">·</span>
+            <span className="flex items-center gap-1 text-slate-400">
+              + {naira(data.rates.perKm)}/km past the first {data.rates.freeKm} km
+            </span>
+          </>
+        )}
         {data.bank.set && (
           <>
             <span className="text-slate-600">·</span>
@@ -281,7 +291,11 @@ export function DriverEarningsTab() {
                     <p className="text-[10px] text-slate-500">
                       {new Date(row.completedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
                       {row.zone ? ` · ${row.zone}` : ''}
+                      {row.distanceKm !== null && row.distanceKm !== undefined ? ` · ${row.distanceKm} km` : ''}
                     </p>
+                    {row.distancePay > 0 && (
+                      <p className="text-[10px] text-gold-400/80">incl. {naira(row.distancePay)} distance</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
@@ -299,9 +313,11 @@ export function DriverEarningsTab() {
 
       <p className="flex items-start gap-1.5 pb-2 text-[10px] leading-relaxed text-slate-500">
         <Info className="mt-0.5 h-3 w-3 shrink-0" />
-        You earn the published rate per completed stop, and the office settles your pending
-        balance weekly. Every payout lands in the bank account on your Account tab, and a
-        receipt is emailed the moment it is recorded.
+        Every stop earns the published base rate, and longer legs earn a
+        distance top-up on top — measured from your branch to the stop&apos;s area,
+        with the first few kilometres included in the base. The office settles
+        your pending balance weekly to the bank account on your Account tab, and
+        a receipt is emailed the moment it is recorded.
       </p>
     </div>
   )

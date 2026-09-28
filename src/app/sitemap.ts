@@ -53,6 +53,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
+      // Phase 72 — partner laundromat/laundrette registration. Laundrettes
+      // search for "laundry partnership" / "franchise" programs too — this
+      // is the B2B recruitment page and it belongs in the index.
+      url: `${base}/partners`,
+      lastModified: now,
+      changeFrequency: 'monthly',
+      priority: 0.7,
+    },
+    {
       url: `${base}/feedback`,
       lastModified: now,
       changeFrequency: 'monthly',

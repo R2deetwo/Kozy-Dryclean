@@ -52,10 +52,18 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
   const appSettings = useAppSettings()
 
   // ----- The Shoe Club (phase 70): live plan rows, SHOES family only -----
-  const { data: session } = useSession()
+  const { data: session, status } = useSession()
   const { data: plans } = useMembershipPlans(true)
   const { data: myMembership } = useMyMembership()
   const [joinPlan, setJoinPlan] = useState<ApiMembershipPlan | null>(null)
+
+  // Phase 73 — same rule as the tiers page: only customer sessions (B2C/B2B)
+  // are “signed in” for joining. A lingering rider/partner/team session (or
+  // no session at all) gets the dialog's account step — never a “Billed to”
+  // line, never a blind redirect that loses the chosen plan.
+  const sessionRole = typeof session?.user?.role === 'string' ? session.user.role : null
+  const isCustomerSession =
+    status === 'authenticated' && (sessionRole === 'B2C' || sessionRole === 'B2B')
 
   const clubPlans = useMemo(
     () =>
@@ -77,11 +85,9 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
   const inClub = Boolean(myMembership?.shoeClub)
 
   const onJoinClub = (plan: ApiMembershipPlan) => {
-    if (!session) {
-      // A membership lives in an account — same gate as the tiers page.
-      window.location.assign('/login?callbackUrl=/services%23shoe-care')
-      return
-    }
+    // A membership lives in an account — the dialog itself now handles
+    // signed-out and non-customer sessions with an in-dialog account step
+    // (phase 73), instead of redirecting away from the plan.
     setJoinPlan(plan)
   }
 
@@ -532,7 +538,10 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
         <JoinDialog
           plan={joinPlan}
           onClose={() => setJoinPlan(null)}
-          sessionEmail={session?.user?.email ?? null}
+          sessionEmail={isCustomerSession ? session?.user?.email ?? null : null}
+          sessionRole={sessionRole}
+          authStatus={status}
+          returnTo="/services#shoe-care"
         />
       )}
     </>

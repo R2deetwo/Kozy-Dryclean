@@ -833,25 +833,28 @@ export function SettingsView() {
                 </CardContent>
               </Card>
 
-              {/* Rider pay (phase 61 → 72) — the rates riders see in their app's
-                  Earnings tab; the payout desk settles the balance weekly */}
+              {/* Rider pay (phase 61 → 73) — base per stop PLUS a distance
+                  top-up, so longer legs pay more; the payout desk settles the
+                  balance weekly */}
               <Card className="border-navy-100 shadow-navy">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 font-serif text-navy">
                     <Bike className="h-4 w-4 text-gold-400" /> Rider Pay
                   </CardTitle>
                   <p className="text-xs text-navy-300">
-                    What riders earn per completed stop. These rates price every completed
-                    pickup/delivery into each rider&apos;s ledger; the pending balance is what the
+                    What riders earn per completed stop, plus a distance top-up for longer
+                    legs — every pickup/delivery is priced into each rider&apos;s ledger as
+                    <span className="font-medium text-navy"> base + ₦ per km past the free kilometres</span>{' '}
+                    (branch → stop area, road distance); the pending balance is what the
                     office settles weekly from <span className="font-medium text-navy">Team → Riders → Settle rider</span>{' '}
-                    (a receipt email follows each payout). At 0 the riders&apos; Earnings tab
+                    (a receipt email follows each payout). At 0/0 the riders&apos; Earnings tab
                     honestly shows their work without a naira figure.
                   </p>
                 </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+                <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <div>
                     <Label htmlFor="rider-pickup-rate" className="text-xs uppercase tracking-wide text-navy-300">
-                      Pay per pickup (₦)
+                      Base per pickup (₦)
                     </Label>
                     <Input
                       id="rider-pickup-rate"
@@ -867,7 +870,7 @@ export function SettingsView() {
                   </div>
                   <div>
                     <Label htmlFor="rider-delivery-rate" className="text-xs uppercase tracking-wide text-navy-300">
-                      Pay per delivery (₦)
+                      Base per delivery (₦)
                     </Label>
                     <Input
                       id="rider-delivery-rate"
@@ -879,6 +882,70 @@ export function SettingsView() {
                     />
                     <p className="mt-1 text-xs text-navy-300">
                       Counted when the rider swipes <span className="font-medium text-navy">Delivered</span> — the handover the customer sees.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="rider-per-km-rate" className="text-xs uppercase tracking-wide text-navy-300">
+                      Distance rate (₦ per km)
+                    </Label>
+                    <Input
+                      id="rider-per-km-rate"
+                      type="number"
+                      min="0"
+                      value={app.riderPerKmRate}
+                      onChange={(e) => setApp({ riderPerKmRate: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-40"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Paid for every whole km beyond the free distance below. 0 = flat
+                      per-stop pay (no distance component).
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="rider-free-km" className="text-xs uppercase tracking-wide text-navy-300">
+                      Free distance (km)
+                    </Label>
+                    <Input
+                      id="rider-free-km"
+                      type="number"
+                      min="0"
+                      value={app.riderFreeKm}
+                      onChange={(e) => setApp({ riderFreeKm: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-40"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Kilometres included in the base rate — near-branch stops pay base only.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="rider-distance-cap" className="text-xs uppercase tracking-wide text-navy-300">
+                      Distance cap per leg (₦)
+                    </Label>
+                    <Input
+                      id="rider-distance-cap"
+                      type="number"
+                      min="0"
+                      value={app.riderDistanceCap}
+                      onChange={(e) => setApp({ riderDistanceCap: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-40"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      The most distance pay any single leg can add — a far-mainland run can
+                      never blow the payroll.
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-navy-100 bg-linen-50 p-3 text-xs leading-relaxed text-navy-300">
+                    <p className="font-semibold text-navy">Example leg</p>
+                    <p>
+                      A stop {app.riderFreeKm + 6} km from the branch pays{' '}
+                      <span className="font-semibold text-navy">
+                        ₦{(app.riderPickupRate + Math.min(app.riderDistanceCap, 6 * app.riderPerKmRate)).toLocaleString('en-NG')}
+                      </span>{' '}
+                      for the pickup — base ₦{app.riderPickupRate.toLocaleString('en-NG')} plus{' '}
+                      6 billable km × ₦{app.riderPerKmRate.toLocaleString('en-NG')}
+                      {app.riderDistanceCap > 0 ? ` (capped at ₦${app.riderDistanceCap.toLocaleString('en-NG')})` : ''}.
+                      Change any number and the ledger re-prices instantly — recorded payouts
+                      never move.
                     </p>
                   </div>
                 </CardContent>

@@ -9,11 +9,19 @@
 // plan's family — kit hand-over language for tiers, pair language for the
 // club — while the machinery (Paystack charge → webhook activation, or
 // transfer receipt → admin verification) is identical.
+//
+// Phase 73 — the account step: a membership can only ever live on a
+// PERSONAL CUSTOMER account. Signed-out visitors now get the account step
+// INSIDE the dialog (no more blind redirects to /login that lose the plan
+// context), and a lingering rider/partner/team session can never surface a
+// “Billed to” line — the dialog explains the account needs to be personal
+// and offers sign-up (or sign-out) right there.
 // =============================================================================
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, BadgeCheck, Banknote, CreditCard, Loader2, Upload } from 'lucide-react'
+import { signOut } from 'next-auth/react'
+import { ArrowRight, BadgeCheck, Banknote, CreditCard, Loader2, LogIn, LogOut, Upload, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
@@ -28,18 +36,43 @@ export function JoinDialog({
   plan,
   onClose,
   sessionEmail,
+  sessionRole,
+  authStatus,
+  returnTo,
 }: {
   plan: ApiMembershipPlan
   onClose: () => void
+  /** Customer-session email ONLY — the pages pass null for every other
+   *  session type (rider/partner/team), so a non-customer account can never
+   *  appear as “Billed to”. */
   sessionEmail: string | null
+  /** Role of whoever is signed in, if anyone (‘DRIVER’, ‘B2C’, …). */
+  sessionRole?: string | null
+  /** next-auth status — while loading we hold the dialog instead of guessing. */
+  authStatus?: 'loading' | 'authenticated' | 'unauthenticated'
+  /** Where to return after signup / login / sign-out (e.g. ‘/memberships’). */
+  returnTo?: string
 }) {
   const subscribe = useSubscribe()
   const paystackInit = useMembershipPaystackInit()
   const [paymentMethod, setPaymentMethod] = useState<'PAYSTACK' | 'BANK_TRANSFER'>('PAYSTACK')
   const [receipt, setReceipt] = useState<string | null>(null)
   const [done, setDone] = useState<'paystack-redirect' | 'transfer-pending' | null>(null)
+  const [signingOut, setSigningOut] = useState(false)
 
   const isClub = plan.family === 'SHOES'
+  const auth = authStatus ?? (sessionEmail ? 'authenticated' : 'unauthenticated')
+  const backTo = returnTo ?? '/memberships'
+  const backToEncoded = encodeURIComponent(backTo)
+  // Plain words for the signed-in-but-wrong-account case.
+  const accountLabel =
+    sessionRole === 'DRIVER'
+      ? 'rider'
+      : sessionRole === 'PARTNER'
+        ? 'partner laundrette'
+        : sessionRole === 'ADMIN' || sessionRole === 'STAFF'
+          ? 'team'
+          : 'non-customer'
 
   const downscaleReceipt = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -121,10 +154,79 @@ export function JoinDialog({
                   {formatNaira(plan.priceMonthly)}
                 </span>
               </div>
+              {/* The billed-to line is customer-only by construction — the
+                  pages never pass a rider/partner/team email here. */}
               {sessionEmail && (
                 <p className="mt-2 text-[11px] text-navy-300">Billed to {sessionEmail}</p>
               )}
             </div>
+
+            {auth === 'loading' ? (
+              /* Session still resolving — hold the dialog rather than flashing
+                 the wrong step (or letting a rider click Start). */
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-navy-300">
+                <Loader2 className="h-4 w-4 animate-spin" /> Checking your account…
+              </div>
+            ) : !sessionEmail ? (
+              /* ------------------ THE ACCOUNT STEP (phase 73) ------------------ */
+              <div className="mt-4 space-y-4">
+                {authStatus === 'authenticated' && sessionRole && sessionRole !== 'B2C' && sessionRole !== 'B2B' ? (
+                  <div className="rounded-xl border border-gold-200 bg-gold-50/60 p-4">
+                    <p className="text-sm font-semibold text-navy">
+                      You&apos;re signed in as a {accountLabel} account
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-navy-300">
+                      Memberships live on personal customer accounts — the plan, your kit
+                      and the monthly billing all attach to one. Create your personal
+                      account to join {plan.name}; it takes about a minute.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm leading-relaxed text-navy-300">
+                    A membership lives on your Kozy account — the plan, your kit and the
+                    monthly billing all attach to one. Create your account now (60 seconds)
+                    or sign in, and we&apos;ll bring you straight back to this plan.
+                  </p>
+                )}
+                <div className="space-y-2">
+                  <Link href={`/signup?callbackUrl=${backToEncoded}`}>
+                    <Button className="w-full rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90">
+                      <UserPlus className="mr-2 h-4 w-4" /> Create my account
+                    </Button>
+                  </Link>
+                  {authStatus === 'authenticated' ? (
+                    <Button
+                      variant="outline"
+                      disabled={signingOut}
+                      onClick={async () => {
+                        setSigningOut(true)
+                        // Sign the rider/partner/team account out and land back
+                        // here as a fresh visitor.
+                        await signOut({ callbackUrl: backTo })
+                      }}
+                      className="w-full rounded-full"
+                    >
+                      {signingOut ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <LogOut className="mr-2 h-4 w-4" />
+                      )}
+                      {signingOut ? 'Signing out…' : `Sign out of the ${accountLabel} account`}
+                    </Button>
+                  ) : (
+                    <Link href={`/login?callbackUrl=${backToEncoded}`} className="block">
+                      <Button variant="outline" className="w-full rounded-full">
+                        <LogIn className="mr-2 h-4 w-4" /> I already have an account
+                      </Button>
+                    </Link>
+                  )}
+                </div>
+                <p className="text-center text-[10px] text-navy-300">
+                  Your chosen plan is waiting right here when you come back
+                </p>
+              </div>
+            ) : (
+              <>
 
             {/* Payment method */}
             <div className="mt-4 space-y-2">
@@ -209,6 +311,8 @@ export function JoinDialog({
             <p className="text-center text-[10px] text-navy-300">
               Cancel any time — the plan runs to the end of the month
             </p>
+              </>
+            )}
           </>
         ) : done === 'transfer-pending' ? (
           <div className="py-4 text-center">

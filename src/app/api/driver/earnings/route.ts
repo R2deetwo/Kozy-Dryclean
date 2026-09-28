@@ -41,7 +41,15 @@ export async function GET() {
     })
     return NextResponse.json({
       published: rates.published,
-      rates: { pickup: rates.pickup, delivery: rates.delivery },
+      // The full rate card (phase 73): base per stop + the distance terms,
+      // so the rider sees exactly why a longer leg pays more.
+      rates: {
+        pickup: rates.pickup,
+        delivery: rates.delivery,
+        perKm: rates.perKm,
+        freeKm: rates.freeKm,
+        cap: rates.cap,
+      },
       summary,
       // The money side (phase 72): what has actually been settled.
       payouts: {
@@ -64,8 +72,10 @@ export async function GET() {
         leg: l.leg,
         completedAt: l.completedAt,
         zone: l.zone,
+        distanceKm: l.distanceKm,
         onTime: l.onTime,
         amount: l.amount,
+        distancePay: l.distancePay,
       })),
     })
   } catch (e) {

@@ -153,9 +153,14 @@ export async function PUT(req: NextRequest) {
   pct('alterationsFromPrice', 0, 100000)
   pct('pricePerKg', 0, 1000000)
   pct('minimumKg', 0, 1000)
-  // Rider pay (phase 61) — naira per completed stop. 0 = unpublished.
+  // Rider pay (phase 61 → 73) — naira per completed stop (0 = unpublished),
+  // plus the distance top-up: ₦ per km past the free kilometres, and the
+  // per-leg cap on the distance component.
   pct('riderPickupRate', 0, 100000)
   pct('riderDeliveryRate', 0, 100000)
+  pct('riderPerKmRate', 0, 10000)
+  pct('riderFreeKm', 0, 100)
+  pct('riderDistanceCap', 0, 100000)
 
   if (errors.length > 0) {
     return NextResponse.json({ error: errors.join('; ') }, { status: 400 })
