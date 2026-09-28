@@ -67,6 +67,15 @@ model User {
   // claim it gets the stop. Set from Team → Riders in the console. Null for
   // non-drivers and legacy rider rows (treated as PART_TIME).
   employmentType    String?
+  // ----- Payout bank details (phase 72) -----
+  // Where the office sends money owed to this account: riders (weekly stop
+  // payouts) and partners (monthly revenue-share settlements). Self-service
+  // editable in the rider/partner app Account tab; visible to the admin in
+  // the payout/settlement dialogs so the office pays the right account.
+  // Null for accounts that have never filled it in.
+  bankName           String?
+  bankAccountNumber  String?
+  bankAccountName    String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -108,6 +117,18 @@ model User {
   // The customer's Kozy Circle memberships (history preserved — one live,
   // cancelled/lapsed ones remain for the record).
   subscriptions       Subscription[]
+  // ----- Rider payouts (phase 72) -----
+  // Money the office has actually PAID this rider (weekly settlement of
+  // completed-stop earnings). The rider's pending balance is computed
+  // earnings minus the sum of these rows.
+  riderPayouts        RiderPayout[]          @relation("RiderPayouts")
+  // Payouts this admin recorded (who settled the money, for the audit trail).
+  recordedPayouts     RiderPayout[]          @relation("RiderPayoutRecorder")
+  // ----- Partner portal (phase 72) -----
+  // A PARTNER-role account's linked network record (one per user).
+  partnerProfile      Partner?
+  // Partner settlements this admin recorded (audit trail).
+  recordedPartnerSettlements PartnerSettlement[] @relation("PartnerSettlementRecorder")
 }
 
 enum Role {
@@ -119,6 +140,12 @@ enum Role {
   // Only admins can create/pause/revoke STAFF accounts (see /api/staff).
   STAFF
   DRIVER
+  // Phase 72: a Kozy Network partner (laundrette operator) — created when
+  // an admin approves a partner application, exactly like DRIVER accounts
+  // are created for approved rider applications. Signs into the /partner
+  // portal (orders routed to them + their revenue-share ledger + account).
+  // Policed by accessStatus like every console role.
+  PARTNER
   B2C
   B2B
 }
@@ -1123,8 +1150,10 @@ model Subscription {
 // order value; Kozy keeps the rest).
 //
 // v1 scope: application + approval + branch assignment + share % + derived
-// ledger. Partner self-serve portal logins are deliberately phase 2 — no
-// new auth surface is opened until the first partner is signed.
+// ledger. Phase 72 completes the pipeline to rider-parity: applications get
+// a KZP reference + confirmation email/SMS; approval creates a PARTNER login
+// (userId) with emailed credentials; the /partner portal shows the orders
+// routed to them and their share ledger.
 model Partner {
   id           String   @id @default(cuid())
   businessName String
@@ -1134,6 +1163,25 @@ model Partner {
   address      String
   // Their story: equipment, staff, throughput, existing clients.
   capacityNotes String? @db.Text
+  // ----- Phase 72: application parity with riders -----
+  // Short reference like KZP-4F2K (minted at submission, quoted in the
+  // confirmation email/SMS and to support — the operator's handle for their
+  // application, exactly like KZR-… for riders).
+  refCode        String? @unique
+  // The Lagos area the laundry operates in (application field).
+  lga            String?
+  // Comma-separated service chips from the application form ("Wash & fold,
+  // Dry cleaning, …") — what they can actually process.
+  servicesOffered String?
+  // The PARTNER login created at approval (one per partner). Null until an
+  // admin approves; the account is created with a system-generated password
+  // that is emailed, never returned (phase-32 recipe).
+  userId         String? @unique
+  user           User?    @relation(fields: [userId], references: [id])
+  // ----- Settlements (phase 72) -----
+  // Money the office has actually settled to this partner against their
+  // revenue share. Pending = share earned on delivered orders minus these.
+  settlements    PartnerSettlement[]
   // The branch hub they hang off (plain scalar, like orders/riders).
   branchId     String?
   // PENDING | APPROVED | SUSPENDED | REJECTED
@@ -1146,5 +1194,59 @@ model Partner {
   updatedAt    DateTime @updatedAt
 
   @@index([status])
+  @@index([createdAt])
+}
+
+// =====================================================
+// RIDER PAYOUTS (phase 72) — the money trail behind "how riders get paid"
+// =====================================================
+// Earnings are computed live (completed legs × the office's published
+// per-stop rates — see rider-ledger.ts); a payout row is what the office
+// actually SETTLED: one row per transfer/cash handover, with the amount,
+// method, reference and who recorded it. A rider's pending balance is
+// computed earnings minus the sum of their payout rows — the ledger and
+// the money reconcile by construction, and every naira of it is auditable.
+model RiderPayout {
+  id           String   @id @default(cuid())
+  riderId      String
+  rider        User     @relation("RiderPayouts", fields: [riderId], references: [id])
+  // Naira settled (whole numbers — naira rates are whole by policy).
+  amount       Int
+  // BANK_TRANSFER | CASH — how the money moved.
+  method       String   @default("BANK_TRANSFER")
+  // Bank transfer reference / receipt number, when there is one.
+  reference    String?
+  note         String?
+  recordedById String?
+  recordedBy   User?    @relation("RiderPayoutRecorder", fields: [recordedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([riderId, createdAt])
+  @@index([createdAt])
+}
+
+// =====================================================
+// PARTNER SETTLEMENTS (phase 72) — same discipline, for partners
+// =====================================================
+// A partner earns revenueSharePartnerPct of every delivered order routed to
+// them (the derived ledger). A settlement row is what the office actually
+// paid out against that share — pending balance = share earned minus the
+// sum of these rows. Mirrors RiderPayout on purpose: one mental model, two
+// money trails, both auditable end-to-end.
+model PartnerSettlement {
+  id           String   @id @default(cuid())
+  partnerId    String
+  partner      Partner  @relation(fields: [partnerId], references: [id])
+  // Naira settled.
+  amount       Int
+  // BANK_TRANSFER | CASH.
+  method       String   @default("BANK_TRANSFER")
+  reference    String?
+  note         String?
+  recordedById String?
+  recordedBy   User?    @relation("PartnerSettlementRecorder", fields: [recordedById], references: [id])
+  createdAt    DateTime @default(now())
+
+  @@index([partnerId, createdAt])
   @@index([createdAt])
 }

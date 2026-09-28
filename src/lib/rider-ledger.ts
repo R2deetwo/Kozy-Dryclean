@@ -162,3 +162,97 @@ export function summarizeLegs(legs: RiderLeg[], rates: { pickup: number; deliver
     rates,
   }
 }
+
+// =============================================================================
+// PAYOUTS (phase 72) — the money side of the ledger
+// =============================================================================
+// Earnings above are what the rider is OWED (computed live at the office's
+// published rates). A payout row is what the office actually SETTLED. The
+// rider's pending balance is earned minus paid — the two reconcile by
+// construction, so neither the rider screen nor the admin desk can drift
+// from the other.
+// =============================================================================
+
+export interface PayoutRow {
+  id: string
+  amount: number
+  method: string
+  reference: string | null
+  note: string | null
+  createdAt: string
+}
+
+/** All-time earned for a rider at today's published rates — the SAME dedupe
+ *  rule the per-leg ledger uses ((order, leg) pairs, latest swipe wins), but
+ *  computed over every event rather than a page of them. Used by the admin
+ *  payout desk and the balance math; the itemised tab view keeps getRiderLegs. */
+export async function getRiderEarnedTotal(
+  userId: string,
+  rates: { pickup: number; delivery: number }
+): Promise<{ earned: number; pickups: number; deliveries: number }> {
+  const events = await db.statusEvent.findMany({
+    where: { actorId: userId, status: { in: ['PICKED_UP', 'DELIVERED'] } },
+    select: { orderId: true, status: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  })
+  const seen = new Set<string>()
+  let pickups = 0
+  let deliveries = 0
+  for (const e of events) {
+    const key = `${e.orderId}:${e.status}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (e.status === 'PICKED_UP') pickups++
+    else deliveries++
+  }
+  return {
+    earned: pickups * rates.pickup + deliveries * rates.delivery,
+    pickups,
+    deliveries,
+  }
+}
+
+/** The money side: payouts actually recorded for a rider, plus the balance
+ *  (earned at today's rates minus paid). `pending` can legitimately go
+ *  negative if the office settles ahead of the ledger or rates are later
+ *  lowered — the desk shows it plainly rather than hiding it. */
+export async function getRiderPayoutSummary(
+  userId: string,
+  rates: { pickup: number; delivery: number },
+  opts?: { limit?: number }
+): Promise<{
+  paidTotal: number
+  pending: number
+  lastPayoutAt: string | null
+  payouts: PayoutRow[]
+}> {
+  const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 100)
+  const { earned } = await getRiderEarnedTotal(userId, rates)
+  const [agg, rows] = await Promise.all([
+    db.riderPayout.aggregate({
+      where: { riderId: userId },
+      _sum: { amount: true },
+      _max: { createdAt: true },
+    }),
+    db.riderPayout.findMany({
+      where: { riderId: userId },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      select: { id: true, amount: true, method: true, reference: true, note: true, createdAt: true },
+    }),
+  ])
+  const paidTotal = agg._sum.amount ?? 0
+  return {
+    paidTotal,
+    pending: earned - paidTotal,
+    lastPayoutAt: agg._max.createdAt?.toISOString() ?? null,
+    payouts: rows.map((r) => ({
+      id: r.id,
+      amount: r.amount,
+      method: r.method,
+      reference: r.reference,
+      note: r.note,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  }
+}

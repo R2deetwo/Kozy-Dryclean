@@ -46,9 +46,9 @@ export const authOptions: NextAuthOptions = {
         }
 
         // ----- Staff-access gate (phase 31) -----
-        // Console roles (ADMIN / STAFF / DRIVER) are policed at the door: a
-        // paused or revoked account can NEVER obtain a session, even with
-        // the correct password. Customer roles are unaffected — their
+        // Console roles (ADMIN / STAFF / DRIVER / PARTNER) are policed at the
+        // door: a paused or revoked account can NEVER obtain a session, even
+        // with the correct password. Customer roles are unaffected — their
         // accessStatus is ignored. These error strings surface verbatim in
         // the login page's res.error (same mechanism as EMAIL_NOT_VERIFIED
         // above), so the staff member sees "your manager paused your
@@ -165,8 +165,10 @@ const accessCache = new Map<
   { role: string; accessStatus: string; expiresAt: number }
 >()
 
-/** Console roles whose accessStatus is policed. */
-export const CONSOLE_ROLES = ['ADMIN', 'STAFF', 'DRIVER'] as const
+/** Console roles whose accessStatus is policed. PARTNER (phase 72) joins
+ *  the list: a suspended partner's portal session dies within ~60s, same
+ *  as a paused staff member or rider. */
+export const CONSOLE_ROLES = ['ADMIN', 'STAFF', 'DRIVER', 'PARTNER'] as const
 
 /** Response (not thrown — returned) when the session's user must be blocked.
  *  null = access fine, carry on. */

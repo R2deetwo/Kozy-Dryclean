@@ -626,10 +626,10 @@ export interface KozyAppSettings {
   // reached this browser's localStorage).
   pricePerKg: number
   minimumKg: number
-  // Rider pay (phase 61) — naira per completed stop, set by the office in
-  // Settings → Rider pay. Drives the rider app's Earnings tab; 0/0 means
-  // "rates not published yet" (riders see their completed work, never a
-  // fabricated number).
+  // Rider pay (phase 61 → 72) — naira per completed stop, set by the office
+  // in Settings → Rider pay. Drives the rider app's Earnings tab and the
+  // payout desk's balances; 0/0 means "rates not published yet" (riders see
+  // their completed work, never a fabricated number).
   riderPickupRate: number
   riderDeliveryRate: number
   // Card payments (Paystack) — NOT stored in the DB: derived server-side
@@ -672,11 +672,16 @@ export function defaultAppSettings(): KozyAppSettings {
     // Bulk pricing defaults mirror the live AppSetting values.
     pricePerKg: B2B_PRICING.pricePerKg,
     minimumKg: B2B_PRICING.minimumKg,
-    // Rider pay defaults to unpublished — the office sets real rates in
-    // Settings → Rider pay; nothing shows in the rider Earnings tab until
-    // they do (honesty over decoration).
-    riderPickupRate: 0,
-    riderDeliveryRate: 0,
+    // Rider pay (phase 72): defaults now publish sensible Lagos per-stop
+    // rates so the pay pipeline works end-to-end on day one — ₦500 per
+    // pickup + ₦500 per delivery = ₦1,000 per completed order, which is
+    // 7–12% of a typical ₦8k–15k order for BOTH legs (within the normal
+    // last-mile labour share) and batched stops make it cheaper per stop.
+    // The office can change either rate any time in Settings → Rider pay;
+    // changing rates re-prices the computed ledger (past payouts are
+    // already-recorded money and never move).
+    riderPickupRate: 500,
+    riderDeliveryRate: 500,
     // Pessimistic client default — the server response overrides it with
     // the real env-derived value. Greyed out beats a broken card checkout.
     paystackAvailable: false,

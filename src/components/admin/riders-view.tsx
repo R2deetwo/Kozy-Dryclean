@@ -42,6 +42,8 @@ import {
   Building2,
   Loader2,
   Timer,
+  Banknote,
+  Landmark,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -64,6 +66,8 @@ import {
   useBranches,
   useRiderBranchAssign,
   useDriverStats,
+  useRiderPayouts,
+  useRecordRiderPayout,
   type ApiRiderApplication,
   type ApiRiderRosterEntry,
   type ApiRiderIncident,
@@ -107,10 +111,22 @@ function fmtPing(iso: string | null): string {
   return `${Math.floor(hours / 24)} d ago`
 }
 
+const naira = (n: number) =>
+  `₦${n.toLocaleString('en-NG', { maximumFractionDigits: 0 })}`
+
 export function RidersView() {
   const { data, isLoading, error } = useRiderApplications()
   const decisionMutation = useRiderDecision()
   const queryClient = useQueryClient()
+  const payoutsQuery = useRiderPayouts({ refetchInterval: 60_000 })
+  const payoutMutation = useRecordRiderPayout()
+
+  // ----- Phase 72: the payout desk state -----
+  const [payoutTarget, setPayoutTarget] = useState<ApiRiderRosterEntry | null>(null)
+  const [payoutAmount, setPayoutAmount] = useState('')
+  const [payoutMethod, setPayoutMethod] = useState<'BANK_TRANSFER' | 'CASH'>('BANK_TRANSFER')
+  const [payoutReference, setPayoutReference] = useState('')
+  const [payoutNote, setPayoutNote] = useState('')
 
   const [filter, setFilter] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'ALL'>('PENDING')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -634,9 +650,93 @@ export function RidersView() {
                   <RiderBranchSelect riderId={r.id} branchId={(r as any).branchId ?? null} />
                   <RiderEmploymentSelect riderId={r.id} employmentType={(r as any).employmentType ?? null} />
                   <RiderResponseStat riderId={r.id} />
+
+                  {/* Phase 72 — the payout desk line: pending balance, bank
+                   * status, and the settle action. The office pays riders
+                   * weekly from exactly here. */}
+                  <div className="mt-3 rounded-xl border border-navy-100 bg-linen-50 p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-navy-300">
+                          <Banknote className="h-3 w-3" /> Pending payout
+                        </p>
+                        <p className="text-base font-bold text-navy">
+                          {r.ratesPublished ? naira(Math.max(r.pendingPayout, 0)) : '—'}
+                          <span className="ml-1.5 text-[10px] font-normal text-navy-300">
+                            {r.ratesPublished
+                              ? `of ${naira(r.earnedTotal)} earned · ${naira(r.paidTotal)} paid`
+                              : 'rates not published'}
+                          </span>
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setPayoutTarget(r)
+                          setPayoutAmount(r.ratesPublished && r.pendingPayout > 0 ? String(r.pendingPayout) : '')
+                          setPayoutMethod('BANK_TRANSFER')
+                          setPayoutReference('')
+                          setPayoutNote('')
+                        }}
+                        className="shrink-0 rounded-full bg-navy px-3.5 py-1.5 text-[11px] font-semibold text-white transition hover:bg-navy-400"
+                      >
+                        Settle rider
+                      </button>
+                    </div>
+                    <p className="mt-1.5 flex items-center gap-1 text-[10px] text-navy-300">
+                      <Landmark className={cn('h-3 w-3', r.bankOnFile ? 'text-emerald-600' : 'text-amber-500')} />
+                      {r.bankOnFile && r.bank
+                        ? `${r.bank.bankName} · ${r.bank.bankAccountNumber} · ${r.bank.bankAccountName}`
+                        : 'No bank details on file — the rider adds them in their app’s Account tab'}
+                      {r.lastPayoutAt ? <span className="ml-auto">last paid {fmtWhen(r.lastPayoutAt)}</span> : null}
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             ))}
+          </div>
+        )}
+      </section>
+
+      {/* ===== Rider payouts (phase 72) — the money trail ===== */}
+      <section>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-navy-300">
+          Payout history
+        </h2>
+        {(payoutsQuery.data?.payouts ?? []).length === 0 ? (
+          <div className="rounded-xl border border-dashed border-navy-100 bg-white p-6 text-center">
+            <Banknote className="mx-auto mb-2 h-6 w-6 text-navy-200" />
+            <p className="text-sm font-medium text-navy">No payouts recorded yet</p>
+            <p className="mt-1 text-xs text-navy-300">
+              When you settle a rider (button on each rider card above), the record lands here —
+              amount, method, reference and who recorded it. The rider gets an email receipt.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-hidden rounded-xl border border-navy-100 bg-white">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-linen-50 text-[10px] uppercase tracking-wide text-navy-300">
+                <tr>
+                  <th className="px-3 py-2 font-semibold">Rider</th>
+                  <th className="px-3 py-2 font-semibold">Amount</th>
+                  <th className="px-3 py-2 font-semibold">Method</th>
+                  <th className="px-3 py-2 font-semibold">Reference</th>
+                  <th className="px-3 py-2 font-semibold">When</th>
+                  <th className="px-3 py-2 font-semibold">Recorded by</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-navy-50">
+                {(payoutsQuery.data?.payouts ?? []).slice(0, 12).map((p) => (
+                  <tr key={p.id} className="text-navy-200">
+                    <td className="px-3 py-2 font-medium text-navy">{p.riderName}</td>
+                    <td className="px-3 py-2 font-bold text-emerald-700">{naira(p.amount)}</td>
+                    <td className="px-3 py-2">{p.method === 'CASH' ? 'Cash' : 'Bank transfer'}</td>
+                    <td className="px-3 py-2 font-mono text-[10px]">{p.reference ?? '—'}</td>
+                    <td className="px-3 py-2">{fmtWhen(p.createdAt)}</td>
+                    <td className="px-3 py-2">{p.recordedByName ?? '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </section>
@@ -806,6 +906,170 @@ export function RidersView() {
               className="bg-emerald-700 text-white hover:bg-emerald-800"
             >
               {resolving ? 'Recording…' : 'Record & resolve'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ===== Record payout dialog (phase 72) ===== */}
+      <Dialog open={!!payoutTarget} onOpenChange={(o) => !o && setPayoutTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm">
+              Settle {payoutTarget?.name ?? 'this rider'}
+            </DialogTitle>
+            <DialogDescription className="text-xs leading-relaxed">
+              Records money you have actually paid out — the rider&apos;s pending balance drops by
+              this amount and they get an email receipt with the method and reference. The amount
+              is prefilled with their pending balance; adjust it if you are settling part or
+              adding an advance.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3">
+            {payoutTarget?.ratesPublished ? (
+              <div className="rounded-lg bg-linen-50 p-3 text-xs text-navy-300">
+                <div className="flex justify-between">
+                  <span>Earned (all stops, today&apos;s rates)</span>
+                  <span className="font-semibold text-navy">{naira(payoutTarget.earnedTotal)}</span>
+                </div>
+                <div className="mt-1 flex justify-between">
+                  <span>Paid to date</span>
+                  <span className="font-semibold text-navy">{naira(payoutTarget.paidTotal)}</span>
+                </div>
+                <div className="mt-1 flex justify-between border-t border-navy-100 pt-1.5">
+                  <span>Pending</span>
+                  <span className="font-bold text-navy">
+                    {naira(Math.max(payoutTarget.pendingPayout, 0))}
+                    {payoutTarget.pendingPayout < 0 ? ' (settled ahead)' : ''}
+                  </span>
+                </div>
+                {payoutTarget.bank && (
+                  <p className="mt-2 flex items-center gap-1 border-t border-navy-100 pt-1.5 text-[11px]">
+                    <Landmark className="h-3 w-3 text-emerald-600" />
+                    {payoutTarget.bank.bankName} · {payoutTarget.bank.bankAccountNumber} ·{' '}
+                    {payoutTarget.bank.bankAccountName}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">
+                Rider rates are not published yet (Settings → Rider pay) — earnings show as zero.
+                You can still record a payout if you are settling on a private arrangement.
+              </div>
+            )}
+
+            <div>
+              <Label htmlFor="payout-amount" className="text-xs text-navy-300">
+                Amount paid (naira)
+              </Label>
+              <Input
+                id="payout-amount"
+                type="number"
+                min={1}
+                inputMode="numeric"
+                value={payoutAmount}
+                onChange={(e) => setPayoutAmount(e.target.value)}
+                placeholder="e.g. 5000"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label className="text-xs text-navy-300">Method</Label>
+              <div className="mt-1 flex gap-2">
+                {(['BANK_TRANSFER', 'CASH'] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setPayoutMethod(m)}
+                    className={cn(
+                      'flex-1 rounded-lg border px-3 py-2 text-xs font-semibold transition',
+                      payoutMethod === m
+                        ? 'border-navy bg-navy text-white'
+                        : 'border-navy-100 bg-white text-navy-300 hover:border-navy-300'
+                    )}
+                  >
+                    {m === 'BANK_TRANSFER' ? 'Bank transfer' : 'Cash'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label htmlFor="payout-reference" className="text-xs text-navy-300">
+                Transfer reference (optional)
+              </Label>
+              <Input
+                id="payout-reference"
+                value={payoutReference}
+                onChange={(e) => setPayoutReference(e.target.value)}
+                placeholder="Receipt / transfer ID"
+                className="mt-1"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="payout-note" className="text-xs text-navy-300">
+                Note (optional — visible to the rider)
+              </Label>
+              <Input
+                id="payout-note"
+                value={payoutNote}
+                onChange={(e) => setPayoutNote(e.target.value)}
+                placeholder="e.g. Week of 22 Sept"
+                className="mt-1"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button size="sm" variant="outline" onClick={() => setPayoutTarget(null)} disabled={payoutMutation.isPending}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                const amount = Math.round(Number(payoutAmount))
+                if (!payoutTarget || !Number.isFinite(amount) || amount <= 0) {
+                  toast({ title: 'Enter a whole amount', variant: 'destructive' })
+                  return
+                }
+                if (payoutTarget.ratesPublished && amount > payoutTarget.pendingPayout + 1) {
+                  // Allowed (advances happen) — but confirm.
+                  const ok = window.confirm(
+                    `This is more than the pending balance (${naira(payoutTarget.pendingPayout)}). Record it anyway?`
+                  )
+                  if (!ok) return
+                }
+                payoutMutation.mutate(
+                  {
+                    riderId: payoutTarget.id,
+                    amount,
+                    method: payoutMethod,
+                    reference: payoutReference.trim() || undefined,
+                    note: payoutNote.trim() || undefined,
+                  },
+                  {
+                    onSuccess: (d: any) => {
+                      toast({
+                        title: 'Payout recorded',
+                        description: `${payoutTarget.name} — ${naira(amount)} by ${
+                          payoutMethod === 'CASH' ? 'cash' : 'bank transfer'
+                        }. Pending now ${naira(Math.max(d?.balance?.pending ?? 0, 0))}. Receipt email queued.`,
+                      })
+                      setPayoutTarget(null)
+                    },
+                    onError: (e: Error) => {
+                      toast({ title: 'Could not record', description: e.message, variant: 'destructive' })
+                    },
+                  }
+                )
+              }}
+              disabled={payoutMutation.isPending}
+              className="bg-emerald-700 text-white hover:bg-emerald-800"
+            >
+              {payoutMutation.isPending ? 'Recording…' : 'Record payout'}
             </Button>
           </DialogFooter>
         </DialogContent>

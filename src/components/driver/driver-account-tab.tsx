@@ -26,6 +26,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Landmark,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { waLink } from '@/lib/whatsapp'
@@ -35,6 +36,9 @@ interface MeProfile {
   phone: string
   email: string
   createdAt: string
+  bankName?: string | null
+  bankAccountNumber?: string | null
+  bankAccountName?: string | null
 }
 
 function deviceLabel(): string {
@@ -73,6 +77,7 @@ export function DriverAccountTab({
   return (
     <div className="space-y-4 pb-2">
       <ProfileCard me={me} />
+      <BankDetailsCard me={me} />
       <NotificationsCard me={me} />
       <InstallCard />
       <RulesCard onOpen={onOpenRules} />
@@ -134,6 +139,144 @@ function ProfileCard({ me }: { me: MeProfile | null }) {
             </p>
           )}
         </div>
+      )}
+    </div>
+  )
+}
+
+// ------------------------------------------------------------------- Bank
+// Phase 72 — where the weekly payout goes. Self-service: the rider enters
+// the account, the office pays what is listed. Inline edit, same visual
+// language as the notifications card.
+function BankDetailsCard({ me }: { me: MeProfile | null }) {
+  const set = Boolean(me?.bankName && me?.bankAccountNumber && me?.bankAccountName)
+  const [editing, setEditing] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState<string | null>(null)
+  const [form, setForm] = useState({ bankName: '', bankAccountNumber: '', bankAccountName: '' })
+
+  const startEdit = () => {
+    setForm({
+      bankName: me?.bankName ?? '',
+      bankAccountNumber: me?.bankAccountNumber ?? '',
+      bankAccountName: me?.bankAccountName ?? me?.name ?? '',
+    })
+    setNote(null)
+    setEditing(true)
+  }
+
+  const save = async () => {
+    if (busy) return
+    setBusy(true)
+    setNote(null)
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        setNote(data?.error ?? 'Could not save — check the details and try again.')
+        return
+      }
+      // Reflect the saved values without a refetch round-trip.
+      if (me) {
+        me.bankName = data.bank?.bankName ?? form.bankName
+        me.bankAccountNumber = data.bank?.bankAccountNumber ?? form.bankAccountNumber
+        me.bankAccountName = data.bank?.bankAccountName ?? form.bankAccountName
+      }
+      setEditing(false)
+      setNote('Saved — payouts will be sent to this account.')
+    } catch {
+      setNote('Network hiccup — try again in a moment.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const inputClass =
+    'mt-1 w-full rounded-lg border border-slate-600 bg-slate-900/70 px-3 py-2 text-sm text-white placeholder:text-slate-500 focus:border-gold-400 focus:outline-none'
+
+  return (
+    <div className="rounded-2xl bg-slate-800 p-5">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-bold text-white">
+          <Landmark className="h-4 w-4 text-gold-400" /> Payout bank account
+        </p>
+        <button
+          onClick={editing ? () => setEditing(false) : startEdit}
+          className="rounded-full border border-slate-600 px-3 py-1 text-[11px] font-semibold text-slate-300 transition hover:border-gold-400 hover:text-gold-300"
+        >
+          {editing ? 'Cancel' : set ? 'Update' : 'Add'}
+        </button>
+      </div>
+
+      {editing ? (
+        <div className="mt-3 space-y-2.5">
+          <div>
+            <label className="text-[11px] font-medium text-slate-400">Bank</label>
+            <input
+              value={form.bankName}
+              onChange={(e) => setForm((f) => ({ ...f, bankName: e.target.value }))}
+              placeholder="e.g. GTBank"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-slate-400">Account number</label>
+            <input
+              value={form.bankAccountNumber}
+              onChange={(e) => setForm((f) => ({ ...f, bankAccountNumber: e.target.value.replace(/\D/g, '') }))}
+              inputMode="numeric"
+              placeholder="10 digits, as printed by your bank"
+              className={inputClass}
+            />
+          </div>
+          <div>
+            <label className="text-[11px] font-medium text-slate-400">Account name</label>
+            <input
+              value={form.bankAccountName}
+              onChange={(e) => setForm((f) => ({ ...f, bankAccountName: e.target.value }))}
+              placeholder="The name on the account"
+              className={inputClass}
+            />
+          </div>
+          <button
+            onClick={save}
+            disabled={busy}
+            className="w-full rounded-xl bg-gold-gradient py-2.5 text-sm font-bold text-navy transition hover:opacity-90 disabled:opacity-50"
+          >
+            {busy ? 'Saving…' : 'Save payout account'}
+          </button>
+        </div>
+      ) : set ? (
+        <div className="mt-3 space-y-1 rounded-xl bg-slate-900/60 p-3 text-xs">
+          <p className="flex items-center justify-between gap-2 text-slate-300">
+            <span className="text-slate-500">Bank</span>
+            <span>{me?.bankName}</span>
+          </p>
+          <p className="flex items-center justify-between gap-2 text-slate-300">
+            <span className="text-slate-500">Account</span>
+            <span className="font-mono">{me?.bankAccountNumber}</span>
+          </p>
+          <p className="flex items-center justify-between gap-2 text-slate-300">
+            <span className="text-slate-500">Name</span>
+            <span className="truncate">{me?.bankAccountName}</span>
+          </p>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs leading-relaxed text-slate-400">
+          Not set yet. Your weekly payout is sent to the account you list here — add one so the
+          money reaches you first time.
+        </p>
+      )}
+
+      {note && (
+        <p className="mt-2 flex items-start gap-1.5 text-[11px] leading-relaxed text-slate-400">
+          <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-emerald-400" />
+          {note}
+        </p>
       )}
     </div>
   )

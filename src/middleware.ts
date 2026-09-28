@@ -24,16 +24,26 @@ export default withAuth(
     // /portal  → B2C or B2B only (customers)
     // /admin   → ADMIN or STAFF (the Atelier Console)
     // /driver  → DRIVER only
+    // /partner → PARTNER only (the Kozy Network portal, phase 72)
 
     if (path.startsWith('/admin') && role !== 'ADMIN' && role !== 'STAFF') {
       // Wrong role → redirect to their correct portal
       if (role === 'DRIVER') return NextResponse.redirect(new URL('/driver', req.url))
+      if (role === 'PARTNER') return NextResponse.redirect(new URL('/partner', req.url))
       if (role === 'B2C' || role === 'B2B') return NextResponse.redirect(new URL('/portal', req.url))
       return NextResponse.redirect(new URL('/login', req.url))
     }
 
     if (path.startsWith('/driver') && role !== 'DRIVER') {
       if (role === 'ADMIN' || role === 'STAFF') return NextResponse.redirect(new URL('/admin', req.url))
+      if (role === 'PARTNER') return NextResponse.redirect(new URL('/partner', req.url))
+      if (role === 'B2C' || role === 'B2B') return NextResponse.redirect(new URL('/portal', req.url))
+      return NextResponse.redirect(new URL('/login', req.url))
+    }
+
+    if (path.startsWith('/partner') && role !== 'PARTNER') {
+      if (role === 'ADMIN' || role === 'STAFF') return NextResponse.redirect(new URL('/admin', req.url))
+      if (role === 'DRIVER') return NextResponse.redirect(new URL('/driver', req.url))
       if (role === 'B2C' || role === 'B2B') return NextResponse.redirect(new URL('/portal', req.url))
       return NextResponse.redirect(new URL('/login', req.url))
     }
@@ -41,6 +51,7 @@ export default withAuth(
     if (path.startsWith('/portal') && role !== 'B2C' && role !== 'B2B') {
       if (role === 'ADMIN' || role === 'STAFF') return NextResponse.redirect(new URL('/admin', req.url))
       if (role === 'DRIVER') return NextResponse.redirect(new URL('/driver', req.url))
+      if (role === 'PARTNER') return NextResponse.redirect(new URL('/partner', req.url))
       return NextResponse.redirect(new URL('/login', req.url))
     }
 
@@ -57,5 +68,5 @@ export default withAuth(
 )
 
 export const config = {
-  matcher: ['/portal/:path*', '/admin/:path*', '/driver/:path*'],
+  matcher: ['/portal/:path*', '/admin/:path*', '/driver/:path*', '/partner/:path*'],
 }

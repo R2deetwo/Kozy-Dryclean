@@ -833,17 +833,19 @@ export function SettingsView() {
                 </CardContent>
               </Card>
 
-              {/* Rider pay (phase 61) — the rates riders see in their app's Earnings tab */}
+              {/* Rider pay (phase 61 → 72) — the rates riders see in their app's
+                  Earnings tab; the payout desk settles the balance weekly */}
               <Card className="border-navy-100 shadow-navy">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 font-serif text-navy">
                     <Bike className="h-4 w-4 text-gold-400" /> Rider Pay
                   </CardTitle>
                   <p className="text-xs text-navy-300">
-                    What riders earn per completed stop. At 0 the riders' Earnings tab
-                    honestly shows their work without a naira figure — publish rates and it
-                    becomes their live payout ledger (every completed pickup/delivery, rolled
-                    into the Monday payout week).
+                    What riders earn per completed stop. These rates price every completed
+                    pickup/delivery into each rider&apos;s ledger; the pending balance is what the
+                    office settles weekly from <span className="font-medium text-navy">Team → Riders → Settle rider</span>{' '}
+                    (a receipt email follows each payout). At 0 the riders&apos; Earnings tab
+                    honestly shows their work without a naira figure.
                   </p>
                 </CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2">

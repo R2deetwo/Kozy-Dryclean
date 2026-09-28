@@ -675,6 +675,14 @@ export interface ApiRiderRosterEntry {
   todayCompleted: number
   /** Unresolved rider-reported incidents — the owner's watch list. */
   unresolvedIncidents: number
+  /** Phase 72 — the payout desk columns. */
+  ratesPublished: boolean
+  earnedTotal: number
+  paidTotal: number
+  pendingPayout: number
+  lastPayoutAt: string | null
+  bankOnFile: boolean
+  bank: { bankName: string; bankAccountNumber: string; bankAccountName: string } | null
 }
 
 /** A rider-reported incident on an order (phase 55). */
@@ -1673,6 +1681,12 @@ export interface ApiPartner {
   reviewedAt: string | null
   reviewNote: string | null
   createdAt: string
+  /** Phase 72 — application reference + portal login created at approval. */
+  refCode: string | null
+  lga: string | null
+  servicesOffered: string | null
+  userId: string | null
+  account: { id: string; name: string; email: string; accessStatus: string } | null
 }
 
 export interface ApiPartnerLedger {
@@ -1683,6 +1697,19 @@ export interface ApiPartnerLedger {
   revenueThisMonth: number
   partnerShareThisMonth: number
   kozyShareThisMonth: number
+  /** Phase 72 — the settlement money side. */
+  shareEarned: number
+  settledTotal: number
+  pendingSettlement: number
+  lastSettlementAt: string | null
+  settlements: {
+    id: string
+    amount: number
+    method: string
+    reference: string | null
+    note: string | null
+    createdAt: string
+  }[]
 }
 
 export function usePartners(options?: { refetchInterval?: number | false }) {
@@ -1743,5 +1770,243 @@ export function useRiderBranchAssign() {
       if (!res.ok) throw new Error(data.error || 'Could not save the rider setting')
       return data
     },
+  })
+}
+
+// =============================================================================
+// RIDER PAYOUTS (phase 72) — the money side of the roster
+// =============================================================================
+
+export interface ApiRiderPayoutRow {
+  id: string
+  amount: number
+  method: string
+  reference: string | null
+  note: string | null
+  createdAt: string
+  riderId: string
+  riderName: string
+  recordedByName: string | null
+}
+
+/** ADMIN: recent rider payouts (the desk's history strip). */
+export function useRiderPayouts(options?: { refetchInterval?: number | false }) {
+  return useQuery<{ payouts: ApiRiderPayoutRow[] }>({
+    queryKey: ['rider-payouts'],
+    queryFn: async () => {
+      const res = await fetch('/api/rider-payouts')
+      if (!res.ok) throw new Error('Failed to load payouts')
+      return res.json()
+    },
+    staleTime: 15 * 1000,
+    refetchInterval: options?.refetchInterval ?? 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+/** ADMIN: record a payout (money actually settled to a rider). */
+export function useRecordRiderPayout() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      riderId: string
+      amount: number
+      method: 'BANK_TRANSFER' | 'CASH'
+      reference?: string
+      note?: string
+    }) => {
+      const res = await fetch('/api/rider-payouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not record the payout')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['rider-payouts'] })
+      qc.invalidateQueries({ queryKey: ['rider-applications'] })
+    },
+  })
+}
+
+/** ADMIN: recent partner settlements (the Partners desk's history strip). */
+export function usePartnerSettlements(options?: { refetchInterval?: number | false }) {
+  return useQuery<{
+    settlements: {
+      id: string
+      amount: number
+      method: string
+      reference: string | null
+      note: string | null
+      createdAt: string
+      partnerId: string
+      partnerName: string
+      recordedByName: string | null
+    }[]
+  }>({
+    queryKey: ['partner-settlements'],
+    queryFn: async () => {
+      const res = await fetch('/api/partner-settlements')
+      if (!res.ok) throw new Error('Failed to load settlements')
+      return res.json()
+    },
+    staleTime: 15 * 1000,
+    refetchInterval: options?.refetchInterval ?? 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+/** ADMIN: record a partner settlement. */
+export function useRecordPartnerSettlement() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      partnerId: string
+      amount: number
+      method: 'BANK_TRANSFER' | 'CASH'
+      reference?: string
+      note?: string
+    }) => {
+      const res = await fetch('/api/partner-settlements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not record the settlement')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['partner-settlements'] })
+      qc.invalidateQueries({ queryKey: ['partners'] })
+    },
+  })
+}
+
+// =============================================================================
+// PARTNER PORTAL (phase 72) — the laundrette's own working screen
+// =============================================================================
+
+export interface ApiPartnerPortalOrder {
+  id: string
+  orderNumber: string
+  status: string
+  type: string
+  serviceSpeed: string
+  modeOfWash: string | null
+  itemCount: number
+  items: { name: string; quantity: number }[]
+  finalWeight: number | null
+  alterationNotes: string | null
+  pickupDate: string | null
+  pickedUpAt: string | null
+  atStationAt: string | null
+  processingAt: string | null
+  finishingAt: string | null
+  outForDeliveryAt: string | null
+  deliveredAt: string | null
+  customerName: string
+}
+
+export interface ApiPartnerPortalData {
+  partner: {
+    id: string
+    businessName: string
+    contactName: string
+    email: string
+    phone: string
+    address: string
+    lga: string | null
+    servicesOffered: string | null
+    branchId: string | null
+    status: string
+    revenueSharePartnerPct: number
+  }
+  stats: { active: number; awaitingReceipt: number; finishedThisMonth: number }
+  active: ApiPartnerPortalOrder[]
+  recentDone: ApiPartnerPortalOrder[]
+}
+
+export interface ApiPartnerEarnings {
+  sharePct: number
+  ledger: {
+    ordersThisMonth: number
+    ordersLifetime: number
+    revenueThisMonth: number
+    revenueLifetime: number
+    shareEarned: number
+    shareThisMonth: number
+  }
+  settlements: {
+    settledTotal: number
+    pending: number
+    lastSettlementAt: string | null
+    history: { id: string; amount: number; method: string; reference: string | null; note: string | null; createdAt: string }[]
+  }
+  deliveredOrders: {
+    orderNumber: string
+    customerName: string
+    orderValue: number
+    yourShare: number
+    deliveredAt: string | null
+    serviceSpeed: string
+  }[]
+}
+
+/** PARTNER: the portal working screen (orders routed to this laundrette). */
+export function usePartnerOverview(options?: { refetchInterval?: number | false }) {
+  return useQuery<ApiPartnerPortalData>({
+    queryKey: ['partner-portal-overview'],
+    queryFn: async () => {
+      const res = await fetch('/api/partner/overview')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to load your overview')
+      }
+      return res.json()
+    },
+    staleTime: 10 * 1000,
+    refetchInterval: options?.refetchInterval ?? 30_000,
+    refetchOnWindowFocus: true,
+  })
+}
+
+/** PARTNER: advance an order one step (received → washing → finishing). */
+export function useUpdatePartnerOrderStatus() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { orderId: string }) => {
+      const res = await fetch(`/api/partner/orders/${input.orderId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.error || 'Could not update the order')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['partner-portal-overview'] })
+    },
+  })
+}
+
+/** PARTNER: the share ledger + settlements. */
+export function usePartnerEarnings(options?: { refetchInterval?: number | false }) {
+  return useQuery<ApiPartnerEarnings>({
+    queryKey: ['partner-portal-earnings'],
+    queryFn: async () => {
+      const res = await fetch('/api/partner/earnings')
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}))
+        throw new Error(err.error || 'Failed to load your earnings')
+      }
+      return res.json()
+    },
+    staleTime: 30 * 1000,
+    refetchInterval: options?.refetchInterval ?? 60_000,
+    refetchOnWindowFocus: true,
   })
 }

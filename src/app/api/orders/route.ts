@@ -72,6 +72,18 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // ----- Role gate (phase 72 hardening) -----
+  // Explicit allowlist: ADMIN/STAFF (the ops board), DRIVER (their route),
+  // B2C/B2B (their own orders). Anything else — notably the new PARTNER
+  // role — is refused: the full order list (customer names, phones,
+  // addresses) is console data, and a partner's world is
+  // /api/partner/overview. Previously an unknown role fell through the
+  // if/else below into the UNFILTERED branch.
+  const ROLE = session.user?.role
+  if (ROLE !== 'ADMIN' && ROLE !== 'STAFF' && ROLE !== 'DRIVER' && ROLE !== 'B2C' && ROLE !== 'B2B') {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
+
   // ----- Cursor pagination params -----
   const { searchParams } = new URL(req.url)
   const limitRaw = parseInt(searchParams.get('limit') ?? '', 10)

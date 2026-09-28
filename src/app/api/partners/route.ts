@@ -5,13 +5,34 @@
 // The public page /partners collects the operator's story; approval happens
 // in the admin Partners view. Applications are rate-limited like the other
 // public forms, and every application fires the admin alert.
+//
+// Phase 72 — application parity with riders (the owner's ask: "partners
+// should be able to register the same way riders sign up"): the POST is
+// validated with the same strictness as /api/rider-applications (Nigerian
+// mobile, LGA, at least one service chip), mints a KZP-XXXX reference, and
+// the applicant gets a confirmation email + SMS immediately. GET now also
+// returns each partner's settlement aggregate (settled + pending share) so
+// the console's money desk and the partner portal read the same numbers.
 // =============================================================================
 
 import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
-import { notifyAdminPartnerApplication } from '@/lib/notifications'
+import { isValidNigerianMobile } from '@/lib/phone-validation'
+import { notifyAdminPartnerApplication, notifyPartnerApplicationReceived } from '@/lib/notifications'
+import { getPartnerShareLedger, getPartnerSettlementSummary } from '@/lib/partner-ledger'
+
+/** Short application reference like KZP-7F2K (same alphabet as KZR — no
+ *  ambiguous glyphs). Uniqueness enforced by the schema; retries on clash. */
+function mintRefCode(): string {
+  const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 4; i++) {
+    code += alphabet[Math.floor(Math.random() * alphabet.length)]
+  }
+  return `KZP-${code}`
+}
 
 export async function POST(req: Request) {
   // Rate limit: 5 applications per IP per hour (form spam valve).
@@ -30,23 +51,40 @@ export async function POST(req: Request) {
   const email = typeof body?.email === 'string' ? body.email.trim().toLowerCase() : ''
   const phone = typeof body?.phone === 'string' ? body.phone.trim() : ''
   const address = typeof body?.address === 'string' ? body.address.trim() : ''
+  const lga = typeof body?.lga === 'string' ? body.lga.trim() : ''
   const capacityNotes =
     typeof body?.capacityNotes === 'string' ? body.capacityNotes.trim().slice(0, 2000) : ''
+  const services = Array.isArray(body?.servicesOffered)
+    ? body.servicesOffered
+        .filter((s: unknown): s is string => typeof s === 'string')
+        .map((s: string) => s.trim())
+        .filter(Boolean)
+        .slice(0, 6)
+    : []
 
+  // ----- Validation (phase 72: the same strictness riders get) -----
+  const bad = (error: string, field?: string) =>
+    NextResponse.json(field ? { error, field } : { error }, { status: 400 })
   if (!businessName || businessName.length < 2) {
-    return NextResponse.json({ error: 'Business name is required.' }, { status: 400 })
+    return bad('Business name is required.', 'businessName')
   }
-  if (!contactName || contactName.length < 2) {
-    return NextResponse.json({ error: 'Contact name is required.' }, { status: 400 })
+  if (!contactName || !/^[A-Za-z][A-Za-z .'-]{1,}$/.test(contactName)) {
+    return bad('Contact name should be your name as you would introduce yourself.', 'contactName')
   }
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return NextResponse.json({ error: 'A valid email is required.' }, { status: 400 })
+    return bad('A valid email is required — your partner-portal sign-in will be emailed there.', 'email')
   }
-  if (phone.length < 7) {
-    return NextResponse.json({ error: 'Phone number is required.' }, { status: 400 })
+  if (!isValidNigerianMobile(phone)) {
+    return bad('Phone number must be a Nigerian mobile — e.g. 0803 222 4455 or +234 803 222 4455.', 'phone')
   }
   if (!address || address.length < 8) {
-    return NextResponse.json({ error: 'Business address is required.' }, { status: 400 })
+    return bad('Business address is required (street and area).', 'address')
+  }
+  if (!lga || lga.length < 2) {
+    return bad('Tell us the Lagos area your laundry operates in.', 'lga')
+  }
+  if (services.length === 0) {
+    return bad('Pick at least one service your laundry can process to the Kozy standard.', 'servicesOffered')
   }
 
   // Duplicate guard: same email already in the pipeline.
@@ -66,6 +104,14 @@ export async function POST(req: Request) {
     )
   }
 
+  // Collision-free KZP reference (practically never loops twice).
+  let refCode = mintRefCode()
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const clash = await db.partner.findUnique({ where: { refCode } })
+    if (!clash) break
+    refCode = mintRefCode()
+  }
+
   const partner = await db.partner.create({
     data: {
       businessName,
@@ -73,12 +119,30 @@ export async function POST(req: Request) {
       email,
       phone,
       address,
+      lga,
+      servicesOffered: services.join(', '),
       capacityNotes: capacityNotes || null,
+      refCode,
       status: 'PENDING',
     },
   })
 
   after(async () => {
+    // (1) the applicant knows it landed + what happens next — the same
+    // "apply → know it landed" contract riders get (phase 54);
+    // (2) the admins get the existing alert (unchanged behaviour).
+    try {
+      await notifyPartnerApplicationReceived({
+        businessName,
+        contactName,
+        email,
+        phone,
+        lga,
+        refCode,
+      })
+    } catch (e) {
+      console.error('[partners] applicant confirmation failed:', e)
+    }
     try {
       await notifyAdminPartnerApplication({
         businessName,
@@ -93,7 +157,7 @@ export async function POST(req: Request) {
     }
   })
 
-  return NextResponse.json({ ok: true, partnerId: partner.id }, { status: 201 })
+  return NextResponse.json({ ok: true, partnerId: partner.id, refCode }, { status: 201 })
 }
 
 export async function GET() {
@@ -110,38 +174,47 @@ export async function GET() {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  const partners = await db.partner.findMany({ orderBy: { createdAt: 'desc' } })
+  const partners = await db.partner.findMany({
+    orderBy: { createdAt: 'desc' },
+    include: { user: { select: { id: true, name: true, email: true, accessStatus: true } } },
+  })
 
   // Derived network ledger: delivered orders tagged per partner (this month
-  // + lifetime). Computed here so the admin view stays a pure renderer.
-  const approved = partners.filter((p) => p.status === 'APPROVED')
+  // + lifetime) + the settlement money side (phase 72). Computed here so the
+  // admin view stays a pure renderer — the SAME functions the partner portal
+  // reads, so the two desks can never disagree.
+  const approved = partners.filter((p) => p.status === 'APPROVED' || p.status === 'SUSPENDED')
   let ledger: any[] = []
   if (approved.length > 0) {
-    const orders = await db.order.findMany({
-      where: { fulfilledByPartnerId: { in: approved.map((p) => p.id) }, status: 'DELIVERED' },
-      select: { fulfilledByPartnerId: true, totalPrice: true, deliveredAt: true },
-    })
-    const now = new Date()
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    ledger = approved.map((p) => {
-      const theirs = orders.filter((o) => o.fulfilledByPartnerId === p.id)
-      const lifetimeValue = theirs.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
-      const monthOrders = theirs.filter(
-        (o) => o.deliveredAt && new Date(o.deliveredAt) >= monthStart
-      )
-      const monthValue = monthOrders.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
-      const partnerShare = (p.revenueSharePartnerPct / 100) * monthValue
-      return {
-        partnerId: p.id,
-        ordersLifetime: theirs.length,
-        ordersThisMonth: monthOrders.length,
-        revenueLifetime: lifetimeValue,
-        revenueThisMonth: monthValue,
-        partnerShareThisMonth: Math.round(partnerShare),
-        kozyShareThisMonth: Math.round(monthValue - partnerShare),
-      }
-    })
+    ledger = await Promise.all(
+      approved.map(async (p) => {
+        const share = await getPartnerShareLedger(p)
+        const money = await getPartnerSettlementSummary(p, { limit: 10 })
+        return {
+          partnerId: p.id,
+          ordersLifetime: share.ordersLifetime,
+          ordersThisMonth: share.ordersThisMonth,
+          revenueLifetime: share.revenueLifetime,
+          revenueThisMonth: share.revenueThisMonth,
+          partnerShareThisMonth: Math.round((p.revenueSharePartnerPct / 100) * share.revenueThisMonth),
+          kozyShareThisMonth: share.kozyShareThisMonth,
+          shareEarned: share.shareEarned,
+          settledTotal: money.settledTotal,
+          pendingSettlement: money.pending,
+          lastSettlementAt: money.lastSettlementAt,
+          settlements: money.settlements,
+        }
+      })
+    )
   }
 
-  return NextResponse.json({ partners, ledger })
+  return NextResponse.json({
+    partners: partners.map((p) => ({
+      ...p,
+      account: p.user
+        ? { id: p.user.id, name: p.user.name, email: p.user.email, accessStatus: p.user.accessStatus }
+        : null,
+    })),
+    ledger,
+  })
 }

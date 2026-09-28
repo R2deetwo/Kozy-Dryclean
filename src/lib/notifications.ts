@@ -1748,7 +1748,7 @@ export async function notifyStaffAccessRestored(opts: {
 
 /** Log a staff-management event to the admin operations feed (never throws). */
 export async function logStaffEvent(opts: {
-  type: 'STAFF_INVITE' | 'RIDER_DECISION'
+  type: 'STAFF_INVITE' | 'RIDER_DECISION' | 'RIDER_PAYOUT' | 'PARTNER_DECISION' | 'PARTNER_SETTLEMENT'
   title: string
   body: string
   staffEmail: string
@@ -1945,5 +1945,248 @@ export async function notifyAdminPartnerApplication(partner: {
     })
   } catch (e) {
     console.error('notifyAdminPartnerApplication failed:', e)
+  }
+}
+
+// =============================================================================
+// PARTNER PIPELINE (phase 72) — application parity with riders + money receipts
+// =============================================================================
+// Partners now get the same treatment riders get: a confirmation the moment
+// they apply (email + SMS, with a KZP reference), a WELCOME email with their
+// portal credentials at approval, and a receipt whenever the office settles
+// their share. Riders get the same receipt for payouts — the money side of
+// both programs speaks with one voice.
+// =============================================================================
+
+/** 1) Application received — mirrors notifyRiderApplicationReceived. */
+export async function notifyPartnerApplicationReceived(app: {
+  businessName: string
+  contactName: string
+  email: string
+  phone: string
+  lga?: string | null
+  refCode: string
+}): Promise<void> {
+  try {
+    const firstName = app.contactName.split(' ')[0]
+
+    const bodyHtml = `
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+          Thank you for applying to the Kozy Network, <strong style="color:#0A192F;">${firstName}</strong> —
+          ${app.businessName} is in our review queue. Here is what happens next:
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Your reference</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;"><code style="background:#F8F9FA; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:13px;">${app.refCode}</code></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Step 1 — Review</td>
+            <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">We review applications within <strong>48 hours</strong> (Mon–Sat).</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Step 2 — Call</td>
+            <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">A call from <strong>our team</strong> to talk capacity, standards and the share that fits your setup${app.lga ? ` (${app.lga})` : ''}.</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top;">Step 3 — Welcome</td>
+            <td style="padding: 8px 0; color: #0A192F;">If it's a fit, you'll receive your partner-portal sign-in by email and orders can start routing to you.</td>
+          </tr>
+        </table>
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+          Nothing is owed and nothing is locked until both sides say yes. Keep your phone close — the review call is how every partnership starts.
+        </p>`
+
+    const { subject, html } = staffEmailChrome({
+      category: 'partner',
+      heading: `Application received — ${app.businessName}`,
+      bodyHtml,
+      cta: undefined,
+      footer: 'This is an application confirmation, not a partnership agreement.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: app.email, subject, html })
+
+    await sendSMS(
+      app.phone,
+      `Kozy Care: Network application received (${app.refCode}). We'll call you within 48 hours (Mon-Sat) to talk capacity and the revenue share.`
+    )
+  } catch (e) {
+    console.error('notifyPartnerApplicationReceived failed:', e)
+  }
+}
+
+/** 2) Partner approved — the WELCOME email with portal credentials (same
+ *  recipe as the rider welcome: system-generated password, set-your-own at
+ *  first sign-in). Returns the delivery outcome so the approving admin
+ *  knows whether it landed. */
+export async function notifyPartnerApproved(opts: {
+  to: string
+  businessName: string
+  contactName: string
+  password: string
+  managerName: string
+  refCode: string
+  sharePct: number
+  note?: string
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { to, businessName, contactName, password, managerName, refCode, sharePct, note } = opts
+    const loginUrl = `${baseUrl()}/login?email=${encodeURIComponent(to)}`
+    const firstName = contactName.split(' ')[0]
+
+    const bodyHtml = `
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+          Welcome to the Kozy Network, <strong style="color:#0A192F;">${firstName}</strong> —
+          ${businessName} (${refCode}) is approved. Your partner portal is ready: sign in below and
+          the orders we route to you appear there, with your revenue-share ledger alongside.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Sign-in email</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;">${to}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Initial password</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;"><code style="background:#F8F9FA; padding:2px 6px; border-radius:4px; font-family:monospace; font-size:13px;">${password}</code></td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top;">Your share</td>
+            <td style="padding: 8px 0; color: #0A192F;">${sharePct}% of the value of every delivered order you process</td>
+          </tr>
+        </table>
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 14px; margin: 20px 0 0 0;"><strong style="color:#0A192F;">How the working day goes:</strong></p>
+        <ol style="color: #0A192F; font-size: 14px; line-height: 1.7; margin: 8px 0 0 0; padding-left: 20px;">
+          <li>Sign in with the button below — the portal will ask you to choose your own password.</li>
+          <li>Our riders bring customer batches to your facility. Each batch appears in the portal as it's routed to you.</li>
+          <li>Move each order along as you work it — received, washing, finishing. That's what keeps the customer's tracking honest.</li>
+          <li>When finishing is done, our rider collects it for delivery. Your share ledger updates the moment an order is delivered.</li>
+          <li>Add your bank details in the portal's Account tab so settlements reach the right account.</li>
+        </ol>
+        ${
+          note
+            ? `<div style="margin: 20px 0 0 0; padding: 14px 16px; background: #F8F9FA; border-left: 3px solid #D4AF37; border-radius: 4px;">
+                 <p style="color: #0A192F; font-size: 14px; margin: 0; line-height: 1.6;"><strong>Message from ${managerName}:</strong><br>${note}</p>
+               </div>`
+            : ''
+        }
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+          Keep this email private until you have set your own password. Support: ${await supportLine()}.
+        </p>`
+
+    const { subject, html } = staffEmailChrome({
+      category: 'partner',
+      heading: `Welcome to the Kozy Network, ${firstName}!`,
+      bodyHtml,
+      cta: { label: 'Open the partner portal', url: loginUrl },
+    })
+
+    await sendEmail({ to, subject, html })
+    return { ok: true }
+  } catch (e: any) {
+    console.error('Partner welcome email failed:', e)
+    return { ok: false, error: e?.message ?? 'unknown error' }
+  }
+}
+
+/** 3) Rider payout receipt — the money side made visible to the rider. */
+export async function notifyRiderPayout(opts: {
+  to: string
+  name: string
+  amount: number
+  method: string
+  reference?: string | null
+  pendingAfter: number
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { to, name, amount, method, reference, pendingAfter } = opts
+    const firstName = name.split(' ')[0]
+    const methodLabel = method === 'CASH' ? 'Cash' : 'Bank transfer'
+
+    const bodyHtml = `
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+          Your payout has been recorded, <strong style="color:#0A192F;">${firstName}</strong> —
+          this week's work, settled. Keep this email as your receipt.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Amount paid</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;">₦${amount.toLocaleString('en-NG')}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Method</td>
+            <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">${methodLabel}${reference ? ` · ref ${reference}` : ''}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top;">Balance after</td>
+            <td style="padding: 8px 0; color: #0A192F;">₦${Math.max(pendingAfter, 0).toLocaleString('en-NG')} still to come on your next payout</td>
+          </tr>
+        </table>
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+          Every stop behind this payout is listed in your rider app's Earnings tab. Support: ${await supportLine()}.
+        </p>`
+
+    const { subject, html } = staffEmailChrome({
+      category: 'rider',
+      heading: `Payout recorded — ₦${amount.toLocaleString('en-NG')}`,
+      bodyHtml,
+      cta: { label: 'See your earnings', url: `${baseUrl()}/driver` },
+    })
+    await sendEmail({ to, subject, html })
+    return { ok: true }
+  } catch (e: any) {
+    console.error('Rider payout email failed:', e)
+    return { ok: false, error: e?.message ?? 'unknown error' }
+  }
+}
+
+/** 4) Partner settlement receipt — the same voice for the partner's money. */
+export async function notifyPartnerSettlement(opts: {
+  to: string
+  businessName: string
+  contactName: string
+  amount: number
+  method: string
+  reference?: string | null
+  pendingAfter: number
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { to, businessName, contactName, amount, method, reference, pendingAfter } = opts
+    const firstName = contactName.split(' ')[0]
+    const methodLabel = method === 'CASH' ? 'Cash' : 'Bank transfer'
+
+    const bodyHtml = `
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+          Your revenue-share settlement has been recorded, <strong style="color:#0A192F;">${firstName}</strong> —
+          ${businessName}, settled. Keep this email as your receipt.
+        </p>
+        <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Amount settled</td>
+            <td style="padding: 8px 0; color: #0A192F; font-weight: 600; border-bottom: 1px solid #F0F2F5;">₦${amount.toLocaleString('en-NG')}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Method</td>
+            <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">${methodLabel}${reference ? ` · ref ${reference}` : ''}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px 0; color: #6F88A8; vertical-align: top;">Balance after</td>
+            <td style="padding: 8px 0; color: #0A192F;">₦${Math.max(pendingAfter, 0).toLocaleString('en-NG')} of earned share still to come</td>
+          </tr>
+        </table>
+        <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
+          Every delivered order behind this settlement is listed in your portal's Earnings tab. Support: ${await supportLine()}.
+        </p>`
+
+    const { subject, html } = staffEmailChrome({
+      category: 'partner',
+      heading: `Settlement recorded — ₦${amount.toLocaleString('en-NG')}`,
+      bodyHtml,
+      cta: { label: 'See your ledger', url: `${baseUrl()}/partner` },
+    })
+    await sendEmail({ to, subject, html })
+    return { ok: true }
+  } catch (e: any) {
+    console.error('Partner settlement email failed:', e)
+    return { ok: false, error: e?.message ?? 'unknown error' }
   }
 }

@@ -18,6 +18,7 @@ import { db } from '@/lib/db'
 import { rateLimit, getClientIP } from '@/lib/rate-limit'
 import { requireRole } from '@/lib/auth'
 import { isValidNigerianMobile } from '@/lib/phone-validation'
+import { getAppSettings } from '@/lib/app-settings'
 import {
   notifyAdminRiderApplication,
   notifyRiderApplicationReceived,
@@ -169,7 +170,9 @@ export async function GET() {
   // ----- The rider roster (phase 54): every DRIVER account with live
   // delivery stats — the "business impact" view the owner asked for.
   // Open assignments are pipeline orders currently riding with them;
-  // completed deliveries are orders they delivered. -----
+  // completed deliveries are orders they delivered. Phase 72 adds the
+  // money side: computed earnings, payouts settled, pending balance and
+  // whether bank details are on file — the payout desk's columns. -----
   const riders = await db.user.findMany({
     where: { role: 'DRIVER' },
     select: {
@@ -181,6 +184,9 @@ export async function GET() {
       createdAt: true,
       branchId: true,
       employmentType: true,
+      bankName: true,
+      bankAccountNumber: true,
+      bankAccountName: true,
       driverLocation: { select: { updatedAt: true, zone: true } },
     },
     orderBy: { createdAt: 'desc' },
@@ -240,22 +246,74 @@ export async function GET() {
       if (g.driverId) openIncidentsByDriver.set(g.driverId, g._count._all)
   }
 
-  const roster = riders.map((r) => ({
-    id: r.id,
-    name: r.name,
-    email: r.email,
-    phone: r.phone,
-    accessStatus: r.accessStatus,
-    joinedAt: r.createdAt,
-    branchId: r.branchId ?? null,
-    employmentType: r.employmentType ?? null,
-    lastPingAt: r.driverLocation?.updatedAt ?? null,
-    lastZone: r.driverLocation?.zone ?? null,
-    openAssignments: openByDriver.get(r.id) ?? 0,
-    deliveriesCompleted: deliveredByDriver.get(r.id) ?? 0,
-    todayCompleted: doneTodayByDriver.get(r.id) ?? 0,
-    unresolvedIncidents: openIncidentsByDriver.get(r.id) ?? 0,
-  }))
+  // ----- Phase 72: the money side of the roster -----
+  // Computed earnings per rider (deduped (order, leg) pairs × published
+  // rates — the same rule the rider's own ledger uses), payouts settled,
+  // pending balance, last payout date. If rates aren't published yet the
+  // desk says so rather than pretending (0/0 rates → earned 0, honest).
+  const settings = await getAppSettings().catch(() => null)
+  const rates = {
+    pickup: settings?.riderPickupRate ?? 0,
+    delivery: settings?.riderDeliveryRate ?? 0,
+  }
+  const ratesPublished = Boolean(settings && (rates.pickup > 0 || rates.delivery > 0))
+  const payoutAgg = await db.riderPayout.groupBy({
+    by: ['riderId'],
+    _sum: { amount: true },
+    _max: { createdAt: true },
+  })
+  const paidByRider = new Map(payoutAgg.map((g) => [g.riderId, g]))
+  const earnedByRider = new Map<string, number>()
+  if (ratesPublished) {
+    // Only price legs when rates exist — an unpublished ledger shows work,
+    // never fake money (the rider app's own honesty rule).
+    const events = await db.statusEvent.findMany({
+      where: { actorId: { in: riderIds }, status: { in: ['PICKED_UP', 'DELIVERED'] } },
+      select: { actorId: true, orderId: true, status: true, createdAt: true },
+      orderBy: { createdAt: 'desc' },
+    })
+    const seen = new Set<string>()
+    for (const e of events) {
+      if (!e.actorId) continue // defensive — actor is always the rider's account here
+      const key = `${e.actorId}:${e.orderId}:${e.status}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const rate = e.status === 'PICKED_UP' ? rates.pickup : rates.delivery
+      earnedByRider.set(e.actorId, (earnedByRider.get(e.actorId) ?? 0) + rate)
+    }
+  }
+
+  const roster = riders.map((r) => {
+    const paid = paidByRider.get(r.id)
+    const earned = earnedByRider.get(r.id) ?? 0
+    const paidTotal = paid?._sum.amount ?? 0
+    return {
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      phone: r.phone,
+      accessStatus: r.accessStatus,
+      joinedAt: r.createdAt,
+      branchId: r.branchId ?? null,
+      employmentType: r.employmentType ?? null,
+      lastPingAt: r.driverLocation?.updatedAt ?? null,
+      lastZone: r.driverLocation?.zone ?? null,
+      openAssignments: openByDriver.get(r.id) ?? 0,
+      deliveriesCompleted: deliveredByDriver.get(r.id) ?? 0,
+      todayCompleted: doneTodayByDriver.get(r.id) ?? 0,
+      unresolvedIncidents: openIncidentsByDriver.get(r.id) ?? 0,
+      // Phase 72 — the payout desk columns
+      ratesPublished,
+      earnedTotal: earned,
+      paidTotal,
+      pendingPayout: ratesPublished ? earned - paidTotal : 0,
+      lastPayoutAt: paid?._max.createdAt?.toISOString() ?? null,
+      bankOnFile: Boolean(r.bankName && r.bankAccountNumber && r.bankAccountName),
+      bank: r.bankName
+        ? { bankName: r.bankName, bankAccountNumber: r.bankAccountNumber, bankAccountName: r.bankAccountName }
+        : null,
+    }
+  })
 
   // ----- Rider incidents (phase 55): the risk-management ledger -----
   // Unresolved incidents first (that is the owner's action list the moment

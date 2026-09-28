@@ -116,6 +116,7 @@ function LoginForm() {
       // A fresh route load already pulls current server data.
       if (role === 'ADMIN' || role === 'STAFF') router.push('/admin')
       else if (role === 'DRIVER') router.push('/driver')
+      else if (role === 'PARTNER') router.push('/partner')
       else {
         // Customers: an explicit return destination wins (e.g. back to a
         // saved booking), then the stored redirect, then the portal.
