@@ -1,0 +1,15 @@
+// Verify rider web-push is LIVE on prod (VAPID keys were set by the owner).
+const { chromium } = require('playwright')
+;(async () => {
+  const browser = await chromium.launch()
+  const page = await browser.newPage()
+  await page.goto('https://kozycare.ng/login', { waitUntil: 'domcontentloaded' })
+  await page.fill('input[type="email"]', 'vk5m2w8t4a@woosh.dpdns.org')
+  await page.fill('input[type="password"]', 'KozyE2EAdmin!56')
+  await page.click('button[type="submit"]')
+  await page.waitForURL(/admin|portal/, { timeout: 25000 }).catch(() => {})
+  console.log('url:', page.url())
+  const res = await page.evaluate(() => fetch('/api/push/key').then((r) => r.text()))
+  console.log('push/key →', res.slice(0, 300))
+  await browser.close()
+})().catch((e) => { console.error('FATAL', e); process.exit(1) })

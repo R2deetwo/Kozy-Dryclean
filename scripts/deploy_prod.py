@@ -16,6 +16,7 @@ design), so this script ships source straight through the REST API:
 Usage:  VERCEL_TOKEN=vcp_... python3 scripts/deploy_prod.py
 """
 import base64
+import hashlib
 import json
 import os
 import sys
@@ -99,7 +100,10 @@ def main():
     for rel in files:
         data = open(os.path.join(ROOT, rel), "rb").read()
         b64 = base64.b64encode(data).decode()
-        entry = {"file": f"src/{rel}", "data": b64, "encoding": "base64"}
+        # The files API requires a per-file digest (sha1 of the CONTENT, hex)
+        # — the "sha1 manifest" of the phase-69 recipe.
+        digest = hashlib.sha1(data).hexdigest()
+        entry = {"file": f"src/{rel}", "data": b64, "encoding": "base64", "digest": digest}
         batch.append(entry)
         batch_bytes += len(b64)
         if batch_bytes > 6_000_000 or len(batch) >= 80:
