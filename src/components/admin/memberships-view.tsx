@@ -107,6 +107,12 @@ function PlansEditor() {
   const [edited, setEdited] = useState<PlanDraft[] | null>(null)
   const drafts: PlanDraft[] = edited ?? (plans ?? []).map((p) => ({ ...p }))
 
+  // Phase 70: two families, two grids — the laundry tiers and the Shoe Club
+  // never mix in one editor (they are different products sold in different
+  // places: tiers on /memberships, club in the /services shoe section).
+  const tierDrafts = drafts.filter((d) => (d.family ?? 'KIT') === 'KIT')
+  const clubDrafts = drafts.filter((d) => d.family === 'SHOES')
+
   const patch = (id: string, key: keyof ApiMembershipPlan, value: any) =>
     setEdited(drafts.map((d) => (d.id === id ? { ...d, [key]: value, _dirty: true } : d)))
 
@@ -147,15 +153,21 @@ function PlansEditor() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {paystackNote && (
         <div className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs text-emerald-800">
           <BadgeCheck className="h-4 w-4 shrink-0" /> {paystackNote}
         </div>
       )}
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {drafts.map((d) => (
+      {/* ===== The laundry tiers (KIT family) ===== */}
+      <div>
+        <div className="mb-3 flex items-center gap-2">
+          <p className="font-serif text-lg font-semibold text-navy">The laundry tiers</p>
+          <span className="rounded-full bg-navy-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-navy-300">sold on /memberships</span>
+        </div>
+        <div className="grid gap-4 md:grid-cols-3">
+          {tierDrafts.map((d) => (
           <Card key={d.id} className={cn('shadow-navy', d.isActive ? 'border-navy-100' : 'border-dashed border-navy-200 opacity-70')}>
             <CardContent className="p-5">
               <div className="flex items-center justify-between gap-2">
@@ -204,7 +216,65 @@ function PlansEditor() {
             </CardContent>
           </Card>
         ))}
+        </div>
       </div>
+
+      {/* ===== The Shoe Club (SHOES family) — phase 70 ===== */}
+      {clubDrafts.length > 0 && (
+        <div>
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <p className="font-serif text-lg font-semibold text-navy">The Shoe Club</p>
+            <span className="rounded-full bg-gold-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-gold-800">sold in the /services shoe section</span>
+            <span className="text-[11px] text-navy-300">
+              A shoes-only membership — never a fourth tier. One pair = the standard sneaker/canvas clean.
+            </span>
+          </div>
+          <div className="grid gap-4 md:grid-cols-3">
+            {clubDrafts.map((d) => (
+              <Card key={d.id} className={cn('shadow-navy', d.isActive ? 'border-gold-200' : 'border-dashed border-navy-200 opacity-70')}>
+                <CardContent className="p-5">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-serif text-lg font-semibold text-navy">{d.name}</p>
+                    <label className="flex cursor-pointer items-center gap-1.5 text-[11px] font-medium text-navy-300">
+                      <input
+                        type="checkbox"
+                        checked={d.isActive}
+                        onChange={(e) => patch(d.id, 'isActive', e.target.checked)}
+                        className="h-3.5 w-3.5 accent-[#0A192F]"
+                      />
+                      {d.isActive ? 'Live' : 'Hidden'}
+                    </label>
+                  </div>
+                  <Input
+                    value={d.tagline}
+                    onChange={(e) => patch(d.id, 'tagline', e.target.value)}
+                    placeholder="Tagline"
+                    className="mt-2 h-8 border-navy-100 text-xs"
+                  />
+                  <div className="mt-4 grid grid-cols-2 gap-3">
+                    <NumField label="Monthly price (₦)" value={d.priceMonthly} onChange={num(d.id, 'priceMonthly')} money />
+                    <NumField label="Pairs / month" value={d.shoesPerMonth} onChange={num(d.id, 'shoesPerMonth')} />
+                    <NumField label="Member discount (% à-la-carte)" value={d.memberDiscountPct} onChange={num(d.id, 'memberDiscountPct')} />
+                    <div className="flex items-end">
+                      <p className="text-[10px] leading-tight text-navy-300">
+                        {d.shoesPerMonth > 0
+                          ? `₦${Math.round(d.priceMonthly / d.shoesPerMonth).toLocaleString('en-NG')} a pair at this price`
+                          : 'Set pairs/month to price per pair'}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between rounded-lg bg-linen-100 px-3 py-2 text-[11px] text-navy-300">
+                    <span className="flex items-center gap-1.5">
+                      <Footprints className="h-3.5 w-3.5 text-gold-600" /> {d.shoesPerMonth} pair{d.shoesPerMonth === 1 ? '' : 's'} a month
+                    </span>
+                    <span>{d.paystackPlanCode ? 'Paystack recurring ✓' : 'Transfer renewals only'}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-end gap-3">
         {dirty && <p className="text-xs text-amber-700">Unsaved changes</p>}

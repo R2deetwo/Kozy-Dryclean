@@ -1,11 +1,17 @@
 // =============================================================================
-// GET   /api/subscriptions/me — the signed-in member's membership
-// PATCH /api/subscriptions/me — { action: 'cancel' | 'cancel-undo' }
+// GET   /api/subscriptions/me — the signed-in member's memberships
+// PATCH /api/subscriptions/me — { action: 'cancel' | 'cancel-undo', family? }
 // =============================================================================
-// GET returns the caller's CURRENT membership (newest non-cancelled first)
+// GET returns the caller's CURRENT memberships (newest non-cancelled first)
 // with computed effective status, the usage snapshot for the current cycle /
 // quarter / year, and the renewal date. 404-shaped { membership: null } for
 // non-members — the portal renders the join CTA instead.
+//
+// Phase 70 — two families, one account: `membership` stays the LAUNDRY tier
+// (every existing surface reads it) and `shoeClub` carries the standalone
+// Shoe Club subscription when the customer holds one. Both can be live at
+// once; each is cancelled independently via PATCH with family: 'KIT' |
+// 'SHOES' (default KIT, so legacy callers keep working).
 //
 // PATCH 'cancel' sets cancelAtPeriodEnd — the classy cancellation: the
 // membership stays fully active until the paid month runs out, then simply
@@ -19,9 +25,9 @@ import { getSession } from '@/lib/auth'
 import { effectiveStatus, effectiveUsage, rowToMembership } from '@/lib/subscriptions'
 import { notifyMembershipCancelled } from '@/lib/notifications'
 
-async function loadCurrent(userId: string) {
+async function loadCurrent(userId: string, family: 'KIT' | 'SHOES' = 'KIT') {
   const row = await db.subscription.findFirst({
-    where: { userId, status: { not: 'CANCELLED' } },
+    where: { userId, status: { not: 'CANCELLED' }, plan: { family } },
     orderBy: { createdAt: 'desc' },
     include: { plan: true },
   })
@@ -35,15 +41,17 @@ export async function GET() {
   }
   const userId = (session.user as any).id as string
 
-  const row = await loadCurrent(userId)
-  if (!row) {
+  const row = await loadCurrent(userId, 'KIT')
+  const club = await loadCurrent(userId, 'SHOES')
+  if (!row && !club) {
     return NextResponse.json({ membership: null })
   }
 
-  const plan = row.plan
+  const plan = row?.plan
+  const clubPlan = club?.plan
   return NextResponse.json({
-    membership: rowToMembership(row),
-    effectiveStatus: effectiveStatus(row),
+    membership: row ? rowToMembership(row) : null,
+    effectiveStatus: row ? effectiveStatus(row) : null,
     usage: plan
       ? effectiveUsage(
           {
@@ -59,6 +67,28 @@ export async function GET() {
           plan
         )
       : null,
+    // Phase 70: the standalone Shoe Club, when this customer holds one.
+    shoeClub: club
+      ? {
+          membership: rowToMembership(club),
+          effectiveStatus: effectiveStatus(club),
+          usage: clubPlan
+            ? effectiveUsage(
+                {
+                  unitsUsed: club.unitsUsed,
+                  extraUnitsUsed: club.extraUnitsUsed,
+                  shoesUsed: club.shoesUsed,
+                  duvetsUsed: club.duvetsUsed,
+                  curtainsUsed: club.curtainsUsed,
+                  springCleanUsed: club.springCleanUsed,
+                  usageQuarterKey: club.usageQuarterKey,
+                  usageYearKey: club.usageYearKey,
+                },
+                clubPlan
+              )
+            : null,
+        }
+      : null,
   })
 }
 
@@ -71,13 +101,23 @@ export async function PATCH(req: Request) {
 
   const body = await req.json().catch(() => ({}))
   const action = body?.action
+  const family: 'KIT' | 'SHOES' = body?.family === 'SHOES' ? 'SHOES' : 'KIT'
   if (action !== 'cancel' && action !== 'cancel-undo') {
     return NextResponse.json({ error: 'action must be "cancel" or "cancel-undo"' }, { status: 400 })
   }
 
-  const row = await loadCurrent(userId)
+  const row = await loadCurrent(userId, family)
   if (!row) {
-    return NextResponse.json({ error: 'No membership to cancel.' }, { status: 404 })
+    return NextResponse.json(
+      {
+        error: 'No membership to cancel.',
+        message:
+          family === 'SHOES'
+            ? 'You are not on the Shoe Club — nothing to cancel.'
+            : 'No membership to cancel.',
+      },
+      { status: 404 }
+    )
   }
   if (row.status === 'PENDING_ACTIVATION') {
     return NextResponse.json(

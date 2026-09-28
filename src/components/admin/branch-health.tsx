@@ -8,9 +8,14 @@
 // with amber alert chips when a branch is drifting (unrouted pickups, stale
 // receipts, no riders). Shares the orders/payments/users query caches with
 // the rest of the console, so opening this tab costs no extra requests.
+//
+// Phase 70 — all-time numbers & the reset: the "All-time" line counts only
+// rows at/after the branch's statsResetAt epoch (null = forever), and
+// COMPANY branches carry a two-tap "reset the numbers" control. Franchise
+// branches never get it — their ledger is contractual.
 // =============================================================================
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   MapPin,
   Package,
@@ -20,10 +25,13 @@ import {
   Bike,
   AlertTriangle,
   Activity,
+  RotateCcw,
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { useOrders, usePayments, useUsers, useBranches, ADMIN_POLL } from '@/lib/hooks'
+import { Button } from '@/components/ui/button'
+import { toast } from '@/hooks/use-toast'
+import { useOrders, usePayments, useUsers, useBranches, useResetBranchStats, ADMIN_POLL } from '@/lib/hooks'
 import { formatNaira } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -40,6 +48,9 @@ export function BranchHealth() {
     refetchOnWindowFocus: true,
   })
   const { data: users } = useUsers({ fetchAll: true, refetchInterval: ADMIN_POLL.slow })
+  const resetStats = useResetBranchStats()
+  // Two-tap confirm: the branch id awaiting the second tap.
+  const [confirmReset, setConfirmReset] = useState<string | null>(null)
 
   const activeBranches = (branches ?? []).filter((b) => b.isActive)
 
@@ -74,9 +85,19 @@ export function BranchHealth() {
         )
         .reduce((s, p) => s + (p.amount ?? 0), 0)
       // Phase 69: all-time revenue — after the Chevron backfill this is the
-      // honest "every naira this hub ever earned" figure.
+      // honest "every naira this hub ever earned" figure. Phase 70: a branch
+      // with a stats epoch counts only rows at/after it (the owner's restart).
+      const epoch = branch.statsResetAt ? new Date(branch.statsResetAt).getTime() : null
+      const sinceOrders = epoch ? branchOrders.filter((o) => new Date(o.createdAt).getTime() >= epoch) : branchOrders
+      const sinceIds = new Set(sinceOrders.map((o) => o.id))
       const allTimeRevenue = (payments ?? [])
-        .filter((p) => p.status === 'VERIFIED' && p.orderId && orderIds.has(p.orderId))
+        .filter(
+          (p) =>
+            p.status === 'VERIFIED' &&
+            p.orderId &&
+            sinceIds.has(p.orderId) &&
+            (!epoch || new Date(p.verifiedAt ?? p.createdAt).getTime() >= epoch)
+        )
         .reduce((s, p) => s + (p.amount ?? 0), 0)
       const riders = (users ?? []).filter((u) => u.role === 'DRIVER' && (u as any).branchId === branch.id)
       const ordersWithNoBranch = (orders ?? []).filter((o) => !o.branchId && o.status !== 'CANCELLED').length
@@ -96,7 +117,8 @@ export function BranchHealth() {
         awaitingPayment: awaitingPayment.length,
         weekRevenue,
         allTimeRevenue,
-        allTimeOrders: branchOrders.filter((o) => o.status !== 'CANCELLED').length,
+        allTimeOrders: sinceOrders.filter((o) => o.status !== 'CANCELLED').length,
+        statsResetAt: branch.statsResetAt ?? null,
         riders: riders.length,
         alerts,
       }
@@ -190,12 +212,81 @@ export function BranchHealth() {
                 <Stat icon={Wallet} label="Revenue (7d)" value={formatNaira(s.weekRevenue)} />
               </div>
 
-              {/* Phase 69: the all-time line — where the Chevron backfill lands. */}
-              <p className="mt-2.5 text-[11px] text-navy-300">
-                All-time: <span className="font-semibold text-navy">{s.allTimeOrders}</span>{' '}
-                order{s.allTimeOrders === 1 ? '' : 's'} ·{' '}
-                <span className="font-semibold text-navy">{formatNaira(s.allTimeRevenue)}</span> earned
-              </p>
+              {/* Phase 69: the all-time line — where the Chevron backfill lands.
+                  Phase 70: a stats epoch restarts the counters; the line says
+                  since when, and company branches can reset right here. */}
+              <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[11px] text-navy-300">
+                  {s.statsResetAt ? (
+                    <>
+                      Since{' '}
+                      <span className="font-semibold text-navy">
+                        {new Date(s.statsResetAt).toLocaleDateString('en-NG', {
+                          day: 'numeric',
+                          month: 'short',
+                          year: 'numeric',
+                        })}
+                      </span>
+                      :
+                    </>
+                  ) : (
+                    <>All-time:</>
+                  )}{' '}
+                  <span className="font-semibold text-navy">{s.allTimeOrders}</span>{' '}
+                  order{s.allTimeOrders === 1 ? '' : 's'} ·{' '}
+                  <span className="font-semibold text-navy">{formatNaira(s.allTimeRevenue)}</span> earned
+                </p>
+
+                {/* Reset — COMPANY branches only (the owner's rule: Chevron &
+                    Ogombo may restart their counters; franchise numbers are
+                    contractual, so no control is ever offered). Two-tap
+                    confirm, and the epoch only moves forward — history stays. */}
+                {s.branch.ownershipType !== 'FRANCHISE' &&
+                  (confirmReset === s.branch.id ? (
+                    <span className="flex items-center gap-1.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 rounded-full px-2.5 text-[10px] text-navy-300"
+                        onClick={() => setConfirmReset(null)}
+                      >
+                        Keep numbers
+                      </Button>
+                      <Button
+                        size="sm"
+                        className="h-7 rounded-full bg-navy px-3 text-[10px] font-semibold text-white hover:bg-navy-600"
+                        disabled={resetStats.isPending}
+                        onClick={async () => {
+                          try {
+                            const res = await resetStats.mutateAsync(s.branch.id)
+                            setConfirmReset(null)
+                            toast({
+                              title: 'Numbers restarted',
+                              description: res.message,
+                            })
+                          } catch (e: any) {
+                            toast({
+                              title: 'Could not reset',
+                              description: e?.message,
+                              variant: 'destructive',
+                            })
+                          }
+                        }}
+                      >
+                        {resetStats.isPending ? 'Restarting…' : 'Confirm restart'}
+                      </Button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmReset(s.branch.id)}
+                      className="flex items-center gap-1 rounded-full border border-navy-100 px-2 py-1 text-[10px] font-medium text-navy-300 transition hover:border-gold-300 hover:text-navy"
+                      title="Restart this branch's all-time orders & earnings from today. Nothing is deleted — the history stays for finance."
+                    >
+                      <RotateCcw className="h-3 w-3" /> Reset numbers
+                    </button>
+                  ))}
+              </div>
 
               <div className="mt-3 flex items-center gap-1.5 text-xs text-navy-300">
                 <Bike className="h-3.5 w-3.5 text-gold-600" />

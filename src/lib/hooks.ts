@@ -1324,6 +1324,8 @@ export interface ApiMembershipPlan {
   code: string
   name: string
   tagline: string
+  // KIT (laundry tier) | SHOES (standalone Shoe Club) — phase 70.
+  family?: 'KIT' | 'SHOES'
   priceMonthly: number
   sortOrder: number
   isActive: boolean
@@ -1418,9 +1420,20 @@ export function useSaveMembershipPlans() {
   })
 }
 
-/** The signed-in member's own membership (null when not a member). */
+/** The signed-in member's own memberships (null when not a member). The
+ * laundry tier keeps the legacy `membership` shape; the standalone Shoe
+ * Club rides on `shoeClub` (phase 70) — one account may hold both. */
 export function useMyMembership() {
-  return useQuery<{ membership: ApiMembership | null; effectiveStatus?: string; usage?: ApiMembershipUsage | null }>({
+  return useQuery<{
+    membership: ApiMembership | null
+    effectiveStatus?: string | null
+    usage?: ApiMembershipUsage | null
+    shoeClub?: {
+      membership: ApiMembership
+      effectiveStatus: string
+      usage: ApiMembershipUsage | null
+    } | null
+  }>({
     queryKey: ['my-membership'],
     queryFn: async () => {
       const res = await fetch('/api/subscriptions/me')
@@ -1478,15 +1491,19 @@ export function useMembershipPaystackInit() {
   })
 }
 
-/** Cancel at period end / undo. */
+/** Cancel at period end / undo. Pass a family to target the Shoe Club
+ * instead of the laundry tier (phase 70); default stays KIT for every
+ * existing caller. */
 export function useMembershipCancel() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (action: 'cancel' | 'cancel-undo') => {
+    mutationFn: async (input: 'cancel' | 'cancel-undo' | { action: 'cancel' | 'cancel-undo'; family?: 'KIT' | 'SHOES' }) => {
+      const body =
+        typeof input === 'string' ? { action: input } : { action: input.action, family: input.family }
       const res = await fetch('/api/subscriptions/me', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action }),
+        body: JSON.stringify(body),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(data.message || data.error || 'Could not update the membership')
@@ -1580,6 +1597,9 @@ export interface ApiBranch {
   /** Phase 69: COMPANY | FRANCHISE — franchise sites render gold with a
    *  partner chip in the console. */
   ownershipType?: 'COMPANY' | 'FRANCHISE'
+  /** Phase 70: all-time numbers epoch (COMPANY branches only). null = count
+   *  everything; a date = count only rows at/after it. */
+  statsResetAt?: string | null
   sortOrder: number
 }
 
@@ -1612,6 +1632,26 @@ export function useSaveBranches() {
       return data as { branches: ApiBranch[] }
     },
     onSuccess: (data) => qc.setQueryData(['branches'], data.branches),
+  })
+}
+
+/** ADMIN: restart a COMPANY branch's all-time numbers (phase 70). Sets the
+ * reporting epoch — orders/payments are never deleted. Franchise branches
+ * are refused server-side (their ledger is contractual). */
+export function useResetBranchStats() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (branchId: string) => {
+      const res = await fetch('/api/branches', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'reset-stats', branchId }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.message || data.error || 'Could not reset the numbers')
+      return data as { branch: { id: string; name: string; statsResetAt: string | null }; message: string }
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['branches'] }),
   })
 }
 

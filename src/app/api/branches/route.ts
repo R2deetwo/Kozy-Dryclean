@@ -166,5 +166,44 @@ export async function POST(req: Request) {
     })
   }
 
+  // ---- reset-stats: zero the branch's all-time numbers (phase 70) ----
+  // COMPANY branches only (the owner's rule: Chevron & Ogombo may restart
+  // their counters; a franchise branch's numbers are contractual — their
+  // revenue-share ledger must stay continuous, so the action refuses).
+  // Nothing is deleted: the epoch (statsResetAt) simply tells every
+  // all-time surface to count only rows from NOW on. Orders, payments and
+  // the full audit trail remain untouched for finance and taxes.
+  if (body?.action === 'reset-stats') {
+    const target = typeof body.branchId === 'string' ? body.branchId : null
+    const branch = target ? await db.branch.findUnique({ where: { id: target } }) : null
+    if (!branch) {
+      return NextResponse.json({ error: 'branchId must reference an existing branch' }, { status: 400 })
+    }
+    if (branch.ownershipType === 'FRANCHISE') {
+      return NextResponse.json(
+        {
+          error: 'FRANCHISE_LOCKED',
+          message:
+            'Franchise branches keep their numbers from day one — their revenue-share ledger must stay continuous. Only company branches (Chevron, Ogombo) can restart their counters.',
+        },
+        { status: 403 }
+      )
+    }
+    const epoch = new Date()
+    const updated = await db.branch.update({
+      where: { id: branch.id },
+      data: { statsResetAt: epoch },
+    })
+    return NextResponse.json({
+      action: 'reset-stats',
+      branch: {
+        id: updated.id,
+        name: updated.name,
+        statsResetAt: updated.statsResetAt?.toISOString() ?? null,
+      },
+      message: `All-time numbers for ${updated.name} now count from this moment. History is preserved — only the counters restart.`,
+    })
+  }
+
   return NextResponse.json({ error: 'Unknown action' }, { status: 400 })
 }

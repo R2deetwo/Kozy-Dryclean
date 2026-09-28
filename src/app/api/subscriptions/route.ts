@@ -127,9 +127,16 @@ export async function POST(req: Request) {
     )
   }
 
-  // ----- One membership per customer -----
+  // ----- One live membership per FAMILY per customer (phase 70) -----
+  // A laundry tier AND a Shoe Club compose (they are different products);
+  // two of the SAME family do not (switching = cancel → re-subscribe, stated
+  // plainly in the error message).
   const existing = await db.subscription.findFirst({
-    where: { userId, status: { in: ['PENDING_ACTIVATION', 'ACTIVE', 'PAST_DUE'] } },
+    where: {
+      userId,
+      status: { in: ['PENDING_ACTIVATION', 'ACTIVE', 'PAST_DUE'] },
+      plan: { family: plan.family },
+    },
     include: { plan: true },
   })
   if (existing) {
@@ -138,8 +145,10 @@ export async function POST(req: Request) {
         error: 'ALREADY_MEMBER',
         message:
           existing.status === 'PENDING_ACTIVATION'
-            ? 'You already have a membership waiting for payment confirmation — it will activate the moment your transfer is verified.'
-            : `You are already on ${existing.plan?.name ?? 'a Kozy Circle plan'}. To switch tiers, cancel it first (it stays active until your current month ends), then subscribe to the new one.`,
+            ? `You already have ${existing.plan?.family === 'SHOES' ? 'a Shoe Club' : 'a membership'} waiting for payment confirmation — it will activate the moment your transfer is verified.`
+            : existing.plan?.family === 'SHOES'
+              ? `You are already on the ${existing.plan?.name ?? 'Shoe Club'}. To switch clubs, cancel it first (it stays active until your current month ends), then subscribe to the new one.`
+              : `You are already on ${existing.plan?.name ?? 'a Kozy Circle plan'}. To switch tiers, cancel it first (it stays active until your current month ends), then subscribe to the new one.`,
         subscription: rowToMembership(existing),
       },
       { status: 409 }

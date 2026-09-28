@@ -77,16 +77,33 @@ export async function POST(req: Request) {
   const count = Math.max(1, Math.min(4, parsed.data.count ?? 1))
 
   // ----- The membership must be live (PAST_DUE enjoys the 7-day grace) -----
-  const sub = await db.subscription.findFirst({
-    where: { userId, status: { in: ['ACTIVE', 'PAST_DUE'] } },
-    orderBy: { createdAt: 'desc' },
-    include: { plan: true },
-  })
+  // Phase 70: a shoes pickup draws from the STANDALONE Shoe Club first (the
+  // dedicated shoes-only membership from /services), and falls back to a
+  // laundry tier's monthly shoe perk when no club exists. Every other kind
+  // reads the laundry tier. Both families can be live on one account.
+  const wantClub = kind === 'shoes'
+  let sub = wantClub
+    ? await db.subscription.findFirst({
+        where: { userId, status: { in: ['ACTIVE', 'PAST_DUE'] }, plan: { family: 'SHOES' } },
+        orderBy: { createdAt: 'desc' },
+        include: { plan: true },
+      })
+    : null
+  if (!sub) {
+    sub = await db.subscription.findFirst({
+      where: { userId, status: { in: ['ACTIVE', 'PAST_DUE'] }, plan: { family: 'KIT' } },
+      orderBy: { createdAt: 'desc' },
+      include: { plan: true },
+    })
+  }
   if (!sub || !sub.plan) {
     return NextResponse.json(
       {
         error: 'NO_ACTIVE_MEMBERSHIP',
-        message: 'Your membership is not active. Join the Kozy Circle from the Membership tab to book bag pickups.',
+        message:
+          kind === 'shoes'
+            ? 'The Shoe Club lives in your account — join it from the shoe care section and your monthly pairs are one tap away.'
+            : 'Your membership is not active. Join the Kozy Circle from the Membership tab to book bag pickups.',
       },
       { status: 400 }
     )
@@ -170,7 +187,10 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error: 'PERK_EXCEEDED',
-          message: `Your plan includes ${plan.shoesPerMonth} shoe clean${plan.shoesPerMonth === 1 ? '' : 's'} per month — ${usage.shoesRemaining} left this month. (Premium materials — suede, leather, embellished — are booked separately with your member discount.)`,
+          message:
+            plan.family === 'SHOES'
+              ? `Your ${plan.name} covers ${plan.shoesPerMonth} pair${plan.shoesPerMonth === 1 ? '' : 's'} this month — ${usage.shoesRemaining} left. Extra pairs can ride along on any booking at the à-la-carte rate with your member discount.`
+              : `Your plan includes ${plan.shoesPerMonth} shoe clean${plan.shoesPerMonth === 1 ? '' : 's'} per month — ${usage.shoesRemaining} left this month. (Premium materials — suede, leather, embellished — are booked separately with your member discount.)`,
         },
         { status: 400 }
       )

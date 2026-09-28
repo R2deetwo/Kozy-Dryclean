@@ -48,10 +48,12 @@ async function syncPaystackPlan(plan: {
   code: string
   name: string
   priceMonthly: number
+  family?: 'KIT' | 'SHOES'
   paystackPlanCode?: string | null
 }) {
   const secretKey = process.env.PAYSTACK_SECRET_KEY
   if (!secretKey || plan.priceMonthly <= 0) return null
+  const brand = plan.family === 'SHOES' ? 'Kozy Shoe Club' : 'Kozy Circle'
 
   try {
     if (plan.paystackPlanCode) {
@@ -62,7 +64,7 @@ async function syncPaystackPlan(plan: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          name: `Kozy Circle — ${plan.name}`,
+          name: `${brand} — ${plan.name}`,
           amount: Math.round(plan.priceMonthly * 100), // kobo
           interval: 'monthly',
           currency: 'NGN',
@@ -80,7 +82,7 @@ async function syncPaystackPlan(plan: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        name: `Kozy Circle — ${plan.name}`,
+        name: `${brand} — ${plan.name}`,
         amount: Math.round(plan.priceMonthly * 100),
         interval: 'monthly',
         currency: 'NGN',

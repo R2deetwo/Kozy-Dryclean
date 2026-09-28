@@ -38,6 +38,9 @@ import {
   useMembershipCancel,
   useMembershipPickup,
   useMembershipPlans,
+  type ApiMembership,
+  type ApiMembershipPlan,
+  type ApiMembershipUsage,
 } from '@/lib/hooks'
 
 const TIME_SLOTS = [
@@ -62,7 +65,11 @@ export function MembershipTab() {
   const { data, isLoading, refetch } = useMyMembership()
   const cancelMutation = useMembershipCancel()
   const [booking, setBooking] = useState<'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | null>(null)
+  // Phase 70: when true, the shoes booking draws from the standalone Shoe
+  // Club instead of the laundry tier's perk (a customer may hold both).
+  const [bookingClub, setBookingClub] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
+  const [confirmClubCancel, setConfirmClubCancel] = useState(false)
   // Prefill the pickup address from the profile the booking wizard also
   // reads (best-effort — an empty field is a perfectly good prompt).
   const [defaultAddress, setDefaultAddress] = useState('')
@@ -84,6 +91,22 @@ export function MembershipTab() {
   const plan = membership?.plan
   const status = data?.effectiveStatus ?? membership?.status ?? 'PENDING_ACTIVATION'
 
+  // ----- The standalone Shoe Club (phase 70) -----
+  const club = data?.shoeClub
+  const clubMembership = club?.membership
+  const clubPlan = clubMembership?.plan
+  const clubUsage = club?.usage
+  const clubStatus = club?.effectiveStatus ?? clubMembership?.status ?? 'PENDING_ACTIVATION'
+
+  const openTierBooking = (kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes') => {
+    setBookingClub(false)
+    setBooking(kind)
+  }
+  const openClubBooking = () => {
+    setBookingClub(true)
+    setBooking('shoes')
+  }
+
   if (isLoading) {
     return (
       <div className="flex justify-center py-10">
@@ -93,8 +116,63 @@ export function MembershipTab() {
   }
 
   // ----- Not a member (yet) — a quiet, classy invitation -----
+  // A shoes-only customer still sees their club card above the invitation.
   if (!membership) {
-    return <JoinCard />
+    return (
+      <div className="space-y-4">
+        {clubMembership && clubPlan && (
+          <ShoeClubCard
+            clubMembership={clubMembership}
+            clubPlan={clubPlan}
+            clubUsage={clubUsage}
+            clubStatus={clubStatus}
+            onBook={openClubBooking}
+            onCancel={() => setConfirmClubCancel(true)}
+            onUndo={async () => {
+              try {
+                await cancelMutation.mutateAsync({ action: 'cancel-undo', family: 'SHOES' })
+                toast({ title: 'Glad you stayed', description: 'Your Shoe Club will keep renewing as before.' })
+              } catch (e: any) {
+                toast({ title: 'Could not undo', description: e?.message, variant: 'destructive' })
+              }
+            }}
+          />
+        )}
+        <JoinCard />
+        {booking && bookingClub && clubPlan && (
+          <MemberPickupDialog
+            kind="shoes"
+            plan={{ unitName: clubPlan.unitName, unitKind: clubPlan.unitKind, extraUnitPrice: clubPlan.extraUnitPrice, maxExtraUnits: clubPlan.maxExtraUnits }}
+            defaultAddress={defaultAddress}
+            remaining={clubUsage?.shoesRemaining ?? 0}
+            onClose={() => setBooking(null)}
+            onBooked={() => {
+              setBooking(null)
+              refetch()
+            }}
+          />
+        )}
+        {confirmClubCancel && clubMembership && clubPlan && (
+          <ConfirmClubCancelDialog
+            clubName={clubPlan.name}
+            periodEnd={clubMembership.periodEnd}
+            onClose={() => setConfirmClubCancel(false)}
+            onConfirm={async () => {
+              try {
+                await cancelMutation.mutateAsync({ action: 'cancel', family: 'SHOES' })
+                setConfirmClubCancel(false)
+                toast({
+                  title: 'The club runs to month end',
+                  description: 'Your pairs stay available until then — nothing else changes.',
+                })
+              } catch (e: any) {
+                toast({ title: 'Could not cancel', description: e?.message, variant: 'destructive' })
+              }
+            }}
+          />
+        )}
+      </div>
+    )
   }
 
   const statusTone: Record<string, string> = {
@@ -206,7 +284,7 @@ export function MembershipTab() {
             {status !== 'LAPSED' && status !== 'CANCELLED' && (
               <div className="mt-5 grid gap-2 sm:grid-cols-2">
                 <Button
-                  onClick={() => setBooking('unit')}
+                  onClick={() => openTierBooking('unit')}
                   disabled={status === 'PENDING_ACTIVATION'}
                   className="rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
                 >
@@ -218,7 +296,7 @@ export function MembershipTab() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setBooking('shoes')}
+                      onClick={() => openTierBooking('shoes')}
                       disabled={status === 'PENDING_ACTIVATION' || usage.shoesRemaining === 0}
                       className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
                     >
@@ -230,7 +308,7 @@ export function MembershipTab() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setBooking('duvet')}
+                      onClick={() => openTierBooking('duvet')}
                       disabled={status === 'PENDING_ACTIVATION' || usage.duvetsRemaining === 0}
                       className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
                     >
@@ -242,7 +320,7 @@ export function MembershipTab() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setBooking('curtain')}
+                      onClick={() => openTierBooking('curtain')}
                       disabled={status === 'PENDING_ACTIVATION' || usage.curtainsRemaining === 0}
                       className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
                     >
@@ -254,7 +332,7 @@ export function MembershipTab() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => setBooking('spring-clean')}
+                      onClick={() => openTierBooking('spring-clean')}
                       disabled={status === 'PENDING_ACTIVATION' || usage.springCleanRemaining === 0}
                       className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
                     >
@@ -312,32 +390,93 @@ export function MembershipTab() {
         )}
       </Card>
 
-      {/* ===== Booking dialog ===== */}
-      {booking && plan && (
-        <MemberPickupDialog
-          kind={booking}
-          plan={{
-            unitName: plan.unitName,
-            unitKind: plan.unitKind,
-            extraUnitPrice: plan.extraUnitPrice,
-            maxExtraUnits: plan.maxExtraUnits,
+      {/* ===== The standalone Shoe Club card (phase 70) — a shoes-only
+          membership that composes with the laundry tier. ===== */}
+      {clubMembership && clubPlan && (
+        <ShoeClubCard
+          clubMembership={clubMembership}
+          clubPlan={clubPlan}
+          clubUsage={clubUsage}
+          clubStatus={clubStatus}
+          onBook={openClubBooking}
+          onCancel={() => setConfirmClubCancel(true)}
+          onUndo={async () => {
+            try {
+              await cancelMutation.mutateAsync({ action: 'cancel-undo', family: 'SHOES' })
+              toast({ title: 'Glad you stayed', description: 'Your Shoe Club will keep renewing as before.' })
+            } catch (e: any) {
+              toast({ title: 'Could not undo', description: e?.message, variant: 'destructive' })
+            }
           }}
-          defaultAddress={defaultAddress}
-          remaining={
-            booking === 'unit'
-              ? (usage?.unitsRemaining ?? 0) + (usage?.extraRemaining ?? 0)
-              : booking === 'shoes'
-                ? usage?.shoesRemaining ?? 0
-                : booking === 'duvet'
-                  ? usage?.duvetsRemaining ?? 0
-                  : booking === 'curtain'
-                    ? usage?.curtainsRemaining ?? 0
-                    : usage?.springCleanRemaining ?? 0
-          }
-          onClose={() => setBooking(null)}
-          onBooked={() => {
-            setBooking(null)
-            refetch()
+        />
+      )}
+
+      {/* ===== Booking dialog (tier perks or Shoe Club — same machinery) ===== */}
+      {booking &&
+        (bookingClub ? clubPlan : plan) &&
+        (bookingClub ? (
+          <MemberPickupDialog
+            kind="shoes"
+            plan={{
+              unitName: clubPlan!.unitName,
+              unitKind: clubPlan!.unitKind,
+              extraUnitPrice: clubPlan!.extraUnitPrice,
+              maxExtraUnits: clubPlan!.maxExtraUnits,
+            }}
+            defaultAddress={defaultAddress}
+            remaining={clubUsage?.shoesRemaining ?? 0}
+            onClose={() => setBooking(null)}
+            onBooked={() => {
+              setBooking(null)
+              refetch()
+            }}
+          />
+        ) : (
+          <MemberPickupDialog
+            kind={booking}
+            plan={{
+              unitName: plan!.unitName,
+              unitKind: plan!.unitKind,
+              extraUnitPrice: plan!.extraUnitPrice,
+              maxExtraUnits: plan!.maxExtraUnits,
+            }}
+            defaultAddress={defaultAddress}
+            remaining={
+              booking === 'unit'
+                ? (usage?.unitsRemaining ?? 0) + (usage?.extraRemaining ?? 0)
+                : booking === 'shoes'
+                  ? usage?.shoesRemaining ?? 0
+                  : booking === 'duvet'
+                    ? usage?.duvetsRemaining ?? 0
+                    : booking === 'curtain'
+                      ? usage?.curtainsRemaining ?? 0
+                      : usage?.springCleanRemaining ?? 0
+            }
+            onClose={() => setBooking(null)}
+            onBooked={() => {
+              setBooking(null)
+              refetch()
+            }}
+          />
+        ))}
+
+      {/* ===== Shoe Club cancel confirm (independent of the tier) ===== */}
+      {confirmClubCancel && clubMembership && clubPlan && (
+        <ConfirmClubCancelDialog
+          clubName={clubPlan.name}
+          periodEnd={clubMembership.periodEnd}
+          onClose={() => setConfirmClubCancel(false)}
+          onConfirm={async () => {
+            try {
+              await cancelMutation.mutateAsync({ action: 'cancel', family: 'SHOES' })
+              setConfirmClubCancel(false)
+              toast({
+                title: 'The club runs to month end',
+                description: 'Your pairs stay available until then — nothing else changes.',
+              })
+            } catch (e: any) {
+              toast({ title: 'Could not cancel', description: e?.message, variant: 'destructive' })
+            }
           }}
         />
       )}
@@ -672,5 +811,152 @@ function JoinCard() {
         </Link>
       </CardContent>
     </Card>
+  )
+}
+
+// =====================================================
+// Shoe Club card (phase 70) — the standalone shoes-only
+// membership, rendered under (or instead of) the tier.
+// =====================================================
+function ShoeClubCard({
+  clubMembership,
+  clubPlan,
+  clubUsage,
+  clubStatus,
+  onBook,
+  onCancel,
+  onUndo,
+}: {
+  clubMembership: ApiMembership
+  clubPlan: ApiMembershipPlan
+  clubUsage?: ApiMembershipUsage | null
+  clubStatus: string
+  onBook: () => void
+  onCancel: () => void
+  onUndo: () => void
+}) {
+  const statusTone: Record<string, string> = {
+    ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    EXPIRING: 'bg-amber-50 text-amber-700 border-amber-200',
+    PAST_DUE: 'bg-amber-50 text-amber-700 border-amber-200',
+    PENDING_ACTIVATION: 'bg-gold-50 text-navy border-gold-300',
+    LAPSED: 'bg-navy-50 text-navy-300 border-navy-200',
+    CANCELLED: 'bg-navy-50 text-navy-300 border-navy-200',
+  }
+  const remaining = clubUsage?.shoesRemaining ?? clubPlan.shoesPerMonth
+  const used = clubUsage?.shoesUsed ?? 0
+  const canBook = !['LAPSED', 'CANCELLED', 'PENDING_ACTIVATION'].includes(clubStatus) && remaining > 0
+
+  return (
+    <Card className="overflow-hidden border-navy-100 shadow-navy">
+      <div className="bg-navy px-5 py-4 text-white sm:px-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <Footprints className="h-4 w-4 text-gold-400" />
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-300">
+                Kozy Shoe Club · {clubPlan.name}
+              </p>
+            </div>
+            <p className="mt-1.5 font-serif text-2xl font-semibold">
+              {formatNaira(clubMembership.pricePaid || clubPlan.priceMonthly)}
+              <span className="text-sm font-normal text-navy-100/70"> / month</span>
+            </p>
+          </div>
+          <Badge variant="outline" className={`rounded-full border ${statusTone[clubStatus] ?? statusTone.ACTIVE} bg-white/95`}>
+            {clubStatus === 'EXPIRING'
+              ? 'Ending soon — not renewing'
+              : clubStatus === 'PAST_DUE'
+                ? 'Renewal pending'
+                : clubStatus === 'PENDING_ACTIVATION'
+                  ? 'Waiting for payment'
+                  : clubStatus === 'LAPSED'
+                    ? 'Ended'
+                    : 'Active'}
+          </Badge>
+        </div>
+      </div>
+      <CardContent className="p-5 sm:p-6">
+        <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">This month</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <UsageMeter icon={Footprints} label="Shoe pairs" used={used} total={clubPlan.shoesPerMonth} />
+        </div>
+        <p className="mt-3 text-xs leading-relaxed text-navy-300">
+          One pair = the standard sneaker &amp; canvas clean (washed, brushed, deodorised, air-dried).
+          Suede, leather and embellished pairs ride along on any booking with your{' '}
+          {clubPlan.memberDiscountPct}% member discount.
+        </p>
+
+        {clubStatus !== 'LAPSED' && clubStatus !== 'CANCELLED' && (
+          <div className="mt-5">
+            <Button
+              onClick={onBook}
+              disabled={!canBook}
+              className="rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
+            >
+              <Footprints className="mr-2 h-4 w-4" />
+              Book a shoe clean
+              {remaining === 0 && ' (month used)'}
+            </Button>
+          </div>
+        )}
+
+        {clubStatus !== 'PENDING_ACTIVATION' && clubStatus !== 'LAPSED' && clubStatus !== 'CANCELLED' && (
+          <div className="mt-4 text-right">
+            {clubMembership.cancelAtPeriodEnd ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={onUndo}
+                className="rounded-full border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+              >
+                <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo — keep my club
+              </Button>
+            ) : (
+              <button
+                onClick={onCancel}
+                className="text-xs text-navy-300 underline-offset-2 transition hover:text-rose-500 hover:underline"
+              >
+                Cancel the club (runs to month end)
+              </button>
+            )}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ConfirmClubCancelDialog({
+  clubName,
+  periodEnd,
+  onClose,
+  onConfirm,
+}: {
+  clubName: string
+  periodEnd: string | null
+  onClose: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-lg text-navy">Rest the {clubName}?</DialogTitle>
+          <DialogDescription>
+            Your pairs stay available until {periodEnd ? formatDate(periodEnd) : 'the end of your paid month'}.
+            Then the club simply does not renew — your laundry plan (if you have one) is untouched.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-2 flex gap-2">
+          <Button variant="outline" onClick={onClose} className="flex-1 rounded-full border-navy-200 text-navy">
+            Keep it
+          </Button>
+          <Button variant="destructive" onClick={onConfirm} className="flex-1 rounded-full">
+            <XCircle className="mr-1.5 h-4 w-4" /> Cancel
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }

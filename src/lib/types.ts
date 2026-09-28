@@ -183,6 +183,9 @@ export interface Branch {
   // COMPANY (ours end-to-end) | FRANCHISE (a partner site under Kozy Care
   // standards — gold treatment + partner chip in the console).
   ownershipType: 'COMPANY' | 'FRANCHISE'
+  // Phase 70: all-time numbers epoch (COMPANY branches only). null = count
+  // everything since the beginning; a date = count only rows at/after it.
+  statsResetAt?: string | null
   sortOrder: number
   createdAt: string
   updatedAt: string
@@ -193,9 +196,12 @@ export interface Branch {
 // =====================================================
 export interface MembershipPlan {
   id: string
-  code: string // ESSENTIALS | HOUSEHOLD | WHOLEHOME | ATELIER
+  code: string // ESSENTIALS | HOUSEHOLD | WHOLEHOME | SHOES1 | SHOES3 | SHOES5
   name: string
   tagline: string
+  // KIT (laundry tier, unit = Kozy Bag/Box) | SHOES (standalone Shoe Club,
+  // unit = a pair of shoes). One live membership per family per customer.
+  family: 'KIT' | 'SHOES'
   priceMonthly: number
   sortOrder: number
   isActive: boolean

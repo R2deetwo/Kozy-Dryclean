@@ -31,6 +31,7 @@ interface PlanSeed {
   code: string
   name: string
   tagline: string
+  family: 'KIT' | 'SHOES'
   priceMonthly: number
   sortOrder: number
   includedUnits: number
@@ -53,6 +54,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     code: 'ESSENTIALS',
     name: 'The Essentials',
     tagline: 'One person’s clothes, every week. Bag goes out, clean clothes come back.',
+    family: 'KIT',
     priceMonthly: 30000,
     sortOrder: 1,
     includedUnits: 4,
@@ -73,6 +75,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     code: 'HOUSEHOLD',
     name: 'The Household',
     tagline: 'The whole family’s weekly load in one big box — plus the beds.',
+    family: 'KIT',
     priceMonthly: 50000,
     sortOrder: 2,
     includedUnits: 4,
@@ -93,6 +96,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     code: 'WHOLEHOME',
     name: 'The Whole Home',
     tagline: 'Everything in the house — the box, the duvets, the curtains, and one deep clean a year.',
+    family: 'KIT',
     priceMonthly: 80000,
     sortOrder: 3,
     includedUnits: 4,
@@ -111,6 +115,90 @@ export const DEFAULT_PLANS: PlanSeed[] = [
   },
 ]
 
+// ----- The Shoe Club (phase 70) — a standalone shoes-only membership -----
+// Lives with the SHOES section on /services, never in the tiers grid (owner
+// directive). The unit is a PAIR — no kit, no bag; the monthly allowance is
+// the tier-style shoesPerMonth counter the pickup route already consumes
+// (kind=shoes). One pair = the standard sneaker/canvas clean (wash, brush,
+// deodorise, air-dry); suede, leather and embellished pairs stay à-la-carte
+// with the member discount — premium materials need specialist time, so
+// they can never be flat-rated inside an allowance.
+//
+// Pricing (market-researched, Sep 2026): Lagos sneaker specialists price a
+// basic per-pair clean at ₦7,000–₦8,000 (Care by Sneaklin: Sneaker Clean
+// ₦8,000, Leather ₦7,000, Suede ₦12,000, Refresh/Restore/Revive
+// ₦15,000–₦25,000; Lekki IG shops ~₦10,000 a pair). Kozy's à-la-carte
+// (₦1,000–₦1,500 a pair) already undercuts them ~80%. The club ladder
+// undercuts them ~85–90% while staying coherent with our own card: the
+// 1-pair club matches à-la-carte but adds free pickup/delivery, the 3- and
+// 5-pair clubs work out to ₦833/₦800 a pair — volume pricing that a hub
+// batch-cleaning shoes alongside laundry absorbs profitably.
+export const DEFAULT_SHOE_CLUB: PlanSeed[] = [
+  {
+    code: 'SHOES1',
+    name: 'Shoe Club · 1 pair',
+    tagline: 'A fresh pair every month — picked up, cleaned, returned. No plan needed.',
+    family: 'SHOES',
+    priceMonthly: 1000,
+    sortOrder: 11,
+    includedUnits: 0,
+    unitKind: 'pair',
+    unitName: 'pair',
+    extraUnitPrice: 0,
+    maxExtraUnits: 0,
+    replacementFee: 0,
+    duvetsPerQuarter: 0,
+    curtainsPerQuarter: 0,
+    springCleanPerYear: 0,
+    shoesPerMonth: 1,
+    concierge: false,
+    memberDiscountPct: 5,
+    prioritySlots: false,
+  },
+  {
+    code: 'SHOES3',
+    name: 'Shoe Club · 3 pairs',
+    tagline: 'The rotation — three pairs a month, so something fresh is always ready.',
+    family: 'SHOES',
+    priceMonthly: 2500,
+    sortOrder: 12,
+    includedUnits: 0,
+    unitKind: 'pair',
+    unitName: 'pair',
+    extraUnitPrice: 0,
+    maxExtraUnits: 0,
+    replacementFee: 0,
+    duvetsPerQuarter: 0,
+    curtainsPerQuarter: 0,
+    springCleanPerYear: 0,
+    shoesPerMonth: 3,
+    concierge: false,
+    memberDiscountPct: 10,
+    prioritySlots: false,
+  },
+  {
+    code: 'SHOES5',
+    name: 'Shoe Club · 5 pairs',
+    tagline: 'The full rotation for sneakerheads — five pairs a month, ₦800 a pair.',
+    family: 'SHOES',
+    priceMonthly: 4000,
+    sortOrder: 13,
+    includedUnits: 0,
+    unitKind: 'pair',
+    unitName: 'pair',
+    extraUnitPrice: 0,
+    maxExtraUnits: 0,
+    replacementFee: 0,
+    duvetsPerQuarter: 0,
+    curtainsPerQuarter: 0,
+    springCleanPerYear: 0,
+    shoesPerMonth: 5,
+    concierge: false,
+    memberDiscountPct: 15,
+    prioritySlots: false,
+  },
+]
+
 // ----- Self-seeding plan access -----
 
 /** Map a Prisma row onto the client-facing shape (zoneNames-style arrays). */
@@ -120,6 +208,7 @@ export function rowToPlan(row: any): MembershipPlan {
     code: row.code,
     name: row.name,
     tagline: row.tagline ?? '',
+    family: row.family === 'SHOES' ? 'SHOES' : 'KIT',
     priceMonthly: row.priceMonthly,
     sortOrder: row.sortOrder,
     isActive: row.isActive,
@@ -142,18 +231,26 @@ export function rowToPlan(row: any): MembershipPlan {
   }
 }
 
+/** All seeds — tiers first, then the Shoe Club. */
+const ALL_SEEDS: PlanSeed[] = [...DEFAULT_PLANS, ...DEFAULT_SHOE_CLUB]
+
 /**
- * All plans, ordered for display. Seeds the DEFAULT_PLANS on an empty table
- * (idempotent create per code — concurrent first requests race harmlessly
- * thanks to the unique constraint + the create-only-if-missing loop).
+ * All plans, ordered for display, optionally narrowed to one family
+ * ('KIT' = the tiers grid, 'SHOES' = the shoe-care section). Seeds ALL_SEEDS
+ * on an empty table (idempotent create per code — concurrent first requests
+ * race harmlessly thanks to the unique constraint + the create-only-if-
+ * missing loop).
  */
-export async function getPlans(includeInactive = true): Promise<MembershipPlan[]> {
+export async function getPlans(
+  includeInactive = true,
+  family?: 'KIT' | 'SHOES'
+): Promise<MembershipPlan[]> {
   try {
     let rows = await db.subscriptionPlan.findMany({
       orderBy: [{ sortOrder: 'asc' }, { priceMonthly: 'asc' }],
     })
     if (rows.length === 0) {
-      for (const seed of DEFAULT_PLANS) {
+      for (const seed of ALL_SEEDS) {
         try {
           await db.subscriptionPlan.create({ data: { ...seed } })
         } catch {
@@ -164,20 +261,23 @@ export async function getPlans(includeInactive = true): Promise<MembershipPlan[]
         orderBy: [{ sortOrder: 'asc' }, { priceMonthly: 'asc' }],
       })
     }
-    const mapped = rows.map(rowToPlan)
+    let mapped = rows.map(rowToPlan)
+    if (family) mapped = mapped.filter((p) => p.family === family)
     return includeInactive ? mapped : mapped.filter((p) => p.isActive)
   } catch {
     // DB unavailable (build-time prerender etc.) — serve code defaults so
     // every surface still renders sensible numbers.
-    return DEFAULT_PLANS.map((seed, i) => ({
+    let fallback = ALL_SEEDS.map((seed, i) => ({
       ...seed,
       id: `default-${seed.code.toLowerCase()}`,
       isActive: true,
-      paystackPlanCode: null,
+      paystackPlanCode: null as string | null,
       createdAt: new Date(0).toISOString(),
       updatedAt: new Date(0).toISOString(),
       sortOrder: seed.sortOrder || i + 1,
     }))
+    if (family) fallback = fallback.filter((p) => p.family === family)
+    return includeInactive ? fallback : fallback.filter((p) => p.isActive)
   }
 }
 

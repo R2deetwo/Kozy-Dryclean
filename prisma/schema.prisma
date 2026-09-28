@@ -961,6 +961,15 @@ model Branch {
   // owner's franchise-tracking ask. A partner site runs under Kozy Care
   // standards with a revenue split; company sites are ours end-to-end.
   ownershipType String @default("COMPANY")
+  // Phase 70 — all-time numbers epoch (COMPANY branches only). Set by the
+  // admin "reset numbers" action on the Branch Health card; every
+  // stats-from-scratch surface (all-time orders/earnings) counts ONLY rows
+  // at or after this instant. Orders and payments are NEVER deleted — the
+  // reset is a reporting epoch, so finance records stay intact and the
+  // action is reversible only by setting a new epoch. NULL = count from the
+  // beginning of time. Franchise branches can never be reset (their ledger
+  // is contractual — revenue-share reporting must stay continuous).
+  statsResetAt DateTime?
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -978,10 +987,17 @@ model Branch {
 // (best-effort, when PAYSTACK_SECRET_KEY is configured).
 model SubscriptionPlan {
   id        String   @id @default(cuid())
-  // ESSENTIALS | HOUSEHOLD | CONCIERGE
+  // ESSENTIALS | HOUSEHOLD | WHOLEHOME | SHOES1 | SHOES3 | SHOES5
   code      String   @unique
   name      String // "The Essentials"
   tagline   String   @default("")
+  // KIT | SHOES (phase 70). KIT = the laundry tiers on /memberships whose
+  // unit is the physical Kozy Bag/Box. SHOES = the standalone Shoe Club sold
+  // from the /services shoe-care section (pairs are the unit, no kit). A
+  // customer may hold ONE live membership per family — a laundry tier AND a
+  // shoe club compose. Surfaces filter on this so the tiers grid never shows
+  // club cards and the shoes section never shows tiers.
+  family     String   @default("KIT")
   priceMonthly Int // naira
   sortOrder Int      @default(0)
   isActive  Boolean  @default(true)

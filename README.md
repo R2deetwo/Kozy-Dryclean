@@ -3,46 +3,76 @@
 > **Live site: [kozycare.ng](https://kozycare.ng)** · Uncompromising care. Exceptional convenience.
 
 Kozy Care is a Lagos-based premium drycleaning and laundry service. This repository is
-the complete production platform: the customer booking website, guest checkout, online
-and bank-transfer payments, customer portal, admin console (orders, payment
-verification, CRM, pricing, reviews, finance charts), and a GPS-geofenced driver app —
-plus the generator scripts for the brand and print kit.
+the complete production platform: the customer booking website with guest checkout,
+memberships, the customer portal, the admin console (orders, payments, CRM, finance,
+branches, marketing automation), and the rider app with GPS dispatch — plus the
+generator scripts for the brand and print kit.
 
-**New here? Read [`HANDOVER.md`](./HANDOVER.md) first.** It is the current, complete
-handover: architecture, deployment pipeline, environment variables, subsystem docs,
-known limitations, and the prioritised roadmap. (`ARCHITECTURE.md` and
-`DEPLOYMENT.md` are historical phase documents kept for context; `worklog.md` is the
-full chronological build record.)
+**New here? Read [`HANDOVER.md`](./HANDOVER.md) first.** It is the full handover:
+architecture, deployment pipeline, environment variables, subsystem docs, known
+limitations, and the roadmap. (`ARCHITECTURE.md` and `DEPLOYMENT.md` are historical
+phase documents kept for context; `worklog.md` is the chronological build record.)
 
 ## What the platform does
 
 | Surface | Route | Highlights |
 | --- | --- | --- |
-| Landing page | `/` | Live server pricing, offers strip (10% first order, HOTEL15 hotel deal, 5% photos), Outerwear menu, Alterations, Reviews & Complaints form, delivery pricing, guarantee eligibility, testimonials, SEO + OG images |
-| Guest booking | `/book` | Book in ~2 minutes with no account; 409 guard for existing accounts |
-| Customer portal | `/portal` | Order tracking, invoices, review submission on delivered orders |
-| Admin console | `/admin` | Kanban/list orders, payment verification queue, CRM, finance charts, pricing settings (server-side — live for every visitor), review moderation, Feedback inbox (reviews & complaints) |
-| Driver app | `/driver` | Route view, swipe confirmations, GPS geofencing across 12 Lagos service zones |
-| Rider recruitment | `/join-riders` | Public application page |
+| Landing page | `/` | Live server pricing ("From ₦800/kg" for corporate/hotel laundry), offers strip, per-item catalog, testimonials, SEO + OG images |
+| Guest booking | `/book` | Book in ~2 minutes with no account; 409 guard for existing accounts; auto-save draft resume; scroll-to-top on every step |
+| Plans & pricing | `/memberships` | The Kozy Circle tiers (Essentials / Household / Whole Home — bag- and box-sized kits), persona routing, the full per-item price list, Paystack or bank-transfer join |
+| Specialty services | `/services` | Couture Care (assessed & quoted per piece), Sneaker & Trainer Restoration (from ₦5,000), Alterations with in-house seamstress, **The Kozy Shoe Club** (shoes-only monthly subscription — 1/3/5 pairs, sold in the shoe-care section, never a tier) |
+| Customer portal | `/portal` | Order tracking, invoices, reviews, the membership tab (tier usage meters + Shoe Club card), referral and loyalty state |
+| Admin console | `/admin` | Kanban/list orders, payment verification queue, CRM with health scoring, finance charts, pricing & settings (server-side — live for every visitor), branch management (company vs franchise), rider response-time league, newsletter engine, coupon & promo calendar, feedback inbox |
+| Rider app | `/driver` | Route view, swipe confirmations, GPS geofencing across 12 Lagos service zones, full-time auto-dispatch (zone → load → distance), part-time claim pool with race-safe claiming, web-push stop notifications, earnings ledger |
+| Rider recruitment | `/join-riders` | Public application page feeding the admin review flow |
 
-Payments: bank transfer with admin verification (live today) and Paystack online card
-payment (built; activates when `PAYSTACK_SECRET_KEY` is set). Bank details live in the
-`AppSetting` table — admin edits reach every customer's checkout instantly. Orders also
-carry a required Mode of Wash (machine vs handwash +50%), an optional offer code
-(`HOTEL15` = 15% first order for hotel guests, stacking with the 5% photo discount), a
-flat delivery fee after the free first delivery, and server-validated guarantee
-eligibility (min 2 garments or a 2,500+ total). Notifications: branded
-email via Brevo (live) and SMS via Termii (built; activates when `TERMII_API_KEY` is
-set). All integrations degrade gracefully when keys are absent.
+### The two product families (phase 70)
+
+- **Kozy Circle** (`family=KIT`) — laundry tiers measured by physical kits (Kozy Bag /
+  Kozy Box). Sold on `/memberships`.
+- **Shoe Club** (`family=SHOES`) — a standalone shoes-only subscription (1/3/5 pairs a
+  month) sold in the `/services` shoe-care section. A customer may hold one membership
+  in EACH family at the same time; two in the same family is refused with switch
+  guidance. Shoe pickups draw from the club first, then a tier's monthly shoe perk.
+
+### Branches & the numbers reset
+
+Orders are branch-routed server-side at creation (zone ownership → nearest → default).
+`ownershipType` separates **company** branches (Chevron Drive, Ogombo) from **franchise**
+partner sites (gold treatment in the console, revenue-share ledger). Company branches
+can restart their all-time numbers (orders/earnings) from the Branch Health card — a
+reporting epoch (`statsResetAt`), never a deletion; franchise branches are locked
+server-side because their ledger is contractual.
+
+### Payments & notifications
+
+Bank transfer with admin verification (live) and Paystack card payment + recurring
+membership charges (activates when `PAYSTACK_SECRET_KEY` is set). Bank details live in
+the `AppSetting` table — admin edits reach every checkout instantly. Orders carry a
+required Mode of Wash (machine vs handwash +50%), offer/coupon codes (server-validated,
+stacking with the 5% photo discount), a flat delivery fee after the free first
+delivery, and guarantee eligibility checks. Notifications: branded email via Brevo
+(live), SMS via Termii (activates when `TERMII_API_KEY` is set), and Web-Push for
+riders (activates when `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` are set). All
+integrations degrade gracefully when keys are absent.
+
+### Marketing engine
+
+A calendar-synced newsletter engine (seasonal content lands BEFORE its event; cadence
+is admin-set — every week / 2 weeks / monthly), coupons with windows and caps, a promo
+calendar, click/open tracking, and a daily 07:00 UTC cron (`/api/marketing/cron`,
+armed by `CRON_SECRET`) that also fires whenever the console's Marketing tab opens.
 
 ## Tech stack
 
 - **Framework**: Next.js 16 (App Router) · TypeScript 5
-- **Data**: Prisma + Supabase Postgres · Upstash Redis (rate limiting)
+- **Data**: Prisma + Postgres (Supabase in production) · Upstash Redis (rate limiting,
+  falls back to in-memory per instance)
 - **UI**: Tailwind CSS 4 · shadcn/ui · Framer Motion · @dnd-kit
-- **Auth**: NextAuth (credentials, server-side sessions, RBAC in middleware + API routes)
-- **State**: React Query for server state; Zustand for ephemeral UI (legacy local
-  persistence is being retired — see HANDOVER.md §10)
+- **Auth**: NextAuth (credentials, server-side sessions, RBAC in middleware + API
+  routes, staff-access lifecycle with pause/revoke)
+- **State**: React Query for server state
+- **Push**: web-push (RFC 8291/8292) with VAPID keys for rider stop notifications
 - **Brand**: Kozy Navy `#0A192F` · Champagne Gold `#D4AF37` · Playfair Display + Outfit
 
 ## Quick start (local)
@@ -55,26 +85,31 @@ cp .env.example .env        # fill values from Vercel → Settings → Environme
 bun run dev                 # http://localhost:3000
 ```
 
-⚠️ The local app talks to the **production** database — create test data sparingly and
-clean it up.
+The app self-seeds: branches, the three tiers + Shoe Club plans, the price catalog and
+app settings all seed on first read of an empty database, so a fresh local Postgres
+works out of the box (set `DATABASE_URL`/`DIRECT_URL` to it). If you point `.env` at
+the **production** database instead, create test data sparingly and clean it up.
 
 Useful scripts (in `scripts/`): `create-admin.ts` (seed an admin account),
-`vercel_deploy.py` (trigger + verify a production deploy via the Vercel API),
-`kozy-brand/` (regenerate the entire print kit — flyers, poster, business cards).
+`deploy_prod.py` (direct REST upload deploy — see below), `start_pg_tcp.sh` (embedded
+local Postgres on :54329), `kozy-brand/` (regenerate the entire print kit).
 
 ## Deployment (read this — it is not what you expect)
 
 **Pushing to GitHub does NOT auto-deploy.** The Vercel Git integration is not wired
-for this repository. Production deploys are triggered via the Vercel REST API:
+for this repository, and the available Vercel token is **project-scoped** (it cannot
+answer `whoami` — never "validate" it that way). Production deploys ship the source
+straight through the REST API:
 
 ```bash
-# 1. Push your commit to GitHub (main = production)
-# 2. Trigger the deploy (see scripts/vercel_deploy.py for the full flow):
-VERCEL_TOKEN=... python3 scripts/vercel_deploy.py
-# ...or click "Deploy" on the commit in the Vercel dashboard.
+# 1. Commit + push to GitHub (main = the record of truth)
+# 2. Ship it:
+VERCEL_TOKEN=vcp_... python3 scripts/deploy_prod.py
+#    sha-per-file manifest → POST /v2/files → POST /v13/deployments
+#    (files as an ARRAY of {file, sha}) → poll READY → kozycare.ng updates.
 ```
 
-- Vercel project: `kozy-dryclean` · build command `bun run build:vercel`
+- Vercel project: `kozy-dryclean` · build `bun run build:vercel`
   (`prisma db push` + `next build` — the schema auto-syncs on every deploy).
 - Domains: `kozycare.ng` (primary) · `www.kozycare.ng` → apex (308) ·
   `kozy-dryclean.vercel.app` (legacy).
@@ -84,15 +119,18 @@ VERCEL_TOKEN=... python3 scripts/vercel_deploy.py
 ## Repository map
 
 ```
-src/app/                 App Router pages + API routes (orders, payments, reviews,
-                         paystack, driver/location, auth)
+src/app/                 App Router pages + API routes (orders, payments, branches,
+                         subscriptions + Shoe Club, paystack + webhooks, marketing
+                         engine, rider-applications, driver-stats, push, auth)
 src/components/          customer / admin / driver / shell UI
-src/lib/                 types (GARMENT_CATALOG), pricing-groups, geo (service zones),
-                         notifications, email, store, hooks
-prisma/schema.prisma     Users, Orders, OrderItem, Payment, Review, DriverLocation,
-                         PriceCatalog, Settings
+src/lib/                 types (GARMENT_CATALOG), subscriptions (plans + Shoe Club),
+                         branches, rider-dispatch, marketing, pricing-groups, geo,
+                         notifications, email, webpush, hooks
+prisma/schema.prisma     Users, Orders, Payments, Branches (ownership + stats epoch),
+                         SubscriptionPlan (KIT/SHOES families) + Subscription, riders,
+                         marketing tables, reviews, loyalty, referrals
 scripts/                 ops + brand-kit generators (see scripts/kozy-brand/)
-public/brand/            v4 K mark, OG image, service icons
+public/brand/            K mark, OG image, photography, service icons
 worklog.md               chronological build record (start here for "why")
 HANDOVER.md              the current handover document
 ```

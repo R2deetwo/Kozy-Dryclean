@@ -1,7 +1,7 @@
 'use client'
 
 // =============================================================================
-// ServicesDetail — the specialty care content (phases 45 → 64 → 67).
+// ServicesDetail — the specialty care content (phases 45 → 64 → 67 → 70).
 // =============================================================================
 // Phase 45 moved the full pricing tables, atelier story, sneaker restoration
 // and alterations off the home page onto /services. Phase 64 (owner): pricing
@@ -12,20 +12,30 @@
 // pattern: Jeeves, Margaret's, Hallak). A short pointer strip at the top
 // (keeping the #pricing anchor) routes anyone who arrived via an old
 // "pricing" deep link to the merged page.
+// Phase 70 (owner): the standalone SHOE CLUB lives in this shoe-care section
+// — a shoes-only monthly subscription, deliberately NOT part of the laundry
+// tiers. Priced from live plan rows (admin-adjustable) to undercut the
+// dedicated sneaker laundries in Lagos (researched at ₦7,000–₦8,000 a pair
+// for a basic clean).
 // =============================================================================
 
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useSession } from 'next-auth/react'
 import { motion } from 'framer-motion'
 import {
   ArrowRight,
   Ruler,
   Scissors,
   Tag,
+  Footprints,
+  Check,
 } from 'lucide-react'
 import { formatNaira } from '@/lib/types'
-import { useAppSettings } from '@/lib/hooks'
+import { useAppSettings, useMembershipPlans, useMyMembership, type ApiMembershipPlan } from '@/lib/hooks'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { JoinDialog } from './join-dialog'
 
 interface Props {
   onBook: () => void
@@ -38,6 +48,30 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
   // Server-managed commercial terms — alterations pricing lives here; the
   // per-item price list itself now renders on /memberships (PricingTables).
   const appSettings = useAppSettings()
+
+  // ----- The Shoe Club (phase 70): live plan rows, SHOES family only -----
+  const { data: session } = useSession()
+  const { data: plans } = useMembershipPlans(true)
+  const { data: myMembership } = useMyMembership()
+  const [joinPlan, setJoinPlan] = useState<ApiMembershipPlan | null>(null)
+
+  const clubPlans = useMemo(
+    () =>
+      (plans ?? [])
+        .filter((p) => p.isActive && p.family === 'SHOES' && p.shoesPerMonth > 0)
+        .sort((a, b) => a.shoesPerMonth - b.shoesPerMonth),
+    [plans]
+  )
+  const inClub = Boolean(myMembership?.shoeClub)
+
+  const onJoinClub = (plan: ApiMembershipPlan) => {
+    if (!session) {
+      // A membership lives in an account — same gate as the tiers page.
+      window.location.assign('/login?callbackUrl=/services%23shoe-care')
+      return
+    }
+    setJoinPlan(plan)
+  }
 
   return (
     <>
@@ -246,6 +280,107 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
               <img src="/brand/images/shoe-care.png" alt="Restored luxury shoes" loading="lazy" decoding="async" className="h-full w-full object-cover" />
             </div>
           </div>
+
+          {/* ============================================================
+              THE KOZY SHOE CLUB (phase 70) — a shoes-only monthly
+              subscription, sold HERE (never as a laundry tier). Prices
+              come from live plan rows, so an admin edit reaches this
+              section without a deploy.
+          ============================================================ */}
+          {clubPlans.length > 0 && (
+            <motion.div
+              id="shoe-club"
+              className="mt-16 scroll-mt-24 rounded-3xl border border-gold-400/30 bg-white/5 p-6 sm:p-8"
+              initial={{ opacity: 0, y: 16 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+            >
+              <div className="flex flex-wrap items-end justify-between gap-3">
+                <div>
+                  <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-gold-400">
+                    <Footprints className="h-4 w-4" /> The Kozy Shoe Club
+                  </p>
+                  <h3 className="font-serif text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+                    Fresh kicks on rotation — a monthly shoe subscription
+                  </h3>
+                  <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/80">
+                    Dedicated sneaker laundries in Lagos charge ₦7,000–₦8,000 to clean ONE pair.
+                    Club members pay from <span className="font-semibold text-gold-300">₦800 a pair</span>{' '}
+                    — with pickup and delivery included, and a discount on everything else we clean.
+                    One pair means the standard sneaker &amp; canvas clean; suede, leather and
+                    embellished pairs ride along with your member discount.
+                  </p>
+                </div>
+                {inClub && (
+                  <Badge className="rounded-full bg-gold-100 text-[10px] font-semibold text-gold-800 hover:bg-gold-100">
+                    YOU&apos;RE IN THE CLUB
+                  </Badge>
+                )}
+              </div>
+
+              <div className="mt-7 grid gap-4 md:grid-cols-3">
+                {clubPlans.map((plan) => {
+                  const perPair = plan.shoesPerMonth > 0 ? Math.round(plan.priceMonthly / plan.shoesPerMonth) : 0
+                  return (
+                    <div
+                      key={plan.id}
+                      className="flex flex-col rounded-2xl border border-white/15 bg-navy-800/60 p-5 backdrop-blur-sm"
+                    >
+                      <p className="font-serif text-lg font-semibold text-white">{plan.name}</p>
+                      <p className="mt-1 min-h-[2.5rem] text-xs leading-relaxed text-white/70">{plan.tagline}</p>
+                      <div className="mt-4 flex items-baseline gap-2">
+                        <span className="font-serif text-3xl font-bold text-white">
+                          {formatNaira(plan.priceMonthly)}
+                        </span>
+                        <span className="text-xs text-white/60">/ month</span>
+                      </div>
+                      <ul className="mt-4 space-y-2 text-xs text-white/80">
+                        <li className="flex items-start gap-2">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-400" />
+                          {plan.shoesPerMonth} pair{plan.shoesPerMonth === 1 ? '' : 's'} cleaned every month
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-400" />
+                          {perPair > 0 && <>₦{perPair.toLocaleString('en-NG')} a pair · </>}free pickup &amp; delivery
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-400" />
+                          {plan.memberDiscountPct}% off everything else we clean
+                        </li>
+                        <li className="flex items-start gap-2">
+                          <Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-400" />
+                          Cancel any time — runs to the end of the month
+                        </li>
+                      </ul>
+                      <div className="mt-5 flex-1" />
+                      {inClub ? (
+                        <Link href="/portal">
+                          <Button
+                            variant="outline"
+                            className="w-full rounded-full border-white/30 bg-transparent text-white hover:bg-white/10 hover:text-white"
+                          >
+                            Manage my club <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                        </Link>
+                      ) : (
+                        <Button
+                          onClick={() => onJoinClub(plan)}
+                          className="w-full rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
+                        >
+                          Join this club
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+
+              <p className="mt-5 text-center text-[11px] text-white/50">
+                Also on a laundry plan? The tiers already include monthly shoe cleans — the club is
+                for shoes-only customers who don&apos;t need the bag.
+              </p>
+            </motion.div>
+          )}
         </div>
       </section>
 
@@ -360,6 +495,15 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
           </div>
         </div>
       </section>
+
+      {/* Shoe Club join flow (shared with the tiers page). */}
+      {joinPlan && (
+        <JoinDialog
+          plan={joinPlan}
+          onClose={() => setJoinPlan(null)}
+          sessionEmail={session?.user?.email ?? null}
+        />
+      )}
     </>
   )
 }
