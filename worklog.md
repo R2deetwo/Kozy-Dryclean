@@ -1586,3 +1586,20 @@ Work Log:
 Stage Summary:
 - LIVE on kozycare.ng: Shoe Club repriced to the rotation ladder 2/4/6 pairs @ ₦3,000/₦5,000/₦7,200 (per-pair ₦1,500/₦1,250/₦1,200 — coherent with our own card, still massively under the specialists). Tiers keep their 1/3/5 shoe perks, now surfaced in the card units box + FAQ. Old club rows hidden (0 subscribers). Everything admin-adjustable at runtime.
 - Next in this task: the audit P1 items (Upstash Redis rate limits, prisma migrations baseline to replace db push --accept-data-loss, backup/restore rehearsal, Termii SMS readiness).
+
+---
+Task ID: 71-p1
+Agent: Super Z (main agent)
+Task: Audit P1 items: replace prisma db push --accept-data-loss with real migrations; rehearse backups; verify Upstash Redis rate limiting; document Termii SMS readiness.
+
+Work Log:
+- P1 REDIS: discovered rate-limit.ts was ALREADY Upstash-ready (phase history) and the owner HAS set UPSTASH_REDIS_REST_URL/TOKEN on prod since the audit (type=sensitive). Live behavioral test on /api/rider-applications (max 3/h) and /api/partners (max 5/h): 429s observed; pattern (6-allowed → 429 → allowed) matches shared counter + the designed 1s fail-open on Redis hiccups. Audit P1 RESOLVED by owner's env; documented in runbook.
+- P1 TERMII: notifications.ts already env-gated; TERMII_SENDER_ID/CHANNEL set, TERMII_API_KEY MISSING (the only gap). Runbook now spells the exact setup: termii.com → Settings → API keys → add TERMII_API_KEY in Vercel + request sender-ID approval for "Kozy" → redeploy.
+- P1 MIGRATIONS: drift check prod-vs-schema EMPTY (via decrypted DIRECT_URL — the pooled DATABASE_URL times out for introspection; prod is Supabase PG 17.6). Baseline prisma/migrations/20260928000000_init generated (29 tables, 860 lines); rehearsed on scratch local DB (30 tables incl _prisma_migrations); marked applied on PROD (migrate resolve) AND local kozy; build:vercel flipped from "prisma db push --accept-data-loss" to "prisma migrate deploy" (soft-fail echo preserved for continuity); full build:vercel rehearsal locally green; DEPLOYED (kozy-dryclean-f5chez5w0) — Vercel build ran migrate deploy against prod via DIRECT_URL as a no-op, migrate status "up to date". GOTCHA: the Bash tool transport eats the literal 2-char sequence bracket-m in echoed strings (ANSI interpretation) — package.json edits must avoid it or verify via char codes.
+- P1 BACKUP: sandbox pg_dump (16.2, no SSL) cannot dump Supabase PG 17.6 → pure-Python backup_rehearsal.py (psycopg2, SSL-capable): decrypts DIRECT_URL, exports every table via COPY with EXPLICIT column lists (immunity to physical column-order drift between db-push-era prod and the migration baseline — a real bug caught in rehearsal: sortOrder got a timestamp), skips _prisma_migrations, writes one timestamped .sql with the restore recipe embedded in its header. Rehearsal: scratch DB → prisma migrate deploy (schema) → psql -f backup (data, session_replication_role=replica defers FKs) → per-table row counts ALL MATCH (29 tables, 306 rows) → scratch dropped. PASSED. Fixed empty-table edge (blank line psql reads as a data row).
+- README: deploy recipe corrected to the working CLI path; new "Database migrations" + "Ops runbook" sections (backup ritual, Redis status, Termii steps); repo map updated.
+
+Stage Summary:
+- P1 scorecard: migrations SHIPPED (db push era over, deploy verified through the new pipeline), backups REHEARSED end-to-end (a restore that actually works, recipe embedded), Redis CONFIRMED LIVE (owner set it post-audit), Termii DOCUMENTED (only TERMII_API_KEY missing — owner action, 5 minutes).
+- Live deploys: dpl kozy-dryclean-f5chez5w0 (migrations pipeline) on kozycare.ng; shoe repricing from task 71 also live.
+- Remaining audit items: P0 sales motion (owner-side), P2 staging env + error tracker (future).
