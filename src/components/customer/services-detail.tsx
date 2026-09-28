@@ -16,7 +16,9 @@
 // — a shoes-only monthly subscription, deliberately NOT part of the laundry
 // tiers. Priced from live plan rows (admin-adjustable) to undercut the
 // dedicated sneaker laundries in Lagos (researched at ₦7,000–₦8,000 a pair
-// for a basic clean).
+// for a basic clean) without undercutting Kozy's own à-la-carte card.
+// Phase 71 (owner): counts follow rotation rhythm (2 fortnightly / 4 weekly
+// / 6 twice-weekly) — never 1/3/5, which mirrors the laundry tiers.
 // =============================================================================
 
 import { useMemo, useState } from 'react'
@@ -61,6 +63,16 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
         .filter((p) => p.isActive && p.family === 'SHOES' && p.shoesPerMonth > 0)
         .sort((a, b) => a.shoesPerMonth - b.shoesPerMonth),
     [plans]
+  )
+  // Cheapest per-pair rate across the live club rows — the copy below reads
+  // it so an admin price edit re-anchors this section without a deploy.
+  const minPerPair = useMemo(
+    () =>
+      clubPlans.reduce((min, p) => {
+        const per = p.shoesPerMonth > 0 ? Math.round(p.priceMonthly / p.shoesPerMonth) : 0
+        return per > 0 && (min === 0 || per < min) ? per : min
+      }, 0),
+    [clubPlans]
   )
   const inClub = Boolean(myMembership?.shoeClub)
 
@@ -305,8 +317,12 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
                   </h3>
                   <p className="mt-3 max-w-2xl text-sm leading-relaxed text-white/80">
                     Dedicated sneaker laundries in Lagos charge ₦7,000–₦8,000 to clean ONE pair.
-                    Club members pay from <span className="font-semibold text-gold-300">₦800 a pair</span>{' '}
-                    — with pickup and delivery included, and a discount on everything else we clean.
+                    Club members pay from{' '}
+                    {minPerPair > 0 && (
+                      <span className="font-semibold text-gold-300">₦{minPerPair.toLocaleString('en-NG')} a pair</span>
+                    )}
+                    {' '}— pickup and delivery included, a discount on everything else we clean, and the
+                    whole six-pair rotation costs about what a single pair costs at a sneaker laundry.
                     One pair means the standard sneaker &amp; canvas clean; suede, leather and
                     embellished pairs ride along with your member discount.
                   </p>
@@ -316,6 +332,20 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
                     YOU&apos;RE IN THE CLUB
                   </Badge>
                 )}
+              </div>
+
+              {/* Rotation rhythm — why 2/4/6, not the tier ladder's 1/3/5:
+                  a shoe customer shops by how often their pairs come back. */}
+              <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-white/70">
+                {[
+                  '2 pairs = a fresh pair every fortnight',
+                  '4 pairs = the weekly rotation',
+                  '6 pairs = twice a week, always something fresh',
+                ].map((t) => (
+                  <span key={t} className="rounded-full border border-white/15 bg-white/5 px-3 py-1">
+                    {t}
+                  </span>
+                ))}
               </div>
 
               <div className="mt-7 grid gap-4 md:grid-cols-3">
@@ -376,8 +406,9 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
               </div>
 
               <p className="mt-5 text-center text-[11px] text-white/50">
-                Also on a laundry plan? The tiers already include monthly shoe cleans — the club is
-                for shoes-only customers who don&apos;t need the bag.
+                Every laundry plan already cleans shoes monthly (1 pair on Essentials, 3 on Household,
+                5 on Whole Home). Need more pairs than your plan includes — or shoes only, no laundry
+                plan? The club stacks on top of any tier, and stands fully on its own.
               </p>
             </motion.div>
           )}

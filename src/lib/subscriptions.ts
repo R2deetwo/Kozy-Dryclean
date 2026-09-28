@@ -115,7 +115,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
   },
 ]
 
-// ----- The Shoe Club (phase 70) — a standalone shoes-only membership -----
+// ----- The Shoe Club (phase 70 → 71) — a standalone shoes-only membership -----
 // Lives with the SHOES section on /services, never in the tiers grid (owner
 // directive). The unit is a PAIR — no kit, no bag; the monthly allowance is
 // the tier-style shoesPerMonth counter the pickup route already consumes
@@ -124,22 +124,31 @@ export const DEFAULT_PLANS: PlanSeed[] = [
 // with the member discount — premium materials need specialist time, so
 // they can never be flat-rated inside an allowance.
 //
-// Pricing (market-researched, Sep 2026): Lagos sneaker specialists price a
-// basic per-pair clean at ₦7,000–₦8,000 (Care by Sneaklin: Sneaker Clean
-// ₦8,000, Leather ₦7,000, Suede ₦12,000, Refresh/Restore/Revive
-// ₦15,000–₦25,000; Lekki IG shops ~₦10,000 a pair). Kozy's à-la-carte
-// (₦1,000–₦1,500 a pair) already undercuts them ~80%. The club ladder
-// undercuts them ~85–90% while staying coherent with our own card: the
-// 1-pair club matches à-la-carte but adds free pickup/delivery, the 3- and
-// 5-pair clubs work out to ₦833/₦800 a pair — volume pricing that a hub
-// batch-cleaning shoes alongside laundry absorbs profitably.
+// Counts (phase 71, owner): 2 / 4 / 6 pairs — NOT 1/3/5, which mirrors the
+// laundry tiers and confuses the shelf. A shoe-service customer thinks in
+// ROTATION RHYTHM: 2 = a fresh pair every fortnight, 4 = the weekly
+// rotation, 6 = the sneakerhead's twice-a-week rotation. Every club card
+// then beats the Essentials perk (1 pair) and the top card beats even Whole
+// Home (5), so the club stacks cleanly on top of any tier.
+//
+// Pricing (phase 71, owner directive: "cheaper than our cheapest competitor
+// — not too cheap"): Lagos sneaker specialists charge ₦7,000–₦8,000 a pair
+// for a basic clean (Care by Sneaklin: Sneaker Clean ₦8,000, Leather ₦7,000,
+// Suede ₦12,000; Lekki IG shops from ~₦5,000). Kozy's own card reads
+// ₦1,000 (coloured) – ₦1,500 (white) – ₦2,000 (suede) a pair. The club
+// ladder prices a pair at ₦1,500 / ₦1,250 / ₦1,200 — never below our own
+// ₦1,000 floor (so the club never undercuts Kozy's own card), a modest
+// volume discount for commitment, and still 70–85% under the specialists.
+// The anchor: the whole 6-pair rotation costs about ONE pair at a sneaker
+// laundry. A ₦3,000 entry also covers a dedicated monthly pickup trip,
+// which the old ₦1,000 tag never could.
 export const DEFAULT_SHOE_CLUB: PlanSeed[] = [
   {
-    code: 'SHOES1',
-    name: 'Shoe Club · 1 pair',
-    tagline: 'A fresh pair every month — picked up, cleaned, returned. No plan needed.',
+    code: 'SHOES2',
+    name: 'Shoe Club · 2 pairs',
+    tagline: 'The fortnightly freshen — one pair out, one pair back, every two weeks.',
     family: 'SHOES',
-    priceMonthly: 1000,
+    priceMonthly: 3000,
     sortOrder: 11,
     includedUnits: 0,
     unitKind: 'pair',
@@ -150,17 +159,17 @@ export const DEFAULT_SHOE_CLUB: PlanSeed[] = [
     duvetsPerQuarter: 0,
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
-    shoesPerMonth: 1,
+    shoesPerMonth: 2,
     concierge: false,
     memberDiscountPct: 5,
     prioritySlots: false,
   },
   {
-    code: 'SHOES3',
-    name: 'Shoe Club · 3 pairs',
-    tagline: 'The rotation — three pairs a month, so something fresh is always ready.',
+    code: 'SHOES4',
+    name: 'Shoe Club · 4 pairs',
+    tagline: 'The weekly rotation — a fresh pair ready every week of the month.',
     family: 'SHOES',
-    priceMonthly: 2500,
+    priceMonthly: 5000,
     sortOrder: 12,
     includedUnits: 0,
     unitKind: 'pair',
@@ -171,17 +180,17 @@ export const DEFAULT_SHOE_CLUB: PlanSeed[] = [
     duvetsPerQuarter: 0,
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
-    shoesPerMonth: 3,
+    shoesPerMonth: 4,
     concierge: false,
     memberDiscountPct: 10,
     prioritySlots: false,
   },
   {
-    code: 'SHOES5',
-    name: 'Shoe Club · 5 pairs',
-    tagline: 'The full rotation for sneakerheads — five pairs a month, ₦800 a pair.',
+    code: 'SHOES6',
+    name: 'Shoe Club · 6 pairs',
+    tagline: 'The sneakerhead rotation — twice a week, always something fresh.',
     family: 'SHOES',
-    priceMonthly: 4000,
+    priceMonthly: 7200,
     sortOrder: 13,
     includedUnits: 0,
     unitKind: 'pair',
@@ -192,7 +201,7 @@ export const DEFAULT_SHOE_CLUB: PlanSeed[] = [
     duvetsPerQuarter: 0,
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
-    shoesPerMonth: 5,
+    shoesPerMonth: 6,
     concierge: false,
     memberDiscountPct: 15,
     prioritySlots: false,
@@ -295,7 +304,10 @@ export async function savePlans(
           where: { code },
           update: {},
           create: {
-            ...(DEFAULT_PLANS.find((p) => p.code === code) ?? DEFAULT_PLANS[0]),
+            // Tier codes AND club codes live across both seed tables — search
+            // ALL_SEEDS, never DEFAULT_PLANS alone (a club default-row would
+            // otherwise seed a duplicate ESSENTIALS-shaped row).
+            ...(ALL_SEEDS.find((p) => p.code === code) ?? DEFAULT_PLANS[0]),
           },
         })
       }

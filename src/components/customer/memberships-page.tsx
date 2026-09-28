@@ -408,6 +408,11 @@ export function MembershipsClient() {
                               ? 'The long laundry bag — your weekly wash & fold'
                               : 'The big box — the whole household, weekly'}
                           </p>
+                          {plan.shoesPerMonth > 0 && (
+                            <p className="mt-1.5 border-t border-navy-100 pt-1.5 text-[10px] font-semibold text-gold-700">
+                              + {plan.shoesPerMonth} pair{plan.shoesPerMonth === 1 ? '' : 's'} of shoes every month
+                            </p>
+                          )}
                         </div>
 
                         <ul className="mt-4 flex-1 space-y-2 text-[13px] text-navy-200">
@@ -571,6 +576,10 @@ export function MembershipsClient() {
               {
                 q: 'What about couture, designer or premium traditional wear?',
                 a: 'That is Couture Care — its own specialist service, not a bigger plan. Designer pieces, aso-oke and lace, agbada, bridal: every piece is assessed before treatment, cleaned and finished by hand, returned in protective covers, and quoted for your approval before any work begins. Circle members get their plan discount on the quote. If you are unsure, send it with your next pickup — the studio will tell you honestly whether it needs the specialists or the normal wash.',
+              },
+              {
+                q: 'Do the plans really include shoes?',
+                a: 'Yes — every plan cleans shoes monthly, on the house: 1 pair on The Essentials, 3 pairs on The Household, 5 pairs on The Whole Home. One pair means the standard sneaker and canvas clean (washed, brushed, deodorised); suede, leather and embellished pairs use the specialist service with your member discount. Need more pairs than your plan includes — or shoes only, without a laundry plan? The Shoe Club adds 2, 4 or 6 pairs a month and stacks on top of any tier.',
               },
               {
                 q: 'What if my bag is not full — or overflowing?',

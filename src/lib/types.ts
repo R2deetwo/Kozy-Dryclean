@@ -196,7 +196,7 @@ export interface Branch {
 // =====================================================
 export interface MembershipPlan {
   id: string
-  code: string // ESSENTIALS | HOUSEHOLD | WHOLEHOME | SHOES1 | SHOES3 | SHOES5
+  code: string // ESSENTIALS | HOUSEHOLD | WHOLEHOME | SHOES2 | SHOES4 | SHOES6
   name: string
   tagline: string
   // KIT (laundry tier, unit = Kozy Bag/Box) | SHOES (standalone Shoe Club,
