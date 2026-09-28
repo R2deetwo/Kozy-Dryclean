@@ -20,20 +20,25 @@ phase documents kept for context; `worklog.md` is the chronological build record
 | Landing page | `/` | Live server pricing ("From ₦800/kg" for corporate/hotel laundry), offers strip, per-item catalog, testimonials, SEO + OG images |
 | Guest booking | `/book` | Book in ~2 minutes with no account; 409 guard for existing accounts; auto-save draft resume; scroll-to-top on every step |
 | Plans & pricing | `/memberships` | The Kozy Circle tiers (Essentials / Household / Whole Home — bag- and box-sized kits), persona routing, the full per-item price list, Paystack or bank-transfer join |
-| Specialty services | `/services` | Couture Care (assessed & quoted per piece), Sneaker & Trainer Restoration (from ₦5,000), Alterations with in-house seamstress, **The Kozy Shoe Club** (shoes-only monthly subscription — 1/3/5 pairs, sold in the shoe-care section, never a tier) |
+| Specialty services | `/services` | Couture Care (assessed & quoted per piece), Sneaker & Trainer Restoration (from ₦5,000), Alterations with in-house seamstress, **The Kozy Shoe Club** (shoes-only monthly subscription — 2/4/6 pairs on a rotation rhythm, sold in the shoe-care section, never a tier) |
 | Customer portal | `/portal` | Order tracking, invoices, reviews, the membership tab (tier usage meters + Shoe Club card), referral and loyalty state |
 | Admin console | `/admin` | Kanban/list orders, payment verification queue, CRM with health scoring, finance charts, pricing & settings (server-side — live for every visitor), branch management (company vs franchise), rider response-time league, newsletter engine, coupon & promo calendar, feedback inbox |
 | Rider app | `/driver` | Route view, swipe confirmations, GPS geofencing across 12 Lagos service zones, full-time auto-dispatch (zone → load → distance), part-time claim pool with race-safe claiming, web-push stop notifications, earnings ledger |
 | Rider recruitment | `/join-riders` | Public application page feeding the admin review flow |
 
-### The two product families (phase 70)
+### The two product families (phase 70 → 71)
 
 - **Kozy Circle** (`family=KIT`) — laundry tiers measured by physical kits (Kozy Bag /
-  Kozy Box). Sold on `/memberships`.
-- **Shoe Club** (`family=SHOES`) — a standalone shoes-only subscription (1/3/5 pairs a
-  month) sold in the `/services` shoe-care section. A customer may hold one membership
-  in EACH family at the same time; two in the same family is refused with switch
-  guidance. Shoe pickups draw from the club first, then a tier's monthly shoe perk.
+  Kozy Box). Sold on `/memberships`. Every tier includes a monthly shoe perk
+  (1/3/5 pairs on Essentials/Household/Whole Home).
+- **Shoe Club** (`family=SHOES`) — a standalone shoes-only subscription sold in the
+  `/services` shoe-care section. Counts follow rotation rhythm, NOT the tier ladder:
+  2 pairs (fortnightly) / 4 (weekly) / 6 (twice-weekly) at ₦3,000/₦5,000/₦7,200 a
+  month — per-pair ₦1,500/₦1,250/₦1,200, never below Kozy's own ₦1,000 a-la-carte
+  floor and ~70-85% under the ₦7,000-8,000 Lagos sneaker specialists. A customer may
+  hold one membership in EACH family at the same time (the club stacks on any tier);
+  two in the same family is refused with switch guidance. Shoe pickups draw from the
+  club first, then a tier's monthly shoe perk.
 
 ### Branches & the numbers reset
 
