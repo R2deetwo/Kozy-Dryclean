@@ -38,6 +38,27 @@ export async function sendEmail({ to, subject, html, tags }: SendEmailParams): P
     'chigozieubahesq@gmail.com'
   const senderName = process.env.BREVO_SENDER_NAME || 'Kozy Care'
 
+  // Phase 77 test harness hook: when EMAIL_CAPTURE_DIR is set (local
+  // batteries ONLY — never in production), every rendered email is also
+  // written to a file so assertions can check the actual HTML a member
+  // would receive — even when no BREVO key is configured and nothing is
+  // actually delivered. Best-effort, never blocks the real send.
+  const captureDir = process.env.EMAIL_CAPTURE_DIR?.trim()
+  if (captureDir) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const fs = require('fs') as typeof import('fs')
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const path = require('path') as typeof import('path')
+      fs.mkdirSync(captureDir, { recursive: true })
+      const safe = `${subject}-${to}`.replace(/[^a-z0-9]+/gi, '-').slice(0, 90).toLowerCase()
+      const file = path.join(captureDir, `${Date.now()}-${safe}.html`)
+      fs.writeFileSync(file, html)
+    } catch {
+      // capture is a convenience only
+    }
+  }
+
   if (!apiKey) {
     console.warn('BREVO_API_KEY not set — skipping email send')
     return

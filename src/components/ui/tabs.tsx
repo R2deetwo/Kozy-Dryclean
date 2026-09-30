@@ -31,8 +31,12 @@ function TabsList({
       // by the page's overflow-x-hidden and the last tabs were unreachable).
       // `nav-scroll` gives iOS momentum scrolling and hides the scrollbar;
       // when the row fits (desktop) nothing changes visually.
+      // Phase 77: `[justify-content:safe_center]` fixes the classic flexbox
+      // trap where `justify-center` + overflow makes the FIRST tabs unreachable
+      // by scrolling on a phone (the row centers and clips its own start).
+      // Browsers without `safe` support keep the plain centering above.
       className={cn(
-        "bg-muted text-muted-foreground inline-flex h-9 max-w-full items-center justify-center overflow-x-auto rounded-lg p-[3px] nav-scroll",
+        "bg-muted text-muted-foreground inline-flex h-9 max-w-full items-center justify-center overflow-x-auto rounded-lg p-[3px] nav-scroll [justify-content:safe_center]",
         className
       )}
       {...props}

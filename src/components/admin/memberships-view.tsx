@@ -51,7 +51,7 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
-import { formatNaira, formatDate } from '@/lib/types'
+import { formatNaira, formatDate, RENEWAL_MONTH_CHOICES, renewalPriceFor, renewalSavingFor } from '@/lib/types'
 import {
   useMembershipPlans,
   useSaveMembershipPlans,
@@ -789,30 +789,49 @@ function SubscribersList() {
             a member's claimed transfer renewal pre-fills automatically — and adjust the amount
             for goodwill pricing if needed.
           </p>
-          {/* The months being confirmed (multi-month prepay / transfer claim) */}
+          {/* The months being confirmed — next month or the discounted
+              3-month prepay; a claimed transfer prefills both */}
           <div className="mt-3">
             <label className="text-xs font-medium text-navy">Months being paid</label>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
-              {[1, 3, 6, 12].map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => {
-                    setRenewMonths(m)
-                    const unit = renewFor?.plan?.priceMonthly ?? renewFor?.pricePaid ?? 0
-                    setRenewPrice(String(unit * m))
-                  }}
-                  className={cn(
-                    'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
-                    renewMonths === m
-                      ? 'border-gold-400 bg-gold-gradient text-navy'
-                      : 'border-navy-200 bg-white text-navy-300 hover:text-navy'
-                  )}
-                >
-                  {m === 1 ? '1 month' : `${m} months`}
-                </button>
-              ))}
+              {RENEWAL_MONTH_CHOICES.map((m) => {
+                const unit = renewFor?.plan?.priceMonthly ?? renewFor?.pricePaid ?? 0
+                const mSaving = renewalSavingFor(unit, m)
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => {
+                      setRenewMonths(m)
+                      setRenewPrice(String(renewalPriceFor(unit, m)))
+                    }}
+                    className={cn(
+                      'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+                      renewMonths === m
+                        ? 'border-gold-400 bg-gold-gradient text-navy'
+                        : 'border-navy-200 bg-white text-navy-300 hover:text-navy'
+                    )}
+                  >
+                    {m === 1 ? '1 month' : `${m} months`}
+                    {m === 3 && mSaving > 0 && (
+                      <span
+                        className={cn(
+                          'ml-1.5 rounded-full px-1.5 py-px text-[9px] font-bold uppercase tracking-wide',
+                          renewMonths === m
+                            ? 'bg-white/30 text-navy'
+                            : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                        )}
+                      >
+                        save {formatNaira(mSaving)}
+                      </span>
+                    )}
+                  </button>
+                )
+              })}
             </div>
+            <p className="mt-1 text-[10px] text-navy-300">
+              3 months pre-fills the discounted prepay amount — the claimed transfer amount overrides it when one is open.
+            </p>
             {renewClaim && (
               <p className="mt-1.5 text-[11px] leading-relaxed text-gold-700">
                 Member claimed a {renewClaim.months}-month transfer ({renewClaim.reference}) —

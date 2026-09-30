@@ -256,14 +256,15 @@ export function FinanceView({
           <CardTitle className="text-sm">Recent transactions</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          {/* Phase 77 (mobile): all columns render; swipe scrolls the table. */}
+          <div className="nav-scroll overflow-x-auto">
+            <table className="w-full min-w-[640px] whitespace-nowrap text-sm">
               <thead className="bg-linen-200 text-left text-xs uppercase tracking-wide text-navy-300">
                 <tr>
                   <th className="px-4 py-2">Order</th>
-                  <th className="hidden px-4 py-2 md:table-cell">Method</th>
+                  <th className="px-4 py-2">Method</th>
                   <th className="px-4 py-2 text-right">Amount</th>
-                  <th className="hidden px-4 py-2 lg:table-cell">Date</th>
+                  <th className="px-4 py-2">Date</th>
                   <th className="px-4 py-2">Status</th>
                 </tr>
               </thead>
@@ -275,7 +276,7 @@ export function FinanceView({
                       <td className="px-4 py-2 font-mono text-xs">
                         #{order?.orderNumber ?? '—'}
                       </td>
-                      <td className="hidden px-4 py-2 md:table-cell">
+                      <td className="px-4 py-2">
                         <span className="flex items-center gap-1 text-xs text-navy-300">
                           {p.method === 'BANK_TRANSFER' ? (
                             <Banknote className="h-3 w-3" />
@@ -288,7 +289,7 @@ export function FinanceView({
                       <td className="px-4 py-2 text-right font-semibold">
                         {formatNaira(p.amount)}
                       </td>
-                      <td className="hidden px-4 py-2 text-xs text-navy-300 lg:table-cell">
+                      <td className="px-4 py-2 text-xs text-navy-300">
                         {formatDateTime(p.createdAt)}
                       </td>
                       <td className="px-4 py-2">

@@ -36,7 +36,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
-import { formatNaira, formatDate, RENEWAL_MONTH_CHOICES, type KozyAppSettings } from '@/lib/types'
+import { formatNaira, formatDate, RENEWAL_MONTH_CHOICES, renewalPriceFor, renewalSavingFor, type KozyAppSettings } from '@/lib/types'
 import {
   useMyMembership,
   useMembershipCancel,
@@ -566,16 +566,16 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
 }
 
 // =============================================================================
-// RenewalCard (phase 76) — the prepopulated payment place for members
+// RenewalCard (phase 76 → 77) — the prepopulated payment place for members
 // =============================================================================
 // Appears when the month is running out (≤10 days), when the member asked
 // for no auto-renew, or when the membership has paused (PAST_DUE/LAPSED):
-// the plan is already known (nothing to pick), the month-count selector
-// covers the owner's multi-month prepay (1/3/6/12), and the two payment
-// paths mirror the join checkout — card (Paystack redirect) or bank
-// transfer (instructions + reference; the office confirms in the
-// drill-down). /portal?renew=1&months=N (the email CTA) lands HERE with
-// the month count preselected.
+// the plan is already known (nothing to pick), the month-count selector is
+// the two payment options (next month / the discounted 3-month prepay —
+// green, with the saving spelled out), and the two payment paths mirror the
+// join checkout — card (Paystack redirect) or bank transfer (instructions +
+// reference; the office confirms in the drill-down). /portal?renew=1&months=N
+// (the email buttons) lands HERE with the month count preselected.
 // =============================================================================
 function RenewalCard({
   membership,
@@ -629,7 +629,8 @@ function RenewalCard({
     paused || membership.cancelAtPeriodEnd || (daysLeft !== null && daysLeft <= 10)
   if (!needsRenewal) return null
 
-  const price = plan.priceMonthly * months
+  const price = renewalPriceFor(plan.priceMonthly, months)
+  const saving = renewalSavingFor(plan.priceMonthly, months)
   const paystackAvailable = appSettings?.paystackAvailable ?? false
 
   const renew = async (method: 'PAYSTACK' | 'BANK_TRANSFER') => {
@@ -708,34 +709,55 @@ function RenewalCard({
               : `Your month ends ${periodEnd ? formatDate(periodEnd.toISOString()) : 'soon'} — renew now and your rider keeps collecting at your usual window without a pause.`}
         </p>
 
-        {/* The month-count selector — the multi-month prepay */}
+        {/* The payment options — next month vs the discounted 3-month prepay */}
         <div className="mt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
             How many months?
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {RENEWAL_MONTH_CHOICES.map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => setMonths(m)}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                  months === m
-                    ? 'border-gold-400 bg-gold-gradient text-navy shadow-sm'
-                    : 'border-navy-200 bg-white text-navy-300 hover:border-navy-300 hover:text-navy'
-                }`}
-              >
-                {m === 1 ? '1 month' : `${m} months`}
-                <span className="ml-1.5 text-xs font-normal opacity-80">
-                  {formatNaira(plan.priceMonthly * m)}
-                </span>
-              </button>
-            ))}
+            {RENEWAL_MONTH_CHOICES.map((m) => {
+              const mSaving = renewalSavingFor(plan.priceMonthly, m)
+              const selected = months === m
+              return (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMonths(m)}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                    selected && m === 3
+                      ? 'border-emerald-400 bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-sm'
+                      : selected
+                        ? 'border-gold-400 bg-gold-gradient text-navy shadow-sm'
+                        : 'border-navy-200 bg-white text-navy-300 hover:border-navy-300 hover:text-navy'
+                  }`}
+                >
+                  {m === 1 ? '1 month' : `${m} months`}
+                  <span
+                    className={`ml-1.5 text-xs font-normal ${
+                      selected && m === 3 ? 'text-emerald-50' : 'opacity-80'
+                    }`}
+                  >
+                    {formatNaira(renewalPriceFor(plan.priceMonthly, m))}
+                  </span>
+                  {m === 3 && mSaving > 0 && (
+                    <span
+                      className={`ml-1.5 rounded-full px-1.5 py-px text-[10px] font-bold uppercase tracking-wide ${
+                        selected
+                          ? 'bg-white/25 text-white'
+                          : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                      }`}
+                    >
+                      save {formatNaira(mSaving)}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
-          {months > 1 && (
+          {months === 3 && saving > 0 && (
             <p className="mt-2 text-xs text-navy-300">
-              One payment of <strong className="text-navy">{formatNaira(price)}</strong> covers you{' '}
-              {months === 12 ? 'for the year' : `for ${months} months`} — laundry off your mind that much longer.
+              One payment of <strong className="text-navy">{formatNaira(price)}</strong> covers your next 3 months —
+              <strong className="text-emerald-700"> {formatNaira(saving)} less</strong> than paying month by month.
             </p>
           )}
         </div>

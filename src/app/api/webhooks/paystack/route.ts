@@ -23,6 +23,7 @@ import { db } from '@/lib/db'
 import { notifyPaymentVerified, notifyMembershipActive } from '@/lib/notifications'
 import { activateOrRenewSubscription } from '@/lib/subscriptions'
 import { dispatchNewOrder } from '@/lib/rider-dispatch'
+import { renewalPriceFor } from '@/lib/types'
 
 export async function POST(req: Request) {
   // ----- 1. Verify the Paystack signature -----
@@ -270,15 +271,25 @@ async function handleMembershipChargeSuccess(data: any) {
     return NextResponse.json({ ok: true, message: 'Subscription not found' })
   }
 
-  // Phase 76: how many cycles does this charge cover? Prefer the months
-  // we stamped into the metadata at initialize; fall back to the amount
-  // (a 3×monthly charge is unmistakably a 3-month prepay). Clamped 1..12.
+  // Phase 76 → 77: how many cycles does this charge cover? Prefer the months
+  // we stamped into the metadata at initialize; fall back to the amount.
+  // The fallback is discount-aware: a 3-month prepay charges the DISCOUNTED
+  // price (renewalPriceFor — e.g. ₦85,000 on a ₦30,000 plan), so plain
+  // division misreads it as 2.83 months. Match the tier's actual price
+  // points first, then fall back to rounding.
   const planForMonths = await db.subscriptionPlan.findUnique({ where: { id: sub.planId } })
   const metaMonths = Number((data as any)?.metadata?.months)
-  const inferredMonths =
-    planForMonths && planForMonths.priceMonthly > 0 && amount > 0
-      ? Math.round(amount / planForMonths.priceMonthly)
-      : 1
+  let inferredMonths = 1
+  if (planForMonths && planForMonths.priceMonthly > 0 && amount > 0) {
+    if (amount === renewalPriceFor(planForMonths.priceMonthly, 3)) {
+      inferredMonths = 3
+    } else if (amount === planForMonths.priceMonthly) {
+      inferredMonths = 1
+    } else {
+      // Goodwill/custom amounts — nearest whole month still reads best.
+      inferredMonths = Math.max(1, Math.round(amount / planForMonths.priceMonthly))
+    }
+  }
   const months = Math.min(
     Math.max(
       Number.isFinite(metaMonths) && metaMonths >= 1 ? Math.round(metaMonths) : inferredMonths,

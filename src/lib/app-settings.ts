@@ -48,9 +48,8 @@ export const APP_SETTING_KEYS = [
   'rider_per_km_rate',
   'rider_free_km',
   'rider_distance_cap',
-  // Phase 76 — member email automation (monthly summary + paused emails)
-  'member_email_automation',
-  'member_email_test_allowlist',
+  // Phase 77 — the Kozy Store master switch (super-admin only, ships dark)
+  'store_enabled',
 ] as const
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number]
@@ -113,8 +112,7 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     riderPerKmRate: num('rider_per_km_rate', d.riderPerKmRate),
     riderFreeKm: num('rider_free_km', d.riderFreeKm),
     riderDistanceCap: num('rider_distance_cap', d.riderDistanceCap),
-    memberEmailAutomation: bool('member_email_automation', d.memberEmailAutomation),
-    memberEmailTestAllowlist: str('member_email_test_allowlist', d.memberEmailTestAllowlist),
+    storeEnabled: bool('store_enabled', d.storeEnabled),
     // Not a DB setting — derived from the server env at the API layer. The
     // false here is a placeholder so this DB-mapped object satisfies the
     // type; callers that care use the /api/settings/app response, which
@@ -161,8 +159,7 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
       rider_per_km_rate: JSON.stringify(d.riderPerKmRate),
       rider_free_km: JSON.stringify(d.riderFreeKm),
       rider_distance_cap: JSON.stringify(d.riderDistanceCap),
-      member_email_automation: JSON.stringify(d.memberEmailAutomation),
-      member_email_test_allowlist: JSON.stringify(d.memberEmailTestAllowlist),
+      store_enabled: JSON.stringify(d.storeEnabled),
     }
     const missing = (Object.keys(seed) as AppSettingKey[]).filter((k) => !existing.has(k))
     if (missing.length > 0) {
@@ -240,10 +237,8 @@ export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<
     map.rider_free_km = JSON.stringify(Math.max(0, Math.round(patch.riderFreeKm)))
   if (patch.riderDistanceCap !== undefined)
     map.rider_distance_cap = JSON.stringify(Math.max(0, Math.round(patch.riderDistanceCap)))
-  if (patch.memberEmailAutomation !== undefined)
-    map.member_email_automation = JSON.stringify(Boolean(patch.memberEmailAutomation))
-  if (patch.memberEmailTestAllowlist !== undefined)
-    map.member_email_test_allowlist = JSON.stringify(patch.memberEmailTestAllowlist.trim())
+  if (patch.storeEnabled !== undefined)
+    map.store_enabled = JSON.stringify(Boolean(patch.storeEnabled))
 
   await Promise.all(
     (Object.keys(map) as AppSettingKey[]).map((key) =>

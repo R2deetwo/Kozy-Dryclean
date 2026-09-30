@@ -15,7 +15,7 @@
 // =============================================================================
 
 import { sendEmail, emailOverrideTarget } from '@/lib/email'
-import { formatNaira } from '@/lib/types'
+import { formatNaira, renewalPriceFor, renewalSavingFor } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
 import { isValidEmail, normalizeEmail } from '@/lib/email-validation'
 import { db } from '@/lib/db'
@@ -2025,30 +2025,46 @@ export async function notifyMemberOrderCancelled(opts: {
 }
 
 // =============================================================================
-// MEMBERSHIP RETENTION (phase 76) — the automated member relationship
+// MEMBERSHIP RETENTION (phase 76 → 77) — the automated member relationship
 // =============================================================================
 // The monthly summary is the retention workhorse: it lands 3 days before the
 // member's period ends, shows the month in review (washes picked up, missed,
-// extras), and carries the prepopulated renewal CTA — with the multi-month
-// prepay options the owner asked for and the tier's extra bag/box upsell.
-// The paused email is the day-1 nudge for a member whose period ended
-// without a renewal. Both are triggered by /api/cron/member-emails behind
-// the memberEmailAutomation gate (test-safe until the office arms it).
+// extras), and carries the two prepopulated renewal buttons — next month at
+// the plan price, or 3 months at the discounted prepay (the owner's ₦30,000
+// plan → ₦85,000 decision) — plus the tier's extra bag/box upsell and, when
+// the office has switched the Kozy Store on, ONE quiet product line. The
+// paused email is the day-1 nudge for a member whose period ended without a
+// renewal. Both are triggered by /api/cron/member-emails — always on for
+// members (phase 77); test runs stay inside the woosh test world.
 // =============================================================================
 
 /** Member-facing email chrome — same navy/gold language as the staff chrome
  *  but WITHOUT the "Staff Console" subline (the phase-75 member emails
  *  borrowed the staff header verbatim; these new ones read like the
- *  member-facing mail they are). */
+ *  member-facing mail they are). Phase 77: `ctas` renders a STACKED button
+ *  pair (the renewal email's next-month gold button + the discounted
+ *  3-month green button); the single `cta` keeps serving every other mail. */
 function memberEmailChrome(opts: {
   category: string
   heading: string
   bodyHtml: string
   cta?: { label: string; url: string }
+  ctas?: Array<{
+    label: string
+    url: string
+    variant?: 'gold' | 'green'
+    note?: string
+  }>
   footer?: string
 }): { subject: string; html: string } {
-  const { category, heading, bodyHtml, cta, footer } = opts
+  const { category, heading, bodyHtml, cta, ctas, footer } = opts
   const subject = `[Kozy Care · ${categoryTag(category)}] ${heading}`
+  const goldButton =
+    'display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);'
+  const greenButton =
+    'display: inline-block; background: linear-gradient(135deg, #2E9E5B, #1F7A43); color: #FFFFFF; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(37,122,67,0.30);'
+  const fallbackLink = (url: string) =>
+    `<span style="color: #0A192F; word-break: break-all;">${url}</span>`
   const html = `
   <!DOCTYPE html>
   <html>
@@ -2062,11 +2078,23 @@ function memberEmailChrome(opts: {
         <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">${heading}</h2>
         ${bodyHtml}
         ${
-          cta
+          ctas && ctas.length > 0
             ? `<div style="text-align: center; margin: 28px 0 8px 0;">
-                 <a href="${cta.url}" style="display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);">${cta.label}</a>
+                 ${ctas
+                   .map(
+                     (b, i) =>
+                       `${i > 0 ? '<div style="height: 12px;"></div>' : ''}<a href="${b.url}" style="${b.variant === 'green' ? greenButton : goldButton}">${b.label}${b.note ? `<br><span style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">${b.note}</span>` : ''}</a>`
+                   )
+                   .join('')}
                </div>
-               <p style="color: #6F88A8; font-size: 12px; margin: 12px 0 0 0; line-height: 1.5;">Or paste this link into your browser:<br><span style="color: #0A192F; word-break: break-all;">${cta.url}</span></p>`
+               <p style="color: #6F88A8; font-size: 12px; margin: 12px 0 0 0; line-height: 1.6;">If the buttons don't work in your email app:<br>${ctas
+                 .map((b, i) => `${i > 0 ? '<br>' : ''}${b.note ? '3 months' : 'Next month'} — ${fallbackLink(b.url)}`)
+                 .join('')}</p>`
+            : cta
+            ? `<div style="text-align: center; margin: 28px 0 8px 0;">
+                 <a href="${cta.url}" style="${goldButton}">${cta.label}</a>
+               </div>
+               <p style="color: #6F88A8; font-size: 12px; margin: 12px 0 0 0; line-height: 1.5;">Or paste this link into your browser:<br>${fallbackLink(cta.url)}</p>`
             : ''
         }
         <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
@@ -2092,30 +2120,40 @@ function summaryRow(label: string, value: string, last = false) {
         </tr>`
 }
 
-/** The multi-month prepay block — plain links so the member lands on the
- *  renewal panel with the month count already selected. */
-function monthsBlock(
-  unitPrice: number,
-  renewUrl: (months: number) => string
+/** Minimal HTML escape for admin-entered store copy riding along in emails. */
+function esc(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+/** The strategic Kozy Store line (phase 77) — ONE quiet strip at the foot of
+ *  the monthly summary, only when the office has switched the store on, at
+ *  most two products, never a separate mailshot. */
+function storeStrip(
+  products: { name: string; tagline?: string | null; price: number }[],
+  storeUrl: string
 ): string {
-  const options = [3, 6, 12]
+  if (!products || products.length === 0) return ''
+  const items = products
     .map(
-      (m) =>
-        `<a href="${renewUrl(m)}" style="color: #0A192F; text-decoration: underline; text-decoration-color: #D4AF37; font-weight: 600;">${m} months — ${formatNaira(unitPrice * m)}</a>`
+      (p) =>
+        `<strong style="color:#0A192F;">${esc(p.name)}</strong> — ${formatNaira(p.price)}${p.tagline ? ` · <span style="color:#6F88A8;">${esc(p.tagline)}</span>` : ''}`
     )
-    .join(
-      ' <span style="color: #D4AF37;">·</span> '
-    )
+    .join('<br>')
   return `
-      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 16px 0 0 0;">
-        Prefer to think about laundry even less? Cover several months in one payment:
-        ${options}
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 16px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
+        <strong style="color:#0A192F;">Also from Kozy:</strong> ${items}<br>
+        <a href="${storeUrl}" style="color: #1F7A43; font-weight: 600; text-decoration: underline; text-decoration-color: #1F7A43;">Add one to your next delivery →</a>
       </p>`
 }
 
 /** The monthly usage summary — the retention email. Lands ~3 days before the
- *  period ends: the month in review + the prepopulated renewal + the
- *  tier-appropriate bag/box upsell. */
+ *  period ends: the month in review + the prepopulated renewal buttons (next
+ *  month vs the discounted 3-month prepay, phase 77) + the tier-appropriate
+ *  bag/box upsell + the strategic Kozy Store strip when the store is lit. */
 export async function notifyMembershipMonthlySummary(opts: {
   user: { name: string; email: string }
   planName: string
@@ -2130,10 +2168,13 @@ export async function notifyMembershipMonthlySummary(opts: {
   priceMonthly: number
   /** CARD_AUTOMATIC: card on file + not cancelled → informational renewal
    *  block. NEEDS_PAYMENT: transfer member, cancel-at-period-end, or paused —
-   *  the renewal CTA carries the email. */
+   *  the renewal buttons carry the email. */
   renewalMode: 'CARD_AUTOMATIC' | 'NEEDS_PAYMENT'
   renewUrl: string
   contactPhone: string
+  /** Phase 77 — the Kozy Store strip (already gated + capped by the caller;
+   *  empty array renders nothing). */
+  storeProducts?: { name: string; tagline?: string | null; price: number }[]
 }): Promise<void> {
   try {
     const firstName = opts.user.name.split(' ')[0]
@@ -2145,6 +2186,8 @@ export async function notifyMembershipMonthlySummary(opts: {
     const monthLabel = new Date(opts.periodStart).toLocaleDateString('en-NG', {
       month: 'long',
     })
+    const threeMonthPrice = renewalPriceFor(opts.priceMonthly, 3)
+    const threeMonthSaving = renewalSavingFor(opts.priceMonthly, 3)
 
     // ----- The month in review -----
     const rows = [
@@ -2165,9 +2208,9 @@ export async function notifyMembershipMonthlySummary(opts: {
           : 'None — every pickup day went smoothly'
       ),
       summaryRow(
-        'Delivered back to you',
+        'Delivered to you',
         opts.deliveredCount > 0
-          ? `<strong>${opts.deliveredCount}</strong> fresh ${opts.unitName}${opts.deliveredCount === 1 ? '' : 's'} returned`
+          ? `<strong>${opts.deliveredCount}</strong> fresh ${opts.unitName}${opts.deliveredCount === 1 ? '' : 's'} delivered`
           : 'Your first delivery of the cycle is on its way'
       ),
       summaryRow(
@@ -2177,14 +2220,20 @@ export async function notifyMembershipMonthlySummary(opts: {
       ),
     ].join('')
 
-    // ----- The renewal block -----
+    // ----- The renewal block (phase 77: two buttons, a real saving) -----
     let renewalHtml: string
     let cta: { label: string; url: string } | undefined
+    let ctas:
+      | Array<{ label: string; url: string; variant?: 'gold' | 'green'; note?: string }>
+      | undefined
     if (opts.renewalMode === 'CARD_AUTOMATIC') {
       renewalHtml = `
       <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 24px 0 0 0;">
         Your next month starts automatically — <strong style="color:#0A192F;">${formatNaira(opts.priceMonthly)}</strong> charges your saved card on
         <strong style="color:#0A192F;">${fmtDate(opts.periodEnd)}</strong>. Nothing to do, nothing to chase.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
+        Rather skip the monthly charges? <a href="${opts.renewUrl}&months=3" style="color: #1F7A43; font-weight: 600; text-decoration: underline; text-decoration-color: #1F7A43;">Cover 3 months in one payment of ${formatNaira(threeMonthPrice)}</a> — ${formatNaira(threeMonthSaving)} less than paying month by month.
       </p>`
       cta = { label: 'View my membership', url: opts.renewUrl }
     } else {
@@ -2197,10 +2246,19 @@ export async function notifyMembershipMonthlySummary(opts: {
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
         Pay by card or bank transfer, whichever you prefer — the portal shows both.
       </p>`
-      cta = {
-        label: `Renew my next month — ${formatNaira(opts.priceMonthly)}`,
-        url: opts.renewUrl,
-      }
+      ctas = [
+        {
+          label: `Pay next month — ${formatNaira(opts.priceMonthly)}`,
+          url: opts.renewUrl,
+          variant: 'gold',
+        },
+        {
+          label: `Pay 3 months — ${formatNaira(threeMonthPrice)}`,
+          url: `${opts.renewUrl}&months=3`,
+          variant: 'green',
+          note: `you save ${formatNaira(threeMonthSaving)}`,
+        },
+      ]
     }
 
     const { subject, html } = memberEmailChrome({
@@ -2212,16 +2270,13 @@ export async function notifyMembershipMonthlySummary(opts: {
       </p>
       <table style="width: 100%; border-collapse: collapse; font-size: 14px;">${rows}</table>
       ${renewalHtml}
-      ${
-        opts.renewalMode === 'NEEDS_PAYMENT'
-          ? monthsBlock(opts.priceMonthly, (m) => `${opts.renewUrl}&months=${m}`)
-          : ''
-      }
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
         Running out of room on busy weeks? A <strong style="color:#0A192F;">second ${opts.unitName}</strong> can ride along with your renewal —
         reply to this email or call <strong style="color:#0A192F;">${opts.contactPhone}</strong> and the office will set it up.
-      </p>`,
+      </p>
+      ${storeStrip(opts.storeProducts ?? [], `${baseUrl()}/portal?store=1`)}`,
       cta,
+      ctas,
       footer:
         'You receive this monthly summary because you are a Kozy Circle member.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
     })
@@ -2231,7 +2286,9 @@ export async function notifyMembershipMonthlySummary(opts: {
   }
 }
 
-/** Day-1 reactivation nudge — the member's period ended without a renewal. */
+/** Day-1 reactivation nudge — the member's period ended without a renewal.
+ *  Phase 77: the same two-button renewal pattern (next month vs the
+ *  discounted 3-month prepay). */
 export async function notifyMembershipPaused(opts: {
   user: { name: string; email: string }
   planName: string
@@ -2244,6 +2301,8 @@ export async function notifyMembershipPaused(opts: {
 }): Promise<void> {
   try {
     const firstName = opts.user.name.split(' ')[0]
+    const threeMonthPrice = renewalPriceFor(opts.priceMonthly, 3)
+    const threeMonthSaving = renewalSavingFor(opts.priceMonthly, 3)
     const { subject, html } = memberEmailChrome({
       category: 'membership',
       heading: `Your ${opts.planName} has paused — one tap brings it back`,
@@ -2258,14 +2317,26 @@ export async function notifyMembershipPaused(opts: {
         <strong style="color:#0A192F;">${opts.includedUnits} × ${opts.unitName}</strong> pickups restart the moment you renew.
         Reactivate for <strong style="color:#0A192F;">${formatNaira(opts.priceMonthly)}</strong> and your rider picks up right where you left off.
       </p>
-      ${monthsBlock(opts.priceMonthly, (m) => `${opts.renewUrl}&months=${m}`)}
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
+        Coming back for longer? Cover 3 months in one payment of <strong style="color:#0A192F;">${formatNaira(threeMonthPrice)}</strong> —
+        <strong style="color:#1F7A43;">${formatNaira(threeMonthSaving)} less</strong> than paying month by month.
+      </p>
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
         Prefer to talk it through? Call <strong style="color:#0A192F;">${opts.contactPhone}</strong> — the office is glad to help.
       </p>`,
-      cta: {
-        label: `Reactivate my membership — ${formatNaira(opts.priceMonthly)}`,
-        url: opts.renewUrl,
-      },
+      ctas: [
+        {
+          label: `Reactivate for next month — ${formatNaira(opts.priceMonthly)}`,
+          url: opts.renewUrl,
+          variant: 'gold',
+        },
+        {
+          label: `Reactivate for 3 months — ${formatNaira(threeMonthPrice)}`,
+          url: `${opts.renewUrl}&months=3`,
+          variant: 'green',
+          note: `you save ${formatNaira(threeMonthSaving)}`,
+        },
+      ],
       footer:
         'You receive this because your Kozy Circle membership paused without a renewal.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
     })
@@ -2320,6 +2391,47 @@ export async function notifyAdminRenewalTransferPending(opts: {
     await Promise.all(targets.map((to) => sendEmail({ to, subject, html })))
   } catch (e) {
     console.error('notifyAdminRenewalTransferPending failed:', e)
+  }
+}
+
+/** A customer asked for a Kozy Store product to ride along with their next
+ *  delivery (phase 77) — office alert with the one-tap lifecycle reminder.
+ *  Never triggers member-side mail: the store line rides inside the monthly
+ *  summary only, never its own mailshot. */
+export async function notifyAdminStoreRequest(opts: {
+  customer: { name: string; email: string; phone: string }
+  product: { name: string; price: number }
+  qty: number
+  note?: string | null
+}): Promise<void> {
+  try {
+    const config = await adminAlertConfig()
+    if (config.emails.length === 0) return
+    const targets = config.emails
+    const bodyHtml = `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        <strong style="color:#0A192F;">${opts.customer.name}</strong> asked for
+        <strong style="color:#0A192F;">${opts.qty} × ${opts.product.name}</strong> (${formatNaira(opts.product.price)}) to ride along with their next delivery.
+      </p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        ${summaryRow('Customer', `${opts.customer.email} · ${opts.customer.phone}`)}
+        ${summaryRow('Their note', opts.note ? opts.note : '—')}
+        ${summaryRow(
+          'What to do',
+          'Settings → Store → Requests — confirm it (it joins their next pickup) or decline it. The customer sees the status in their portal.',
+          true
+        )}
+      </table>`
+    const { subject, html } = staffEmailChrome({
+      category: 'store',
+      heading: `Store request — ${opts.qty} × ${opts.product.name}`,
+      bodyHtml,
+      cta: { label: 'Open Settings → Store', url: `${baseUrl()}/admin` },
+      footer: 'Kozy Care — the office side of the Kozy Store.',
+    })
+    await Promise.all(targets.map((to) => sendEmail({ to, subject, html })))
+  } catch (e) {
+    console.error('notifyAdminStoreRequest failed:', e)
   }
 }
 

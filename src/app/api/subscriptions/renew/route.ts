@@ -1,18 +1,19 @@
 // =============================================================================
 // POST /api/subscriptions/renew — a member renews (or reactivates) their own
-// membership, optionally prepaying several months (phase 76)
+// membership, optionally prepaying months at a saving (phase 76 → 77)
 // =============================================================================
 // Authed customers only, own membership only. This is the endpoint behind the
-// email's prepopulated renewal CTA and the portal's renewal card:
+// email's renewal buttons and the portal's renewal card:
 //
-//   body: { subscriptionId, months: 1|3|6|12,
+//   body: { subscriptionId, months: 1|3,
 //           method: 'PAYSTACK' | 'BANK_TRANSFER', transferReceipt? }
 //
 //   PAYSTACK      → we initialize a Paystack transaction inline and return
 //                   the authorization URL. months=1 keeps the plan's
 //                   recurring code (Paystack re-charges monthly from then
-//                   on); months>1 is a ONE-OFF charge of months × price that
-//                   extends periodEnd on the webhook (metadata.months).
+//                   on); months=3 is a ONE-OFF charge at the discounted
+//                   prepay price (renewalPriceFor) that extends periodEnd on
+//                   the webhook (metadata.months).
 //   BANK_TRANSFER → we record a RENEWAL_INTENT ledger row (the claim, with
 //                   the receipt when the member attached one), alert the
 //                   office, and return the transfer instructions. Money
@@ -27,7 +28,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import { getAppSettings } from '@/lib/app-settings'
 import { effectiveStatus } from '@/lib/subscriptions'
 import { notifyAdminRenewalTransferPending } from '@/lib/notifications'
-import { RENEWAL_MONTH_CHOICES } from '@/lib/types'
+import { RENEWAL_MONTH_CHOICES, renewalPriceFor, renewalSavingFor } from '@/lib/types'
 
 function baseUrl(): string {
   return (
@@ -122,7 +123,10 @@ export async function POST(req: Request) {
     )
   }
 
-  const amount = Math.round(sub.plan.priceMonthly * months)
+  // The ONE pricing path: 1 month = plan price, 3 months = the discounted
+  // prepay (the owner's ₦30,000 → ₦85,000 decision generalised per tier).
+  const amount = renewalPriceFor(sub.plan.priceMonthly, months)
+  const saving = renewalSavingFor(sub.plan.priceMonthly, months)
   const transferReference = `KZY-RENEW-${sub.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`
 
   // ----- Bank transfer: claim + instructions, office confirms -----
@@ -174,7 +178,10 @@ export async function POST(req: Request) {
         amount,
         months,
         reference: transferReference,
-        note: `Send the amount with reference ${transferReference} — your ${months > 1 ? `${months} months` : 'next month'} applies the moment the office confirms. You can also reply to your summary email with the receipt.`,
+        note:
+          saving > 0
+            ? `Send ${amount} with reference ${transferReference} — your ${months} months (₦${saving.toLocaleString()} saved) apply the moment the office confirms. You can also reply to your summary email with the receipt.`
+            : `Send the amount with reference ${transferReference} — your next month applies the moment the office confirms. You can also reply to your summary email with the receipt.`,
       },
     })
   }

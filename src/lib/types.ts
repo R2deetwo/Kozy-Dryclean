@@ -644,12 +644,12 @@ export interface KozyAppSettings {
   riderPerKmRate: number
   riderFreeKm: number
   riderDistanceCap: number
-  // Phase 76 — member email automation gate + test allowlist. When the
-  // automation is OFF, the daily sweep still runs but only delivers to
-  // allowlisted addresses (test inboxes + the owner) — everything else is
-  // suppressed and logged, so flipping the toggle is what arms real sends.
-  memberEmailAutomation: boolean
-  memberEmailTestAllowlist: string
+  // Phase 77 — the Kozy Store (whitelabelled hygiene add-ons). Ships DARK:
+  // false means the store exists nowhere a customer can see it (no portal
+  // tab, no email line, nothing on the landing page ever). Only a super
+  // admin (ADMIN role) can flip it in Settings → Store — the settings PUT
+  // is ADMIN-only by construction, so staff can never turn it on.
+  storeEnabled: boolean
   // Card payments (Paystack) — NOT stored in the DB: derived server-side
   // from the presence of PAYSTACK_SECRET_KEY on each /api/settings/app
   // read. When false, checkout greys the card option out and transfer is
@@ -703,12 +703,9 @@ export function defaultAppSettings(): KozyAppSettings {
     riderPerKmRate: 150,
     riderFreeKm: 4,
     riderDistanceCap: 1800,
-    // Phase 76 — the member email automation ships ARMED-OFF by default:
-    // the sweep computes and logs everything, but only allowlisted
-    // recipients actually receive. The office flips this in Settings →
-    // Memberships once the emails have been reviewed.
-    memberEmailAutomation: false,
-    memberEmailTestAllowlist: '@woosh.dpdns.org,practiceprosystems@gmail.com',
+    // Phase 77 — the Kozy Store ships dark. Nothing customer-facing renders
+    // until a super admin turns it on in Settings → Store.
+    storeEnabled: false,
     // Pessimistic client default — the server response overrides it with
     // the real env-derived value. Greyed out beats a broken card checkout.
     paystackAvailable: false,
@@ -728,13 +725,13 @@ export const COMPANY_BANK = {
 }
 
 // =====================================================
-// MEMBERSHIP RENEWALS (phase 76)
+// MEMBERSHIP RENEWALS (phase 76 → 77)
 // =====================================================
 /** The month counts a member can prepay at the point of renewal — the
  *  owner's "pay for multiple months at the point of payment". 1 = the
- *  normal monthly renewal (card members keep their auto-charge); 3/6/12
- *  are one-off charges that extend periodEnd by that many cycles. */
-export const RENEWAL_MONTH_CHOICES = [1, 3, 6, 12] as const
+ *  normal monthly renewal (card members keep their auto-charge); 3 = the
+ *  prepay incentive (a real saving, phase 77). */
+export const RENEWAL_MONTH_CHOICES = [1, 3] as const
 export type RenewalMonths = (typeof RENEWAL_MONTH_CHOICES)[number]
 
 export function isRenewalMonths(v: unknown): v is RenewalMonths {
@@ -744,9 +741,27 @@ export function isRenewalMonths(v: unknown): v is RenewalMonths {
   )
 }
 
-/** The prepay price for N months — plan price × months (no invented
- *  discounts; the office can goodwill-adjust any confirmed renewal). */
+/** The 3-month prepay saving — the owner's decision (₦30,000 plan → pay
+ *  ₦85,000 instead of ₦90,000) generalised to every tier at the same
+ *  ~5½% shape: one month's price ÷ 6, rounded to the nearest ₦500 so the
+ *  transfer amounts stay human. Returns 0 for anything that is not the
+ *  3-month prepay. */
+export function renewalSavingFor(priceMonthly: number, months: number): number {
+  if (months !== 3 || priceMonthly <= 0) return 0
+  const save = Math.round(priceMonthly / 6 / 500) * 500
+  // Never let rounding push the saving past a sane fraction of the quarter.
+  return Math.min(save, Math.max(0, priceMonthly * 3 - 500))
+}
+
+/** The prepay price for N months — the ONE pricing path shared by the email
+ *  buttons, the portal renewal card, the renew API, the Paystack charge and
+ *  the office confirm dialog. 3 months carries the prepay saving; every
+ *  other count is the plain plan price × months (goodwill adjustments stay
+ *  an office-only manual override at confirm time). */
 export function renewalPriceFor(priceMonthly: number, months: number): number {
+  if (months === 3) {
+    return Math.max(500, Math.round(priceMonthly * 3) - renewalSavingFor(priceMonthly, 3))
+  }
   return Math.round(priceMonthly * months)
 }
 

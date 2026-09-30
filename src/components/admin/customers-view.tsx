@@ -245,18 +245,21 @@ export function CustomersView() {
         </span>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-white shadow-sm">
-        <table className="w-full text-sm">
+      {/* Phase 77 (mobile): every column renders and the whole table
+       *  scrolls horizontally — the phone swipe the owner asked for — instead
+       *  of columns silently vanishing behind hidden md:table-cell classes. */}
+      <div className="nav-scroll overflow-x-auto rounded-xl border bg-white shadow-sm">
+        <table className="w-full min-w-[900px] whitespace-nowrap text-sm">
           <thead className="bg-linen-200 text-left text-xs uppercase tracking-wide text-navy-300">
             <tr>
               <th className="px-4 py-2">Customer</th>
-              <th className="hidden px-4 py-2 md:table-cell">Type</th>
-              <th className="hidden px-4 py-2 lg:table-cell">Contact</th>
+              <th className="px-4 py-2">Type</th>
+              <th className="px-4 py-2">Contact</th>
               <th className="px-4 py-2 text-center">Orders</th>
               <th className="px-4 py-2">Health</th>
-              <th className="hidden px-4 py-2 sm:table-cell">Last order</th>
-              <th className="hidden px-4 py-2 lg:table-cell">Total Spent</th>
-              <th className="hidden px-4 py-2 sm:table-cell">Since</th>
+              <th className="px-4 py-2">Last order</th>
+              <th className="px-4 py-2">Total Spent</th>
+              <th className="px-4 py-2">Since</th>
             </tr>
           </thead>
           <tbody>
@@ -315,8 +318,6 @@ export function CustomersView() {
                               new
                             </span>
                           )}
-                          {/* Unverified email — the signup verification email
-                              never landed (typically a typo). */}
                           {!u.emailVerified && (
                             <span
                               title="Email not verified — the verification email may never have arrived"
@@ -330,11 +331,12 @@ export function CustomersView() {
                       </div>
                     </div>
                   </td>
-                  <td className="hidden px-4 py-3 md:table-cell">
+                  <td className="px-4 py-3">
                     <RoleBadge role={u.role} />
                   </td>
-                  <td className="hidden px-4 py-3 lg:table-cell">
+                  <td className="px-4 py-3">
                     <p className="text-xs text-navy">{u.phone}</p>
+                    <p className="text-xs text-navy-300">{u.email}</p>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className="font-semibold text-navy">{userOrders.length}</span>
@@ -342,15 +344,15 @@ export function CustomersView() {
                   <td className="px-4 py-3">
                     {health ? <HealthChip health={health} /> : null}
                   </td>
-                  <td className="hidden px-4 py-3 text-xs text-navy-300 sm:table-cell">
+                  <td className="px-4 py-3 text-xs text-navy-300">
                     {health?.lastDeliveredAt
                       ? sinceLabel(Date.now() - new Date(health.lastDeliveredAt).getTime())
                       : '—'}
                   </td>
-                  <td className="hidden px-4 py-3 lg:table-cell">
+                  <td className="px-4 py-3">
                     <span className="font-semibold text-navy-300">{formatNaira(health?.ltv ?? 0)}</span>
                   </td>
-                  <td className="hidden px-4 py-3 sm:table-cell text-xs text-navy-300">
+                  <td className="px-4 py-3 text-xs text-navy-300">
                     {formatDate(u.createdAt)}
                   </td>
                 </tr>

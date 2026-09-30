@@ -688,10 +688,11 @@ function OrdersListView({
         })}
       </div>
 
-      {/* Orders table */}
+      {/* Orders table — Phase 77 (mobile): every column renders and the
+          whole table swipes horizontally instead of columns disappearing. */}
       <div className="overflow-hidden rounded-xl border border-navy-100 bg-white shadow-navy">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+        <div className="nav-scroll overflow-x-auto">
+          <table className="w-full min-w-[860px] whitespace-nowrap text-sm">
             <thead className="bg-linen-100 text-left text-xs uppercase tracking-wide text-navy-300">
               <tr>
                 <th className="px-4 py-3">
@@ -700,21 +701,21 @@ function OrdersListView({
                     {sortBy === 'number' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                   </button>
                 </th>
-                <th className="hidden px-4 py-3 md:table-cell">Customer</th>
-                <th className="hidden px-4 py-3 lg:table-cell">Type</th>
+                <th className="px-4 py-3">Customer</th>
+                <th className="px-4 py-3">Type</th>
                 <th className="px-4 py-3">
                   <button onClick={() => toggleSort('status')} className="flex items-center gap-1 font-semibold">
                     Status
                     {sortBy === 'status' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                   </button>
                 </th>
-                <th className="hidden px-4 py-3 sm:table-cell">
+                <th className="px-4 py-3">
                   <button onClick={() => toggleSort('due')} className="flex items-center gap-1 font-semibold">
                     Due
                     {sortBy === 'due' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
                   </button>
                 </th>
-                <th className="hidden px-4 py-3 lg:table-cell">
+                <th className="px-4 py-3">
                   <button onClick={() => toggleSort('date')} className="flex items-center gap-1 font-semibold">
                     Date
                     {sortBy === 'date' && <span>{sortDir === 'asc' ? '↑' : '↓'}</span>}
@@ -770,7 +771,7 @@ function OrdersListView({
                         )}
                       </span>
                     </td>
-                    <td className="hidden px-4 py-3 md:table-cell">
+                    <td className="px-4 py-3">
                       <span className="flex items-center gap-2 text-navy">
                         {o.type === 'ITEM' ? (
                           <User className="h-3.5 w-3.5 text-navy-300" />
@@ -780,7 +781,7 @@ function OrdersListView({
                         <span className="truncate">{customer?.name ?? '—'}</span>
                       </span>
                     </td>
-                    <td className="hidden px-4 py-3 lg:table-cell">
+                    <td className="px-4 py-3">
                       <span className="text-xs text-navy-300">
                         {o.type === 'ITEM' ? 'Retail' : 'Corporate'}
                       </span>
@@ -795,7 +796,7 @@ function OrdersListView({
                         {meta.label}
                       </span>
                     </td>
-                    <td className="hidden px-4 py-3 sm:table-cell">
+                    <td className="px-4 py-3">
                       {timing ? (
                         <span
                           title={`${timing.clock} — ${timing.state === 'overdue' ? 'past the promised time' : timing.state === 'watch' ? 'final stretch of the promised window' : 'comfortably inside the promised window'}`}
@@ -808,7 +809,7 @@ function OrdersListView({
                         <span className="text-xs text-navy-300">—</span>
                       )}
                     </td>
-                    <td className="hidden px-4 py-3 text-xs text-navy-300 lg:table-cell">
+                    <td className="px-4 py-3 text-xs text-navy-300">
                       {formatDate(o.pickupDate)}
                     </td>
                     <td className="px-4 py-3 text-right font-semibold text-navy">

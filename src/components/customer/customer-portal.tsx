@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useSession, signOut } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
+import { useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft,
   ShoppingBag,
@@ -17,6 +18,7 @@ import {
   Zap,
   Gift,
   Crown,
+  Store,
 } from 'lucide-react'
 import { useOrders, type ApiOrder } from '@/lib/hooks'
 import { formatNaira, formatDate } from '@/lib/types'
@@ -30,6 +32,7 @@ import { OrderDetailModal } from './order-detail-modal'
 import { InvoiceView } from './invoice-view'
 import { BookingWizard } from './booking-wizard'
 import { MembershipTab } from './membership-tab'
+import { StoreTab } from './store-tab'
 import { motion } from 'framer-motion'
 
 interface Props {
@@ -37,8 +40,8 @@ interface Props {
   initialHighlight?: string
   /** Phase 76: the prepopulated-renewal deep link (?renew=1&months=N) opens
    *  the portal straight on the Membership tab with the renewal card
-   *  preselected — the landing target of the monthly summary email CTA. */
-  initialTab?: 'active' | 'invoices' | 'membership'
+   *  preselected — the landing target of the monthly summary email buttons. */
+  initialTab?: 'active' | 'invoices' | 'membership' | 'store'
   renewPrefill?: number
   onBackToLanding?: () => void
 }
@@ -226,7 +229,7 @@ function CustomerDashboard({
   displayName: string
   displayEmail: string
   highlightedId?: string
-  initialTab?: 'active' | 'invoices' | 'membership'
+  initialTab?: 'active' | 'invoices' | 'membership' | 'store'
   renewPrefill?: number
   onSignOut: () => void
   onBackToLanding: () => void
@@ -237,8 +240,27 @@ function CustomerDashboard({
   // Fetch orders from the real API (already RBAC-filtered server-side to this
   // user) — cursor-paginated, older orders load on demand.
   const { data: orders, isLoading, hasMore, loadMore, isFetchingMore } = useOrders()
-  const [tab, setTab] = useState<'active' | 'invoices' | 'membership'>(
-    initialTab ?? 'active'
+  // Phase 77 — the Kozy Store: while the office keeps it dark this returns
+  // enabled:false + an empty list and the tab never mounts (not even a hint
+  // that a store exists). The landing page never carries the store at all.
+  const { data: store } = useQuery({
+    queryKey: ['kozy-store'],
+    queryFn: async () => {
+      const res = await fetch('/api/store')
+      if (!res.ok) return { enabled: false, products: [] }
+      const data = await res.json()
+      return {
+        enabled: Boolean(data?.enabled),
+        products: (data?.products ?? []) as { id: string; name: string; tagline: string | null; price: number }[],
+      }
+    },
+    staleTime: 60 * 1000,
+  })
+  const storeLive = Boolean(store?.enabled && store.products.length > 0)
+  const [tab, setTab] = useState<'active' | 'invoices' | 'membership' | 'store'>(
+    initialTab === 'store' && storeLive
+      ? 'store'
+      : (initialTab ?? 'active')
   )
   const [selected, setSelected] = useState<any | undefined>(
     highlightedId ? orders?.find((o) => o.id === highlightedId) : undefined
@@ -342,7 +364,7 @@ function CustomerDashboard({
         {/* Orders + membership — the tabs always render so a fresh Kozy
             Circle member can reach their Membership tab even with zero
             orders (the empty state lives inside the Active tab). */}
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'active' | 'invoices' | 'membership')}>
+        <Tabs value={tab} onValueChange={(v) => setTab(v as 'active' | 'invoices' | 'membership' | 'store')}>
           <TabsList className="bg-linen-200">
             <TabsTrigger value="active" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
               <Clock className="mr-1.5 h-3.5 w-3.5" /> Active ({activeOrders.length})
@@ -353,6 +375,11 @@ function CustomerDashboard({
             <TabsTrigger value="membership" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
               <Crown className="mr-1.5 h-3.5 w-3.5" /> Membership
             </TabsTrigger>
+            {storeLive && (
+              <TabsTrigger value="store" className="data-[state=active]:bg-emerald-700 data-[state=active]:text-white text-navy-300">
+                <Store className="mr-1.5 h-3.5 w-3.5" /> Store
+              </TabsTrigger>
+            )}
           </TabsList>
 
             <TabsContent value="active" className="mt-4">
@@ -411,6 +438,15 @@ function CustomerDashboard({
             <TabsContent value="membership" className="mt-4">
               <MembershipTab renewPrefill={renewPrefill} />
             </TabsContent>
+
+            {/* Phase 77 — the Kozy Store tab. Only reachable while the office
+                keeps the switch ON (the tab above is otherwise not rendered);
+                the deep link /portal?store=1 lands here. */}
+            {storeLive && (
+              <TabsContent value="store" className="mt-4">
+                <StoreTab products={store?.products ?? []} />
+              </TabsContent>
+            )}
         </Tabs>
       </div>
 

@@ -41,10 +41,6 @@ export async function GET() {
     delete (payload as Partial<KozyAppSettings>).adminAlertsNewSignup
     delete (payload as Partial<KozyAppSettings>).adminAlertsNewOrder
     delete (payload as Partial<KozyAppSettings>).adminAlertsPaymentPending
-    // Phase 76: the member-email test allowlist is office-only too (test
-    // inbox addresses are nobody else's business). The gate itself is
-    // enforced server-side in member-emails.ts regardless.
-    delete (payload as Partial<KozyAppSettings>).memberEmailTestAllowlist
   }
   return NextResponse.json({ settings: payload })
 }
@@ -165,31 +161,10 @@ export async function PUT(req: NextRequest) {
   pct('riderPerKmRate', 0, 10000)
   pct('riderFreeKm', 0, 100)
   pct('riderDistanceCap', 0, 100000)
-  // Phase 76 — member email automation: the arm toggle + the test allowlist.
-  // Allowlist entries are @domain or full addresses (the same matcher the
-  // sweep uses), capped at a sane length.
-  flag('memberEmailAutomation')
-  {
-    const v = p.memberEmailTestAllowlist
-    if (v !== undefined) {
-      if (typeof v !== 'string' || v.trim().length === 0 || v.trim().length > 300) {
-        errors.push('memberEmailTestAllowlist must be a comma-separated list of @domains or email addresses (max 300 characters)')
-      } else {
-        const parts = v
-          .split(/[,;\n]/)
-          .map((s) => s.trim().toLowerCase())
-          .filter(Boolean)
-        const bad = parts.filter((s) => !(s.startsWith('@') ? s.length > 3 : isValidEmail(s)))
-        if (parts.length === 0 || parts.length > 12 || bad.length > 0) {
-          errors.push(
-            'memberEmailTestAllowlist entries must be @domains (e.g. @woosh.dpdns.org) or complete email addresses, comma-separated'
-          )
-        } else {
-          ;(out as Record<string, unknown>).memberEmailTestAllowlist = parts.join(',')
-        }
-      }
-    }
-  }
+  // Phase 77 — the Kozy Store master switch. This PUT is ADMIN-only by
+  // construction (checked above), which is exactly the owner's directive:
+  // the store can only ever be activated by a super admin.
+  flag('storeEnabled')
 
   if (errors.length > 0) {
     return NextResponse.json({ error: errors.join('; ') }, { status: 400 })

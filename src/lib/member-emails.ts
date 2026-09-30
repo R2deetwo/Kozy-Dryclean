@@ -1,26 +1,27 @@
 // =============================================================================
-// Member email sweep (phase 76) — the automated member relationship
+// Member email sweep (phase 76 → 77) — the automated member relationship
 // =============================================================================
 // ONE daily pass, called by /api/cron/member-emails (vercel.json cron) and
 // reusable from the admin drill-down preview and the test harness:
 //
 //   Job 1 — MONTHLY SUMMARY: a member whose period ends in 2–4 days gets
-//   the month in review + the prepopulated renewal CTA (multi-month prepay
-//   options + the tier's extra bag/box upsell). Card members with
-//   auto-renew get the informational version. Sent once per cycle.
+//   the month in review + the prepopulated renewal buttons (next month vs
+//   the discounted 3-month prepay + the tier's extra bag/box upsell).
+//   Card members with auto-renew get the informational version.
+//   Sent once per cycle.
 //
 //   Job 2 — PAUSED: a member whose period ended within the last ~36 hours
 //   (PAST_DUE day 1) without a renewal gets the one-tap reactivation email.
 //   Sent once per lapse.
 //
-// THE SAFETY GATE (the owner's directive — never confuse a real member):
-//   Recipients must pass the test allowlist (default: @woosh.dpdns.org
-//   test accounts + practiceprosystems@gmail.com) OR the office must have
-//   armed the automation in Settings (memberEmailAutomation). Suppressed
-//   sends are logged + reported by the sweep but do NOT write the dedupe
-//   row, so the member still receives normally once the office arms it.
-//   EMAIL_OVERRIDE_TO (the phase-53 valve) stays the master override: when
-//   set, every send physically lands in that one inbox no matter what.
+// ALWAYS ON FOR MEMBERS (phase 77, the owner's directive): there is no
+//   admin toggle — real members receive their emails as a matter of course.
+//   The only guard is for OUR OWN testing: when MEMBER_EMAIL_TEST_MODE is
+//   set in the environment (local batteries, dry-run harnesses — never in
+//   production), recipients outside the test allowlist (the woosh test
+//   accounts + practiceprosystems@gmail.com) are suppressed and logged so
+//   a test can never reach a real member. EMAIL_OVERRIDE_TO stays the
+//   master valve it has always been.
 // =============================================================================
 
 import { db } from '@/lib/db'
@@ -34,6 +35,7 @@ import {
   notifyMembershipMonthlySummary,
   notifyMembershipPaused,
 } from '@/lib/notifications'
+import { getStoreProducts } from '@/lib/kozy-store'
 
 function baseUrl(): string {
   return (
@@ -51,6 +53,27 @@ const SUMMARY_WINDOW_DAYS = { min: 2, max: 4 }
  *  daily cron catches day 1 even if it fires up to 12h off-schedule. */
 const PAUSED_WINDOW_MS = 36 * 60 * 60 * 1000
 
+/** The test allowlist (phase 77): the woosh test world + the owner. Entries
+ *  are comma-separated; "@domain" matches any address there, a plain entry
+ *  must match the full address. Overridable via MEMBER_EMAIL_TEST_ALLOWLIST
+ *  — never via the admin UI (there is no toggle, per the owner's directive). */
+export const DEFAULT_MEMBER_EMAIL_TEST_ALLOWLIST =
+  '@woosh.dpdns.org,practiceprosystems@gmail.com'
+
+export function memberEmailTestAllowlist(): string {
+  return (
+    process.env.MEMBER_EMAIL_TEST_ALLOWLIST?.trim() ||
+    DEFAULT_MEMBER_EMAIL_TEST_ALLOWLIST
+  )
+}
+
+/** True when this process is explicitly running TESTS (local batteries,
+ *  harnesses). Never true in production — the env var simply is not set. */
+export function memberEmailTestMode(): boolean {
+  const v = process.env.MEMBER_EMAIL_TEST_MODE
+  return v === '1' || v === 'true' || v === 'yes'
+}
+
 export type SweepOutcome = 'SENT' | 'SUPPRESSED' | 'SKIPPED_SENT_ALREADY' | 'DRY_RUN'
 
 export interface SweepDetail {
@@ -65,7 +88,7 @@ export interface SweepDetail {
 export interface SweepResult {
   ranAt: string
   dryRun: boolean
-  automationArmed: boolean
+  testMode: boolean
   allowlist: string
   summaryCandidates: number
   pausedCandidates: number
@@ -187,7 +210,8 @@ async function markHandled(
  *  outcome. Shared by the sweep, the admin preview button, and the test
  *  harness so every surface renders the SAME email. `overrideTo` delivers
  *  the identical render to a different inbox (the admin preview) without
- *  touching the member. */
+ *  touching the member. The strategic Kozy Store line rides along only when
+ *  the office has switched the store on (phase 77). */
 export async function sendMonthlySummaryFor(
   sub: SubWithPlan,
   opts: { dry?: boolean; overrideTo?: string } = {}
@@ -224,6 +248,16 @@ export async function sendMonthlySummaryFor(
 
   if (opts.dry) return { outcome: 'DRY_RUN', subjectHint }
 
+  // The strategic store line — active products only, never more than two,
+  // only when the office has switched the store on.
+  const storeProducts = settings.storeEnabled
+    ? (await getStoreProducts({ activeOnly: true })).slice(0, 2).map((p) => ({
+        name: p.name,
+        tagline: p.tagline,
+        price: p.price,
+      }))
+    : []
+
   await notifyMembershipMonthlySummary({
     user: { name: sub.user!.name, email: opts.overrideTo ?? sub.user!.email },
     planName: sub.plan!.name,
@@ -239,6 +273,7 @@ export async function sendMonthlySummaryFor(
     renewalMode: cardAutomatic ? 'CARD_AUTOMATIC' : 'NEEDS_PAYMENT',
     renewUrl: memberRenewUrl(sub.id),
     contactPhone: settings.contactPhone,
+    storeProducts,
   })
   return { outcome: 'SENT', subjectHint }
 }
@@ -270,17 +305,16 @@ export async function sendPausedFor(
 }
 
 /** The daily pass. Safe to run any time: idempotent per cycle via the
- *  ledger, gated per recipient, and dry mode plans without sending. */
+ *  ledger. Member emails are ALWAYS ON (phase 77) — the only suppression
+ *  is our own test mode, which never exists in production. */
 export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise<SweepResult> {
-  const settings = await getAppSettings()
-  const armed = settings.memberEmailAutomation === true
-  const allowlist = settings.memberEmailTestAllowlist?.trim() ||
-    '@woosh.dpdns.org,practiceprosystems@gmail.com'
+  const testMode = memberEmailTestMode()
+  const allowlist = memberEmailTestAllowlist()
 
   const result: SweepResult = {
     ranAt: new Date().toISOString(),
     dryRun: Boolean(opts.dry),
-    automationArmed: armed,
+    testMode,
     allowlist,
     summaryCandidates: 0,
     pausedCandidates: 0,
@@ -325,7 +359,7 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
         })
         continue
       }
-      const safe = armed || isTestSafeRecipient(sub.user.email, allowlist)
+      const safe = !testMode || isTestSafeRecipient(sub.user.email, allowlist)
       if (!safe) {
         result.suppressed++
         result.details.push({
@@ -334,7 +368,7 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
           planName: sub.plan.name,
           outcome: 'SUPPRESSED',
           reason:
-            'Automation is OFF and the recipient is not on the test allowlist — logged only, will send once armed',
+            'Test mode is ON and this recipient is outside the test allowlist — logged only; production sends to every member',
         })
         continue
       }
@@ -369,7 +403,7 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
         })
         continue
       }
-      const safe = armed || isTestSafeRecipient(sub.user.email, allowlist)
+      const safe = !testMode || isTestSafeRecipient(sub.user.email, allowlist)
       if (!safe) {
         result.suppressed++
         result.details.push({
@@ -378,7 +412,7 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
           planName: sub.plan.name,
           outcome: 'SUPPRESSED',
           reason:
-            'Automation is OFF and the recipient is not on the test allowlist — logged only, will send once armed',
+            'Test mode is ON and this recipient is outside the test allowlist — logged only; production sends to every member',
         })
         continue
       }

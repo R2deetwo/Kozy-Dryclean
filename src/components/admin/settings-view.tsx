@@ -22,6 +22,7 @@ import {
   ShoppingBag,
   Receipt,
   Bike,
+  Store,
 } from 'lucide-react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { GARMENT_CATALOG, formatNaira, type KozyAppSettings } from '@/lib/types'
@@ -33,6 +34,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { toast } from '@/hooks/use-toast'
 import { cn } from '@/lib/utils'
 import { BranchesTab } from './branches-settings'
+import { StoreSettings } from './store-settings'
 
 const CATEGORY_LABELS: Record<string, string> = {
   Shirts: 'Shirts & Tops',
@@ -266,6 +268,9 @@ export function SettingsView() {
           </TabsTrigger>
           <TabsTrigger value="branches" className="data-[state=active]:bg-navy data-[state=active]:text-white">
             <MapPin className="mr-1.5 h-3.5 w-3.5" /> Branches
+          </TabsTrigger>
+          <TabsTrigger value="store" className="data-[state=active]:bg-navy data-[state=active]:text-white">
+            <Store className="mr-1.5 h-3.5 w-3.5" /> Store
           </TabsTrigger>
         </TabsList>
 
@@ -545,9 +550,11 @@ export function SettingsView() {
             </CardContent>
           </Card>
 
-          {/* ===== MEMBER EMAILS (phase 76) — the automated Kozy Circle
-              relationship: monthly summaries + paused/reactivation nudges,
-              behind a test-safe gate the office arms when ready. ===== */}
+          {/* ===== MEMBER EMAILS (phase 76 → 77) — the automated Kozy Circle
+              relationship: monthly summaries + paused/reactivation nudges.
+              ALWAYS ON for members (the owner's directive — no admin toggle
+              exists); test runs live inside the woosh test world + the
+              owner's inbox only. ===== */}
           <Card className="border-navy-100 shadow-navy">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 font-serif text-navy">
@@ -557,40 +564,26 @@ export function SettingsView() {
                 Every morning (09:00 WAT) the office system looks at every membership and emails
                 on its own: a member whose month ends in ~3 days gets the{' '}
                 <span className="font-medium text-navy">monthly summary</span> — washes used,
-                missed pickups, what&apos;s left — with their renewal button and the option to
-                prepay 3, 6 or 12 months; a member whose month ended without a renewal gets a
-                <span className="font-medium text-navy"> gentle reactivation email</span> the next morning.
-                Card members with auto-renew get the informational version.
+                missed pickups, what&apos;s left — with two renewal buttons: next month, or{' '}
+                <span className="font-medium text-navy">3 months at a saving</span>; a member whose
+                month ended without a renewal gets a{' '}
+                <span className="font-medium text-navy">gentle reactivation email</span> the next
+                morning. Card members with auto-renew get the informational version. These emails
+                are always on for members — there is nothing to arm.
               </p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <AlertToggle
-                icon={<Mail className="h-4 w-4" />}
-                title="Send member emails for real (arm the automation)"
-                description="While OFF, the sweep still runs every morning but only delivers to the test allowlist below — everyone else is logged as suppressed, never emailed. Flip this ON when you've seen the emails and want members receiving them."
-                checked={app?.memberEmailAutomation === true}
-                onChange={(v) => app && setApp({ memberEmailAutomation: v })}
-              />
-              <div>
-                <Label htmlFor="member-email-allowlist" className="text-xs uppercase tracking-wide text-navy-300">
-                  Test allowlist (who receives while the automation is OFF)
-                </Label>
-                <Input
-                  id="member-email-allowlist"
-                  value={app?.memberEmailTestAllowlist ?? ''}
-                  onChange={(e) => app && setApp({ memberEmailTestAllowlist: e.target.value })}
-                  placeholder="@woosh.dpdns.org,practiceprosystems@gmail.com"
-                  className="mt-1.5"
-                />
-                <p className="mt-1 text-xs text-navy-300">
-                  Comma-separated. An entry starting with @ allows a whole domain (test
-                  accounts); a full address allows that one inbox. Suppressed members still get
-                  their email normally the moment the automation is armed — nothing is lost by
-                  testing.
+            <CardContent className="space-y-3">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/50 p-3 text-xs leading-relaxed text-navy-300">
+                <p className="font-medium text-emerald-800">Always on, by design</p>
+                <p className="mt-1">
+                  Subscription emails are a standing service, not a campaign — members receive
+                  them the same way they receive their pickup reminders. When we run internal
+                  tests, sends are restricted to the test world (@woosh.dpdns.org test accounts
+                  + practiceprosystems@gmail.com) and never touch a real member.
                 </p>
               </div>
               <div className="rounded-lg border border-navy-100 bg-linen-50 p-3 text-xs leading-relaxed text-navy-300">
-                <p className="font-medium text-navy">Trying it out safely:</p>
+                <p className="font-medium text-navy">Seeing one safely:</p>
                 <p className="mt-1">
                   Memberships → any member&apos;s drill-down →{' '}
                   <span className="font-medium text-navy">Preview summary email</span> sends that
@@ -609,6 +602,13 @@ export function SettingsView() {
             default fallback, active state. Decides where new pickups land. */}
         <TabsContent value="branches" className="mt-4">
           <BranchesTab />
+        </TabsContent>
+
+        {/* STORE TAB (phase 77) — the whitelabelled hygiene add-ons. Ships
+            dark; only a super admin can light it up (this page is admin-only
+            in the nav and the settings PUT is ADMIN-only server-side). */}
+        <TabsContent value="store" className="mt-4">
+          <StoreSettings app={app ?? null} setApp={setApp} saving={saving} />
         </TabsContent>
 
         {/* PRICING TAB — server-backed: per-kg terms now save to AppSetting

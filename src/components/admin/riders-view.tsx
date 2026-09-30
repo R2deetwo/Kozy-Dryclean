@@ -712,8 +712,8 @@ export function RidersView() {
             </p>
           </div>
         ) : (
-          <div className="overflow-hidden rounded-xl border border-navy-100 bg-white">
-            <table className="w-full text-left text-xs">
+          <div className="nav-scroll overflow-x-auto rounded-xl border border-navy-100 bg-white">
+            <table className="w-full min-w-[720px] whitespace-nowrap text-left text-xs">
               <thead className="bg-linen-50 text-[10px] uppercase tracking-wide text-navy-300">
                 <tr>
                   <th className="px-3 py-2 font-semibold">Rider</th>

@@ -48,6 +48,7 @@ import {
   notifyMembershipRenewalReminder,
 } from '@/lib/notifications'
 import { sendMonthlySummaryFor, type SubWithPlan } from '@/lib/member-emails'
+import { renewalPriceFor } from '@/lib/types'
 
 async function guard(): Promise<ReturnType<typeof requireRole> | NextResponse | null> {
   try {
@@ -196,7 +197,7 @@ export async function PATCH(
         Number.isFinite(Number(body?.pricePaid)) &&
         Number(body?.pricePaid) >= 0
           ? Math.round(Number(body?.pricePaid))
-          : (sub.plan?.priceMonthly ?? 0) * months
+          : renewalPriceFor(sub.plan?.priceMonthly ?? 0, months)
       try {
         const updated = await activateOrRenewSubscription(id, {
           pricePaid: price,

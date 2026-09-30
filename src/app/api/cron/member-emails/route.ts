@@ -8,13 +8,15 @@
 //
 //   GET  ?dry=1  → plan the whole sweep WITHOUT sending (the office can see
 //                  exactly who would get what, and why)
-//   GET          → run the sweep for real (subject to the safety gate)
+//   GET          → run the sweep for real
 //   POST         → same as GET (body may carry { dry: true })
 //
-// The safety gate lives in src/lib/member-emails.ts: with the automation
-// disarmed, only allowlisted recipients (test accounts + the owner) actually
-// receive — everyone else is reported as SUPPRESSED. Flip the
-// memberEmailAutomation setting in admin Settings to arm real sends.
+// Phase 77: member emails are ALWAYS ON — real members receive their monthly
+// summaries and reactivation nudges as a matter of course (the owner's
+// directive; there is no admin toggle). The only suppression that can ever
+// appear is MEMBER_EMAIL_TEST_MODE, an env var that exists ONLY in our own
+// test harnesses (never in production) — it keeps test sends inside the
+// woosh test accounts + practiceprosystems@gmail.com.
 // =============================================================================
 
 import { NextResponse } from 'next/server'
