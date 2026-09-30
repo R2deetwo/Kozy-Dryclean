@@ -790,7 +790,7 @@ function SubscribersList() {
             for goodwill pricing if needed.
           </p>
           {/* The months being confirmed — next month or the discounted
-              3-month prepay; a claimed transfer prefills both */}
+              prepay ladder (3/6/12); a claimed transfer prefills both */}
           <div className="mt-3">
             <label className="text-xs font-medium text-navy">Months being paid</label>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -813,7 +813,7 @@ function SubscribersList() {
                     )}
                   >
                     {m === 1 ? '1 month' : `${m} months`}
-                    {m === 3 && mSaving > 0 && (
+                    {m > 1 && mSaving > 0 && (
                       <span
                         className={cn(
                           'ml-1.5 rounded-full px-1.5 py-px text-[9px] font-bold uppercase tracking-wide',
@@ -830,7 +830,7 @@ function SubscribersList() {
               })}
             </div>
             <p className="mt-1 text-[10px] text-navy-300">
-              3 months pre-fills the discounted prepay amount — the claimed transfer amount overrides it when one is open.
+              3, 6 and 12 months each pre-fill their discounted ladder amount — the claimed transfer amount overrides it when one is open.
             </p>
             {renewClaim && (
               <p className="mt-1.5 text-[11px] leading-relaxed text-gold-700">

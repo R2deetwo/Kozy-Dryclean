@@ -407,11 +407,14 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
         )}
       </Card>
 
-      {/* ===== The renewal card (phase 76) — the prepopulated payment place.
-          Shown when the month is close to its end (or already past it): the
-          same checkout as joining, but prefilled with THIS member's plan and
-          a month-count selector for the multi-month prepay. This is where
-          the monthly summary email's CTA lands. ===== */}
+      {/* ===== The payment card (phase 76 → 78) — the member's own payment
+          place. Near the month's end (or past it): the full prepopulated
+          renewal card with the whole standing ladder (1/3/6/12 months).
+          Mid-cycle: the same card collapses to ONE quiet line ("covered
+          through … · months stack · add months early") so a member can
+          always settle a quarter, half-year or year on their own — without
+          the page ever shouting at them. This is where the monthly summary
+          email's CTAs land. ===== */}
       {plan && membership && status !== 'PENDING_ACTIVATION' && status !== 'CANCELLED' && (
         <RenewalCard
           membership={membership}
@@ -566,16 +569,25 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
 }
 
 // =============================================================================
-// RenewalCard (phase 76 → 77) — the prepopulated payment place for members
+// RenewalCard (phase 76 → 78) — the member's own payment place
 // =============================================================================
-// Appears when the month is running out (≤10 days), when the member asked
-// for no auto-renew, or when the membership has paused (PAST_DUE/LAPSED):
-// the plan is already known (nothing to pick), the month-count selector is
-// the two payment options (next month / the discounted 3-month prepay —
-// green, with the saving spelled out), and the two payment paths mirror the
-// join checkout — card (Paystack redirect) or bank transfer (instructions +
-// reference; the office confirms in the drill-down). /portal?renew=1&months=N
-// (the email buttons) lands HERE with the month count preselected.
+// Near the end of a cycle (≤10 days), when the member asked for no
+// auto-renew, or when the membership has paused (PAST_DUE/LAPSED): the full
+// prepopulated renewal card — plan already known, the month-count selector
+// now the WHOLE standing ladder (1 / 3 / 6 / 12 months, each discounted rung
+// in green with its saving spelled out, per-month figure at the deeper
+// rungs), and the two payment paths mirroring the join checkout — card
+// (Paystack redirect) or bank transfer (instructions + reference; the
+// office confirms in the drill-down).
+//
+// MID-CYCLE (phase 78): the same card becomes the quiet "cover more months"
+// place — collapsed to ONE calm line by default (covered-through date +
+// "months stack, you never lose a day" + an Add-months button). Never a
+// popup, never mid-page shouting: it is simply THERE whenever a member
+// wants to settle a quarter, a half-year or a year on their own — exactly
+// as the owner asked. /portal?renew=1&months=N (the email buttons and the
+// ladder line's "every option lives in your portal") lands HERE with the
+// month count preselected, expanding the card even mid-cycle.
 // =============================================================================
 function RenewalCard({
   membership,
@@ -593,6 +605,7 @@ function RenewalCard({
       ? Number(prefillMonths)
       : 1
   )
+  const [earlyOpen, setEarlyOpen] = useState(false)
   const [appSettings, setAppSettings] = useState<KozyAppSettings | null>(null)
   const [busy, setBusy] = useState<'card' | 'transfer' | null>(null)
   const [transfer, setTransfer] = useState<{
@@ -623,11 +636,39 @@ function RenewalCard({
     ? Math.ceil((periodEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
     : null
   const paused = status === 'PAST_DUE' || status === 'LAPSED'
-  // Only meaningful when the month is actually running out (or already has):
-  // a mid-cycle card would just be noise.
+  // The full card when the month is actually running out (or already has);
+  // mid-cycle, the quiet collapsed card carries the same machinery.
   const needsRenewal =
     paused || membership.cancelAtPeriodEnd || (daysLeft !== null && daysLeft <= 10)
-  if (!needsRenewal) return null
+
+  // ----- The quiet mid-cycle card: one calm line + an expand button -----
+  // A deep link (?renew=1&months=N) expands it straight away.
+  if (!needsRenewal && !earlyOpen && prefillMonths === undefined) {
+    return (
+      <Card className="border-navy-100 bg-white" id="kozy-renewal">
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="max-w-md text-sm leading-relaxed text-navy-300">
+              <span className="font-semibold text-navy">
+                Covered through {periodEnd ? formatDate(periodEnd.toISOString()) : 'your current month'}
+              </span>
+              <span className="mx-2 text-navy-200">·</span>
+              Months added now simply stack onto that date — you never lose a day — and the
+              longer you cover, the kinder the rate.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => setEarlyOpen(true)}
+              className="rounded-full border-navy-200 font-semibold text-navy hover:bg-navy hover:text-white"
+            >
+              Add months early
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
 
   const price = renewalPriceFor(plan.priceMonthly, months)
   const saving = renewalSavingFor(plan.priceMonthly, months)
@@ -684,14 +725,20 @@ function RenewalCard({
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600">
-              {paused ? 'Your membership has paused' : 'Your next month'}
+              {paused
+                ? 'Your membership has paused'
+                : needsRenewal
+                  ? 'Your next month'
+                  : 'Cover more months'}
             </p>
             <p className="mt-1 font-serif text-xl font-semibold text-navy">
               {paused
                 ? `Reactivate the ${plan.name}`
                 : membership.cancelAtPeriodEnd
                   ? `Keep the ${plan.name} going`
-                  : `Renew the ${plan.name}`}
+                  : needsRenewal
+                    ? `Renew the ${plan.name}`
+                    : `Add months to the ${plan.name}`}
             </p>
           </div>
           {paused && (
@@ -706,10 +753,13 @@ function RenewalCard({
             ? `Your ${plan.includedUnits} × ${plan.unitName} pickups restart the moment you renew — your ${plan.unitName} is still yours and your history is intact.`
             : membership.cancelAtPeriodEnd
               ? `You asked us not to auto-renew — the month ends ${periodEnd ? formatDate(periodEnd.toISOString()) : 'soon'}. Change your mind in one tap: renew below and everything continues as before.`
-              : `Your month ends ${periodEnd ? formatDate(periodEnd.toISOString()) : 'soon'} — renew now and your rider keeps collecting at your usual window without a pause.`}
+              : needsRenewal
+                ? `Your month ends ${periodEnd ? formatDate(periodEnd.toISOString()) : 'soon'} — renew now and your rider keeps collecting at your usual window without a pause.`
+                : `You're covered through ${periodEnd ? formatDate(periodEnd.toISOString()) : 'your current month'}. Months added now simply stack onto that date — you never lose a day.`}
         </p>
 
-        {/* The payment options — next month vs the discounted 3-month prepay */}
+        {/* The payment options — the standing ladder: next month, or a
+            discounted 3 / 6 / 12-month cover, every discounted rung green */}
         <div className="mt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
             How many months?
@@ -724,7 +774,7 @@ function RenewalCard({
                   type="button"
                   onClick={() => setMonths(m)}
                   className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                    selected && m === 3
+                    selected && m > 1
                       ? 'border-emerald-400 bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-sm'
                       : selected
                         ? 'border-gold-400 bg-gold-gradient text-navy shadow-sm'
@@ -734,12 +784,12 @@ function RenewalCard({
                   {m === 1 ? '1 month' : `${m} months`}
                   <span
                     className={`ml-1.5 text-xs font-normal ${
-                      selected && m === 3 ? 'text-emerald-50' : 'opacity-80'
+                      selected && m > 1 ? 'text-emerald-50' : 'opacity-80'
                     }`}
                   >
                     {formatNaira(renewalPriceFor(plan.priceMonthly, m))}
                   </span>
-                  {m === 3 && mSaving > 0 && (
+                  {m > 1 && mSaving > 0 && (
                     <span
                       className={`ml-1.5 rounded-full px-1.5 py-px text-[10px] font-bold uppercase tracking-wide ${
                         selected
@@ -754,10 +804,11 @@ function RenewalCard({
               )
             })}
           </div>
-          {months === 3 && saving > 0 && (
+          {months > 1 && saving > 0 && (
             <p className="mt-2 text-xs text-navy-300">
-              One payment of <strong className="text-navy">{formatNaira(price)}</strong> covers your next 3 months —
-              <strong className="text-emerald-700"> {formatNaira(saving)} less</strong> than paying month by month.
+              One payment of <strong className="text-navy">{formatNaira(price)}</strong> covers your next {months} months —
+              <strong className="text-emerald-700"> {formatNaira(saving)} less</strong> than paying month by month
+              {months >= 6 ? ` (${formatNaira(Math.round(price / months))} a month)` : ''}.
             </p>
           )}
         </div>
@@ -825,6 +876,9 @@ function RenewalCard({
         )}
 
         <p className="mt-4 text-xs leading-relaxed text-navy-300">
+          The longer you cover, the kinder the rate — always.
+        </p>
+        <p className="mt-2 text-xs leading-relaxed text-navy-300">
           Need a second {plan.unitName} for the busy weeks? Reply to your summary email or call{' '}
           {appSettings?.contactPhone ?? 'the office'} — we&apos;ll add it to your renewal.
         </p>

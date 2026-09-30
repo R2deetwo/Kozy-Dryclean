@@ -271,20 +271,24 @@ async function handleMembershipChargeSuccess(data: any) {
     return NextResponse.json({ ok: true, message: 'Subscription not found' })
   }
 
-  // Phase 76 → 77: how many cycles does this charge cover? Prefer the months
+  // Phase 76 → 78: how many cycles does this charge cover? Prefer the months
   // we stamped into the metadata at initialize; fall back to the amount.
-  // The fallback is discount-aware: a 3-month prepay charges the DISCOUNTED
-  // price (renewalPriceFor — e.g. ₦85,000 on a ₦30,000 plan), so plain
-  // division misreads it as 2.83 months. Match the tier's actual price
-  // points first, then fall back to rounding.
+  // The fallback is ladder-aware: a prepay charges the DISCOUNTED price
+  // (renewalPriceFor — e.g. ₦85,000 on a ₦30,000 plan for 3 months,
+  // ₦166,500 for 6, ₦324,000 for 12), so plain division misreads it. Match
+  // the tier's actual price points first (deepest cover first, so no
+  // rounded amount can shadow a deeper rung), then fall back to rounding.
   const planForMonths = await db.subscriptionPlan.findUnique({ where: { id: sub.planId } })
   const metaMonths = Number((data as any)?.metadata?.months)
   let inferredMonths = 1
   if (planForMonths && planForMonths.priceMonthly > 0 && amount > 0) {
-    if (amount === renewalPriceFor(planForMonths.priceMonthly, 3)) {
-      inferredMonths = 3
-    } else if (amount === planForMonths.priceMonthly) {
-      inferredMonths = 1
+    const ladderMatch = [12, 6, 3, 1].find(
+      (m) =>
+        amount ===
+        (m === 1 ? planForMonths.priceMonthly : renewalPriceFor(planForMonths.priceMonthly, m))
+    )
+    if (ladderMatch) {
+      inferredMonths = ladderMatch
     } else {
       // Goodwill/custom amounts — nearest whole month still reads best.
       inferredMonths = Math.max(1, Math.round(amount / planForMonths.priceMonthly))
@@ -302,13 +306,21 @@ async function handleMembershipChargeSuccess(data: any) {
   // activation. The period must EXTEND by exactly the charged cycles —
   // never re-activate from scratch on an active membership unless the
   // period has actually lapsed. A multi-month charge is only "already
-  // processed" when the period already covers those months.
+  // processed" when the period ALREADY COVERS those months (coveredMs,
+  // with a 15-day grace) — NOT merely "the month is fresh". Phase 78 fix:
+  // the old Math.min(29d, coveredMs) threshold collapsed to 29 days for
+  // every multi-month charge, so a member with a month left who prepaid
+  // 3/6/12 months had their payment silently ignored — the opposite of
+  // "months added early stack onto the end". Early prepays now extend;
+  // duplicates stay ignored (a replay sees the period already covering the
+  // charged months); monthly duplicates stay ignored via their own
+  // months=1 coveredMs (15 days).
   const now = Date.now()
   const periodEndMs = sub.periodEnd ? new Date(sub.periodEnd).getTime() : 0
   const dayMs = 24 * 60 * 60 * 1000
   const coveredMs = months * 30 * dayMs - 15 * dayMs
   const activeAndFresh =
-    sub.status === 'ACTIVE' && periodEndMs - now > Math.min(29 * dayMs, coveredMs)
+    sub.status === 'ACTIVE' && periodEndMs - now > coveredMs
   if (activeAndFresh) {
     // Still record the recurring codes if this is the first time we see them.
     if (subCode && !sub.paystackSubscriptionCode) {

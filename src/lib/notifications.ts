@@ -2153,7 +2153,12 @@ function storeStrip(
 /** The monthly usage summary — the retention email. Lands ~3 days before the
  *  period ends: the month in review + the prepopulated renewal buttons (next
  *  month vs the discounted 3-month prepay, phase 77) + the tier-appropriate
- *  bag/box upsell + the strategic Kozy Store strip when the store is lit. */
+ *  bag/box upsell + the strategic Kozy Store strip when the store is lit.
+ *  Phase 78: `nudge` carries the ONE behaviour-targeted line (an upgrade for
+ *  power users / a deeper prepay rung for proven pre-payers) picked by
+ *  pickMembershipNudge; when it is absent the quiet standing ladder line
+ *  renders instead, so the deeper options are always findable but never
+ *  doubled up. Exactly one of the two ever appears. */
 export async function notifyMembershipMonthlySummary(opts: {
   user: { name: string; email: string }
   planName: string
@@ -2175,6 +2180,10 @@ export async function notifyMembershipMonthlySummary(opts: {
   /** Phase 77 — the Kozy Store strip (already gated + capped by the caller;
    *  empty array renders nothing). */
   storeProducts?: { name: string; tagline?: string | null; price: number }[]
+  /** Phase 78 — the one smart-nudge line (already frequency-capped and
+   *  behaviour-picked by the caller; undefined renders the quiet standing
+   *  ladder line instead). */
+  nudge?: { kind: 'UPGRADE' | 'PREPAY'; line: string }
 }): Promise<void> {
   try {
     const firstName = opts.user.name.split(' ')[0]
@@ -2188,6 +2197,17 @@ export async function notifyMembershipMonthlySummary(opts: {
     })
     const threeMonthPrice = renewalPriceFor(opts.priceMonthly, 3)
     const threeMonthSaving = renewalSavingFor(opts.priceMonthly, 3)
+    const sixMonthPrice = renewalPriceFor(opts.priceMonthly, 6)
+    const yearPrice = renewalPriceFor(opts.priceMonthly, 12)
+    const yearPerMonth = Math.round(yearPrice / 12)
+    // The standing ladder line — permanent policy, never a promo. Renders
+    // only when the behavioural nudge did not (never both).
+    const ladderLine = `Covering longer saves more, always — 6 months is ${formatNaira(sixMonthPrice)} and a full year ${formatNaira(yearPrice)} (${formatNaira(yearPerMonth)} a month). Every option lives in <a href="${opts.renewUrl}" style="color: #1F7A43; font-weight: 600; text-decoration: underline; text-decoration-color: #1F7A43;">your portal</a>.`
+    // The one behaviour-targeted line (quiet by design: muted text, no
+    // button, no urgency — a suggestion, not a pitch).
+    const nudgeHtml = opts.nudge
+      ? `<p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">${opts.nudge.line}</p>`
+      : ''
 
     // ----- The month in review -----
     const rows = [
@@ -2233,7 +2253,7 @@ export async function notifyMembershipMonthlySummary(opts: {
         <strong style="color:#0A192F;">${fmtDate(opts.periodEnd)}</strong>. Nothing to do, nothing to chase.
       </p>
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
-        Rather skip the monthly charges? <a href="${opts.renewUrl}&months=3" style="color: #1F7A43; font-weight: 600; text-decoration: underline; text-decoration-color: #1F7A43;">Cover 3 months in one payment of ${formatNaira(threeMonthPrice)}</a> — ${formatNaira(threeMonthSaving)} less than paying month by month.
+        Rather settle it less often? One payment covers longer at a kinder rate — 3 months ${formatNaira(threeMonthPrice)}, 6 months ${formatNaira(sixMonthPrice)}, a year ${formatNaira(yearPrice)} — from <a href="${opts.renewUrl}" style="color: #1F7A43; font-weight: 600; text-decoration: underline; text-decoration-color: #1F7A43;">your portal</a> whenever you like.
       </p>`
       cta = { label: 'View my membership', url: opts.renewUrl }
     } else {
@@ -2270,6 +2290,15 @@ export async function notifyMembershipMonthlySummary(opts: {
       </p>
       <table style="width: 100%; border-collapse: collapse; font-size: 14px;">${rows}</table>
       ${renewalHtml}
+      ${
+        // Card members: the informational block above already carries the
+        // ladder sentence — only a behavioural nudge may add a line, never
+        // the standing ladder (no member sees the ladder twice).
+        opts.renewalMode === 'CARD_AUTOMATIC'
+          ? nudgeHtml
+          : nudgeHtml ||
+            `<p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">${ladderLine}</p>`
+      }
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
         Running out of room on busy weeks? A <strong style="color:#0A192F;">second ${opts.unitName}</strong> can ride along with your renewal —
         reply to this email or call <strong style="color:#0A192F;">${opts.contactPhone}</strong> and the office will set it up.
@@ -2320,6 +2349,7 @@ export async function notifyMembershipPaused(opts: {
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
         Coming back for longer? Cover 3 months in one payment of <strong style="color:#0A192F;">${formatNaira(threeMonthPrice)}</strong> —
         <strong style="color:#1F7A43;">${formatNaira(threeMonthSaving)} less</strong> than paying month by month.
+        6-month and year-long covers save more still; your portal shows every option.
       </p>
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
         Prefer to talk it through? Call <strong style="color:#0A192F;">${opts.contactPhone}</strong> — the office is glad to help.

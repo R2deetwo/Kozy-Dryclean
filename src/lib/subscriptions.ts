@@ -16,7 +16,13 @@
 // =============================================================================
 
 import { db } from '@/lib/db'
-import type { MembershipPlan, Membership } from '@/lib/types'
+import {
+  formatNaira,
+  renewalPriceFor,
+  renewalSavingFor,
+  type MembershipPlan,
+  type Membership,
+} from '@/lib/types'
 
 // ----- Plan defaults (phase 66 → 67: the owner's ladder, retold in plain words) -----
 // Three plans sized by KIT (bag → box → the whole home). Couture, designer
@@ -884,4 +890,193 @@ export async function getSubscriptionActivity(subscriptionId: string, opts?: { e
       createdAt: e.createdAt.toISOString(),
     })),
   }
+}
+
+// =============================================================================
+// THE SMART NUDGE (phase 78) — behaviour-targeted upselling, done politely
+// =============================================================================
+// ONE quiet line, at most, riding inside an email that is already being sent
+// for a functional reason (the monthly summary). Never a standalone mail,
+// never a popup, never a countdown. The member's own behaviour picks the
+// line — or picks silence:
+//
+//   UPGRADE  for the power user (allowance exhausted + extras on top, and a
+//            higher tier exists) — framed as right-sizing, not selling.
+//   PREPAY   for the proven loyalist who already prepays — shown the NEXT
+//            rung of the ladder only (3→6, 6→12). A member who has never
+//            prepaid gets NO prepay nudge: the email's green 3-month button
+//            and the quiet ladder line already tell that story.
+//   silence  for everyone we don't yet know (first cycle), everyone whose
+//            membership is struggling (missed pickups, barely-used, paused),
+//            and anyone nudged recently. Silence, done well, is also service.
+//
+// Frequency governance (the anti-harassment constitution), enforced from the
+// append-only ledger (UPSELL_SHOWN rows written by the sweep after a real
+// send): at most one nudge line per email (by construction), at most one
+// nudge of any kind per 30 days, at most one of the same kind per 60 days,
+// and after the same kind has been shown twice without the member acting on
+// it, we go quiet on that kind for a further 90 days.
+// =============================================================================
+
+export type NudgeKind = 'UPGRADE' | 'PREPAY'
+
+export interface MembershipNudge {
+  kind: NudgeKind
+  /** PREPAY: the rung being shown (6 or 12 — never 3, the button covers it). */
+  months?: number
+  /** The complete, ready-to-render line (numbers baked in). */
+  line: string
+  /** Why this member, in one sentence — for the ledger row + the office. */
+  reason: string
+}
+
+/** The caps, in days. Same constants the sweep enforces when it writes the
+ *  UPSELL_SHOWN ledger rows. */
+export const NUDGE_CAPS = { anyKindDays: 30, sameKindDays: 60, quietAfterShown: 2, quietDays: 90 } as const
+
+function parseMeta(meta: string | null): Record<string, unknown> {
+  try {
+    return JSON.parse(meta ?? '{}')
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * Pick the one nudge this member should see — or none. Pure: every input is
+ * data the sweep already holds (the ledger + the health computation), so the
+ * choice is testable and identical everywhere it runs.
+ */
+export function pickMembershipNudge(input: {
+  sub: { unitsUsed: number; extraUnitsUsed: number }
+  plan: { code: string; family: string; priceMonthly: number; includedUnits: number; unitName: string }
+  health: { state: string; usageRatio: number | null }
+  /** CYCLE_START rows this membership has produced (≥2 = a renewer). */
+  renewalCount: number
+  /** The deepest cover the member has EVER paid for (1 = monthly only). */
+  maxPrepaidMonths: number
+  /** This membership's ledger rows, for the frequency caps. */
+  events: Array<{ kind: string; meta: string | null; createdAt: Date | string }>
+  /** The next tier up in the same family, or null (top tier / SHOES). */
+  higherPlan: {
+    code: string
+    name: string
+    priceMonthly: number
+    includedUnits: number
+    unitName: string
+    duvetsPerQuarter: number
+  } | null
+}): MembershipNudge | null {
+  const { sub, plan, health, renewalCount, maxPrepaidMonths, events, higherPlan } = input
+
+  // ----- Suppression: we do not upsell strangers or struggling members -----
+  if (renewalCount < 2) return null // first cycle — we don't know them yet
+  const struggling = ['MISSED_PICKUP', 'UNUSED_RISK', 'NO_USAGE_DATA', 'INACTIVE']
+  if (struggling.includes(health.state)) return null
+  if (health.usageRatio === null) return null
+
+  // ----- Frequency caps from the ledger -----
+  const shown = events
+    .filter((e) => e.kind === 'UPSELL_SHOWN')
+    .map((e) => {
+      const meta = parseMeta(e.meta)
+      return {
+        kind: String(meta.kind ?? '') as NudgeKind,
+        months: Number(meta.months ?? 0) || undefined,
+        at: new Date(e.createdAt).getTime(),
+      }
+    })
+    .sort((a, b) => b.at - a.at)
+  const now = Date.now()
+  const DAY = 24 * 60 * 60 * 1000
+  if (shown.some((s) => now - s.at < NUDGE_CAPS.anyKindDays * DAY)) return null
+  const countSameKind = (kind: NudgeKind) => shown.filter((s) => s.kind === kind).length
+
+  // ----- The upgrade path: allowance exhausted + extras on top -----
+  const extras = Math.max(0, sub.extraUnitsUsed)
+  const powerUser =
+    health.state === 'OVER_QUOTA' || (health.usageRatio >= 0.9 && extras >= 1)
+  if (powerUser && higherPlan) {
+    if (now - (shown.find((s) => s.kind === 'UPGRADE')?.at ?? 0) < NUDGE_CAPS.sameKindDays * DAY) return null
+    if (countSameKind('UPGRADE') >= NUDGE_CAPS.quietAfterShown) return null
+    const duvetLine = higherPlan.duvetsPerQuarter > 0 ? ` plus ${higherPlan.duvetsPerQuarter} duvets a quarter at no extra cost` : ''
+    return {
+      kind: 'UPGRADE',
+      line: `When your weeks run this full, the next plan up tends to fit better: ${higherPlan.name} is ${formatNaira(higherPlan.priceMonthly)} a month for ${higherPlan.includedUnits} × ${higherPlan.unitName}${duvetLine}. Reply to this email or call the office and we'll move you up from your next cycle — whenever it suits you.`,
+      reason: `Used ${sub.unitsUsed}/${plan.includedUnits} ${plan.unitName}s with ${extras} extra${extras === 1 ? '' : 's'} on top — allowance outgrown`,
+    }
+  }
+
+  // ----- The prepay path: escalate ONLY members who already prepay -----
+  if (maxPrepaidMonths >= 6) {
+    if (countSameKind('PREPAY') >= NUDGE_CAPS.quietAfterShown) return null
+    const yearPrice = renewalPriceFor(plan.priceMonthly, 12)
+    const yearPerMonth = Math.round(yearPrice / 12)
+    return {
+      kind: 'PREPAY',
+      months: 12,
+      line: `A year with Kozy is one payment of ${formatNaira(yearPrice)} — ${formatNaira(yearPerMonth)} a month, our kindest rate, and nothing to think about for twelve cycles. Whenever it suits you, it's waiting in your portal.`,
+      reason: 'Has covered 6 months at a time before — shown the year rung',
+    }
+  }
+  if (maxPrepaidMonths >= 3) {
+    if (countSameKind('PREPAY') >= NUDGE_CAPS.quietAfterShown) return null
+    const sixPrice = renewalPriceFor(plan.priceMonthly, 6)
+    const sixSaving = renewalSavingFor(plan.priceMonthly, 6)
+    const sixPerMonth = Math.round(sixPrice / 6)
+    return {
+      kind: 'PREPAY',
+      months: 6,
+      line: `You've been covering 3 months at a time — thank you. If it ever suits you to think about laundry even less: 6 months is one payment of ${formatNaira(sixPrice)} (${formatNaira(sixPerMonth)} a month, ${formatNaira(sixSaving)} kinder than monthly). It's in your portal whenever you like.`,
+      reason: 'Has covered 3 months at a time before — shown the 6-month rung',
+    }
+  }
+  // Never prepaid → the email's own green button + the quiet ladder line
+  // already carry the story. No behavioural line for them.
+  return null
+}
+
+/**
+ * Gather the ledger facts the nudge needs (renewal count, deepest cover,
+ * upsell history) in ONE query — called by the sweep per candidate member.
+ */
+export async function nudgeFacts(subscriptionId: string): Promise<{
+  renewalCount: number
+  maxPrepaidMonths: number
+  events: Array<{ kind: string; meta: string | null; createdAt: Date }>
+}> {
+  const rows = await db.subscriptionEvent.findMany({
+    where: { subscriptionId, kind: { in: ['CYCLE_START', 'RENEWAL_INTENT', 'UPSELL_SHOWN'] } },
+    select: { kind: true, meta: true, createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  })
+  let renewalCount = 0
+  let maxPrepaidMonths = 1
+  for (const r of rows) {
+    const meta = parseMeta(r.meta)
+    if (r.kind === 'CYCLE_START') {
+      renewalCount++
+      const months = Math.round(Number(meta.cycles ?? meta.months ?? 1)) || 1
+      if (months >= 1 && months <= 12) maxPrepaidMonths = Math.max(maxPrepaidMonths, months)
+    } else if (r.kind === 'RENEWAL_INTENT') {
+      const months = Math.round(Number(meta.months ?? 1)) || 1
+      if (months >= 1 && months <= 12) maxPrepaidMonths = Math.max(maxPrepaidMonths, months)
+    }
+  }
+  return { renewalCount, maxPrepaidMonths, events: rows }
+}
+
+/**
+ * The next plan up in the same family (KIT only — the Shoe Club composes on
+ * top of tiers and is never an "upgrade destination"). Null at the top.
+ */
+export async function higherPlanFor(plan: { code: string; family: string }): Promise<MembershipPlan | null> {
+  if (plan.family !== 'KIT') return null
+  const plans = await getPlans(false, 'KIT')
+  const current = plans.find((p) => p.code === plan.code)
+  if (!current) return null
+  const higher = plans
+    .filter((p) => p.priceMonthly > current.priceMonthly)
+    .sort((a, b) => a.priceMonthly - b.priceMonthly)[0]
+  return higher ?? null
 }

@@ -30,6 +30,10 @@ import {
   effectiveStatus,
   effectiveUsage,
   cycleHealth,
+  pickMembershipNudge,
+  nudgeFacts,
+  higherPlanFor,
+  recordSubscriptionEvent,
 } from '@/lib/subscriptions'
 import {
   notifyMembershipMonthlySummary,
@@ -210,12 +214,20 @@ async function markHandled(
  *  outcome. Shared by the sweep, the admin preview button, and the test
  *  harness so every surface renders the SAME email. `overrideTo` delivers
  *  the identical render to a different inbox (the admin preview) without
- *  touching the member. The strategic Kozy Store line rides along only when
- *  the office has switched the store on (phase 77). */
+ *  touching the member — and without writing the UPSELL_SHOWN ledger row
+ *  (only the sweep's real sends count against the frequency caps; a preview
+ *  must never spend a member's nudge budget). The strategic Kozy Store line
+ *  rides along only when the office has switched the store on (phase 77),
+ *  and the ONE behaviour-targeted nudge line rides along only when the
+ *  member's own behaviour picked one (phase 78). */
 export async function sendMonthlySummaryFor(
   sub: SubWithPlan,
   opts: { dry?: boolean; overrideTo?: string } = {}
-): Promise<{ outcome: SweepOutcome; subjectHint: string }> {
+): Promise<{
+  outcome: SweepOutcome
+  subjectHint: string
+  nudge?: { kind: 'UPGRADE' | 'PREPAY'; months?: number; reason: string }
+}> {
   const settings = await getAppSettings()
   const since = sub.periodStart ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
   const orders = await db.order.findMany({
@@ -246,7 +258,46 @@ export async function sendMonthlySummaryFor(
     ? `Your ${monthLabel} with Kozy — ${usage.unitsUsed} of ${sub.plan!.includedUnits} washes, card renews in ${days} days`
     : `Your ${monthLabel} with Kozy — ${usage.unitsUsed} of ${sub.plan!.includedUnits} washes, ${days} days to renew`
 
-  if (opts.dry) return { outcome: 'DRY_RUN', subjectHint }
+  // ----- Phase 78: the one behaviour-targeted nudge line -----
+  // Computed BEFORE the dry-run return so a dry run REPORTS the line it
+  // would carry (the office can see the targeting without sending).
+  const facts = await nudgeFacts(sub.id)
+  const higher = await higherPlanFor({ code: sub.plan!.code, family: 'KIT' })
+  let picked = pickMembershipNudge({
+    sub: { unitsUsed: usage.unitsUsed, extraUnitsUsed: usage.extraUnitsUsed },
+    plan: {
+      code: sub.plan!.code,
+      family: 'KIT',
+      priceMonthly: sub.plan!.priceMonthly,
+      includedUnits: sub.plan!.includedUnits,
+      unitName: sub.plan!.unitName,
+    },
+    health: { state: health.state, usageRatio: health.usageRatio },
+    renewalCount: facts.renewalCount,
+    maxPrepaidMonths: facts.maxPrepaidMonths,
+    events: facts.events,
+    higherPlan: higher
+      ? {
+          code: higher.code,
+          name: higher.name,
+          priceMonthly: higher.priceMonthly,
+          includedUnits: higher.includedUnits,
+          unitName: higher.unitName,
+          duvetsPerQuarter: higher.duvetsPerQuarter,
+        }
+      : null,
+  })
+  // Card members: the informational block + the ladder line already cover
+  // prepay; their behavioural targeting is upgrades only (usage-driven).
+  if (cardAutomatic && picked?.kind === 'PREPAY') picked = null
+
+  if (opts.dry) {
+    return {
+      outcome: 'DRY_RUN',
+      subjectHint,
+      ...(picked ? { nudge: { kind: picked.kind, months: picked.months, reason: picked.reason } } : {}),
+    }
+  }
 
   // The strategic store line — active products only, never more than two,
   // only when the office has switched the store on.
@@ -274,8 +325,13 @@ export async function sendMonthlySummaryFor(
     renewUrl: memberRenewUrl(sub.id),
     contactPhone: settings.contactPhone,
     storeProducts,
+    ...(picked ? { nudge: { kind: picked.kind, line: picked.line } } : {}),
   })
-  return { outcome: 'SENT', subjectHint }
+  return {
+    outcome: 'SENT',
+    subjectHint,
+    ...(picked ? { nudge: { kind: picked.kind, months: picked.months, reason: picked.reason } } : {}),
+  }
 }
 
 /** Compute + send the paused/reactivation email for one subscription. */
@@ -372,10 +428,32 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
         })
         continue
       }
-      const { outcome, subjectHint } = await sendMonthlySummaryFor(sub, opts)
+      const { outcome, subjectHint, nudge } = await sendMonthlySummaryFor(sub, opts)
       if (outcome === 'SENT') {
         await markHandled(sub.id, 'SUMMARY_SENT', periodEnd)
         result.sent++
+        // Phase 78: record the nudge the member actually received — the
+        // append-only ledger IS the frequency governor (caps + dampening
+        // read these rows back on every future pick).
+        if (nudge) {
+          await recordSubscriptionEvent({
+            subscriptionId: sub.id,
+            kind: 'UPSELL_SHOWN',
+            delta: 0,
+            count: 0,
+            meta: {
+              kind: nudge.kind,
+              ...(nudge.months ? { months: nudge.months } : {}),
+              reason: nudge.reason,
+              periodEnd: periodEnd.toISOString(),
+              automation: true,
+            },
+            note:
+              nudge.kind === 'UPGRADE'
+                ? 'Smart nudge emailed: the next tier up'
+                : `Smart nudge emailed: ${nudge.months ?? 3}-month cover`,
+          })
+        }
       }
       result.details.push({
         job: 'summary',
@@ -384,6 +462,9 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
         outcome,
         reason: opts.dry ? 'Dry run — planned only' : 'Summary emailed',
         subjectHint,
+        // Phase 78: which nudge line this email carries (absent = the quiet
+        // standing ladder line renders instead).
+        ...(nudge ? { nudge: `${nudge.kind}${nudge.months ? `-${nudge.months}` : ''}` } : {}),
       })
       continue
     }

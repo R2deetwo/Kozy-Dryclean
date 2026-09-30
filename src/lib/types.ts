@@ -725,13 +725,14 @@ export const COMPANY_BANK = {
 }
 
 // =====================================================
-// MEMBERSHIP RENEWALS (phase 76 → 77)
+// MEMBERSHIP RENEWALS (phase 76 → 78 — the Kozy Ladder)
 // =====================================================
-/** The month counts a member can prepay at the point of renewal — the
- *  owner's "pay for multiple months at the point of payment". 1 = the
- *  normal monthly renewal (card members keep their auto-charge); 3 = the
- *  prepay incentive (a real saving, phase 77). */
-export const RENEWAL_MONTH_CHOICES = [1, 3] as const
+/** The month counts a member can prepay, at renewal or any time from their
+ *  portal. 1 = the normal monthly renewal (card members keep their
+ *  auto-charge); 3/6/12 = the standing prepay ladder (phase 78 restored 6
+ *  and 12 so members can settle a quarter, a half-year or a year on their
+ *  own, at the owner's direction). */
+export const RENEWAL_MONTH_CHOICES = [1, 3, 6, 12] as const
 export type RenewalMonths = (typeof RENEWAL_MONTH_CHOICES)[number]
 
 export function isRenewalMonths(v: unknown): v is RenewalMonths {
@@ -741,28 +742,41 @@ export function isRenewalMonths(v: unknown): v is RenewalMonths {
   )
 }
 
-/** The 3-month prepay saving — the owner's decision (₦30,000 plan → pay
- *  ₦85,000 instead of ₦90,000) generalised to every tier at the same
- *  ~5½% shape: one month's price ÷ 6, rounded to the nearest ₦500 so the
- *  transfer amounts stay human. Returns 0 for anything that is not the
- *  3-month prepay. */
+/** The prepay ladder (phase 78) — a PERMANENT POLICY, not a promo:
+ *
+ *    3 months → save one month's price ÷ 6        ≈ 5.6% of the quarter
+ *    6 months → save one month's price × 0.45     =  7.5% of the half-year
+ *   12 months → save one month's price × 1.2      =   10% of the year
+ *
+ *  The 3-month shape is the owner's own decision from phase 77 (₦30,000
+ *  plan → ₦85,000 instead of ₦90,000), kept EXACTLY as set; 6 and 12 step
+ *  the saving up gently so the discounts stay modest at every depth. Every
+ *  saving is rounded to the nearest ₦500 so transfer amounts stay human.
+ *  A member who prepays gets the ladder rate EVERY time they prepay — the
+ *  rate never expires and never becomes a once-off. Monthly renewal stays
+ *  full price; that is the whole, honest incentive. */
 export function renewalSavingFor(priceMonthly: number, months: number): number {
-  if (months !== 3 || priceMonthly <= 0) return 0
-  const save = Math.round(priceMonthly / 6 / 500) * 500
-  // Never let rounding push the saving past a sane fraction of the quarter.
-  return Math.min(save, Math.max(0, priceMonthly * 3 - 500))
+  if (priceMonthly <= 0) return 0
+  let save = 0
+  if (months === 3) save = priceMonthly / 6
+  else if (months === 6) save = priceMonthly * 0.45
+  else if (months === 12) save = priceMonthly * 1.2
+  else return 0
+  save = Math.round(save / 500) * 500
+  // Never let rounding push the saving past a sane fraction of the cover.
+  return Math.min(save, Math.max(0, priceMonthly * months - 500))
 }
 
 /** The prepay price for N months — the ONE pricing path shared by the email
- *  buttons, the portal renewal card, the renew API, the Paystack charge and
- *  the office confirm dialog. 3 months carries the prepay saving; every
- *  other count is the plain plan price × months (goodwill adjustments stay
- *  an office-only manual override at confirm time). */
+ *  buttons, the portal payment card, the renew API, the Paystack charge,
+ *  the webhook inference and the office confirm dialog. 3/6/12 months
+ *  carry their ladder saving; any other count is the plain plan price ×
+ *  months (goodwill adjustments stay an office-only manual override at
+ *  confirm time). */
 export function renewalPriceFor(priceMonthly: number, months: number): number {
-  if (months === 3) {
-    return Math.max(500, Math.round(priceMonthly * 3) - renewalSavingFor(priceMonthly, 3))
-  }
-  return Math.round(priceMonthly * months)
+  const total = Math.round(priceMonthly * months)
+  const save = renewalSavingFor(priceMonthly, months)
+  return Math.max(500, total - save)
 }
 
 // =====================================================
