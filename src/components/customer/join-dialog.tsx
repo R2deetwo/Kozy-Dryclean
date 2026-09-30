@@ -39,7 +39,6 @@ export function JoinDialog({
   sessionEmail,
   sessionRole,
   authStatus,
-  returnTo,
 }: {
   plan: ApiMembershipPlan
   onClose: () => void
