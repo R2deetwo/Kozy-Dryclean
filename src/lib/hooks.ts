@@ -1391,6 +1391,48 @@ export interface ApiMembership {
   transferReceipt?: string | null
   user?: { id: string; name: string; email: string; phone: string } | null
   createdAt: string
+  // ----- Phase 75: the retention radar + kit tag -----
+  health?: {
+    state: string
+    label: string
+    missedPickups: number
+    pickupsThisCycle: number
+    usageRatio: number | null
+    cycleElapsed: number | null
+  }
+  kitTag?: string | null
+  lastPickupAt?: string | null
+  nextPickupAt?: string | null
+  nextPickupSlot?: string | null
+}
+
+/** Phase 75: one row of the member's in-cycle activity (a booking with its
+ * live order status — the portal's "Your pickups this month" list). */
+export interface ApiMembershipActivityRow {
+  id: string
+  orderNumber: string
+  kind: string
+  count: number
+  label: string
+  status: string
+  missed: boolean
+  pickupDate: string
+  pickupTimeSlot: string
+  pickedUpAt: string | null
+  deliveredAt: string | null
+  extraCharge: number
+  createdAt: string
+}
+
+/** Phase 75: a ledger row (the WHY behind the counters). */
+export interface ApiSubscriptionEventRow {
+  id: string
+  kind: string
+  delta: number
+  count: number
+  note: string | null
+  orderId: string | null
+  createdAt: string
 }
 
 /** Public plan list — the marketing page and the portal both read this. */
@@ -1430,16 +1472,27 @@ export function useSaveMembershipPlans() {
 
 /** The signed-in member's own memberships (null when not a member). The
  * laundry tier keeps the legacy `membership` shape; the standalone Shoe
- * Club rides on `shoeClub` (phase 70) — one account may hold both. */
+ * Club rides on `shoeClub` (phase 70) — one account may hold both.
+ * Phase 75 adds `activity` — the in-cycle bookings with live statuses. */
 export function useMyMembership() {
   return useQuery<{
     membership: ApiMembership | null
     effectiveStatus?: string | null
     usage?: ApiMembershipUsage | null
+    activity?: {
+      subscriptionId: string
+      activity: ApiMembershipActivityRow[]
+      events: ApiSubscriptionEventRow[]
+    } | null
     shoeClub?: {
       membership: ApiMembership
       effectiveStatus: string
       usage: ApiMembershipUsage | null
+      activity?: {
+        subscriptionId: string
+        activity: ApiMembershipActivityRow[]
+        events: ApiSubscriptionEventRow[]
+      } | null
     } | null
   }>({
     queryKey: ['my-membership'],
@@ -1566,11 +1619,22 @@ export function useAdminMemberships(options?: { refetchInterval?: number | false
   })
 }
 
-/** ADMIN: verify / renew / cancel / kit lifecycle / reset usage. */
+/** ADMIN: verify / renew / cancel / kit lifecycle / reset usage / adjust
+ * usage / nudges / kit tag (phase 75 additions ride the same mutation). */
 export function useMembershipAdminAction() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: { id: string; action: string; pricePaid?: number; reason?: string; method?: string }) => {
+    mutationFn: async (input: {
+      id: string
+      action: string
+      pricePaid?: number
+      reason?: string
+      method?: string
+      counter?: string
+      delta?: number
+      note?: string
+      reMint?: boolean
+    }) => {
       const res = await fetch(`/api/subscriptions/${input.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -1583,7 +1647,32 @@ export function useMembershipAdminAction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['admin-memberships'] })
       qc.invalidateQueries({ queryKey: ['my-membership'] })
+      qc.invalidateQueries({ queryKey: ['membership-drilldown'] })
     },
+  })
+}
+
+/** ADMIN (phase 75): the member drill-down — ledger, activity, kit tag. */
+export function useMembershipDrilldown(id: string | null) {
+  return useQuery<{
+    membership: ApiMembership
+    user: { id: string; name: string; email: string; phone: string } | null
+    kitTag: string | null
+    activity: {
+      subscriptionId: string
+      activity: ApiMembershipActivityRow[]
+      events: ApiSubscriptionEventRow[]
+    } | null
+  } | null>({
+    queryKey: ['membership-drilldown', id],
+    enabled: Boolean(id),
+    queryFn: async () => {
+      if (!id) return null
+      const res = await fetch(`/api/subscriptions/${id}`)
+      if (!res.ok) throw new Error('Failed to load the member ledger')
+      return res.json()
+    },
+    staleTime: 10 * 1000,
   })
 }
 

@@ -21,7 +21,13 @@ import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
-import { getPlans, rowToMembership, effectiveStatus, effectiveUsage } from '@/lib/subscriptions'
+import {
+  getPlans,
+  rowToMembership,
+  effectiveStatus,
+  effectiveUsage,
+  cycleHealth,
+} from '@/lib/subscriptions'
 import { notifyAdminNewSubscription } from '@/lib/notifications'
 
 export async function GET(req: Request) {
@@ -52,8 +58,54 @@ export async function GET(req: Request) {
   })
   const userById = new Map(users.map((u) => [u.id, u]))
 
+  // ----- Phase 75: the per-member cycle orders (ONE query, not N+1) -----
+  // Everything since each member's periodStart powers the health radar:
+  // missed pickups, last pickup, next scheduled, usage ratio vs cycle clock.
+  const liveRows = rows.filter((r) => r.periodStart)
+  const sinceBySub = new Map(liveRows.map((r) => [r.id, r.periodStart as Date]))
+  const cycleOrders = liveRows.length
+    ? await db.order.findMany({
+        where: {
+          subscriptionId: { in: liveRows.map((r) => r.id) },
+          createdAt: { gte: new Date(Math.min(...Array.from(sinceBySub.values()).map((d) => d.getTime()))) },
+        },
+        orderBy: { pickupDate: 'asc' },
+        select: {
+          id: true,
+          subscriptionId: true,
+          status: true,
+          pickupDate: true,
+          pickupTimeSlot: true,
+          pickedUpAt: true,
+          deliveredAt: true,
+          createdAt: true,
+        },
+      })
+    : []
+  type CycleOrder = (typeof cycleOrders)[number]
+  const ordersBySub = new Map<string, CycleOrder[]>()
+  for (const o of cycleOrders) {
+    if (!o.subscriptionId) continue
+    const since = sinceBySub.get(o.subscriptionId)
+    if (since && o.createdAt >= since) {
+      const list = ordersBySub.get(o.subscriptionId) ?? []
+      list.push(o)
+      ordersBySub.set(o.subscriptionId, list)
+    }
+  }
+
+  const now = new Date()
   const items = rows.map((r) => {
     const plan = r.plan ?? planById.get(r.planId)
+    const subOrders = ordersBySub.get(r.id) ?? []
+    const health = cycleHealth(r, plan, subOrders, now)
+    const live = subOrders.filter((o) => o.status !== 'CANCELLED')
+    const lastPickup = live
+      .filter((o) => o.pickedUpAt)
+      .sort((a, b) => new Date(b.pickedUpAt!).getTime() - new Date(a.pickedUpAt!).getTime())[0]
+    const nextScheduled = live
+      .filter((o) => !o.pickedUpAt && new Date(o.pickupDate).getTime() >= now.getTime() - 12 * 60 * 60 * 1000)
+      .sort((a, b) => new Date(a.pickupDate).getTime() - new Date(b.pickupDate).getTime())[0]
     return {
       ...rowToMembership({ ...r, plan }),
       effectiveStatus: effectiveStatus(r),
@@ -74,6 +126,12 @@ export async function GET(req: Request) {
         : null,
       transferReceipt: r.transferReceipt,
       user: userById.get(r.userId) ?? null,
+      // Phase 75: the retention radar + wash-floor facts.
+      health,
+      kitTag: r.kitTag,
+      lastPickupAt: lastPickup?.pickedUpAt?.toISOString() ?? null,
+      nextPickupAt: nextScheduled?.pickupDate?.toISOString() ?? null,
+      nextPickupSlot: nextScheduled?.pickupTimeSlot ?? null,
     }
   })
 

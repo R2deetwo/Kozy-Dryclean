@@ -22,7 +22,7 @@
 import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
-import { effectiveStatus, effectiveUsage, rowToMembership } from '@/lib/subscriptions'
+import { effectiveStatus, effectiveUsage, rowToMembership, getSubscriptionActivity } from '@/lib/subscriptions'
 import { notifyMembershipCancelled } from '@/lib/notifications'
 
 async function loadCurrent(userId: string, family: 'KIT' | 'SHOES' = 'KIT') {
@@ -47,6 +47,14 @@ export async function GET() {
     return NextResponse.json({ membership: null })
   }
 
+  // Phase 75: the member's in-cycle activity — every booking with its live
+  // status, the missed-pickup flag, and the ledger tail. The portal's
+  // "Your pickups this month" section renders straight from this.
+  const [tierActivity, clubActivity] = await Promise.all([
+    row ? getSubscriptionActivity(row.id, { eventLimit: 12 }) : Promise.resolve(null),
+    club ? getSubscriptionActivity(club.id, { eventLimit: 8 }) : Promise.resolve(null),
+  ])
+
   const plan = row?.plan
   const clubPlan = club?.plan
   return NextResponse.json({
@@ -67,6 +75,7 @@ export async function GET() {
           plan
         )
       : null,
+    activity: tierActivity,
     // Phase 70: the standalone Shoe Club, when this customer holds one.
     shoeClub: club
       ? {
@@ -87,6 +96,7 @@ export async function GET() {
                 clubPlan
               )
             : null,
+          activity: clubActivity,
         }
       : null,
   })

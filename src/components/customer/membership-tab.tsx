@@ -26,6 +26,8 @@ import {
   XCircle,
   Undo2,
   PlusCircle,
+  ClipboardList,
+  AlertCircle,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -90,6 +92,8 @@ export function MembershipTab() {
   const usage = data?.usage
   const plan = membership?.plan
   const status = data?.effectiveStatus ?? membership?.status ?? 'PENDING_ACTIVATION'
+  // Phase 75: the member's in-cycle bookings (live statuses + missed flags).
+  const activity = data?.activity?.activity ?? []
 
   // ----- The standalone Shoe Club (phase 70) -----
   const club = data?.shoeClub
@@ -390,6 +394,15 @@ export function MembershipTab() {
         )}
       </Card>
 
+      {/* ===== Your pickups this month (phase 75) — the tracking ledger ===== */}
+      {membership && (status === 'ACTIVE' || status === 'EXPIRING' || status === 'PAST_DUE') && (
+        <CycleActivityCard
+          activity={activity}
+          unitName={plan?.unitName ?? 'Kozy Bag'}
+          onRebook={() => openTierBooking('unit')}
+        />
+      )}
+
       {/* ===== The standalone Shoe Club card (phase 70) — a shoes-only
           membership that composes with the laundry tier. ===== */}
       {clubMembership && clubPlan && (
@@ -560,6 +573,146 @@ function UsageMeter({
       </div>
       {suffix && <p className="mt-1.5 text-[10px] text-navy-300">{suffix}</p>}
     </div>
+  )
+}
+
+// =====================================================
+// Cycle activity (phase 75) — "Your pickups this month"
+// =====================================================
+// The member's tracking ledger: every booking this cycle with its live
+// status, the next scheduled pickup, and a quiet "we missed you" row with a
+// one-tap rebook for anything that slipped past its pickup day.
+const ACTIVITY_STATUS: Record<string, { label: string; tone: string }> = {
+  REQUESTED: { label: 'Scheduled', tone: 'border-navy-100 bg-linen-50 text-navy-300' },
+  PAYMENT_PENDING_VERIFICATION: { label: 'Confirming payment', tone: 'border-amber-200 bg-amber-50 text-amber-700' },
+  PAYMENT_VERIFIED: { label: 'Rider on the way', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  PICKED_UP: { label: 'Picked up', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  AT_STATION: { label: 'At the station', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  PROCESSING: { label: 'In the wash', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  FINISHING: { label: 'Finishing', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  OUT_FOR_DELIVERY: { label: 'Out for delivery', tone: 'border-emerald-200 bg-emerald-50 text-emerald-700' },
+  DELIVERED: { label: 'Delivered', tone: 'border-navy-200 bg-navy-50 text-navy-300' },
+  CANCELLED: { label: 'Cancelled — allowance returned', tone: 'border-navy-200 bg-navy-50 text-navy-300' },
+}
+
+function CycleActivityCard({
+  activity,
+  unitName,
+  onRebook,
+}: {
+  activity: Array<{
+    id: string
+    orderNumber: string
+    label: string
+    status: string
+    missed: boolean
+    pickupDate: string
+    pickupTimeSlot: string
+    deliveredAt: string | null
+    extraCharge: number
+  }>
+  unitName: string
+  onRebook: () => void
+}) {
+  const now = Date.now()
+  const upcoming = activity
+    .filter((a) => !a.deliveredAt && a.status !== 'CANCELLED' && new Date(a.pickupDate).getTime() + 36 * 60 * 60 * 1000 > now)
+    .sort((a, b) => new Date(a.pickupDate).getTime() - new Date(b.pickupDate).getTime())[0]
+  const missed = activity.filter((a) => a.missed)
+  const done = activity.filter((a) => a.deliveredAt).length
+
+  return (
+    <Card className="border-navy-100 shadow-navy">
+      <CardContent className="p-5 sm:p-6">
+        <div className="flex items-center justify-between gap-2">
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-navy-300">
+            <ClipboardList className="h-4 w-4 text-gold-600" /> Your pickups this month
+          </p>
+          {activity.length > 0 && (
+            <span className="font-mono text-[11px] text-navy-300">
+              {done}/{activity.length} delivered
+            </span>
+          )}
+        </div>
+
+        {/* Next scheduled pickup — the thing members check most */}
+        {upcoming && (
+          <div className="mt-3 flex items-center gap-3 rounded-xl border border-gold-200 bg-gold-50 p-3.5">
+            <CalendarClock className="h-5 w-5 shrink-0 text-gold-600" />
+            <div className="min-w-0">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-gold-800">
+                Next pickup
+              </p>
+              <p className="text-sm font-medium text-navy">
+                {formatDate(upcoming.pickupDate)} · {upcoming.pickupTimeSlot}
+              </p>
+              <p className="truncate text-xs text-navy-300">{upcoming.label}</p>
+            </div>
+          </div>
+        )}
+
+        {/* We missed you — plain words, one-tap rebook */}
+        {missed.length > 0 && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3.5">
+            <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-800">
+              <AlertCircle className="h-3.5 w-3.5" /> We missed {missed.length === 1 ? 'a pickup' : `${missed.length} pickups`}
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-amber-700">
+              {missed.length === 1
+                ? `The ${missed[0].label.toLowerCase()} on ${formatDate(missed[0].pickupDate)} didn't happen — your allowance for it is untouched while it sits uncollected.`
+                : 'These pickups passed their dates uncollected — the allowance is untouched until the order is cancelled or collected.'}
+            </p>
+            <Button
+              size="sm"
+              onClick={onRebook}
+              className="mt-2 rounded-full bg-navy text-white hover:bg-navy-700"
+            >
+              <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Rebook a pickup
+            </Button>
+          </div>
+        )}
+
+        {/* The ledger */}
+        {activity.length === 0 ? (
+          <div className="mt-4 rounded-xl border border-dashed border-navy-200 p-6 text-center">
+            <p className="text-sm font-medium text-navy">No pickups booked yet this month</p>
+            <p className="mt-1 text-xs text-navy-300">
+              Your {unitName} is ready when you are — book the first one and the month starts moving.
+            </p>
+            <Button
+              size="sm"
+              onClick={onRebook}
+              className="mt-3 rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
+            >
+              <PlusCircle className="mr-1.5 h-3.5 w-3.5" /> Book a {unitName.toLowerCase()} pickup
+            </Button>
+          </div>
+        ) : (
+          <div className="mt-4 divide-y divide-linen-100">
+            {activity.map((a) => {
+              const s = ACTIVITY_STATUS[a.status] ?? {
+                label: a.status.toLowerCase().replace(/_/g, ' '),
+                tone: 'border-navy-100 bg-linen-50 text-navy-300',
+              }
+              return (
+                <div key={a.id} className="flex items-center justify-between gap-3 py-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium text-navy">{a.label}</p>
+                    <p className="text-[11px] text-navy-300">
+                      #{a.orderNumber} · pickup {formatDate(a.pickupDate)} · {a.pickupTimeSlot}
+                      {a.extraCharge > 0 && ` · ₦${a.extraCharge.toLocaleString('en-NG')} extra`}
+                    </p>
+                  </div>
+                  <Badge variant="outline" className={`shrink-0 rounded-full text-[10px] ${s.tone}`}>
+                    {a.missed && a.status !== 'CANCELLED' ? 'missed' : s.label}
+                  </Badge>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

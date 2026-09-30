@@ -13,6 +13,8 @@ Disallow: /signup-success
 Disallow: /verify-email
 Disallow: /reset-password
 Disallow: /forgot-password
+# Phase 75 — kit tag QR destinations (staff utility, no organic value)
+Disallow: /kit
 
 # Sitemap
 Sitemap: https://kozycare.ng/sitemap.xml

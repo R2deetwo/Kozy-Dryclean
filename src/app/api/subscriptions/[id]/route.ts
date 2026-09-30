@@ -1,7 +1,8 @@
 // =============================================================================
+// GET   /api/subscriptions/[id] — ADMIN drill-down: ledger + activity + kit tag
 // PATCH /api/subscriptions/[id] — ADMIN membership management
 // =============================================================================
-// Actions:
+// Actions (PATCH):
 //   verify       — the transfer receipt checks out → activate/renew the cycle
 //   reject       — the receipt does not match → notify + keep pending (the
 //                  member sees "awaiting verification" and can re-upload)
@@ -9,6 +10,13 @@
 //   cancel       — immediate hard cancellation (member-requested, offline)
 //   kit-delivered / kit-returned / kit-replaced — the physical kit lifecycle
 //   reset-usage  — zero the counters (goodwill / billing correction)
+//   adjust-usage (phase 75) — move ONE counter by a signed delta with a note;
+//                  writes a USAGE_ADJUST ledger row (the WHY survives)
+//   nudge-usage  (phase 75) — send the at-risk member the "your pickups are
+//                  waiting" email
+//   nudge-renewal(phase 75) — send the transfer member a renewal reminder
+//   kit-tag      (phase 75) — mint (or re-mint) the bag/box QR tag; returns
+//                  the code + QR SVG for the printable label
 //
 // The verify + renew paths reuse activateOrRenewSubscription — the same
 // engine the Paystack webhook drives — so a card member and a transfer
@@ -18,8 +26,19 @@
 import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { requireRole } from '@/lib/auth'
-import { activateOrRenewSubscription, rowToMembership } from '@/lib/subscriptions'
-import { notifyMembershipActive } from '@/lib/notifications'
+import {
+  activateOrRenewSubscription,
+  rowToMembership,
+  getSubscriptionActivity,
+  ensureKitTag,
+  recordSubscriptionEvent,
+  KIND_COUNTER,
+} from '@/lib/subscriptions'
+import {
+  notifyMembershipActive,
+  notifyMembershipUsageNudge,
+  notifyMembershipRenewalReminder,
+} from '@/lib/notifications'
 
 async function guard(): Promise<ReturnType<typeof requireRole> | NextResponse | null> {
   try {
@@ -35,6 +54,41 @@ async function guard(): Promise<ReturnType<typeof requireRole> | NextResponse | 
   }
 }
 
+/** The base URL a kit QR points at (kozycare.ng in prod). */
+function kitTagUrl(code: string): string {
+  const raw = process.env.NEXTAUTH_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? ''
+  const base = raw.replace(/\/$/, '')
+  return `${base || 'https://kozycare.ng'}/kit/${code}`
+}
+
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await guard()
+  if (session instanceof NextResponse) return session
+
+  const { id } = await params
+  const sub = await db.subscription.findUnique({
+    where: { id },
+    include: {
+      plan: true,
+      user: { select: { id: true, name: true, email: true, phone: true } },
+    },
+  })
+  if (!sub) {
+    return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
+  }
+
+  const activity = await getSubscriptionActivity(id, { eventLimit: 50 })
+  return NextResponse.json({
+    membership: rowToMembership(sub),
+    user: sub.user,
+    kitTag: sub.kitTag,
+    activity,
+  })
+}
+
 export async function PATCH(
   req: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -42,6 +96,7 @@ export async function PATCH(
   const session = await guard()
   if (session instanceof NextResponse) return session
   const adminName = session?.user?.name || 'Admin'
+  const adminId = session?.user?.id
 
   const { id } = await params
   const body = await req.json().catch(() => ({}))
@@ -135,6 +190,14 @@ export async function PATCH(
         data: { kitState: 'WITH_MEMBER', kitDeliveredAt: new Date() },
         include: { plan: true },
       })
+      await recordSubscriptionEvent({
+        subscriptionId: id,
+        kind: 'KIT_DELIVERED',
+        delta: 0,
+        count: 0,
+        note: 'Kit delivered (recorded by office)',
+        recordedById: adminId,
+      })
       return NextResponse.json({ membership: rowToMembership(updated) })
     }
 
@@ -144,6 +207,14 @@ export async function PATCH(
         where: { id },
         data: { kitState: action === 'kit-returned' ? 'RETURNED' : 'REPLACED' },
         include: { plan: true },
+      })
+      await recordSubscriptionEvent({
+        subscriptionId: id,
+        kind: action === 'kit-returned' ? 'KIT_RETURNED' : 'KIT_REPLACED',
+        delta: 0,
+        count: 0,
+        note: action === 'kit-returned' ? 'Kit returned to the office' : 'Kit replaced — fee charged',
+        recordedById: adminId,
       })
       return NextResponse.json({ membership: rowToMembership(updated) })
     }
@@ -161,14 +232,141 @@ export async function PATCH(
         },
         include: { plan: true },
       })
+      await recordSubscriptionEvent({
+        subscriptionId: id,
+        kind: 'USAGE_ADJUST',
+        delta: 0,
+        count: 0,
+        note: 'Counters reset to zero (office correction)',
+        recordedById: adminId,
+      })
       return NextResponse.json({ membership: rowToMembership(updated) })
+    }
+
+    // ----- Phase 75: the retention desk -----
+
+    case 'adjust-usage': {
+      // { counter: 'unitsUsed' | 'shoesUsed' | 'duvetsUsed' | 'curtainsUsed' | 'springCleanUsed',
+      //   delta: signed int, note: required }
+      const counter = typeof body?.counter === 'string' ? body.counter : ''
+      const delta = Math.round(Number(body?.delta))
+      const note = typeof body?.note === 'string' ? body.note.trim().slice(0, 300) : ''
+      const allowed = Object.values(KIND_COUNTER) as string[]
+      if (!allowed.includes(counter) || !Number.isFinite(delta) || delta === 0) {
+        return NextResponse.json(
+          { error: 'adjust-usage needs { counter, delta (nonzero), note }' },
+          { status: 400 }
+        )
+      }
+      if (!note) {
+        return NextResponse.json(
+          { error: 'A note is required — the ledger records WHY' },
+          { status: 400 }
+        )
+      }
+      const before = (sub as any)[counter] ?? 0
+      const after = Math.max(0, before + delta)
+      const updated = await db.subscription.update({
+        where: { id },
+        data: { [counter]: after },
+        include: { plan: true },
+      })
+      await recordSubscriptionEvent({
+        subscriptionId: id,
+        kind: 'USAGE_ADJUST',
+        delta: after - before,
+        count: 0,
+        meta: { counter, before, after },
+        note: `${note} — ${adminName}`,
+        recordedById: adminId,
+      })
+      return NextResponse.json({ membership: rowToMembership(updated) })
+    }
+
+    case 'nudge-usage': {
+      if (!sub.plan || !sub.user?.email || !sub.periodEnd) {
+        return NextResponse.json({ error: 'Nothing to nudge — no plan, email or period.' }, { status: 400 })
+      }
+      const remaining = Math.max(0, sub.plan.includedUnits - sub.unitsUsed)
+      after(async () => {
+        try {
+          await notifyMembershipUsageNudge({
+            user: { name: sub.user!.name, email: sub.user!.email },
+            planName: sub.plan!.name,
+            unitName: sub.plan!.unitName,
+            unitsRemaining: remaining,
+            periodEnd: sub.periodEnd!,
+          })
+        } catch (e) {
+          console.error('[memberships] usage nudge failed:', e)
+        }
+      })
+      return NextResponse.json({ ok: true, sent: 'usage-nudge' })
+    }
+
+    case 'nudge-renewal': {
+      if (!sub.plan || !sub.user?.email || !sub.periodEnd) {
+        return NextResponse.json({ error: 'Nothing to remind — no plan, email or period.' }, { status: 400 })
+      }
+      after(async () => {
+        try {
+          await notifyMembershipRenewalReminder({
+            user: { name: sub.user!.name, email: sub.user!.email },
+            planName: sub.plan!.name,
+            priceMonthly: sub.plan!.priceMonthly,
+            periodEnd: sub.periodEnd!,
+          })
+        } catch (e) {
+          console.error('[memberships] renewal reminder failed:', e)
+        }
+      })
+      return NextResponse.json({ ok: true, sent: 'renewal-reminder' })
+    }
+
+    // ----- Phase 75: the bag/box QR tag -----
+
+    case 'kit-tag': {
+      // Mints on first use; re-mint=true issues a FRESH code (worn/swapped
+      // bag — the old code dies with the row update).
+      try {
+        if (body?.reMint === true) {
+          await db.subscription.update({ where: { id }, data: { kitTag: null } })
+        }
+        const code = await ensureKitTag(id)
+        const url = kitTagUrl(code)
+        // The QR as inline SVG — drop-in for the label preview + print page.
+        const QRCode = (await import('qrcode')).default
+        const qrSvg = await QRCode.toString(url, {
+          type: 'svg',
+          margin: 1,
+          errorCorrectionLevel: 'M',
+          color: { dark: '#0A192F', light: '#FFFFFF' },
+        })
+        await recordSubscriptionEvent({
+          subscriptionId: id,
+          kind: 'KIT_TAG_MINTED',
+          delta: 0,
+          count: 0,
+          meta: { code, reMint: body?.reMint === true },
+          note: body?.reMint === true ? 'Kit tag re-minted (new label printed)' : 'Kit tag minted',
+          recordedById: adminId,
+        })
+        return NextResponse.json({ code, url, qrSvg })
+      } catch (e: any) {
+        console.error('[memberships] kit tag mint failed:', e)
+        return NextResponse.json({ error: e?.message ?? 'Could not mint the tag' }, { status: 500 })
+      }
     }
 
     default:
       return NextResponse.json(
         {
           error: 'Unknown action',
-          actions: ['verify', 'reject', 'renew', 'cancel', 'kit-delivered', 'kit-returned', 'kit-replaced', 'reset-usage'],
+          actions: [
+            'verify', 'reject', 'renew', 'cancel', 'kit-delivered', 'kit-returned',
+            'kit-replaced', 'reset-usage', 'adjust-usage', 'nudge-usage',
+            'nudge-renewal', 'kit-tag',
+          ],
         },
         { status: 400 }
       )

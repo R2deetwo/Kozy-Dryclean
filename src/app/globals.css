@@ -323,3 +323,27 @@
     transition: none;
   }
 }
+
+/* ============================================================
+   Phase 75 — kit-label printing (admin Memberships → drill-down)
+   window.print() from the drill-down prints ONLY the bag/box
+   label; everything else on the page fades out of the sheet.
+   ============================================================ */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  #kit-label,
+  #kit-label * {
+    visibility: visible;
+  }
+  #kit-label {
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: 176px;
+    border-width: 2px;
+    box-shadow: none;
+  }
+}

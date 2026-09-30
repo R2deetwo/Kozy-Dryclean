@@ -12,7 +12,7 @@
 //                transfer verification and the kit lifecycle.
 // =============================================================================
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Loader2,
   Save,
@@ -32,6 +32,16 @@ import {
   ShieldCheck,
   AlertTriangle,
   ImageIcon,
+  ClipboardList,
+  QrCode,
+  Phone,
+  Mail,
+  CalendarClock,
+  HeartPulse,
+  Send,
+  MinusCircle,
+  PlusCircle,
+  Printer,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -46,6 +56,7 @@ import {
   useSaveMembershipPlans,
   useAdminMemberships,
   useMembershipAdminAction,
+  useMembershipDrilldown,
   type ApiMembershipPlan,
   type ApiMembership,
 } from '@/lib/hooks'
@@ -349,6 +360,9 @@ function SubscribersList() {
   const [receipt, setReceipt] = useState<ApiMembership | null>(null)
   const [renewFor, setRenewFor] = useState<ApiMembership | null>(null)
   const [renewPrice, setRenewPrice] = useState('')
+  // Phase 75: the member drill-down (ledger + kit tag + retention desk).
+  const [drillId, setDrillId] = useState<string | null>(null)
+  const [onlyAttention, setOnlyAttention] = useState(false)
 
   const list = memberships ?? []
   const pending = list.filter((m) => m.status === 'PENDING_ACTIVATION')
@@ -358,6 +372,20 @@ function SubscribersList() {
       m.periodEnd &&
       new Date(m.periodEnd).getTime() - Date.now() < 4 * 24 * 60 * 60 * 1000
   )
+  // Phase 75: the retention radar — members needing a human today.
+  const attention = list.filter(
+    (m) =>
+      m.health &&
+      m.health.state !== 'INACTIVE' &&
+      m.health.state !== 'OK' &&
+      m.status !== 'PENDING_ACTIVATION'
+  )
+  const activeCount = list.filter(
+    (m) => m.effectiveStatus === 'ACTIVE' || m.effectiveStatus === 'EXPIRING' || m.effectiveStatus === 'PAST_DUE'
+  ).length
+  const kitsOut = list.filter((m) => m.kitState === 'WITH_MEMBER').length
+
+  const shown = onlyAttention ? list.filter((m) => attention.some((a) => a.id === m.id)) : list
 
   const run = async (m: ApiMembership, act: string, extra?: Record<string, unknown>) => {
     try {
@@ -393,6 +421,50 @@ function SubscribersList() {
 
   return (
     <div className="space-y-4">
+      {/* ===== Phase 75: the cohort dashboard — one glance, the whole Circle ===== */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatCard icon={Users} label="Running members" value={activeCount} tone="navy" />
+        <StatCard icon={Package} label="Kits with members" value={kitsOut} tone="navy" />
+        <StatCard
+          icon={HeartPulse}
+          label="Need a human"
+          value={attention.length}
+          tone={attention.length > 0 ? 'amber' : 'navy'}
+        />
+        <StatCard
+          icon={RefreshCcw}
+          label="Renewals ≤ 4 days"
+          value={expiringSoon.length}
+          tone={expiringSoon.length > 0 ? 'gold' : 'navy'}
+        />
+      </div>
+
+      {/* Filter chips */}
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setOnlyAttention(false)}
+          className={cn(
+            'rounded-full border px-3 py-1 text-[11px] font-semibold transition',
+            !onlyAttention
+              ? 'border-navy bg-navy text-white'
+              : 'border-navy-200 bg-white text-navy-300 hover:border-navy-300'
+          )}
+        >
+          All members ({list.length})
+        </button>
+        <button
+          onClick={() => setOnlyAttention(true)}
+          className={cn(
+            'rounded-full border px-3 py-1 text-[11px] font-semibold transition',
+            onlyAttention
+              ? 'border-amber-400 bg-amber-50 text-amber-800'
+              : 'border-amber-200 bg-white text-amber-700 hover:border-amber-300'
+          )}
+        >
+          Needs attention ({attention.length})
+        </button>
+      </div>
+
       {pending.length > 0 && (
         <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
           <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -409,18 +481,28 @@ function SubscribersList() {
       )}
 
       <div className="space-y-3">
-        {list.map((m) => (
+        {shown.map((m) => (
           <Card key={m.id} className="shadow-navy">
             <CardContent className="p-4 sm:p-5">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-medium text-navy">{m.user?.name ?? 'Member'}</p>
+                    {/* Phase 75: the row opens the drill-down — the member's
+                        whole life in one click. */}
+                    <button
+                      onClick={() => setDrillId(m.id)}
+                      className="font-medium text-navy underline-offset-2 transition hover:text-gold-700 hover:underline"
+                    >
+                      {m.user?.name ?? 'Member'}
+                    </button>
                     <MemberStatusBadge m={m} />
                     {m.cancelAtPeriodEnd && (
                       <Badge variant="outline" className="rounded-full border-amber-200 text-[10px] text-amber-700">
                         not renewing
                       </Badge>
+                    )}
+                    {m.health && m.health.state !== 'INACTIVE' && m.health.state !== 'OK' && m.status !== 'PENDING_ACTIVATION' && (
+                      <HealthChip state={m.health.state} label={m.health.label} />
                     )}
                   </div>
                   <p className="mt-0.5 truncate text-xs text-navy-300">
@@ -430,6 +512,26 @@ function SubscribersList() {
                     {m.plan?.name ?? 'Plan'} · {formatNaira(m.pricePaid || m.plan?.priceMonthly || 0)} ·{' '}
                     {m.paymentMethod === 'PAYSTACK' ? 'card' : m.paymentMethod === 'BANK_TRANSFER' ? 'transfer' : 'unpaid'}
                     {m.periodEnd && ` · ${m.status === 'PENDING_ACTIVATION' ? 'starts on activation' : `renews ${formatDate(m.periodEnd)}`}`}
+                  </p>
+                  {/* Phase 75: the wash-floor line — last/next pickup at a glance. */}
+                  <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-navy-300">
+                    {m.lastPickupAt && (
+                      <span className="flex items-center gap-1">
+                        <ClipboardList className="h-3 w-3 text-gold-600" /> Last pickup {formatDate(m.lastPickupAt)}
+                      </span>
+                    )}
+                    {m.nextPickupAt && (
+                      <span className="flex items-center gap-1">
+                        <CalendarClock className="h-3 w-3 text-gold-600" /> Next{' '}
+                        {formatDate(m.nextPickupAt)}
+                        {m.nextPickupSlot ? ` · ${m.nextPickupSlot}` : ''}
+                      </span>
+                    )}
+                    {m.kitTag && (
+                      <span className="flex items-center gap-1 font-mono">
+                        <QrCode className="h-3 w-3 text-gold-600" /> {m.kitTag}
+                      </span>
+                    )}
                   </p>
                 </div>
 
@@ -499,6 +601,29 @@ function SubscribersList() {
                     >
                       <RefreshCcw className="mr-1.5 h-3.5 w-3.5" /> Record renewal
                     </Button>
+                    {/* Phase 75: the retention desk — one click per nudge. */}
+                    {m.health && (m.health.state === 'UNUSED_RISK' || m.health.state === 'NO_USAGE_DATA') && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => run(m, 'nudge-usage')}
+                        disabled={action.isPending}
+                        className="rounded-full border-gold-300 text-gold-800 hover:bg-gold-50"
+                      >
+                        <Send className="mr-1.5 h-3.5 w-3.5" /> Nudge: use it or lose it
+                      </Button>
+                    )}
+                    {m.paymentMethod === 'BANK_TRANSFER' && m.periodEnd && new Date(m.periodEnd).getTime() - Date.now() < 7 * 24 * 60 * 60 * 1000 && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => run(m, 'nudge-renewal')}
+                        disabled={action.isPending}
+                        className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+                      >
+                        <Send className="mr-1.5 h-3.5 w-3.5" /> Remind: renewal
+                      </Button>
+                    )}
                     {m.status !== 'LAPSED' && (
                       <Button
                         size="sm"
@@ -567,6 +692,17 @@ function SubscribersList() {
         ))}
       </div>
 
+      {/* ===== Phase 75: the member drill-down — ledger, kit tag, adjustments ===== */}
+      <MemberDrilldown
+        id={drillId}
+        onClose={() => setDrillId(null)}
+        onAction={(act, extra) => {
+          if (!drillId) return
+          const m = list.find((x) => x.id === drillId)
+          if (m) run(m, act, extra)
+        }}
+      />
+
       {/* Receipt viewer */}
       <Dialog open={Boolean(receipt)} onOpenChange={(o) => !o && setReceipt(null)}>
         <DialogContent className="max-w-lg">
@@ -628,6 +764,386 @@ function SubscribersList() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// =====================================================
+// Phase 75: the drill-down — one member's whole life
+// =====================================================
+function MemberDrilldown({
+  id,
+  onClose,
+  onAction,
+}: {
+  id: string | null
+  onClose: () => void
+  onAction: (action: string, extra?: Record<string, unknown>) => void
+}) {
+  const { data, isLoading } = useMembershipDrilldown(id)
+  const action = useMembershipAdminAction()
+  const [kitTagData, setKitTagData] = useState<{ code: string; url: string; qrSvg: string } | null>(null)
+  const [minting, setMinting] = useState(false)
+  const [adjustCounter, setAdjustCounter] = useState('unitsUsed')
+  const [adjustDelta, setAdjustDelta] = useState('1')
+  const [adjustNote, setAdjustNote] = useState('')
+
+  // Load (or re-mint) the kit tag + QR whenever the dialog opens.
+  useEffect(() => {
+    if (!id) {
+      setKitTagData(null)
+      return
+    }
+    let cancelled = false
+    setMinting(true)
+    fetch(`/api/subscriptions/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'kit-tag' }),
+    })
+      .then(async (r) => {
+        const body = await r.json().catch(() => ({}))
+        if (!r.ok) throw new Error(body?.error ?? 'Could not mint the tag')
+        return body
+      })
+      .then((body) => {
+        if (!cancelled) setKitTagData(body)
+      })
+      .catch(() => {
+        if (!cancelled) setKitTagData(null)
+      })
+      .finally(() => {
+        if (!cancelled) setMinting(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [id])
+
+  const activity = data?.activity?.activity ?? []
+  const events = data?.activity?.events ?? []
+  const m = data?.membership
+
+  const runAdjust = async () => {
+    if (!id || !adjustNote.trim()) {
+      toast({ title: 'A note is required', description: 'The ledger records WHY the counter moved.', variant: 'destructive' })
+      return
+    }
+    try {
+      await action.mutateAsync({
+        id,
+        action: 'adjust-usage',
+        counter: adjustCounter,
+        delta: Number(adjustDelta) || 0,
+        note: adjustNote.trim(),
+      })
+      setAdjustNote('')
+      toast({ title: 'Counter adjusted', description: 'The ledger row is written with your note.' })
+    } catch (e: any) {
+      toast({ title: 'Could not adjust', description: e?.message, variant: 'destructive' })
+    }
+  }
+
+  return (
+    <Dialog open={Boolean(id)} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-lg text-navy">
+            {data?.user?.name ?? 'Member'} — the member ledger
+          </DialogTitle>
+        </DialogHeader>
+
+        {isLoading && (
+          <div className="flex justify-center py-8">
+            <Loader2 className="h-5 w-5 animate-spin text-navy-300" />
+          </div>
+        )}
+
+        {m && (
+          <div className="space-y-4">
+            {/* Contact + cycle */}
+            <div className="rounded-xl bg-linen-100 p-3.5 text-xs text-navy-300">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                {data?.user?.phone && (
+                  <a href={`tel:${data.user.phone.replace(/\s/g, '')}`} className="flex items-center gap-1 font-medium text-navy">
+                    <Phone className="h-3.5 w-3.5 text-gold-600" /> {data.user.phone}
+                  </a>
+                )}
+                {data?.user?.email && (
+                  <span className="flex items-center gap-1">
+                    <Mail className="h-3.5 w-3.5 text-gold-600" /> {data.user.email}
+                  </span>
+                )}
+                <span className="flex items-center gap-1">
+                  <CalendarClock className="h-3.5 w-3.5 text-gold-600" />
+                  {m.periodEnd ? `Cycle to ${formatDate(m.periodEnd)}` : 'Not activated'}
+                </span>
+              </div>
+              <p className="mt-1.5">
+                {m.plan?.name} · {m.usage ? `${m.usage.unitsUsed}/${m.plan?.includedUnits ?? 0} ${m.plan?.unitKind ?? 'units'}` : 'no usage'}{' '}
+                {m.usage && m.usage.shoesUsed > 0 && ` · shoes ${m.usage.shoesUsed}/${m.plan?.shoesPerMonth ?? 0}`}
+              </p>
+            </div>
+
+            {/* The kit tag — QR + printable label */}
+            <div className="rounded-xl border border-navy-100 p-4">
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-navy-300">
+                <QrCode className="h-4 w-4 text-gold-600" /> Bag / box tag
+              </p>
+              {minting && !kitTagData ? (
+                <div className="flex items-center gap-2 py-3 text-xs text-navy-300">
+                  <Loader2 className="h-4 w-4 animate-spin" /> Minting the tag…
+                </div>
+              ) : kitTagData ? (
+                <div className="mt-3 flex flex-wrap items-start gap-4">
+                  {/* The label preview — also the print target */}
+                  <div id="kit-label" className="w-44 rounded-lg border-2 border-navy bg-white p-3 text-center">
+                    <p className="font-serif text-sm font-bold text-navy">Kozy Care</p>
+                    <p className="text-[9px] uppercase tracking-wide text-navy-300">
+                      {m.plan?.unitName ?? 'Kozy Bag'} · {m.plan?.name}
+                    </p>
+                    {kitTagData.qrSvg && <div className="mt-2" dangerouslySetInnerHTML={{ __html: kitTagData.qrSvg }} />}
+                    <p className="mt-1 font-mono text-[11px] font-bold tracking-wider text-navy">{kitTagData.code}</p>
+                    <p className="mt-0.5 truncate text-[9px] text-navy-300">{data?.user?.name}</p>
+                    <p className="text-[8px] text-navy-300">Scan: {kitTagData.url.replace('https://', '')}</p>
+                  </div>
+                  <div className="min-w-0 flex-1 space-y-2 text-xs text-navy-300">
+                    <p>
+                      Print this label and stick it on the member&apos;s {m.plan?.unitName?.toLowerCase() ?? 'bag'}.
+                      Scanning it opens whose bag this is, the plan and the cycle usage — on any phone.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" className="rounded-full border-navy-200 text-navy" onClick={() => window.print()}>
+                        <Printer className="mr-1.5 h-3.5 w-3.5" /> Print label
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="rounded-full text-navy-300 hover:text-navy"
+                        onClick={async () => {
+                          if (!id) return
+                          setMinting(true)
+                          try {
+                            const r = await fetch(`/api/subscriptions/${id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ action: 'kit-tag', reMint: true }),
+                            })
+                            const body = await r.json()
+                            if (!r.ok) throw new Error(body?.error ?? 'Could not re-mint')
+                            setKitTagData(body)
+                            toast({ title: 'New tag minted', description: 'The old code no longer opens anything — print the new label.' })
+                          } catch (e: any) {
+                            toast({ title: 'Could not re-mint', description: e?.message, variant: 'destructive' })
+                          } finally {
+                            setMinting(false)
+                          }
+                        }}
+                      >
+                        <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> New code (worn label)
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-xs text-navy-300">No tag yet — mint one when the kit goes out.</p>
+              )}
+            </div>
+
+            {/* This cycle's bookings */}
+            <div>
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-navy-300">
+                <ClipboardList className="h-4 w-4 text-gold-600" /> This cycle&apos;s bookings
+              </p>
+              {activity.length === 0 ? (
+                <p className="mt-2 rounded-xl border border-dashed border-navy-200 p-4 text-center text-xs text-navy-300">
+                  No bookings since the cycle started {m.periodStart ? formatDate(m.periodStart) : ''}.
+                </p>
+              ) : (
+                <div className="mt-2 divide-y divide-linen-100 rounded-xl border border-navy-100">
+                  {activity.map((a) => (
+                    <div key={a.id} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-navy">{a.label}</p>
+                        <p className="text-[11px] text-navy-300">
+                          #{a.orderNumber} · pickup {formatDate(a.pickupDate)} · {a.status.toLowerCase().replace(/_/g, ' ')}
+                          {a.pickedUpAt && ` · collected ${formatDate(a.pickedUpAt)}`}
+                        </p>
+                      </div>
+                      {a.missed && (
+                        <Badge variant="outline" className="rounded-full border-rose-200 bg-rose-50 text-[10px] text-rose-700">
+                          missed
+                        </Badge>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* The raw ledger */}
+            <div>
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-navy-300">
+                <Receipt className="h-4 w-4 text-gold-600" /> Ledger (why the counters moved)
+              </p>
+              {events.length === 0 ? (
+                <p className="mt-2 text-xs text-navy-300">No ledger rows yet — history starts with the next booking or renewal.</p>
+              ) : (
+                <div className="mt-2 max-h-52 space-y-1 overflow-y-auto rounded-xl bg-linen-100 p-3 font-mono text-[11px] leading-relaxed text-navy">
+                  {events.map((e) => (
+                    <p key={e.id} className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-navy-300">{new Date(e.createdAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' })}</span>
+                      <span className={cn('font-bold', e.delta < 0 ? 'text-emerald-700' : e.delta > 0 ? 'text-gold-800' : 'text-navy')}>
+                        {e.kind}
+                        {e.delta !== 0 && ` ${e.delta > 0 ? '+' : ''}${e.delta}`}
+                      </span>
+                      {e.note && <span className="text-navy-300">{e.note}</span>}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Manual adjustment */}
+            <div className="rounded-xl border border-navy-100 p-4">
+              <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">Adjust a counter</p>
+              <p className="mt-1 text-[11px] text-navy-300">
+                For goodwill corrections — the movement lands in the ledger with your note.
+              </p>
+              <div className="mt-2.5 flex flex-wrap items-end gap-2">
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-navy-300">Counter</label>
+                  <select
+                    value={adjustCounter}
+                    onChange={(e) => setAdjustCounter(e.target.value)}
+                    className={cn(field, 'mt-1 h-9 w-36')}
+                  >
+                    <option value="unitsUsed">Bag/box pickups</option>
+                    <option value="shoesUsed">Shoe pairs</option>
+                    <option value="duvetsUsed">Duvets</option>
+                    <option value="curtainsUsed">Curtains</option>
+                    <option value="springCleanUsed">Spring cleans</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-navy-300">Change</label>
+                  <div className="mt-1 flex items-center gap-1">
+                    <button
+                      onClick={() => setAdjustDelta(String(Math.max(1, (Number(adjustDelta) || 0) * -1)))}
+                      className="flex h-9 w-9 items-center justify-center rounded-lg border border-navy-200 text-navy transition hover:bg-linen-100"
+                      title="Flip direction"
+                    >
+                      {Number(adjustDelta) < 0 ? <MinusCircle className="h-4 w-4" /> : <PlusCircle className="h-4 w-4" />}
+                    </button>
+                    <input
+                      type="number"
+                      value={adjustDelta}
+                      onChange={(e) => setAdjustDelta(e.target.value)}
+                      className={cn(field, 'w-20')}
+                    />
+                  </div>
+                </div>
+                <div className="min-w-40 flex-1">
+                  <label className="text-[10px] font-semibold uppercase tracking-wide text-navy-300">Note (required)</label>
+                  <input
+                    value={adjustNote}
+                    onChange={(e) => setAdjustNote(e.target.value)}
+                    placeholder="e.g. counted the bag twice by mistake"
+                    className={cn(field, 'mt-1')}
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  onClick={runAdjust}
+                  disabled={action.isPending || !adjustNote.trim()}
+                  className="rounded-full bg-navy text-white hover:bg-navy-700"
+                >
+                  Apply
+                </Button>
+              </div>
+            </div>
+
+            {/* Retention nudges */}
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onAction('nudge-usage')}
+                className="rounded-full border-gold-300 text-gold-800 hover:bg-gold-50"
+              >
+                <Send className="mr-1.5 h-3.5 w-3.5" /> Send usage nudge
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onAction('nudge-renewal')}
+                className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+              >
+                <Send className="mr-1.5 h-3.5 w-3.5" /> Send renewal reminder
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// =====================================================
+// Phase 75: roster + stat chips
+// =====================================================
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  tone,
+}: {
+  icon: any
+  label: string
+  value: number
+  tone: 'navy' | 'amber' | 'gold'
+}) {
+  return (
+    <Card className={cn('shadow-navy', tone === 'amber' && 'border-amber-200', tone === 'gold' && 'border-gold-200')}>
+      <CardContent className="flex items-center gap-3 p-3.5">
+        <div
+          className={cn(
+            'flex h-9 w-9 shrink-0 items-center justify-center rounded-full',
+            tone === 'amber' ? 'bg-amber-100 text-amber-700' : tone === 'gold' ? 'bg-gold-100 text-gold-800' : 'bg-linen-200 text-navy-300'
+          )}
+        >
+          <Icon className="h-4.5 w-4.5" />
+        </div>
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-navy-300">{label}</p>
+          <p className="font-serif text-xl font-bold text-navy">{value}</p>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
+function HealthChip({ state, label }: { state: string; label: string }) {
+  const tone: Record<string, string> = {
+    MISSED_PICKUP: 'border-rose-200 bg-rose-50 text-rose-700',
+    UNUSED_RISK: 'border-amber-200 bg-amber-50 text-amber-700',
+    NO_USAGE_DATA: 'border-amber-200 bg-amber-50 text-amber-700',
+    OVER_QUOTA: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  }
+  const short: Record<string, string> = {
+    MISSED_PICKUP: 'missed pickup',
+    UNUSED_RISK: 'barely used',
+    NO_USAGE_DATA: 'not booked',
+    OVER_QUOTA: 'quota full',
+  }
+  return (
+    <Badge
+      variant="outline"
+      className={`rounded-full text-[10px] ${tone[state] ?? 'border-navy-100 bg-linen-50 text-navy-300'}`}
+      title={label}
+    >
+      <HeartPulse className="mr-1 h-3 w-3" />
+      {short[state] ?? 'watch'}
+    </Badge>
   )
 }
 

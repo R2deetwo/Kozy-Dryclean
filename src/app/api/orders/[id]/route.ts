@@ -24,9 +24,10 @@ import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession, requireSession, verifyLiveAccess } from '@/lib/auth'
 import { UpdateOrderSchema } from '@/lib/schemas'
-import { notifyOrderStatus, notifyInvoiceReady } from '@/lib/notifications'
+import { notifyOrderStatus, notifyInvoiceReady, notifyMemberOrderCancelled } from '@/lib/notifications'
 import { STAGE_RANK } from '@/lib/types'
 import { getAppSettings } from '@/lib/app-settings'
+import { refundSubscriptionUsage } from '@/lib/subscriptions'
 import { zoneFromAddress, haversineKm, GEO } from '@/lib/geo'
 import { detectAnomalies, logAnomaly } from '@/lib/anomalies'
 import { scheduleMediaPurge } from '@/lib/media'
@@ -500,6 +501,46 @@ export async function PATCH(
         actorId: session.user?.id,
       },
     })
+
+    // ----- Phase 75: a cancelled member booking gives the allowance back -----
+    // Membership pickups consume allowance at BOOKING time (the reservation
+    // model — a booked bag is a bag the member owns this cycle). The moment
+    // the order is cancelled, that reservation returns to the membership so
+    // the member never loses what they paid for. refundSubscriptionUsage is
+    // idempotent (a refund row already written = no-op), so a dragged card
+    // can never double-refund.
+    if (parsed.data.status === 'CANCELLED' && order.status !== 'CANCELLED' && order.subscriptionId) {
+      try {
+        const refunded = await refundSubscriptionUsage(id)
+        if (refunded) {
+          const what = (() => {
+            try {
+              return JSON.parse(order.itemsManifest ?? '[]')[0]?.name ?? 'member pickup'
+            } catch {
+              return 'member pickup'
+            }
+          })()
+          const owner = await db.user.findUnique({
+            where: { id: order.userId },
+            select: { name: true, email: true },
+          })
+          after(async () => {
+            try {
+              await notifyMemberOrderCancelled({
+                user: { name: owner?.name ?? 'Member', email: owner?.email ?? '' },
+                orderNumber: order.orderNumber,
+                what,
+                refunded,
+              })
+            } catch (e) {
+              console.error('[memberships] cancel notification failed:', e)
+            }
+          })
+        }
+      } catch (e) {
+        console.error('[memberships] usage refund failed:', e)
+      }
+    }
 
     // ----- Odd-movement flags (phase 32, STAFF moves only) -----
     // Backwards moves, stage skips and unpaid deliveries leave an anomaly

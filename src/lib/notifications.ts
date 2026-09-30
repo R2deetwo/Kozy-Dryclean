@@ -1904,6 +1904,118 @@ export async function notifyMembershipCancelled(opts: {
 }
 
 // =============================================================================
+// MEMBERSHIP RETENTION (phase 75) — the office-triggered nudges
+// =============================================================================
+// Two one-click emails from the admin drill-down (no cron, no spam):
+//   • USAGE nudge — an at-risk member sitting on an unused allowance.
+//   • RENEWAL reminder — a transfer member whose month is about to end.
+// =============================================================================
+
+/** "Your pickups are waiting" — sent to members flagged UNUSED_RISK / NO_USAGE_DATA. */
+export async function notifyMembershipUsageNudge(opts: {
+  user: { name: string; email: string }
+  planName: string
+  unitName: string
+  unitsRemaining: number
+  periodEnd: Date
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const days = Math.max(
+      1,
+      Math.ceil((opts.periodEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    )
+    const bodyHtml = `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        <strong style="color:#0A192F;">${firstName}</strong>, your ${opts.unitName} pickups are waiting —
+        <strong style="color:#0A192F;">${opts.unitsRemaining}</strong> still included on your ${opts.planName},
+        and ${days} day${days === 1 ? '' : 's'} of your month remain.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 12px 0;">
+        A full bag is a booking away — one tap in your portal and your rider collects at your usual window.
+        Unused pickups don't roll over, so send the bag out while the month is still yours.
+      </p>`
+    const { subject, html } = staffEmailChrome({
+      category: 'membership',
+      heading: `Your ${opts.unitName} pickups are waiting`,
+      bodyHtml,
+      cta: { label: 'Book your next pickup', url: `${baseUrl()}/portal` },
+      footer: 'Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMembershipUsageNudge failed:', e)
+  }
+}
+
+/** "Your month renews on X" — for transfer members nearing period end. */
+export async function notifyMembershipRenewalReminder(opts: {
+  user: { name: string; email: string }
+  planName: string
+  priceMonthly: number
+  periodEnd: Date
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const bodyHtml = `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        <strong style="color:#0A192F;">${firstName}</strong>, your <strong style="color:#0A192F;">${opts.planName}</strong>
+        month runs to <strong style="color:#0A192F;">${fmtDate(opts.periodEnd)}</strong> — a quick note so it renews
+        without a hitch.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 12px 0;">
+        Renewal is <strong style="color:#0A192F;">${formatNaira(opts.priceMonthly)}</strong> for the next month of
+        pickups. Card members renew automatically — nothing to do. Transfer members: send the renewal before the
+        last day and the office will confirm the moment it lands.
+      </p>`
+    const { subject, html } = staffEmailChrome({
+      category: 'membership',
+      heading: `Your ${opts.planName} renews ${fmtDate(opts.periodEnd)}`,
+      bodyHtml,
+      cta: { label: 'View my membership', url: `${baseUrl()}/portal` },
+      footer: 'Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMembershipRenewalReminder failed:', e)
+  }
+}
+
+/** A member booking was cancelled — the allowance came back (plain words). */
+export async function notifyMemberOrderCancelled(opts: {
+  user: { name: string; email: string }
+  orderNumber: string
+  what: string
+  refunded: boolean
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const bodyHtml = `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        <strong style="color:#0A192F;">${firstName}</strong>, your booking <strong style="color:#0A192F;">${opts.orderNumber}</strong>
+        (${opts.what}) has been cancelled.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 12px 0;">
+        ${
+          opts.refunded
+            ? 'Your included allowance for it is back on your membership — rebook any time from your portal, one tap.'
+            : 'Rebook any time from your portal — one tap and your rider collects at your usual window.'
+        }
+      </p>`
+    const { subject, html } = staffEmailChrome({
+      category: 'membership',
+      heading: `Booking ${opts.orderNumber} cancelled`,
+      bodyHtml,
+      cta: { label: 'Rebook from my portal', url: `${baseUrl()}/portal` },
+      footer: 'Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMemberOrderCancelled failed:', e)
+  }
+}
+
+// =============================================================================
 // KOZY NETWORK (phase 62) — partner application alert
 // =============================================================================
 

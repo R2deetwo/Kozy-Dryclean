@@ -129,6 +129,9 @@ model User {
   partnerProfile      Partner?
   // Partner settlements this admin recorded (audit trail).
   recordedPartnerSettlements PartnerSettlement[] @relation("PartnerSettlementRecorder")
+  // ----- Subscription ledger (phase 75) -----
+  // Manual usage adjustments this admin recorded on member counters.
+  recordedSubscriptionEvents SubscriptionEvent[] @relation("SubscriptionEventRecorder")
 }
 
 enum Role {
@@ -258,6 +261,9 @@ model Order {
   referralRedemption ReferralRedemption?
   // Coupons redeemed on this order (phase 36 — usually 0 or 1)
   couponUsages      DiscountUsage[]
+  // Phase 75: the member-activity ledger rows tied to this order (the
+  // booking consumption + its refund when cancelled).
+  subscriptionEvents SubscriptionEvent[] @relation("SubscriptionOrderEvents")
 
   @@index([userId])
   @@index([driverId])
@@ -1127,6 +1133,20 @@ model Subscription {
   // PENDING_DELIVERY -> WITH_MEMBER -> RETURNED | REPLACED (fee charged)
   kitState      String   @default("PENDING_DELIVERY")
   kitDeliveredAt DateTime?
+  // ----- Kit tag (phase 75) — the QR on the physical Kozy Bag/Box -----
+  // Short code like KZK-7QF3 minted when the kit goes out. The QR printed on
+  // the bag/box label encodes https://kozycare.ng/kit/{code} — scanning it
+  // on the wash floor or in the van opens whose bag this is, their plan and
+  // their cycle usage in one glance. Unique; re-mintable by admin (a worn or
+  // swapped bag gets a fresh tag; the old one dies with the row update).
+  kitTag        String?  @unique
+  // ----- The append-only usage ledger (phase 75) -----
+  // Every entitlement movement, event-sourced: bookings (with the order they
+  // belong to), cancellations (refunds), cycle starts, admin adjustments,
+  // kit hand-overs. The counters above stay the fast "current state"; this
+  // table is the WHY and the WHEN — the answer to "have they washed this
+  // month, how many pickups, did they miss one".
+  events        SubscriptionEvent[] @relation("SubscriptionEvents")
   // ----- Cancellation -----
   cancelAtPeriodEnd Boolean  @default(false)
   cancelledAt  DateTime?
@@ -1137,6 +1157,44 @@ model Subscription {
   @@index([userId])
   @@index([status])
   @@index([periodEnd])
+}
+
+// =====================================================
+// SUBSCRIPTION EVENT (phase 75) — the member's activity ledger
+// =====================================================
+// Append-only. One row per entitlement movement:
+//   UNIT / SHOES / DUVET / CURTAIN / SPRING — a member booking consumed
+//       allowance (delta > 0, orderId set → the order's live status tells
+//       you whether it was actually picked up, delivered, or cancelled)
+//   *_REFUND — a cancelled booking gave the allowance back (delta < 0)
+//   CYCLE_START — a renewal reset the counters (meta carries the new window)
+//   USAGE_ADJUST — an admin corrected the counters by hand (note required)
+//   KIT_DELIVERED / KIT_RETURNED / KIT_REPLACED — the physical kit moves
+// `meta` is JSON: for UNIT bookings { includedUnits, extraUnits } (the split
+// that decided billing), for CYCLE_START { periodStart, periodEnd }.
+// Refunds read the original event's meta so a cancellation returns EXACTLY
+// what the booking took — included and extra both clamped at zero.
+model SubscriptionEvent {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation("SubscriptionEvents", fields: [subscriptionId], references: [id])
+  kind           String
+  // Signed movement on the kind's counter (negative = returned/adjusted down).
+  delta          Int      @default(0)
+  // Quantity on the originating booking (1 for most; N for multi-bag).
+  count          Int      @default(1)
+  meta           String?
+  note           String?
+  // The order this event belongs to (bookings + refunds). Null for cycle /
+  // adjustment / kit events — they belong to the subscription itself.
+  orderId        String?
+  order          Order?   @relation("SubscriptionOrderEvents", fields: [orderId], references: [id])
+  recordedById   String?
+  recordedBy     User?    @relation("SubscriptionEventRecorder", fields: [recordedById], references: [id])
+  createdAt      DateTime @default(now())
+
+  @@index([subscriptionId, createdAt])
+  @@index([orderId])
 }
 
 // =====================================================

@@ -29,7 +29,7 @@ import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { MemberPickupSchema } from '@/lib/schemas'
-import { effectiveStatus, effectiveUsage, quarterKey, yearKey } from '@/lib/subscriptions'
+import { effectiveStatus, effectiveUsage, quarterKey, yearKey, recordSubscriptionEvent } from '@/lib/subscriptions'
 import { assignBranchForAddress } from '@/lib/branches'
 import { notifyOrderCreated, notifyAdminNewOrder } from '@/lib/notifications'
 
@@ -340,6 +340,44 @@ export async function POST(req: Request) {
       await db.subscription.update({ where: { id: sub.id }, data: usagePatch })
     } catch (e) {
       console.error('[memberships] usage update failed (order still placed):', e)
+    }
+  }
+
+  // ----- The ledger row (phase 75) — the WHY behind the counter movement -----
+  // UNIT bookings carry the included/extra split in meta so a cancellation
+  // can refund exactly what this booking took.
+  {
+    const kindMap: Record<string, string> = {
+      unit: 'UNIT',
+      duvet: 'DUVET',
+      curtain: 'CURTAIN',
+      'spring-clean': 'SPRING',
+      shoes: 'SHOES',
+    }
+    const qty = kind === 'unit' ? count : perkCount
+    await recordSubscriptionEvent({
+      subscriptionId: sub.id,
+      kind: kindMap[kind] ?? 'UNIT',
+      delta: qty,
+      count: qty,
+      meta:
+        kind === 'unit'
+          ? { includedUnits: includedUnitsUsed, extraUnits }
+          : kind === 'shoes'
+            ? { club: plan.family === 'SHOES' }
+            : undefined,
+      note: `Booked by member${extraUnits > 0 ? ` — ${extraUnits} extra billed` : ''}`,
+      orderId: order.id,
+    })
+    if (usagePatch.kitState === 'WITH_MEMBER') {
+      await recordSubscriptionEvent({
+        subscriptionId: sub.id,
+        kind: 'KIT_DELIVERED',
+        delta: 0,
+        count: 0,
+        note: 'Kit handed over with the first member pickup',
+        orderId: order.id,
+      })
     }
   }
 

@@ -461,6 +461,9 @@ export function rowToMembership(row: any): Membership {
  * Activate a fresh subscription or renew an existing cycle. Resets the unit
  * counters belonging to the new cycle and lazily rolls the quarter/year
  * bookmarks. Idempotent-ish: called only after money is confirmed.
+ *
+ * Phase 75: every activation/renewal also writes a CYCLE_START ledger row —
+ * the renewal history the member (and the office) can look back on.
  */
 export async function activateOrRenewSubscription(
   subscriptionId: string,
@@ -482,7 +485,7 @@ export async function activateOrRenewSubscription(
       ? new Date(base.getTime() + CYCLE_DAYS * 24 * 60 * 60 * 1000)
       : periodEnd
 
-  return db.subscription.update({
+  const updated = await db.subscription.update({
     where: { id: subscriptionId },
     data: {
       status: 'ACTIVE',
@@ -505,4 +508,371 @@ export async function activateOrRenewSubscription(
     },
     include: { plan: true },
   })
+
+  // The ledger row (best-effort — activation must never fail on it).
+  try {
+    await db.subscriptionEvent.create({
+      data: {
+        subscriptionId,
+        kind: 'CYCLE_START',
+        delta: 0,
+        count: 0,
+        meta: JSON.stringify({
+          periodStart: periodStart.toISOString(),
+          periodEnd: end.toISOString(),
+          pricePaid: Math.round(opts.pricePaid),
+          method: opts.method,
+          renewal: sub.status === 'ACTIVE',
+        }),
+      },
+    })
+  } catch (e) {
+    console.error('[memberships] CYCLE_START ledger write failed:', e)
+  }
+
+  return updated
+}
+
+// =============================================================================
+// THE MEMBER ACTIVITY LEDGER (phase 75)
+// =============================================================================
+// Append-only SubscriptionEvent rows are the WHY behind the counters. The
+// helpers below are the ONLY sanctioned ways to write them, so every surface
+// (member booking, order cancellation, admin desk) records the same shape.
+// =============================================================================
+
+/** Kinds that consume allowance (their refund twins carry _REFUND). */
+export const BOOKING_KINDS = ['UNIT', 'SHOES', 'DUVET', 'CURTAIN', 'SPRING'] as const
+export type BookingKind = (typeof BOOKING_KINDS)[number]
+
+export const KIND_COUNTER: Record<BookingKind, 'unitsUsed' | 'shoesUsed' | 'duvetsUsed' | 'curtainsUsed' | 'springCleanUsed'> = {
+  UNIT: 'unitsUsed',
+  SHOES: 'shoesUsed',
+  DUVET: 'duvetsUsed',
+  CURTAIN: 'curtainsUsed',
+  SPRING: 'springCleanUsed',
+}
+
+/**
+ * Record a booking's consumption (or its refund — pass a negative delta).
+ * `meta` for UNIT bookings carries the included/extra split so a refund can
+ * put back exactly what was taken.
+ */
+export async function recordSubscriptionEvent(input: {
+  subscriptionId: string
+  kind: string
+  delta: number
+  count?: number
+  meta?: Record<string, unknown>
+  note?: string
+  orderId?: string
+  recordedById?: string
+}): Promise<void> {
+  try {
+    await db.subscriptionEvent.create({
+      data: {
+        subscriptionId: input.subscriptionId,
+        kind: input.kind,
+        delta: Math.round(input.delta),
+        count: Math.max(0, Math.round(input.count ?? 1)),
+        ...(input.meta ? { meta: JSON.stringify(input.meta) } : {}),
+        ...(input.note ? { note: input.note.slice(0, 300) } : {}),
+        ...(input.orderId ? { orderId: input.orderId } : {}),
+        ...(input.recordedById ? { recordedById: input.recordedById } : {}),
+      },
+    })
+  } catch (e) {
+    // The ledger is append-only history — never let it break the money path.
+    console.error('[memberships] ledger write failed:', input.kind, e)
+  }
+}
+
+/**
+ * Refund a cancelled member order's allowance. Reads the order's original
+ * booking event (with the included/extra split in meta) and returns exactly
+ * that to the counters — clamped at zero so a refund can never go negative
+ * (edge: the cycle rolled between booking and cancellation).
+ *
+ * Idempotent: a second call finds the refund already written and no-ops —
+ * dragging an order in and out of CANCELLED can never double-refund.
+ */
+export async function refundSubscriptionUsage(orderId: string): Promise<boolean> {
+  const booking = await db.subscriptionEvent.findFirst({
+    where: { orderId, kind: { in: [...BOOKING_KINDS] } },
+    orderBy: { createdAt: 'desc' },
+  })
+  if (!booking) return false
+  const already = await db.subscriptionEvent.findFirst({
+    where: { orderId, kind: `${booking.kind}_REFUND` },
+  })
+  if (already) return false
+
+  const sub = await db.subscription.findUnique({ where: { id: booking.subscriptionId } })
+  if (!sub) return false
+
+  const meta = (() => {
+    try {
+      return JSON.parse(booking.meta ?? '{}')
+    } catch {
+      return {}
+    }
+  })()
+
+  const patch: Record<string, number> = {}
+  if (booking.kind === 'UNIT') {
+    const included = Math.max(0, Number(meta.includedUnits ?? booking.count))
+    const extra = Math.max(0, Number(meta.extraUnits ?? 0))
+    patch.unitsUsed = Math.max(0, sub.unitsUsed - included)
+    patch.extraUnitsUsed = Math.max(0, sub.extraUnitsUsed - extra)
+  } else {
+    const counter = KIND_COUNTER[booking.kind as BookingKind]
+    const before = (sub as any)[counter] ?? 0
+    ;(patch as any)[counter] = Math.max(0, before - booking.count)
+  }
+
+  await db.subscription.update({ where: { id: sub.id }, data: patch })
+  await recordSubscriptionEvent({
+    subscriptionId: sub.id,
+    kind: `${booking.kind}_REFUND`,
+    delta: -booking.count,
+    count: booking.count,
+    meta,
+    note: 'Cancelled booking — allowance returned',
+    orderId,
+  })
+  return true
+}
+
+// =============================================================================
+// KIT TAGS (phase 75) — the QR on the physical Kozy Bag / Kozy Box
+// =============================================================================
+// Minted when the kit goes out (first pickup or admin "mark delivered").
+// The QR encodes https://kozycare.ng/kit/{code} — staff scan it in the van
+// or on the wash floor and instantly see whose bag this is, the plan and
+// the cycle usage.
+// =============================================================================
+
+// 32-char alphabet without ambiguous glyphs (no 0/O/1/I) — readable aloud
+// over the phone when a label smudges.
+const KIT_TAG_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+
+export function mintKitTagCode(): string {
+  let s = ''
+  for (let i = 0; i < 6; i++) {
+    s += KIT_TAG_ALPHABET[Math.floor(Math.random() * KIT_TAG_ALPHABET.length)]
+  }
+  return `KZK-${s}`
+}
+
+/**
+ * Ensure the subscription has a kit tag (mint on first need). Retries on the
+    (rare) unique collision. Returns the tag.
+ */
+export async function ensureKitTag(subscriptionId: string): Promise<string> {
+  const sub = await db.subscription.findUnique({ where: { id: subscriptionId } })
+  if (!sub) throw new Error('Subscription not found')
+  if (sub.kitTag) return sub.kitTag
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const code = mintKitTagCode()
+    try {
+      const updated = await db.subscription.update({
+        where: { id: subscriptionId },
+        data: { kitTag: code },
+      })
+      return updated.kitTag ?? code
+    } catch {
+      // Either a concurrent mint or a code collision — try a fresh code.
+      const again = await db.subscription.findUnique({ where: { id: subscriptionId } })
+      if (again?.kitTag) return again.kitTag
+    }
+  }
+  throw new Error('Could not mint a kit tag — try again')
+}
+
+// =============================================================================
+// CYCLE HEALTH (phase 75) — the retention radar
+// =============================================================================
+// One glance per member: are they USING what they paid for? An unused member
+// is a cancellation waiting to happen; an over-quota member is a candidate
+// for the next tier up. Missed pickups need a phone call today.
+// =============================================================================
+
+export type CycleHealth = {
+  /** OK | UNUSED_RISK | OVER_QUOTA | NO_USAGE_DATA | INACTIVE */
+  state: string
+  /** Human sentence for the admin roster + drill-down. */
+  label: string
+  missedPickups: number
+  pickupsThisCycle: number
+  /** Allowance share consumed (0–1); null when the plan has no units. */
+  usageRatio: number | null
+  /** Share of the cycle already elapsed (0–1). */
+  cycleElapsed: number | null
+}
+
+/**
+ * Compute a member's cycle health from the counters + this cycle's member
+ * orders. `orders` should be the subscription's orders created since
+ * periodStart (status != CANCELLED for the live view).
+ */
+export function cycleHealth(
+  sub: { status: string; periodStart: Date | string | null; periodEnd: Date | string | null; unitsUsed: number },
+  plan: { includedUnits: number } | null | undefined,
+  orders: Array<{ status: string; pickupDate: Date | string; pickedUpAt: Date | string | null; createdAt: Date | string }>,
+  now: Date = new Date()
+): CycleHealth {
+  const eff = effectiveStatus(sub as any)
+  if (eff !== 'ACTIVE' && eff !== 'EXPIRING' && eff !== 'PAST_DUE') {
+    return {
+      state: 'INACTIVE',
+      label: 'Not running',
+      missedPickups: 0,
+      pickupsThisCycle: 0,
+      usageRatio: null,
+      cycleElapsed: null,
+    }
+  }
+
+  const start = sub.periodStart ? new Date(sub.periodStart) : null
+  const end = sub.periodEnd ? new Date(sub.periodEnd) : null
+  const live = orders.filter((o) => o.status !== 'CANCELLED')
+  const missed = live.filter((o) => {
+    const pd = new Date(o.pickupDate)
+    // A member order whose pickup day passed without being picked up.
+    const dayEnd = new Date(pd)
+    dayEnd.setHours(23, 59, 59, 999)
+    return !o.pickedUpAt && dayEnd.getTime() < now.getTime()
+  })
+
+  const pickedUp = live.filter((o) => Boolean(o.pickedUpAt)).length
+  const usageRatio = plan && plan.includedUnits > 0 ? Math.min(1, sub.unitsUsed / plan.includedUnits) : null
+
+  let cycleElapsed: number | null = null
+  if (start && end && end.getTime() > start.getTime()) {
+    cycleElapsed = Math.max(0, Math.min(1, (now.getTime() - start.getTime()) / (end.getTime() - start.getTime())))
+  }
+
+  let state = 'OK'
+  let label = 'On track'
+  if (missed.length > 0) {
+    state = 'MISSED_PICKUP'
+    label = `${missed.length} missed pickup${missed.length === 1 ? '' : 's'} — call today`
+  } else if (usageRatio !== null && cycleElapsed !== null && cycleElapsed > 0.6 && usageRatio < 0.25) {
+    state = 'UNUSED_RISK'
+    label = 'Barely used — nudge before the month runs out'
+  } else if (usageRatio !== null && usageRatio >= 1) {
+    state = 'OVER_QUOTA'
+    label = 'Full allowance used — extras or next tier'
+  } else if (pickedUp === 0 && live.length === 0 && cycleElapsed !== null && cycleElapsed > 0.35) {
+    state = 'NO_USAGE_DATA'
+    label = 'No bookings yet this cycle'
+  }
+
+  return { state, label, missedPickups: missed.length, pickupsThisCycle: pickedUp, usageRatio, cycleElapsed }
+}
+
+/**
+ * A member's in-cycle activity for the portal and the admin drill-down:
+ * the subscription orders since periodStart (with live status + the
+ * missed-pickup flag) and the raw ledger tail. Kept lean — the portal
+ * payload stays small even for a heavy member.
+ */
+export async function getSubscriptionActivity(subscriptionId: string, opts?: { eventLimit?: number }) {
+  const sub = await db.subscription.findUnique({
+    where: { id: subscriptionId },
+    include: { plan: true },
+  })
+  if (!sub) return null
+
+  const since = sub.periodStart ?? new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+  const orders = await db.order.findMany({
+    where: { subscriptionId: sub.id, createdAt: { gte: since } },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      itemsManifest: true,
+      pickupDate: true,
+      pickupTimeSlot: true,
+      pickedUpAt: true,
+      deliveredAt: true,
+      totalPrice: true,
+      createdAt: true,
+    },
+  })
+
+  const events = await db.subscriptionEvent.findMany({
+    where: { subscriptionId: sub.id },
+    orderBy: { createdAt: 'desc' },
+    take: opts?.eventLimit ?? 30,
+  })
+
+  const now = new Date()
+  const activity = orders.map((o) => {
+    let kind = 'unit'
+    let count = 1
+    let label = 'Member pickup'
+    try {
+      const first = JSON.parse(o.itemsManifest ?? '[]')[0]
+      if (first?.id) {
+        if (first.id === 'member_unit') {
+          kind = 'unit'
+          count = Number(first.quantity ?? 1)
+          label = `${count} × ${sub.plan?.unitName ?? 'Kozy Bag'} pickup${count === 1 ? '' : 's'}`
+        } else if (first.id === 'member_perk_duvet') {
+          kind = 'duvet'
+          count = Number(first.quantity ?? 1)
+          label = count === 1 ? 'Duvet wash — included' : `${count} × duvet wash — included`
+        } else if (first.id === 'member_perk_curtain') {
+          kind = 'curtain'
+          count = Number(first.quantity ?? 1)
+          label = 'Curtain care — included'
+        } else if (first.id === 'member_perk_spring') {
+          kind = 'spring-clean'
+          count = 1
+          label = 'Spring clean — included'
+        } else if (first.id === 'member_perk_shoes') {
+          kind = 'shoes'
+          count = Number(first.quantity ?? 1)
+          label = count === 1 ? 'Shoe clean — included' : `${count} × shoe clean — included`
+        }
+      }
+    } catch {
+      /* manifest unparsable — the generic label stands */
+    }
+    const dayEnd = new Date(o.pickupDate)
+    dayEnd.setHours(23, 59, 59, 999)
+    const missed = !o.pickedUpAt && o.status !== 'CANCELLED' && dayEnd.getTime() < now.getTime()
+    return {
+      id: o.id,
+      orderNumber: o.orderNumber,
+      kind,
+      count,
+      label,
+      status: o.status,
+      missed,
+      pickupDate: o.pickupDate.toISOString(),
+      pickupTimeSlot: o.pickupTimeSlot,
+      pickedUpAt: o.pickedUpAt?.toISOString() ?? null,
+      deliveredAt: o.deliveredAt?.toISOString() ?? null,
+      extraCharge: o.totalPrice ?? 0,
+      createdAt: o.createdAt.toISOString(),
+    }
+  })
+
+  return {
+    subscriptionId: sub.id,
+    activity,
+    events: events.map((e) => ({
+      id: e.id,
+      kind: e.kind,
+      delta: e.delta,
+      count: e.count,
+      note: e.note,
+      orderId: e.orderId,
+      createdAt: e.createdAt.toISOString(),
+    })),
+  }
 }
