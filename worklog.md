@@ -1704,3 +1704,15 @@ Stage Summary:
 - SAFE BY DEFAULT: memberEmailAutomation ships OFF — until the office arms it in Settings → Notifications, only @woosh.dpdns.org test accounts + practiceprosystems@gmail.com can ever receive; everyone else is reported as suppressed and will receive normally once armed (suppression never writes the dedupe row).
 - The money chain: member pays at the renewal card (card = Paystack one-off for N months / recurring for 1; transfer = KZY-RENEW reference + office alert) → webhook/office confirm extends periodEnd by N × 30 days → months-aware activation email. Admin drill-down previews any member's summary in the admin's own inbox.
 - Owner follow-ups: review the 6 test emails (woosh inboxes + practiceprosystems@gmail.com — delivered + opened); when satisfied, flip Settings → Notifications → "Send member emails for real"; cron fires daily 09:00 WAT (first run tomorrow morning — watch the Vercel function logs or just watch the inbox); PAYSTACK_SECRET_KEY still unset → the card renewal button honestly says transfer-only until it is added.
+
+---
+Task ID: 76-b
+Agent: Super Z (main agent)
+Task: Google Ads logo package hosting (the last token-blocked item from Task 74 — the old zip was wiped by a sandbox reset; the brand assets survived)
+
+Work Log:
+- Rebuilt the curated Google Ads zip from the surviving v6.2 brand assets (byte-identical copies, md5 verified): the square 1:1 kozy-app-icon-1024.png (1024x1024) + five 2400x600 (4:1) landscape lockups (primary navy/gold/white, compact-gold, print-caps-white) + a README mapping each file to its Google Ads field with a recommended submission order.
+- Deployed as a static public asset: LIVE at https://kozycare.ng/kozy-google-ads-logos.zip (200, ~241KB) — a permanent, stable download URL that survives tmp-file expiry. Copy also in download/kozy-google-ads-logos.zip.
+
+Stage Summary:
+- All three token-blocked items are now closed: Task 75 subscription tracking (live), Task 76 member email automation + renewals (live), and the Google Ads logo package hosted on the production domain.
