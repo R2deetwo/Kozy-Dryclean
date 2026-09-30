@@ -7,6 +7,11 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import Link from 'next/link'
 
+/** Only allow same-site relative redirect targets (no open redirects). */
+function safePath(p: string | null | undefined): string | null {
+  return p && p.startsWith('/') && !p.startsWith('//') ? p : null
+}
+
 export default function VerifyEmailPage() {
   return (
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-linen"><Loader2 className="h-8 w-8 animate-spin text-navy-300" /></div>}>
@@ -18,6 +23,12 @@ export default function VerifyEmailPage() {
 function VerifyEmailContent() {
   const searchParams = useSearchParams()
   const token = searchParams.get('token')
+  // Phase 80 — the return destination that rode on the verification link
+  // (e.g. /memberships?join=ESSENTIALS). Forwarding it to login is the last
+  // hop of the chain that brings a new member BACK to the plan they were
+  // joining — before this the chain always ended in the portal, which read
+  // as "membership with no payment".
+  const callbackUrl = safePath(searchParams.get('callbackUrl'))
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading')
   const [message, setMessage] = useState('')
 
@@ -71,9 +82,17 @@ function VerifyEmailContent() {
               </div>
               <h1 className="font-serif text-2xl font-semibold text-navy mb-2">Email verified!</h1>
               <p className="text-sm text-navy-300 mb-6">{message}</p>
-              <Link href="/login">
+              <Link
+                href={
+                  callbackUrl
+                    ? `/login?callbackUrl=${encodeURIComponent(callbackUrl)}`
+                    : '/login'
+                }
+              >
                 <Button className="bg-gold-gradient text-navy hover:opacity-90 w-full">
-                  Sign in to your account
+                  {callbackUrl?.includes('join=')
+                    ? 'Sign in & finish joining'
+                    : 'Sign in to your account'}
                 </Button>
               </Link>
             </>

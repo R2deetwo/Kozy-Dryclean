@@ -95,7 +95,9 @@ function SignupSuccess() {
       const res = await fetch('/api/auth/resend-verification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }),
+        // Phase 80 — the resend keeps the return destination on the link so
+        // the chain still lands back on the plan being joined.
+        body: JSON.stringify({ email, callbackUrl }),
       })
       const data = await res.json()
       setResendMessage(data.message || data.error || 'Something went wrong.')
@@ -118,7 +120,7 @@ function SignupSuccess() {
       const res = await fetch('/api/auth/update-unverified-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentEmail: email, newEmail: fixedEmail.trim() }),
+        body: JSON.stringify({ currentEmail: email, newEmail: fixedEmail.trim(), callbackUrl }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -171,6 +173,13 @@ function SignupSuccess() {
             </p>
             <p className="text-xs text-navy-300 mb-4">
               Click the link to activate your account, then sign in.
+              {callbackUrl?.includes('join=') ? (
+                <>
+                  <br />
+                  <strong className="text-navy">We&apos;ll bring you straight back to your chosen plan</strong>{' '}
+                  to complete your first payment — nothing is charged until then.
+                </>
+              ) : null}
               <br />
               <strong className="text-navy">Didn&apos;t get it?</strong> Check your spam folder — or
               fix the address below.

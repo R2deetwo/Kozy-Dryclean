@@ -20,7 +20,7 @@
 // identical end state.
 // =============================================================================
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import NextImage from 'next/image'
 import { useSession } from 'next-auth/react'
@@ -63,7 +63,8 @@ import {
 export function MembershipsClient() {
   const { data: session, status } = useSession()
   const { data: plans, isLoading: plansLoading } = useMembershipPlans(true)
-  const { data: myMembership } = useMyMembership()
+  const membershipQuery = useMyMembership()
+  const myMembership = membershipQuery.data
 
   const [joinPlan, setJoinPlan] = useState<ApiMembershipPlan | null>(null)
 
@@ -86,6 +87,27 @@ export function MembershipsClient() {
   )
 
   const alreadyMember = Boolean(myMembership?.membership)
+
+  // Phase 80 — the join deep link: /memberships?join=ESSENTIALS re-opens the
+  // exact plan's dialog. It arrives from the JoinDialog's own account step,
+  // carried through signup → verification email → login (the chain that used
+  // to lose the plan at the first hop). Guarded: only once the plan rows are
+  // live AND the membership probe has settled (signed-out probes error — that
+  // counts as settled and not-a-member); the param is stripped after use so a
+  // refresh never re-triggers the dialog.
+  useEffect(() => {
+    if (joinPlan || alreadyMember) return
+    if (!activePlans.length) return
+    if (!(membershipQuery.isSuccess || membershipQuery.isError)) return
+    const code = new URLSearchParams(window.location.search).get('join')
+    if (!code) return
+    const target = activePlans.find(
+      (p) => p.code.toUpperCase() === code.trim().toUpperCase()
+    )
+    if (!target) return
+    setJoinPlan(target)
+    window.history.replaceState({}, '', '/memberships')
+  }, [joinPlan, alreadyMember, activePlans, membershipQuery.isSuccess, membershipQuery.isError])
 
   return (
     <div className="bg-linen">
@@ -648,7 +670,6 @@ export function MembershipsClient() {
           sessionEmail={isCustomerSession ? session?.user?.email ?? null : null}
           sessionRole={sessionRole}
           authStatus={status}
-          returnTo="/memberships"
         />
       )}
     </div>

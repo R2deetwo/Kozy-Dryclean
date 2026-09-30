@@ -39,6 +39,10 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => ({}))
   const { currentEmail, newEmail } = body ?? {}
+  // Phase 80 — keep the return destination on the corrected-address resend
+  // too (the success screen sends it along with the fix).
+  const rawReturn = typeof body?.callbackUrl === 'string' ? body.callbackUrl : ''
+  const safeReturn = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : null
 
   if (!currentEmail || !newEmail) {
     return NextResponse.json(
@@ -112,7 +116,7 @@ export async function POST(req: Request) {
   })
 
   try {
-    await sendVerificationEmail(normalizedNew, user.name, token)
+    await sendVerificationEmail(normalizedNew, user.name, token, safeReturn ?? undefined)
   } catch (e: any) {
     console.error('Failed to send verification email after email fix:', e)
     return NextResponse.json(

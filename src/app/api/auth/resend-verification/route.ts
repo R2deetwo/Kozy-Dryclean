@@ -22,7 +22,12 @@ export async function POST(req: Request) {
     )
   }
 
-  const { email } = await req.json()
+  const body = await req.json().catch(() => ({}))
+  const email = body?.email
+  // Phase 80 — the resend keeps the same return destination riding on the
+  // verification link (the success screen sends it; see signup-success).
+  const rawReturn = typeof body?.callbackUrl === 'string' ? body.callbackUrl : ''
+  const safeReturn = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : null
 
   if (!email) {
     return NextResponse.json({ error: 'Email is required' }, { status: 400 })
@@ -74,7 +79,7 @@ export async function POST(req: Request) {
 
   // Send email
   try {
-    await sendVerificationEmail(user.email, user.name, token)
+    await sendVerificationEmail(user.email, user.name, token, safeReturn ?? undefined)
     return NextResponse.json({
       ok: true,
       message: 'A new verification link has been sent to your email.',

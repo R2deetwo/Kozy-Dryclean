@@ -39,6 +39,13 @@ export async function POST(req: Request) {
 
   const body = await req.json()
   const { email, password, name, phone, role } = body
+  // Phase 80 — where the customer was headed when they created the account
+  // (e.g. /memberships?join=ESSENTIALS). It rides on the verification email
+  // so the verify → login chain brings them BACK to finish joining + paying
+  // instead of dumping them in the portal with the plan lost. Same-site
+  // relative paths only (same safePath rule as every callback consumer).
+  const rawReturn = typeof body?.callbackUrl === 'string' ? body.callbackUrl : ''
+  const safeReturn = rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : null
 
   // ----- Role clamp (SECURITY) -----
   // Public signup may only create CUSTOMER accounts. ADMIN and DRIVER
@@ -117,7 +124,7 @@ export async function POST(req: Request) {
   // by POST /api/auth/update-unverified-email.
   after(async () => {
     try {
-      await sendVerificationEmail(user.email, user.name, token)
+      await sendVerificationEmail(user.email, user.name, token, safeReturn ?? undefined)
     } catch (e: any) {
       console.error('Failed to send verification email:', e)
     }

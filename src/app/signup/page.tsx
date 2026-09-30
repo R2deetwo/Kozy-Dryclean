@@ -76,6 +76,10 @@ function SignupForm() {
           phone,
           role: accountType,
           company: accountType === 'B2B' ? company : undefined,
+          // Phase 80 — the return destination rides on the signup so the
+          // verification email can carry it (verify → login → back to the
+          // plan the visitor was joining, payment step included).
+          callbackUrl,
         }),
       })
 

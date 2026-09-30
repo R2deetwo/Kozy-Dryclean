@@ -21,7 +21,7 @@
 // / 6 twice-weekly) — never 1/3/5, which mirrors the laundry tiers.
 // =============================================================================
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useSession } from 'next-auth/react'
 import { motion } from 'framer-motion'
@@ -54,7 +54,8 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
   // ----- The Shoe Club (phase 70): live plan rows, SHOES family only -----
   const { data: session, status } = useSession()
   const { data: plans } = useMembershipPlans(true)
-  const { data: myMembership } = useMyMembership()
+  const membershipQuery = useMyMembership()
+  const myMembership = membershipQuery.data
   const [joinPlan, setJoinPlan] = useState<ApiMembershipPlan | null>(null)
 
   // Phase 73 — same rule as the tiers page: only customer sessions (B2C/B2B)
@@ -83,6 +84,25 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
     [clubPlans]
   )
   const inClub = Boolean(myMembership?.shoeClub)
+
+  // Phase 80 — the join deep link: /services?join=CLUB-CODE re-opens the
+  // club's dialog (arriving back from the account-creation detour the dialog
+  // itself sends visitors on — signup → verify email → login). Same guards
+  // as the tiers page: plan rows live, membership probe settled, param
+  // stripped after use.
+  useEffect(() => {
+    if (joinPlan || inClub) return
+    if (!clubPlans.length) return
+    if (!(membershipQuery.isSuccess || membershipQuery.isError)) return
+    const code = new URLSearchParams(window.location.search).get('join')
+    if (!code) return
+    const target = clubPlans.find(
+      (p) => p.code.toUpperCase() === code.trim().toUpperCase()
+    )
+    if (!target) return
+    setJoinPlan(target)
+    window.history.replaceState({}, '', '/services')
+  }, [joinPlan, inClub, clubPlans, membershipQuery.isSuccess, membershipQuery.isError])
 
   const onJoinClub = (plan: ApiMembershipPlan) => {
     // A membership lives in an account — the dialog itself now handles
@@ -541,7 +561,6 @@ export function ServicesDetail({ onBook, onBookShoes }: Props) {
           sessionEmail={isCustomerSession ? session?.user?.email ?? null : null}
           sessionRole={sessionRole}
           authStatus={status}
-          returnTo="/services#shoe-care"
         />
       )}
     </>

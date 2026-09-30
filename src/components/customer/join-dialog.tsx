@@ -51,8 +51,6 @@ export function JoinDialog({
   sessionRole?: string | null
   /** next-auth status — while loading we hold the dialog instead of guessing. */
   authStatus?: 'loading' | 'authenticated' | 'unauthenticated'
-  /** Where to return after signup / login / sign-out (e.g. ‘/memberships’). */
-  returnTo?: string
 }) {
   const subscribe = useSubscribe()
   const paystackInit = useMembershipPaystackInit()
@@ -76,7 +74,16 @@ export function JoinDialog({
 
   const isClub = plan.family === 'SHOES'
   const auth = authStatus ?? (sessionEmail ? 'authenticated' : 'unauthenticated')
-  const backTo = returnTo ?? '/memberships'
+  // Phase 80 — the account step carries the PLAN, not just the page. The
+  // deep link (?join=CODE) re-opens this exact dialog after the signup →
+  // verify-email → login detour (both pages auto-open it). Before this the
+  // plan — and its payment step — were lost at the first hop: a visitor
+  // "joined", created an account, landed in the portal, and no payment was
+  // ever shown (the phase-80 owner complaint: "no payment required, it went
+  // straight to the portal").
+  const backTo = isClub
+    ? `/services?join=${encodeURIComponent(plan.code)}#shoe-care`
+    : `/memberships?join=${encodeURIComponent(plan.code)}`
   const backToEncoded = encodeURIComponent(backTo)
   // Plain words for the signed-in-but-wrong-account case.
   const accountLabel =

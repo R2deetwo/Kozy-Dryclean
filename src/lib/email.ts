@@ -101,9 +101,22 @@ export async function sendEmail({ to, subject, html, tags }: SendEmailParams): P
   console.log(`[brevo] sent: ${subject} -> ${target}`)
 }
 
-export async function sendVerificationEmail(email: string, name: string, token: string): Promise<void> {
+export async function sendVerificationEmail(
+  email: string,
+  name: string,
+  token: string,
+  returnTo?: string
+): Promise<void> {
   const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-  const verifyUrl = `${baseUrl}/verify-email?token=${token}`
+  // Phase 80 — the return destination rides along on the verification link
+  // (only same-site relative paths; absolute or protocol-relative values are
+  // dropped — no open redirects through the email). Without it the verify →
+  // login chain forgot where the customer was headed: a visitor joining a
+  // plan ended up in the portal with the plan (and its payment step) lost.
+  const safeReturn = returnTo && returnTo.startsWith('/') && !returnTo.startsWith('//') ? returnTo : null
+  const verifyUrl = `${baseUrl}/verify-email?token=${token}${
+    safeReturn ? `&callbackUrl=${encodeURIComponent(safeReturn)}` : ''
+  }`
 
   await sendEmail({
     to: email,
