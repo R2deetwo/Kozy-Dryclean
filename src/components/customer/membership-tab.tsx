@@ -155,6 +155,22 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
             }}
           />
         )}
+
+        {/* Phase 79 — a shoes-only member whose club payment never landed
+            gets the same completion card as the laundry tiers (the trap
+            fix covers BOTH families). Reactivation (PAST_DUE/LAPSED) rides
+            the same card. */}
+        {clubMembership &&
+          clubPlan &&
+          ['PENDING_ACTIVATION', 'PAST_DUE', 'LAPSED'].includes(clubStatus) && (
+            <RenewalCard
+              membership={clubMembership}
+              plan={clubPlan}
+              status={clubStatus}
+              cardId="kozy-renewal-club"
+            />
+          )}
+
         <JoinCard />
         {booking && bookingClub && clubPlan && (
           <MemberPickupDialog
@@ -242,9 +258,9 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
           )}
           {status === 'PENDING_ACTIVATION' && (
             <p className="mt-3 text-xs leading-relaxed text-navy-100/80">
-              We received your membership — the moment your payment is verified, your month starts
-              and your rider schedules the kit hand-over. (Card payments verify themselves
-              instantly; transfers take a human glance.)
+              We received your membership — complete your first payment below and your month starts
+              the moment it is confirmed (card payments verify themselves instantly; transfers take
+              a human glance).
             </p>
           )}
         </div>
@@ -407,15 +423,20 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
         )}
       </Card>
 
-      {/* ===== The payment card (phase 76 → 78) — the member's own payment
-          place. Near the month's end (or past it): the full prepopulated
-          renewal card with the whole standing ladder (1/3/6/12 months).
-          Mid-cycle: the same card collapses to ONE quiet line ("covered
-          through … · months stack · add months early") so a member can
-          always settle a quarter, half-year or year on their own — without
-          the page ever shouting at them. This is where the monthly summary
-          email's CTAs land. ===== */}
-      {plan && membership && status !== 'PENDING_ACTIVATION' && status !== 'CANCELLED' && (
+      {/* ===== The payment card (phase 76 → 78 → 79) — the member's own
+          payment place. Near the month's end (or past it): the full
+          prepopulated renewal card with the whole standing ladder
+          (1/3/6/12 months). Mid-cycle: the same card collapses to ONE quiet
+          line ("covered through … · months stack · add months early") so a
+          member can always settle a quarter, half-year or year on their own
+          — without the page ever shouting at them. This is where the monthly
+          summary email's CTAs land.
+          PHASE 79: PENDING_ACTIVATION members get the card too — as the
+          "Complete your first payment" card. A member whose card checkout
+          never opened (or whose transfer never landed) previously had NO
+          payment surface at all while pending — the trap behind the office's
+          "subscribed but cannot pay" complaint. ===== */}
+      {plan && membership && status !== 'CANCELLED' && (
         <RenewalCard
           membership={membership}
           plan={plan}
@@ -453,6 +474,19 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
           }}
         />
       )}
+
+      {/* Phase 79 — the club's own payment card when the club is pending or
+          paused, for members who hold BOTH a tier and the club. */}
+      {clubMembership &&
+        clubPlan &&
+        ['PENDING_ACTIVATION', 'PAST_DUE', 'LAPSED'].includes(clubStatus) && (
+          <RenewalCard
+            membership={clubMembership}
+            plan={clubPlan}
+            status={clubStatus}
+            cardId="kozy-renewal-club"
+          />
+        )}
 
       {/* ===== Booking dialog (tier perks or Shoe Club — same machinery) ===== */}
       {booking &&
@@ -569,16 +603,21 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
 }
 
 // =============================================================================
-// RenewalCard (phase 76 → 78) — the member's own payment place
+// RenewalCard (phase 76 → 79) — the member's own payment place
 // =============================================================================
 // Near the end of a cycle (≤10 days), when the member asked for no
 // auto-renew, or when the membership has paused (PAST_DUE/LAPSED): the full
 // prepopulated renewal card — plan already known, the month-count selector
 // now the WHOLE standing ladder (1 / 3 / 6 / 12 months, each discounted rung
-// in green with its saving spelled out, per-month figure at the deeper
-// rungs), and the two payment paths mirroring the join checkout — card
-// (Paystack redirect) or bank transfer (instructions + reference; the
-// office confirms in the drill-down).
+// in NAVY with its saving spelled out — brand colours only, phase 79 —
+// per-month figure at the deeper rungs), and the two payment paths mirroring
+// the join checkout — card (Paystack redirect) or bank transfer
+// (instructions + reference; the office confirms in the drill-down).
+//
+// PENDING_ACTIVATION (phase 79): the same card becomes "Complete your first
+// payment" — one month at plan price, no ladder, both payment paths. This is
+// the door out of the phase-79 trap (members who joined, the card checkout
+// never opened, and no payment surface existed while pending).
 //
 // MID-CYCLE (phase 78): the same card becomes the quiet "cover more months"
 // place — collapsed to ONE calm line by default (covered-through date +
@@ -594,11 +633,15 @@ function RenewalCard({
   plan,
   status,
   prefillMonths,
+  cardId,
 }: {
   membership: ApiMembership
   plan: ApiMembershipPlan
   status: string
   prefillMonths?: number
+  /** The deep-link anchor — the laundry card keeps #kozy-renewal; the Shoe
+   *  Club card (phase 79) uses its own so the two never collide. */
+  cardId?: string
 }) {
   const [months, setMonths] = useState<number>(
     (RENEWAL_MONTH_CHOICES as readonly number[]).includes(Number(prefillMonths))
@@ -636,16 +679,22 @@ function RenewalCard({
     ? Math.ceil((periodEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
     : null
   const paused = status === 'PAST_DUE' || status === 'LAPSED'
+  // Phase 79 — a pending membership shows the completion card: the FIRST
+  // payment, one month, no ladder (the ladder opens once it is live).
+  const pending = status === 'PENDING_ACTIVATION'
   // The full card when the month is actually running out (or already has);
   // mid-cycle, the quiet collapsed card carries the same machinery.
   const needsRenewal =
-    paused || membership.cancelAtPeriodEnd || (daysLeft !== null && daysLeft <= 10)
+    pending || paused || membership.cancelAtPeriodEnd || (daysLeft !== null && daysLeft <= 10)
+  // The first payment is a single month at plan price — the ladder is for
+  // live memberships. (The renew API enforces the same rule.)
+  const effectiveMonths = pending ? 1 : months
 
   // ----- The quiet mid-cycle card: one calm line + an expand button -----
   // A deep link (?renew=1&months=N) expands it straight away.
   if (!needsRenewal && !earlyOpen && prefillMonths === undefined) {
     return (
-      <Card className="border-navy-100 bg-white" id="kozy-renewal">
+      <Card className="border-navy-100 bg-white" id={cardId ?? 'kozy-renewal'}>
         <CardContent className="p-4 sm:p-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="max-w-md text-sm leading-relaxed text-navy-300">
@@ -670,8 +719,8 @@ function RenewalCard({
     )
   }
 
-  const price = renewalPriceFor(plan.priceMonthly, months)
-  const saving = renewalSavingFor(plan.priceMonthly, months)
+  const price = renewalPriceFor(plan.priceMonthly, effectiveMonths)
+  const saving = renewalSavingFor(plan.priceMonthly, effectiveMonths)
   const paystackAvailable = appSettings?.paystackAvailable ?? false
 
   const renew = async (method: 'PAYSTACK' | 'BANK_TRANSFER') => {
@@ -680,7 +729,11 @@ function RenewalCard({
       const res = await fetch('/api/subscriptions/renew', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subscriptionId: membership.id, months, method }),
+        body: JSON.stringify({
+          subscriptionId: membership.id,
+          months: effectiveMonths,
+          method,
+        }),
       })
       const data = await res.json().catch(() => ({}))
       if (method === 'PAYSTACK') {
@@ -697,8 +750,10 @@ function RenewalCard({
         if (res.ok && data.transfer) {
           setTransfer(data.transfer)
           toast({
-            title: 'Almost there — one transfer',
-            description: 'Send the amount with your reference; the office confirms the moment it lands.',
+            title: pending ? 'One transfer and you are in' : 'Almost there — one transfer',
+            description: pending
+              ? 'Send the amount with your reference; your membership activates the moment the office confirms.'
+              : 'Send the amount with your reference; the office confirms the moment it lands.',
           })
         } else {
           toast({
@@ -720,19 +775,25 @@ function RenewalCard({
   }
 
   return (
-    <Card className="overflow-hidden border-gold-300/60 shadow-navy" id="kozy-renewal">
+    <Card className="overflow-hidden border-gold-300/60 shadow-navy" id={cardId ?? 'kozy-renewal'}>
       <CardContent className="p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600">
-              {paused
+              {pending
+                ? plan.family === 'SHOES'
+                  ? 'Almost in the club'
+                  : 'Almost in the Circle'
+                : paused
                 ? 'Your membership has paused'
                 : needsRenewal
                   ? 'Your next month'
                   : 'Cover more months'}
             </p>
             <p className="mt-1 font-serif text-xl font-semibold text-navy">
-              {paused
+              {pending
+                ? 'Complete your first payment'
+                : paused
                 ? `Reactivate the ${plan.name}`
                 : membership.cancelAtPeriodEnd
                   ? `Keep the ${plan.name} going`
@@ -746,10 +807,19 @@ function RenewalCard({
               Paused
             </Badge>
           )}
+          {pending && (
+            <Badge variant="outline" className="rounded-full border-gold-200 bg-gold-50 text-gold-700">
+              Awaiting payment
+            </Badge>
+          )}
         </div>
 
         <p className="mt-2 text-sm leading-relaxed text-navy-300">
-          {paused
+          {pending
+            ? plan.family === 'SHOES'
+              ? `Your ${plan.shoesPerMonth} pair${plan.shoesPerMonth === 1 ? '' : 's'} of cleans a month unlock the moment your first month is paid. Pay by transfer below (or by card when it is available); the kinder 3/6/12-month rates open right after.`
+              : `Your ${plan.includedUnits} × ${plan.unitName} pickups start the moment your first month is paid — and your rider schedules the ${plan.unitName} hand-over. Pay by transfer below (or by card when it is available); the 3/6/12-month kinder rates open right after.`
+            : paused
             ? `Your ${plan.includedUnits} × ${plan.unitName} pickups restart the moment you renew — your ${plan.unitName} is still yours and your history is intact.`
             : membership.cancelAtPeriodEnd
               ? `You asked us not to auto-renew — the month ends ${periodEnd ? formatDate(periodEnd.toISOString()) : 'soon'}. Change your mind in one tap: renew below and everything continues as before.`
@@ -759,7 +829,22 @@ function RenewalCard({
         </p>
 
         {/* The payment options — the standing ladder: next month, or a
-            discounted 3 / 6 / 12-month cover, every discounted rung green */}
+            discounted 3 / 6 / 12-month cover, every discounted rung navy
+            (brand). PENDING members see a single first-month line instead —
+            the ladder opens the moment the membership is live. */}
+        {pending ? (
+          <div className="mt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
+              Your first month
+            </p>
+            <p className="mt-2 text-sm text-navy">
+              <strong>{formatNaira(price)}</strong>
+              <span className="ml-2 text-xs text-navy-300">
+                one month · then the kinder 3/6/12-month rates open in this card
+              </span>
+            </p>
+          </div>
+        ) : (
         <div className="mt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
             How many months?
@@ -775,7 +860,7 @@ function RenewalCard({
                   onClick={() => setMonths(m)}
                   className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
                     selected && m > 1
-                      ? 'border-emerald-400 bg-gradient-to-br from-emerald-500 to-emerald-700 text-white shadow-sm'
+                      ? 'border-navy-500 bg-gradient-to-br from-navy-500 to-navy-700 text-white shadow-sm'
                       : selected
                         ? 'border-gold-400 bg-gold-gradient text-navy shadow-sm'
                         : 'border-navy-200 bg-white text-navy-300 hover:border-navy-300 hover:text-navy'
@@ -784,7 +869,7 @@ function RenewalCard({
                   {m === 1 ? '1 month' : `${m} months`}
                   <span
                     className={`ml-1.5 text-xs font-normal ${
-                      selected && m > 1 ? 'text-emerald-50' : 'opacity-80'
+                      selected && m > 1 ? 'text-gold-200' : 'opacity-80'
                     }`}
                   >
                     {formatNaira(renewalPriceFor(plan.priceMonthly, m))}
@@ -794,7 +879,7 @@ function RenewalCard({
                       className={`ml-1.5 rounded-full px-1.5 py-px text-[10px] font-bold uppercase tracking-wide ${
                         selected
                           ? 'bg-white/25 text-white'
-                          : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                          : 'bg-navy-50 text-navy-700 ring-1 ring-navy-200'
                       }`}
                     >
                       save {formatNaira(mSaving)}
@@ -807,11 +892,12 @@ function RenewalCard({
           {months > 1 && saving > 0 && (
             <p className="mt-2 text-xs text-navy-300">
               One payment of <strong className="text-navy">{formatNaira(price)}</strong> covers your next {months} months —
-              <strong className="text-emerald-700"> {formatNaira(saving)} less</strong> than paying month by month
+              <strong className="text-navy-700"> {formatNaira(saving)} less</strong> than paying month by month
               {months >= 6 ? ` (${formatNaira(Math.round(price / months))} a month)` : ''}.
             </p>
           )}
         </div>
+        )}
 
         {/* The payment paths — same as the join checkout */}
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
@@ -845,7 +931,7 @@ function RenewalCard({
         {!paystackAvailable && (
           <p className="mt-2 text-xs text-navy-300">
             Card payments are not configured yet — bank transfer works today; your{' '}
-            {months > 1 ? `${months} months` : 'next month'} applies the moment the office confirms.
+            {pending ? 'membership activates' : months > 1 ? `${months} months apply` : 'next month applies'} the moment the office confirms.
           </p>
         )}
 
@@ -876,7 +962,9 @@ function RenewalCard({
         )}
 
         <p className="mt-4 text-xs leading-relaxed text-navy-300">
-          The longer you cover, the kinder the rate — always.
+          {pending
+            ? 'Once your first month is in, the standing ladder takes over — the longer you cover, the kinder the rate, always.'
+            : 'The longer you cover, the kinder the rate — always.'}
         </p>
         <p className="mt-2 text-xs leading-relaxed text-navy-300">
           Need a second {plan.unitName} for the busy weeks? Reply to your summary email or call{' '}

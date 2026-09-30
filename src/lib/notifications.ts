@@ -2043,7 +2043,10 @@ export async function notifyMemberOrderCancelled(opts: {
  *  borrowed the staff header verbatim; these new ones read like the
  *  member-facing mail they are). Phase 77: `ctas` renders a STACKED button
  *  pair (the renewal email's next-month gold button + the discounted
- *  3-month green button); the single `cta` keeps serving every other mail. */
+ *  3-month button); phase 79: the prepay button is NAVY — the owner's brand
+ *  call (green was never a Kozy colour; gold = the primary action, navy =
+ *  the longer-cover action). The single `cta` keeps serving every other
+ *  mail. */
 function memberEmailChrome(opts: {
   category: string
   heading: string
@@ -2052,7 +2055,7 @@ function memberEmailChrome(opts: {
   ctas?: Array<{
     label: string
     url: string
-    variant?: 'gold' | 'green'
+    variant?: 'gold' | 'navy'
     note?: string
   }>
   footer?: string
@@ -2061,8 +2064,8 @@ function memberEmailChrome(opts: {
   const subject = `[Kozy Care · ${categoryTag(category)}] ${heading}`
   const goldButton =
     'display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);'
-  const greenButton =
-    'display: inline-block; background: linear-gradient(135deg, #2E9E5B, #1F7A43); color: #FFFFFF; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(37,122,67,0.30);'
+  const navyButton =
+    'display: inline-block; background: linear-gradient(135deg, #0A192F, #1B3A5F); color: #FFFFFF; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(10,25,47,0.35);'
   const fallbackLink = (url: string) =>
     `<span style="color: #0A192F; word-break: break-all;">${url}</span>`
   const html = `
@@ -2083,7 +2086,7 @@ function memberEmailChrome(opts: {
                  ${ctas
                    .map(
                      (b, i) =>
-                       `${i > 0 ? '<div style="height: 12px;"></div>' : ''}<a href="${b.url}" style="${b.variant === 'green' ? greenButton : goldButton}">${b.label}${b.note ? `<br><span style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px;">${b.note}</span>` : ''}</a>`
+                       `${i > 0 ? '<div style="height: 12px;"></div>' : ''}<a href="${b.url}" style="${b.variant === 'navy' ? navyButton : goldButton}">${b.label}${b.note ? `<br><span style="font-size: 11px; font-weight: 700; letter-spacing: 0.5px; ${b.variant === 'navy' ? 'color: #E3BE4F;' : ''}">${b.note}</span>` : ''}</a>`
                    )
                    .join('')}
                </div>
@@ -2146,7 +2149,7 @@ function storeStrip(
   return `
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 16px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
         <strong style="color:#0A192F;">Also from Kozy:</strong> ${items}<br>
-        <a href="${storeUrl}" style="color: #1F7A43; font-weight: 600; text-decoration: underline; text-decoration-color: #1F7A43;">Add one to your next delivery →</a>
+        <a href="${storeUrl}" style="color: #0A192F; font-weight: 600; text-decoration: underline; text-decoration-color: #D4AF37;">Add one to your next delivery →</a>
       </p>`
 }
 
@@ -2202,7 +2205,7 @@ export async function notifyMembershipMonthlySummary(opts: {
     const yearPerMonth = Math.round(yearPrice / 12)
     // The standing ladder line — permanent policy, never a promo. Renders
     // only when the behavioural nudge did not (never both).
-    const ladderLine = `Covering longer saves more, always — 6 months is ${formatNaira(sixMonthPrice)} and a full year ${formatNaira(yearPrice)} (${formatNaira(yearPerMonth)} a month). Every option lives in <a href="${opts.renewUrl}" style="color: #1F7A43; font-weight: 600; text-decoration: underline; text-decoration-color: #1F7A43;">your portal</a>.`
+    const ladderLine = `Covering longer saves more, always — 6 months is ${formatNaira(sixMonthPrice)} and a full year ${formatNaira(yearPrice)} (${formatNaira(yearPerMonth)} a month). Every option lives in <a href="${opts.renewUrl}" style="color: #0A192F; font-weight: 600; text-decoration: underline; text-decoration-color: #D4AF37;">your portal</a>.`
     // The one behaviour-targeted line (quiet by design: muted text, no
     // button, no urgency — a suggestion, not a pitch).
     const nudgeHtml = opts.nudge
@@ -2244,7 +2247,7 @@ export async function notifyMembershipMonthlySummary(opts: {
     let renewalHtml: string
     let cta: { label: string; url: string } | undefined
     let ctas:
-      | Array<{ label: string; url: string; variant?: 'gold' | 'green'; note?: string }>
+      | Array<{ label: string; url: string; variant?: 'gold' | 'navy'; note?: string }>
       | undefined
     if (opts.renewalMode === 'CARD_AUTOMATIC') {
       renewalHtml = `
@@ -2253,7 +2256,7 @@ export async function notifyMembershipMonthlySummary(opts: {
         <strong style="color:#0A192F;">${fmtDate(opts.periodEnd)}</strong>. Nothing to do, nothing to chase.
       </p>
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
-        Rather settle it less often? One payment covers longer at a kinder rate — 3 months ${formatNaira(threeMonthPrice)}, 6 months ${formatNaira(sixMonthPrice)}, a year ${formatNaira(yearPrice)} — from <a href="${opts.renewUrl}" style="color: #1F7A43; font-weight: 600; text-decoration: underline; text-decoration-color: #1F7A43;">your portal</a> whenever you like.
+        Rather settle it less often? One payment covers longer at a kinder rate — 3 months ${formatNaira(threeMonthPrice)}, 6 months ${formatNaira(sixMonthPrice)}, a year ${formatNaira(yearPrice)} — from <a href="${opts.renewUrl}" style="color: #0A192F; font-weight: 600; text-decoration: underline; text-decoration-color: #D4AF37;">your portal</a> whenever you like.
       </p>`
       cta = { label: 'View my membership', url: opts.renewUrl }
     } else {
@@ -2275,7 +2278,7 @@ export async function notifyMembershipMonthlySummary(opts: {
         {
           label: `Pay 3 months — ${formatNaira(threeMonthPrice)}`,
           url: `${opts.renewUrl}&months=3`,
-          variant: 'green',
+          variant: 'navy',
           note: `you save ${formatNaira(threeMonthSaving)}`,
         },
       ]
@@ -2348,7 +2351,7 @@ export async function notifyMembershipPaused(opts: {
       </p>
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
         Coming back for longer? Cover 3 months in one payment of <strong style="color:#0A192F;">${formatNaira(threeMonthPrice)}</strong> —
-        <strong style="color:#1F7A43;">${formatNaira(threeMonthSaving)} less</strong> than paying month by month.
+        <strong style="color:#0A192F;">${formatNaira(threeMonthSaving)} less</strong> than paying month by month.
         6-month and year-long covers save more still; your portal shows every option.
       </p>
       <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
@@ -2363,7 +2366,7 @@ export async function notifyMembershipPaused(opts: {
         {
           label: `Reactivate for 3 months — ${formatNaira(threeMonthPrice)}`,
           url: `${opts.renewUrl}&months=3`,
-          variant: 'green',
+          variant: 'navy',
           note: `you save ${formatNaira(threeMonthSaving)}`,
         },
       ],
@@ -2386,6 +2389,9 @@ export async function notifyAdminRenewalTransferPending(opts: {
   amount: number
   transferReference: string
   receiptUrl?: string | null
+  /** Phase 79: true when this is the member's FIRST payment completing a
+   *  pending membership — the office activates it rather than extending. */
+  isInitial?: boolean
 }): Promise<void> {
   try {
     const config = await adminAlertConfig()
@@ -2393,8 +2399,11 @@ export async function notifyAdminRenewalTransferPending(opts: {
     const targets = config.emails
     const bodyHtml = `
       <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
-        <strong style="color:#0A192F;">${opts.member.name}</strong> (${opts.member.email}) claims a
-        <strong style="color:#0A192F;">${opts.months}-month renewal</strong> on the
+        <strong style="color:#0A192F;">${opts.member.name}</strong> (${opts.member.email}) ${
+          opts.isInitial
+            ? 'is completing the <strong style="color:#0A192F;">first month</strong> of their pending'
+            : 'claims a <strong style="color:#0A192F;">' + opts.months + '-month renewal</strong> on the'
+        }
         <strong style="color:#0A192F;">${opts.planName}</strong> — <strong style="color:#0A192F;">${formatNaira(opts.amount)}</strong> by bank transfer.
       </p>
       <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
@@ -2407,13 +2416,17 @@ export async function notifyAdminRenewalTransferPending(opts: {
         )}
         ${summaryRow(
           'What to do',
-          'Memberships → the member\'s drill-down → Renew (months prefilled from the claim). Confirm only what actually landed.',
+          opts.isInitial
+            ? "Memberships → the member's drill-down → Verify &amp; activate (or Renew — months prefilled from the claim). The membership is PENDING until you confirm."
+            : 'Memberships → the member\'s drill-down → Renew (months prefilled from the claim). Confirm only what actually landed.',
           true
         )}
       </table>`
     const { subject, html } = staffEmailChrome({
       category: 'membership',
-      heading: `${opts.months}-month renewal transfer claimed — confirm it`,
+      heading: opts.isInitial
+        ? `First-month transfer claimed — activate ${opts.member.name}'s membership`
+        : `${opts.months}-month renewal transfer claimed — confirm it`,
       bodyHtml,
       cta: { label: 'Open Memberships', url: `${baseUrl()}/admin` },
       footer: 'Kozy Care — the office side of the Kozy Circle.',

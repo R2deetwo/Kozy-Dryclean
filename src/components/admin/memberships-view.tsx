@@ -819,7 +819,7 @@ function SubscribersList() {
                           'ml-1.5 rounded-full px-1.5 py-px text-[9px] font-bold uppercase tracking-wide',
                           renewMonths === m
                             ? 'bg-white/30 text-navy'
-                            : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200'
+                            : 'bg-navy-50 text-navy-700 ring-1 ring-navy-200'
                         )}
                       >
                         save {formatNaira(mSaving)}

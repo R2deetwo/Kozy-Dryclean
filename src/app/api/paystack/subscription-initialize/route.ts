@@ -88,7 +88,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Account not found' }, { status: 404 })
   }
 
-  const reference = sub.paystackRef ?? `SUB-${sub.id}`
+  // Phase 79 — a FRESH reference every attempt (Paystack references are
+  // single-use; re-initializing with a stored reference errors as a
+  // duplicate). The webhook resolves the sub by the STORED paystackRef,
+  // which is updated below — the initial charge and the renewal charges
+  // share the exact same matching path.
+  const reference = `SUB-${sub.id}-R${Date.now().toString(36).toUpperCase()}`
   const amountKobo = Math.round(sub.plan.priceMonthly * 100)
 
   const res = await fetch('https://api.paystack.co/transaction/initialize', {

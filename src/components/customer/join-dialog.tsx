@@ -27,6 +27,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { toast } from '@/hooks/use-toast'
 import { formatNaira } from '@/lib/types'
 import {
+  useAppSettings,
   useSubscribe,
   useMembershipPaystackInit,
   type ApiMembershipPlan,
@@ -55,7 +56,20 @@ export function JoinDialog({
 }) {
   const subscribe = useSubscribe()
   const paystackInit = useMembershipPaystackInit()
-  const [paymentMethod, setPaymentMethod] = useState<'PAYSTACK' | 'BANK_TRANSFER'>('PAYSTACK')
+  const appSettings = useAppSettings()
+  // Phase 79 — the honesty gate: when Paystack is not configured the card
+  // option is NEVER offered as a working choice. Before this, "Pay by card"
+  // was the default even with no PAYSTACK_SECRET_KEY — members joined,
+  // the checkout never opened, and they were trapped in "awaiting payment"
+  // with no way to complete it (the office complaint that started phase 79).
+  const paystackAvailable = appSettings?.paystackAvailable === true
+  const [paymentMethod, setPaymentMethod] = useState<'PAYSTACK' | 'BANK_TRANSFER'>(
+    paystackAvailable ? 'PAYSTACK' : 'BANK_TRANSFER'
+  )
+  // If availability resolves AFTER first render (settings fetch), a card
+  // pre-selection must fall back to transfer — never offer a dead button.
+  const effectiveMethod: 'PAYSTACK' | 'BANK_TRANSFER' =
+    paymentMethod === 'PAYSTACK' && !paystackAvailable ? 'BANK_TRANSFER' : paymentMethod
   const [receipt, setReceipt] = useState<string | null>(null)
   const [done, setDone] = useState<'paystack-redirect' | 'transfer-pending' | null>(null)
   const [signingOut, setSigningOut] = useState(false)
@@ -98,10 +112,13 @@ export function JoinDialog({
     })
 
   const onJoin = async () => {
+    // The method the server actually gets (a dead card choice can never be
+    // submitted — see the honesty gate above).
+    const method = effectiveMethod
     try {
       const res = await subscribe.mutateAsync({
         planCode: plan.code,
-        paymentMethod,
+        paymentMethod: method,
         ...(receipt ? { transferReceipt: receipt } : {}),
       })
 
@@ -123,6 +140,19 @@ export function JoinDialog({
         setDone('transfer-pending')
       }
     } catch (e: any) {
+      // Phase 79: ALREADY_MEMBER while PENDING_ACTIVATION now carries the
+      // completion path — point the member at their portal instead of a
+      // dead "waiting for verification" message.
+      const code = (e as any)?.code
+      const existing = (e as any)?.subscription as { id?: string } | undefined
+      if (code === 'ALREADY_MEMBER' && existing?.id) {
+        toast({
+          title: 'Your membership is waiting for its first payment',
+          description:
+            'Complete it in a moment from your portal — pay by transfer (or card when available) right from the Membership tab.',
+        })
+        return
+      }
       toast({
         title: 'Could not start the membership',
         description: e?.message ?? 'Please try again in a moment.',
@@ -231,25 +261,39 @@ export function JoinDialog({
             {/* Payment method */}
             <div className="mt-4 space-y-2">
               <button
+                type="button"
+                disabled={!paystackAvailable}
                 onClick={() => setPaymentMethod('PAYSTACK')}
                 className={
-                  paymentMethod === 'PAYSTACK'
+                  effectiveMethod === 'PAYSTACK'
                     ? 'flex w-full items-center gap-3 rounded-xl border-2 border-gold-300 bg-gold-50/50 p-3 text-left'
-                    : 'flex w-full items-center gap-3 rounded-xl border border-navy-100 p-3 text-left transition hover:border-gold-200'
+                    : paystackAvailable
+                    ? 'flex w-full items-center gap-3 rounded-xl border border-navy-100 p-3 text-left transition hover:border-gold-200'
+                    : 'flex w-full cursor-not-allowed items-center gap-3 rounded-xl border border-navy-100 bg-linen-100/70 p-3 text-left opacity-60'
                 }
               >
                 <CreditCard className="h-5 w-5 shrink-0 text-navy" />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-navy">Pay by card</p>
+                  <p className="text-sm font-medium text-navy">
+                    Pay by card
+                    {!paystackAvailable && (
+                      <span className="ml-2 rounded-full bg-navy-50 px-2 py-px text-[9px] font-bold uppercase tracking-wide text-navy-300">
+                        coming soon
+                      </span>
+                    )}
+                  </p>
                   <p className="text-[11px] text-navy-300">
-                    Instant activation · renews automatically each month
+                    {paystackAvailable
+                      ? 'Instant activation · renews automatically each month'
+                      : 'Card checkout is being set up — transfer works today'}
                   </p>
                 </div>
               </button>
               <button
+                type="button"
                 onClick={() => setPaymentMethod('BANK_TRANSFER')}
                 className={
-                  paymentMethod === 'BANK_TRANSFER'
+                  effectiveMethod === 'BANK_TRANSFER'
                     ? 'flex w-full items-center gap-3 rounded-xl border-2 border-gold-300 bg-gold-50/50 p-3 text-left'
                     : 'flex w-full items-center gap-3 rounded-xl border border-navy-100 p-3 text-left transition hover:border-gold-200'
                 }
@@ -264,7 +308,7 @@ export function JoinDialog({
               </button>
             </div>
 
-            {paymentMethod === 'BANK_TRANSFER' && (
+            {effectiveMethod === 'BANK_TRANSFER' && (
               <div className="mt-3 rounded-xl border border-dashed border-navy-200 p-3">
                 <label className="flex cursor-pointer items-center gap-3">
                   <Upload className="h-4 w-4 shrink-0 text-navy-300" />

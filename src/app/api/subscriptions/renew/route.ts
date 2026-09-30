@@ -1,17 +1,17 @@
 // =============================================================================
 // POST /api/subscriptions/renew — a member renews (or reactivates) their own
-// membership, optionally prepaying months at a saving (phase 76 → 77)
+// membership, optionally prepaying months at a saving (phase 76 → 77 → 79)
 // =============================================================================
 // Authed customers only, own membership only. This is the endpoint behind the
 // email's renewal buttons and the portal's renewal card:
 //
-//   body: { subscriptionId, months: 1|3,
+//   body: { subscriptionId, months: 1|3|6|12,
 //           method: 'PAYSTACK' | 'BANK_TRANSFER', transferReceipt? }
 //
 //   PAYSTACK      → we initialize a Paystack transaction inline and return
 //                   the authorization URL. months=1 keeps the plan's
 //                   recurring code (Paystack re-charges monthly from then
-//                   on); months=3 is a ONE-OFF charge at the discounted
+//                   on); months>1 is a ONE-OFF charge at the discounted
 //                   prepay price (renewalPriceFor) that extends periodEnd on
 //                   the webhook (metadata.months).
 //   BANK_TRANSFER → we record a RENEWAL_INTENT ledger row (the claim, with
@@ -19,6 +19,13 @@
 //                   office, and return the transfer instructions. Money
 //                   still moves only when the office confirms in the
 //                   drill-down (Renew, months prefilled from the claim).
+//
+//   PHASE 79 — PENDING_ACTIVATION: a member whose FIRST payment never landed
+//   (card checkout failed / never opened — exactly the "subscribed but cannot
+//   pay" complaint) completes their first month HERE: months=1 only, the same
+//   transfer claim + card paths. This is the door out of the trap: the portal
+//   renders the completion card for pending members; re-subscribing stays
+//   blocked (one membership per person).
 // =============================================================================
 
 import { NextResponse, after } from 'next/server'
@@ -94,18 +101,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
-  // ----- Nothing to renew while the INITIAL payment is still pending -----
-  if (sub.status === 'PENDING_ACTIVATION') {
-    return NextResponse.json(
-      {
-        error: 'PAYMENT_PENDING',
-        message:
-          'This membership is still waiting for its first payment to be confirmed — the office will activate it the moment it lands.',
-      },
-      { status: 409 }
-    )
-  }
-  if (sub.status === 'CANCELLED') {
+  // ----- Phase 79: PENDING_ACTIVATION — the FIRST payment, months=1 only -----
+  // These members joined but their payment never landed (the card checkout
+  // could not open before a Paystack key existed). The ladder opens once the
+  // membership is live; the first payment is a single month at plan price.
+  const isInitialPayment = sub.status === 'PENDING_ACTIVATION'
+  if (isInitialPayment) {
+    if (months !== 1) {
+      return NextResponse.json(
+        {
+          error: 'FIRST_MONTH_IS_ONE',
+          message:
+            'Your first payment covers one month — once your membership is live, the kinder 3/6/12-month rates open up in your portal.',
+        },
+        { status: 400 }
+      )
+    }
+  } else if (sub.status === 'CANCELLED') {
     return NextResponse.json(
       {
         error: 'CANCELLED',
@@ -115,12 +127,16 @@ export async function POST(req: Request) {
     )
   }
 
-  const eff = effectiveStatus(sub)
-  if (eff !== 'ACTIVE' && eff !== 'EXPIRING' && eff !== 'PAST_DUE' && eff !== 'LAPSED') {
-    return NextResponse.json(
-      { error: 'NOT_RENEWABLE', message: 'This membership cannot be renewed in its current state.' },
-      { status: 409 }
-    )
+  // The effective-status gate applies to LIVE memberships only; a pending
+  // first payment is completed through this endpoint (phase 79).
+  if (!isInitialPayment) {
+    const eff = effectiveStatus(sub)
+    if (eff !== 'ACTIVE' && eff !== 'EXPIRING' && eff !== 'PAST_DUE' && eff !== 'LAPSED') {
+      return NextResponse.json(
+        { error: 'NOT_RENEWABLE', message: 'This membership cannot be renewed in its current state.' },
+        { status: 409 }
+      )
+    }
   }
 
   // The ONE pricing path: 1 month = plan price, 3 months = the discounted
@@ -141,10 +157,13 @@ export async function POST(req: Request) {
           meta: JSON.stringify({
             months,
             amount,
+            isInitial: isInitialPayment,
             reference: transferReference,
             receipt: transferReceipt ? 'attached' : 'none',
           }),
-          note: `Member claimed a ${months}-month renewal transfer (${transferReference})`,
+          note: isInitialPayment
+            ? `Member is completing their FIRST month (${transferReference}) — activate the membership when the transfer lands.`
+            : `Member claimed a ${months}-month renewal transfer (${transferReference})`,
         },
       })
     } catch (e) {
@@ -163,6 +182,7 @@ export async function POST(req: Request) {
             amount,
             transferReference,
             receiptUrl: null,
+            isInitial: isInitialPayment,
           })
         }
       } catch (e) {
@@ -179,7 +199,9 @@ export async function POST(req: Request) {
         months,
         reference: transferReference,
         note:
-          saving > 0
+          isInitialPayment
+            ? `Send ${amount} with reference ${transferReference} — your membership activates the moment the office confirms it. You can also reply to your summary email with the receipt.`
+            : saving > 0
             ? `Send ${amount} with reference ${transferReference} — your ${months} months (₦${saving.toLocaleString()} saved) apply the moment the office confirms. You can also reply to your summary email with the receipt.`
             : `Send the amount with reference ${transferReference} — your next month applies the moment the office confirms. You can also reply to your summary email with the receipt.`,
       },
@@ -206,6 +228,8 @@ export async function POST(req: Request) {
   // A FRESH reference every attempt (Paystack references are single-use).
   // The webhook matches the stored paystackRef exactly; metadata carries
   // the months so the multi-month charge extends the right number of cycles.
+  // The initial payment (phase 79) rides the same shape — the webhook's
+  // activateOrRenewSubscription branch activates a pending membership.
   const reference = `SUB-${sub.id}-R${Date.now().toString(36).toUpperCase()}`
   const amountKobo = Math.round(amount * 100)
 
@@ -221,8 +245,10 @@ export async function POST(req: Request) {
       reference,
       currency: 'NGN',
       // months=1 stays on the plan's recurring code when one exists (the
-      // card keeps auto-charging monthly). A multi-month prepay is a ONE-OFF
-      // charge — no plan code, or Paystack would ALSO recur it.
+      // card keeps auto-charging monthly) — including the initial payment,
+      // which becomes a normal recurring membership after its first charge.
+      // A multi-month prepay is a ONE-OFF charge — no plan code, or Paystack
+      // would ALSO recur it.
       ...(months === 1 && sub.plan.paystackPlanCode
         ? { plan: sub.plan.paystackPlanCode }
         : {}),
@@ -233,7 +259,7 @@ export async function POST(req: Request) {
         planName: sub.plan.name,
         customerName: user.name,
         kind: 'membership',
-        renewal: true,
+        renewal: !isInitialPayment,
         months,
       },
     }),
