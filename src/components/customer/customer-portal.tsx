@@ -35,6 +35,11 @@ import { motion } from 'framer-motion'
 interface Props {
   initialView?: 'dashboard' | 'booking'
   initialHighlight?: string
+  /** Phase 76: the prepopulated-renewal deep link (?renew=1&months=N) opens
+   *  the portal straight on the Membership tab with the renewal card
+   *  preselected — the landing target of the monthly summary email CTA. */
+  initialTab?: 'active' | 'invoices' | 'membership'
+  renewPrefill?: number
   onBackToLanding?: () => void
 }
 
@@ -43,7 +48,12 @@ type View =
   | { name: 'booking' }
   | { name: 'invoice'; order: any }
 
-export function CustomerPortal({ initialView = 'dashboard', initialHighlight }: Props) {
+export function CustomerPortal({
+  initialView = 'dashboard',
+  initialHighlight,
+  initialTab,
+  renewPrefill,
+}: Props) {
   const { data: session, status } = useSession()
   const router = useRouter()
 
@@ -95,6 +105,8 @@ export function CustomerPortal({ initialView = 'dashboard', initialHighlight }: 
       displayName={displayName}
       displayEmail={displayEmail}
       highlightedId={selectedOrderId}
+      initialTab={initialTab}
+      renewPrefill={renewPrefill}
       onSignOut={() => signOut({ callbackUrl: '/' })}
       onBackToLanding={() => router.push('/')}
       onBook={() => setView({ name: 'booking' })}
@@ -203,6 +215,8 @@ function CustomerDashboard({
   displayName,
   displayEmail,
   highlightedId,
+  initialTab,
+  renewPrefill,
   onSignOut,
   onBackToLanding,
   onBook,
@@ -212,6 +226,8 @@ function CustomerDashboard({
   displayName: string
   displayEmail: string
   highlightedId?: string
+  initialTab?: 'active' | 'invoices' | 'membership'
+  renewPrefill?: number
   onSignOut: () => void
   onBackToLanding: () => void
   onBook: () => void
@@ -221,7 +237,9 @@ function CustomerDashboard({
   // Fetch orders from the real API (already RBAC-filtered server-side to this
   // user) — cursor-paginated, older orders load on demand.
   const { data: orders, isLoading, hasMore, loadMore, isFetchingMore } = useOrders()
-  const [tab, setTab] = useState<'active' | 'invoices' | 'membership'>('active')
+  const [tab, setTab] = useState<'active' | 'invoices' | 'membership'>(
+    initialTab ?? 'active'
+  )
   const [selected, setSelected] = useState<any | undefined>(
     highlightedId ? orders?.find((o) => o.id === highlightedId) : undefined
   )
@@ -391,7 +409,7 @@ function CustomerDashboard({
             </TabsContent>
 
             <TabsContent value="membership" className="mt-4">
-              <MembershipTab />
+              <MembershipTab renewPrefill={renewPrefill} />
             </TabsContent>
         </Tabs>
       </div>

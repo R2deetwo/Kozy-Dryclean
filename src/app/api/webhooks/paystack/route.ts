@@ -270,13 +270,34 @@ async function handleMembershipChargeSuccess(data: any) {
     return NextResponse.json({ ok: true, message: 'Subscription not found' })
   }
 
+  // Phase 76: how many cycles does this charge cover? Prefer the months
+  // we stamped into the metadata at initialize; fall back to the amount
+  // (a 3×monthly charge is unmistakably a 3-month prepay). Clamped 1..12.
+  const planForMonths = await db.subscriptionPlan.findUnique({ where: { id: sub.planId } })
+  const metaMonths = Number((data as any)?.metadata?.months)
+  const inferredMonths =
+    planForMonths && planForMonths.priceMonthly > 0 && amount > 0
+      ? Math.round(amount / planForMonths.priceMonthly)
+      : 1
+  const months = Math.min(
+    Math.max(
+      Number.isFinite(metaMonths) && metaMonths >= 1 ? Math.round(metaMonths) : inferredMonths,
+      1
+    ),
+    12
+  )
+
   // Idempotency: a renewal that landed twice, or a race with the initial
-  // activation. The period must EXTEND by exactly one cycle from the
-  // current end — never re-activate from scratch on an active membership
-  // unless the period has actually lapsed.
+  // activation. The period must EXTEND by exactly the charged cycles —
+  // never re-activate from scratch on an active membership unless the
+  // period has actually lapsed. A multi-month charge is only "already
+  // processed" when the period already covers those months.
   const now = Date.now()
   const periodEndMs = sub.periodEnd ? new Date(sub.periodEnd).getTime() : 0
-  const activeAndFresh = sub.status === 'ACTIVE' && periodEndMs - now > 29 * 24 * 60 * 60 * 1000
+  const dayMs = 24 * 60 * 60 * 1000
+  const coveredMs = months * 30 * dayMs - 15 * dayMs
+  const activeAndFresh =
+    sub.status === 'ACTIVE' && periodEndMs - now > Math.min(29 * dayMs, coveredMs)
   if (activeAndFresh) {
     // Still record the recurring codes if this is the first time we see them.
     if (subCode && !sub.paystackSubscriptionCode) {
@@ -290,13 +311,15 @@ async function handleMembershipChargeSuccess(data: any) {
 
   // A lapsed membership being re-charged (retry after PAST_DUE) should
   // restart from now; an expiring-soon renewal extends from period end —
-  // activateOrRenewSubscription handles both branches.
-  const plan = await db.subscriptionPlan.findUnique({ where: { id: sub.planId } })
+  // activateOrRenewSubscription handles both branches, multiplying the
+  // extension by the charged months.
+  const plan = planForMonths
   const pricePaid = amount > 0 ? amount : plan?.priceMonthly ?? 0
 
   const updated = await activateOrRenewSubscription(sub.id, {
     pricePaid,
     method: 'PAYSTACK',
+    cycles: months,
   })
 
   // Persist the recurring codes — every future charge.success with this
@@ -319,12 +342,15 @@ async function handleMembershipChargeSuccess(data: any) {
         periodEnd: updated.periodEnd,
         unitName: plan.unitName,
         includedUnits: plan.includedUnits,
+        months,
       })
     }
   } catch (e) {
     console.error('[memberships] activation email failed:', e)
   }
 
-  console.log(`[memberships] Paystack webhook: membership ${sub.id} charged ${pricePaid}`)
+  console.log(
+    `[memberships] Paystack webhook: membership ${sub.id} charged ${pricePaid} for ${months} month${months === 1 ? '' : 's'}`
+  )
   return NextResponse.json({ ok: true, message: 'Membership activated/renewed' })
 }

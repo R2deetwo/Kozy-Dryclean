@@ -544,6 +544,65 @@ export function SettingsView() {
               )}
             </CardContent>
           </Card>
+
+          {/* ===== MEMBER EMAILS (phase 76) — the automated Kozy Circle
+              relationship: monthly summaries + paused/reactivation nudges,
+              behind a test-safe gate the office arms when ready. ===== */}
+          <Card className="border-navy-100 shadow-navy">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+                <Mail className="h-4 w-4 text-gold-400" /> Member emails (the Kozy Circle)
+              </CardTitle>
+              <p className="text-xs leading-relaxed text-navy-300">
+                Every morning (09:00 WAT) the office system looks at every membership and emails
+                on its own: a member whose month ends in ~3 days gets the{' '}
+                <span className="font-medium text-navy">monthly summary</span> — washes used,
+                missed pickups, what&apos;s left — with their renewal button and the option to
+                prepay 3, 6 or 12 months; a member whose month ended without a renewal gets a
+                <span className="font-medium text-navy"> gentle reactivation email</span> the next morning.
+                Card members with auto-renew get the informational version.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <AlertToggle
+                icon={<Mail className="h-4 w-4" />}
+                title="Send member emails for real (arm the automation)"
+                description="While OFF, the sweep still runs every morning but only delivers to the test allowlist below — everyone else is logged as suppressed, never emailed. Flip this ON when you've seen the emails and want members receiving them."
+                checked={app?.memberEmailAutomation === true}
+                onChange={(v) => app && setApp({ memberEmailAutomation: v })}
+              />
+              <div>
+                <Label htmlFor="member-email-allowlist" className="text-xs uppercase tracking-wide text-navy-300">
+                  Test allowlist (who receives while the automation is OFF)
+                </Label>
+                <Input
+                  id="member-email-allowlist"
+                  value={app?.memberEmailTestAllowlist ?? ''}
+                  onChange={(e) => app && setApp({ memberEmailTestAllowlist: e.target.value })}
+                  placeholder="@woosh.dpdns.org,practiceprosystems@gmail.com"
+                  className="mt-1.5"
+                />
+                <p className="mt-1 text-xs text-navy-300">
+                  Comma-separated. An entry starting with @ allows a whole domain (test
+                  accounts); a full address allows that one inbox. Suppressed members still get
+                  their email normally the moment the automation is armed — nothing is lost by
+                  testing.
+                </p>
+              </div>
+              <div className="rounded-lg border border-navy-100 bg-linen-50 p-3 text-xs leading-relaxed text-navy-300">
+                <p className="font-medium text-navy">Trying it out safely:</p>
+                <p className="mt-1">
+                  Memberships → any member&apos;s drill-down →{' '}
+                  <span className="font-medium text-navy">Preview summary email</span> sends that
+                  member&apos;s real summary to <span className="font-medium text-navy">your own inbox</span>.
+                  The morning sweep itself can be planned without sending from this console&apos;s
+                  address bar:{' '}
+                  <code className="rounded bg-white px-1 py-0.5 text-[11px] text-navy">/api/cron/member-emails?dry=1</code>{' '}
+                  (with the cron secret) shows exactly who would get what, and why.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* BRANCHES TAB (phase 62) — the physical locations: zones owned,

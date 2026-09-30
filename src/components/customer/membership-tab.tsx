@@ -28,13 +28,15 @@ import {
   PlusCircle,
   ClipboardList,
   AlertCircle,
+  CreditCard,
+  Landmark,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
-import { formatNaira, formatDate } from '@/lib/types'
+import { formatNaira, formatDate, RENEWAL_MONTH_CHOICES, type KozyAppSettings } from '@/lib/types'
 import {
   useMyMembership,
   useMembershipCancel,
@@ -63,7 +65,7 @@ function tomorrowISO(): string {
   return d.toISOString().slice(0, 10)
 }
 
-export function MembershipTab() {
+export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
   const { data, isLoading, refetch } = useMyMembership()
   const cancelMutation = useMembershipCancel()
   const [booking, setBooking] = useState<'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | null>(null)
@@ -94,6 +96,17 @@ export function MembershipTab() {
   const status = data?.effectiveStatus ?? membership?.status ?? 'PENDING_ACTIVATION'
   // Phase 75: the member's in-cycle bookings (live statuses + missed flags).
   const activity = data?.activity?.activity ?? []
+
+  // Phase 76: the prepopulated-renewal deep link — once the data is in,
+  // bring the renewal card into view so the email CTA lands exactly where
+  // the member expects to pay.
+  useEffect(() => {
+    if (!renewPrefill || isLoading || !membership) return
+    const t = setTimeout(() => {
+      document.getElementById('kozy-renewal')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 350)
+    return () => clearTimeout(t)
+  }, [renewPrefill, isLoading, membership])
 
   // ----- The standalone Shoe Club (phase 70) -----
   const club = data?.shoeClub
@@ -394,6 +407,20 @@ export function MembershipTab() {
         )}
       </Card>
 
+      {/* ===== The renewal card (phase 76) — the prepopulated payment place.
+          Shown when the month is close to its end (or already past it): the
+          same checkout as joining, but prefilled with THIS member's plan and
+          a month-count selector for the multi-month prepay. This is where
+          the monthly summary email's CTA lands. ===== */}
+      {plan && membership && status !== 'PENDING_ACTIVATION' && status !== 'CANCELLED' && (
+        <RenewalCard
+          membership={membership}
+          plan={plan}
+          status={status}
+          prefillMonths={renewPrefill}
+        />
+      )}
+
       {/* ===== Your pickups this month (phase 75) — the tracking ledger ===== */}
       {membership && (status === 'ACTIVE' || status === 'EXPIRING' || status === 'PAST_DUE') && (
         <CycleActivityCard
@@ -535,6 +562,252 @@ export function MembershipTab() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+// =============================================================================
+// RenewalCard (phase 76) — the prepopulated payment place for members
+// =============================================================================
+// Appears when the month is running out (≤10 days), when the member asked
+// for no auto-renew, or when the membership has paused (PAST_DUE/LAPSED):
+// the plan is already known (nothing to pick), the month-count selector
+// covers the owner's multi-month prepay (1/3/6/12), and the two payment
+// paths mirror the join checkout — card (Paystack redirect) or bank
+// transfer (instructions + reference; the office confirms in the
+// drill-down). /portal?renew=1&months=N (the email CTA) lands HERE with
+// the month count preselected.
+// =============================================================================
+function RenewalCard({
+  membership,
+  plan,
+  status,
+  prefillMonths,
+}: {
+  membership: ApiMembership
+  plan: ApiMembershipPlan
+  status: string
+  prefillMonths?: number
+}) {
+  const [months, setMonths] = useState<number>(
+    (RENEWAL_MONTH_CHOICES as readonly number[]).includes(Number(prefillMonths))
+      ? Number(prefillMonths)
+      : 1
+  )
+  const [appSettings, setAppSettings] = useState<KozyAppSettings | null>(null)
+  const [busy, setBusy] = useState<'card' | 'transfer' | null>(null)
+  const [transfer, setTransfer] = useState<{
+    bankName: string
+    accountName: string
+    accountNumber: string
+    amount: number
+    months: number
+    reference: string
+    note: string
+  } | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/settings/app')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled && d?.settings) setAppSettings(d.settings as KozyAppSettings)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const periodEnd = membership.periodEnd ? new Date(membership.periodEnd) : null
+  const daysLeft = periodEnd
+    ? Math.ceil((periodEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    : null
+  const paused = status === 'PAST_DUE' || status === 'LAPSED'
+  // Only meaningful when the month is actually running out (or already has):
+  // a mid-cycle card would just be noise.
+  const needsRenewal =
+    paused || membership.cancelAtPeriodEnd || (daysLeft !== null && daysLeft <= 10)
+  if (!needsRenewal) return null
+
+  const price = plan.priceMonthly * months
+  const paystackAvailable = appSettings?.paystackAvailable ?? false
+
+  const renew = async (method: 'PAYSTACK' | 'BANK_TRANSFER') => {
+    setBusy(method === 'PAYSTACK' ? 'card' : 'transfer')
+    try {
+      const res = await fetch('/api/subscriptions/renew', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subscriptionId: membership.id, months, method }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (method === 'PAYSTACK') {
+        if (res.ok && data.authorizationUrl) {
+          window.location.href = data.authorizationUrl as string
+          return // the redirect is the success path
+        }
+        toast({
+          title: 'Could not start the card payment',
+          description: data?.message ?? 'Please try again, or choose bank transfer below.',
+          variant: 'destructive',
+        })
+      } else {
+        if (res.ok && data.transfer) {
+          setTransfer(data.transfer)
+          toast({
+            title: 'Almost there — one transfer',
+            description: 'Send the amount with your reference; the office confirms the moment it lands.',
+          })
+        } else {
+          toast({
+            title: 'Could not start the transfer renewal',
+            description: data?.message ?? 'Please try again in a moment.',
+            variant: 'destructive',
+          })
+        }
+      }
+    } catch {
+      toast({
+        title: 'Network hiccup',
+        description: 'Please check your connection and try again.',
+        variant: 'destructive',
+      })
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  return (
+    <Card className="overflow-hidden border-gold-300/60 shadow-navy" id="kozy-renewal">
+      <CardContent className="p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-gold-600">
+              {paused ? 'Your membership has paused' : 'Your next month'}
+            </p>
+            <p className="mt-1 font-serif text-xl font-semibold text-navy">
+              {paused
+                ? `Reactivate the ${plan.name}`
+                : membership.cancelAtPeriodEnd
+                  ? `Keep the ${plan.name} going`
+                  : `Renew the ${plan.name}`}
+            </p>
+          </div>
+          {paused && (
+            <Badge variant="outline" className="rounded-full border-amber-200 bg-amber-50 text-amber-700">
+              Paused
+            </Badge>
+          )}
+        </div>
+
+        <p className="mt-2 text-sm leading-relaxed text-navy-300">
+          {paused
+            ? `Your ${plan.includedUnits} × ${plan.unitName} pickups restart the moment you renew — your ${plan.unitName} is still yours and your history is intact.`
+            : membership.cancelAtPeriodEnd
+              ? `You asked us not to auto-renew — the month ends ${periodEnd ? formatDate(periodEnd.toISOString()) : 'soon'}. Change your mind in one tap: renew below and everything continues as before.`
+              : `Your month ends ${periodEnd ? formatDate(periodEnd.toISOString()) : 'soon'} — renew now and your rider keeps collecting at your usual window without a pause.`}
+        </p>
+
+        {/* The month-count selector — the multi-month prepay */}
+        <div className="mt-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
+            How many months?
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {RENEWAL_MONTH_CHOICES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMonths(m)}
+                className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
+                  months === m
+                    ? 'border-gold-400 bg-gold-gradient text-navy shadow-sm'
+                    : 'border-navy-200 bg-white text-navy-300 hover:border-navy-300 hover:text-navy'
+                }`}
+              >
+                {m === 1 ? '1 month' : `${m} months`}
+                <span className="ml-1.5 text-xs font-normal opacity-80">
+                  {formatNaira(plan.priceMonthly * m)}
+                </span>
+              </button>
+            ))}
+          </div>
+          {months > 1 && (
+            <p className="mt-2 text-xs text-navy-300">
+              One payment of <strong className="text-navy">{formatNaira(price)}</strong> covers you{' '}
+              {months === 12 ? 'for the year' : `for ${months} months`} — laundry off your mind that much longer.
+            </p>
+          )}
+        </div>
+
+        {/* The payment paths — same as the join checkout */}
+        <div className="mt-5 grid gap-2 sm:grid-cols-2">
+          <Button
+            onClick={() => renew('PAYSTACK')}
+            disabled={busy !== null || !paystackAvailable}
+            className="rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
+            title={paystackAvailable ? undefined : 'Card payments are not configured yet — transfer works today'}
+          >
+            {busy === 'card' ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <CreditCard className="mr-2 h-4 w-4" />
+            )}
+            Pay {formatNaira(price)} by card
+          </Button>
+          <Button
+            onClick={() => renew('BANK_TRANSFER')}
+            disabled={busy !== null}
+            variant="outline"
+            className="rounded-full border-navy-200 font-semibold text-navy hover:bg-navy hover:text-white"
+          >
+            {busy === 'transfer' ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Landmark className="mr-2 h-4 w-4" />
+            )}
+            Pay by bank transfer
+          </Button>
+        </div>
+        {!paystackAvailable && (
+          <p className="mt-2 text-xs text-navy-300">
+            Card payments are not configured yet — bank transfer works today; your{' '}
+            {months > 1 ? `${months} months` : 'next month'} applies the moment the office confirms.
+          </p>
+        )}
+
+        {/* The transfer instructions (after the member picks transfer) */}
+        {transfer && (
+          <div className="mt-4 rounded-xl border border-gold-200 bg-gold-50/60 p-4 text-sm">
+            <p className="font-semibold text-navy">Transfer {formatNaira(transfer.amount)}</p>
+            <div className="mt-2 space-y-1 text-navy-300">
+              <p>
+                <span className="inline-block w-28 text-navy-300">Bank</span>
+                <strong className="text-navy">{transfer.bankName}</strong>
+              </p>
+              <p>
+                <span className="inline-block w-28 text-navy-300">Account name</span>
+                <strong className="text-navy">{transfer.accountName}</strong>
+              </p>
+              <p>
+                <span className="inline-block w-28 text-navy-300">Account number</span>
+                <strong className="text-navy">{transfer.accountNumber}</strong>
+              </p>
+              <p>
+                <span className="inline-block w-28 text-navy-300">Reference</span>
+                <strong className="text-navy">{transfer.reference}</strong>
+              </p>
+            </div>
+            <p className="mt-3 text-xs leading-relaxed text-navy-300">{transfer.note}</p>
+          </div>
+        )}
+
+        <p className="mt-4 text-xs leading-relaxed text-navy-300">
+          Need a second {plan.unitName} for the busy weeks? Reply to your summary email or call{' '}
+          {appSettings?.contactPhone ?? 'the office'} — we&apos;ll add it to your renewal.
+        </p>
+      </CardContent>
+    </Card>
   )
 }
 

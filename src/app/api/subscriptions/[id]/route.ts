@@ -17,6 +17,14 @@
 //   nudge-renewal(phase 75) — send the transfer member a renewal reminder
 //   kit-tag      (phase 75) — mint (or re-mint) the bag/box QR tag; returns
 //                  the code + QR SVG for the printable label
+//   preview-summary (phase 76) — render THIS member's monthly summary email
+//                  and deliver it to the signed-in admin's own inbox (never
+//                  to the member) — the office sees exactly what the
+//                  automation would send, with real numbers
+//   renew        (phase 76) — accepts `months` (1/3/6/12); defaults to the
+//                  member's claimed RENEWAL_INTENT months when one is open,
+//                  else 1. A multi-month confirm extends periodEnd by that
+//                  many cycles and the member email says so.
 //
 // The verify + renew paths reuse activateOrRenewSubscription — the same
 // engine the Paystack webhook drives — so a card member and a transfer
@@ -39,6 +47,7 @@ import {
   notifyMembershipUsageNudge,
   notifyMembershipRenewalReminder,
 } from '@/lib/notifications'
+import { sendMonthlySummaryFor, type SubWithPlan } from '@/lib/member-emails'
 
 async function guard(): Promise<ReturnType<typeof requireRole> | NextResponse | null> {
   try {
@@ -110,7 +119,7 @@ export async function PATCH(
     return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
   }
 
-  const sendActiveEmail = (pricePaid: number) =>
+  const sendActiveEmail = (pricePaid: number, periodEnd: Date, months = 1) =>
     after(async () => {
       try {
         if (sub.plan && sub.user?.email) {
@@ -118,9 +127,10 @@ export async function PATCH(
             user: { name: sub.user.name, email: sub.user.email },
             planName: sub.plan.name,
             pricePaid,
-            periodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            periodEnd,
             unitName: sub.plan.unitName,
             includedUnits: sub.plan.includedUnits,
+            months,
           })
         }
       } catch (e) {
@@ -129,24 +139,73 @@ export async function PATCH(
     })
 
   switch (action) {
+    case 'preview-summary': {
+      // Render the member's monthly summary with REAL numbers and deliver
+      // it to the ADMIN'S OWN inbox — the office previews the automation
+      // without emailing the member.
+      if (!sub.plan || !sub.user?.email) {
+        return NextResponse.json({ error: 'Nothing to preview' }, { status: 400 })
+      }
+      const adminEmail = (session?.user as any)?.email
+      if (!adminEmail) {
+        return NextResponse.json({ error: 'No admin email on this session' }, { status: 400 })
+      }
+      try {
+        const previewSub = { ...sub, user: sub.user } as unknown as SubWithPlan
+        const { subjectHint } = await sendMonthlySummaryFor(previewSub, {
+          overrideTo: adminEmail,
+        })
+        return NextResponse.json({
+          ok: true,
+          sentTo: adminEmail,
+          subjectHint,
+          note: 'Preview delivered to your own inbox — the member was not emailed.',
+        })
+      } catch (e) {
+        console.error('[memberships] summary preview failed:', e)
+        return NextResponse.json({ error: 'Preview failed' }, { status: 500 })
+      }
+    }
     case 'verify':
     case 'renew': {
       // renew allows a price override (goodwill discounts, founding-member
-      // pricing); verify always charges the plan price.
+      // pricing); verify always charges the plan price. Phase 76: months —
+      // explicit beats the open RENEWAL_INTENT claim, which beats 1.
+      const openIntent = await db.subscriptionEvent.findFirst({
+        where: { subscriptionId: id, kind: 'RENEWAL_INTENT' },
+        orderBy: { createdAt: 'desc' },
+      })
+      let intentMonths = 1
+      if (openIntent) {
+        try {
+          const meta = JSON.parse(openIntent.meta ?? '{}')
+          if (Number.isFinite(Number(meta.months)) && Number(meta.months) >= 1) {
+            intentMonths = Math.min(Math.round(Number(meta.months)), 12)
+          }
+        } catch {
+          // malformed meta — fall back to 1
+        }
+      }
+      const bodyMonths = Number(body?.months)
+      const months =
+        Number.isFinite(bodyMonths) && bodyMonths >= 1 && bodyMonths <= 12
+          ? Math.round(bodyMonths)
+          : intentMonths
       const price =
         action === 'renew' &&
         Number.isFinite(Number(body?.pricePaid)) &&
         Number(body?.pricePaid) >= 0
           ? Math.round(Number(body?.pricePaid))
-          : sub.plan?.priceMonthly ?? sub.pricePaid
+          : (sub.plan?.priceMonthly ?? 0) * months
       try {
         const updated = await activateOrRenewSubscription(id, {
           pricePaid: price,
           method: body?.method === 'PAYSTACK' ? 'PAYSTACK' : 'BANK_TRANSFER',
+          cycles: months,
         })
-        sendActiveEmail(price)
+        sendActiveEmail(price, updated.periodEnd, months)
         console.log(
-          `[memberships] ${adminName} ${action === 'verify' ? 'verified' : 'renewed'} membership ${id} (${sub.user?.email}) at ${price} naira`
+          `[memberships] ${adminName} ${action === 'verify' ? 'verified' : 'renewed'} membership ${id} (${sub.user?.email}) at ${price} naira for ${months} month${months === 1 ? '' : 's'}`
         )
         return NextResponse.json({ membership: rowToMembership(updated) })
       } catch (e) {

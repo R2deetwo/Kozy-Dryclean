@@ -42,6 +42,7 @@ import {
   MinusCircle,
   PlusCircle,
   Printer,
+  Eye,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -360,6 +361,10 @@ function SubscribersList() {
   const [receipt, setReceipt] = useState<ApiMembership | null>(null)
   const [renewFor, setRenewFor] = useState<ApiMembership | null>(null)
   const [renewPrice, setRenewPrice] = useState('')
+  // Phase 76: the months the office is confirming (multi-month prepay /
+  // claimed transfer renewals). Defaults to the member's open claim.
+  const [renewMonths, setRenewMonths] = useState(1)
+  const [renewClaim, setRenewClaim] = useState<{ months: number; reference: string } | null>(null)
   // Phase 75: the member drill-down (ledger + kit tag + retention desk).
   const [drillId, setDrillId] = useState<string | null>(null)
   const [onlyAttention, setOnlyAttention] = useState(false)
@@ -387,10 +392,56 @@ function SubscribersList() {
 
   const shown = onlyAttention ? list.filter((m) => attention.some((a) => a.id === m.id)) : list
 
+  // Phase 76: when the record-renewal dialog opens, read the member's
+  // latest RENEWAL_INTENT (a claimed transfer renewal) so the months +
+  // amount pre-fill with what the member actually said they sent.
+  useEffect(() => {
+    if (!renewFor) {
+      setRenewClaim(null)
+      return
+    }
+    let cancelled = false
+    fetch(`/api/subscriptions/${renewFor.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (cancelled || !d?.activity?.events) return
+        const events: Array<{ kind: string; meta?: string; createdAt?: string }> = d.activity.events
+        // Newest first — the most recent claim is the live one.
+        const latest = events.find((e) => e.kind === 'RENEWAL_INTENT')
+        if (!latest) return
+        try {
+          const meta = JSON.parse(latest.meta ?? '{}')
+          const months = Number(meta.months)
+          if (Number.isFinite(months) && months >= 1) {
+            setRenewClaim({ months: Math.min(Math.round(months), 12), reference: String(meta.reference ?? 'transfer') })
+            setRenewMonths(Math.min(Math.round(months), 12))
+            if (Number.isFinite(Number(meta.amount))) {
+              setRenewPrice(String(Math.round(Number(meta.amount))))
+            }
+          }
+        } catch {
+          // malformed meta — leave the dialog at its defaults
+        }
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [renewFor])
+
   const run = async (m: ApiMembership, act: string, extra?: Record<string, unknown>) => {
     try {
-      await action.mutateAsync({ id: m.id, action: act, ...extra })
-      toast({ title: 'Done', description: `${m.user?.name ?? 'Member'} · ${act.replace('-', ' ')}` })
+      const res = await action.mutateAsync({ id: m.id, action: act, ...extra })
+      if (act === 'preview-summary') {
+        toast({
+          title: 'Preview sent to your inbox',
+          description: res?.subjectHint
+            ? `“${res.subjectHint}” — ${m.user?.name ?? 'member'} was NOT emailed.`
+            : `${m.user?.name ?? 'Member'} — the member was NOT emailed.`,
+        })
+      } else {
+        toast({ title: 'Done', description: `${m.user?.name ?? 'Member'} · ${act.replace('-', ' ')}` })
+      }
     } catch (e: any) {
       toast({ title: 'Action failed', description: e?.message, variant: 'destructive' })
     }
@@ -725,7 +776,7 @@ function SubscribersList() {
         </DialogContent>
       </Dialog>
 
-      {/* Renewal price dialog */}
+      {/* Renewal price dialog (phase 76: months + claimed-transfer prefill) */}
       <Dialog open={Boolean(renewFor)} onOpenChange={(o) => !o && setRenewFor(null)}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -734,9 +785,41 @@ function SubscribersList() {
             </DialogTitle>
           </DialogHeader>
           <p className="text-xs text-navy-300">
-            Extends the membership by one month from the current period end. Adjust the amount for
-            goodwill pricing if needed.
+            Extends the membership from the current period end. Pick the months being paid for —
+            a member's claimed transfer renewal pre-fills automatically — and adjust the amount
+            for goodwill pricing if needed.
           </p>
+          {/* The months being confirmed (multi-month prepay / transfer claim) */}
+          <div className="mt-3">
+            <label className="text-xs font-medium text-navy">Months being paid</label>
+            <div className="mt-1.5 flex flex-wrap gap-1.5">
+              {[1, 3, 6, 12].map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => {
+                    setRenewMonths(m)
+                    const unit = renewFor?.plan?.priceMonthly ?? renewFor?.pricePaid ?? 0
+                    setRenewPrice(String(unit * m))
+                  }}
+                  className={cn(
+                    'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
+                    renewMonths === m
+                      ? 'border-gold-400 bg-gold-gradient text-navy'
+                      : 'border-navy-200 bg-white text-navy-300 hover:text-navy'
+                  )}
+                >
+                  {m === 1 ? '1 month' : `${m} months`}
+                </button>
+              ))}
+            </div>
+            {renewClaim && (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-gold-700">
+                Member claimed a {renewClaim.months}-month transfer ({renewClaim.reference}) —
+                confirm only what actually landed.
+              </p>
+            )}
+          </div>
           <div className="mt-3">
             <label className="text-xs font-medium text-navy">Amount paid (₦)</label>
             <input
@@ -753,13 +836,22 @@ function SubscribersList() {
           <Button
             onClick={async () => {
               if (!renewFor) return
-              await run(renewFor, 'renew', { pricePaid: Number(renewPrice) || undefined })
+              await run(renewFor, 'renew', {
+                months: renewMonths,
+                pricePaid: Number(renewPrice) || undefined,
+              })
               setRenewFor(null)
             }}
             disabled={action.isPending}
             className="mt-4 w-full rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
           >
-            {action.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Extend the month'}
+            {action.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : renewMonths > 1 ? (
+              `Extend by ${renewMonths} months`
+            ) : (
+              'Extend the month'
+            )}
           </Button>
         </DialogContent>
       </Dialog>
@@ -1062,7 +1154,7 @@ function MemberDrilldown({
               </div>
             </div>
 
-            {/* Retention nudges */}
+            {/* Retention nudges + the phase-76 automation preview */}
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -1079,6 +1171,15 @@ function MemberDrilldown({
                 className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
               >
                 <Send className="mr-1.5 h-3.5 w-3.5" /> Send renewal reminder
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => onAction('preview-summary')}
+                title="Sends this member's monthly summary — real numbers — to YOUR OWN inbox. The member is not emailed."
+                className="rounded-full border-gold-300 text-gold-800 hover:bg-gold-50"
+              >
+                <Eye className="mr-1.5 h-3.5 w-3.5" /> Preview summary email
               </Button>
             </div>
           </div>

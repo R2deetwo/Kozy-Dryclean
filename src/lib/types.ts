@@ -248,6 +248,10 @@ export interface Membership {
   springCleanUsed: number
   kitState: string
   kitDeliveredAt: string | null
+  // Phase 76: the Paystack transaction reference (SUB-… / SUB-…-R…) — the
+  // webhook matches the stored ref, so the surfaces that show a pending
+  // renewal (member portal / admin drill-down) read it from here.
+  paystackRef?: string | null
   plan?: MembershipPlan
   createdAt: string
   updatedAt: string
@@ -640,6 +644,12 @@ export interface KozyAppSettings {
   riderPerKmRate: number
   riderFreeKm: number
   riderDistanceCap: number
+  // Phase 76 — member email automation gate + test allowlist. When the
+  // automation is OFF, the daily sweep still runs but only delivers to
+  // allowlisted addresses (test inboxes + the owner) — everything else is
+  // suppressed and logged, so flipping the toggle is what arms real sends.
+  memberEmailAutomation: boolean
+  memberEmailTestAllowlist: string
   // Card payments (Paystack) — NOT stored in the DB: derived server-side
   // from the presence of PAYSTACK_SECRET_KEY on each /api/settings/app
   // read. When false, checkout greys the card option out and transfer is
@@ -693,6 +703,12 @@ export function defaultAppSettings(): KozyAppSettings {
     riderPerKmRate: 150,
     riderFreeKm: 4,
     riderDistanceCap: 1800,
+    // Phase 76 — the member email automation ships ARMED-OFF by default:
+    // the sweep computes and logs everything, but only allowlisted
+    // recipients actually receive. The office flips this in Settings →
+    // Memberships once the emails have been reviewed.
+    memberEmailAutomation: false,
+    memberEmailTestAllowlist: '@woosh.dpdns.org,practiceprosystems@gmail.com',
     // Pessimistic client default — the server response overrides it with
     // the real env-derived value. Greyed out beats a broken card checkout.
     paystackAvailable: false,
@@ -709,6 +725,29 @@ export const COMPANY_BANK = {
   accountName: 'Kozy Cleaning Services Ltd',
   accountNumber: '8123456789',
   routingNumber: '',
+}
+
+// =====================================================
+// MEMBERSHIP RENEWALS (phase 76)
+// =====================================================
+/** The month counts a member can prepay at the point of renewal — the
+ *  owner's "pay for multiple months at the point of payment". 1 = the
+ *  normal monthly renewal (card members keep their auto-charge); 3/6/12
+ *  are one-off charges that extend periodEnd by that many cycles. */
+export const RENEWAL_MONTH_CHOICES = [1, 3, 6, 12] as const
+export type RenewalMonths = (typeof RENEWAL_MONTH_CHOICES)[number]
+
+export function isRenewalMonths(v: unknown): v is RenewalMonths {
+  return (
+    typeof v === 'number' &&
+    (RENEWAL_MONTH_CHOICES as readonly number[]).includes(v)
+  )
+}
+
+/** The prepay price for N months — plan price × months (no invented
+ *  discounts; the office can goodwill-adjust any confirmed renewal). */
+export function renewalPriceFor(priceMonthly: number, months: number): number {
+  return Math.round(priceMonthly * months)
 }
 
 // =====================================================

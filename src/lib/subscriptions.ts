@@ -449,6 +449,7 @@ export function rowToMembership(row: any): Membership {
     springCleanUsed: row.springCleanUsed,
     kitState: row.kitState,
     kitDeliveredAt: row.kitDeliveredAt?.toISOString?.() ?? null,
+    paystackRef: row.paystackRef ?? null,
     plan,
     createdAt: row.createdAt?.toISOString?.() ?? String(row.createdAt),
     updatedAt: row.updatedAt?.toISOString?.() ?? String(row.updatedAt),
@@ -467,22 +468,28 @@ export function rowToMembership(row: any): Membership {
  */
 export async function activateOrRenewSubscription(
   subscriptionId: string,
-  opts: { pricePaid: number; method: string }
+  opts: { pricePaid: number; method: string; cycles?: number }
 ): Promise<any> {
   const sub = await db.subscription.findUnique({ where: { id: subscriptionId } })
   if (!sub) throw new Error('Subscription not found')
 
+  // Phase 76: multi-month renewals — one payment can cover several cycles.
+  // Clamped to a sane 1..12 so a bad payload can never mint a decade.
+  const cycles = Math.min(Math.max(Math.round(opts.cycles ?? 1), 1), 12)
+  const cycleMs = CYCLE_DAYS * 24 * 60 * 60 * 1000
+
   const now = new Date()
   const periodStart = now
-  const periodEnd = new Date(now.getTime() + CYCLE_DAYS * 24 * 60 * 60 * 1000)
+  const periodEnd = new Date(now.getTime() + cycles * cycleMs)
 
   // A renewal while still active extends from the CURRENT period end, so a
-  // member who pays early never loses days.
+  // member who pays early never loses days — multi-month payments extend by
+  // cycles × 30 from the same base.
   const base =
     sub.periodEnd && sub.periodEnd.getTime() > now.getTime() ? sub.periodEnd : now
   const end =
     sub.status === 'ACTIVE' && sub.periodEnd
-      ? new Date(base.getTime() + CYCLE_DAYS * 24 * 60 * 60 * 1000)
+      ? new Date(base.getTime() + cycles * cycleMs)
       : periodEnd
 
   const updated = await db.subscription.update({
@@ -523,6 +530,7 @@ export async function activateOrRenewSubscription(
           pricePaid: Math.round(opts.pricePaid),
           method: opts.method,
           renewal: sub.status === 'ACTIVE',
+          cycles,
         }),
       },
     })
@@ -870,6 +878,7 @@ export async function getSubscriptionActivity(subscriptionId: string, opts?: { e
       kind: e.kind,
       delta: e.delta,
       count: e.count,
+      meta: e.meta,
       note: e.note,
       orderId: e.orderId,
       createdAt: e.createdAt.toISOString(),

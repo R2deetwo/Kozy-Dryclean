@@ -1833,9 +1833,18 @@ export async function notifyMembershipActive(opts: {
   periodEnd: Date
   unitName: string
   includedUnits: number
+  /** Phase 76: a multi-month prepay covers several cycles — the email says
+   *  so plainly ("your next 3 months are covered" instead of a silent
+   *  far-future date). Defaults to 1. */
+  months?: number
 }): Promise<void> {
   try {
     const firstName = opts.user.name.split(' ')[0]
+    const months = Math.min(Math.max(Math.round(opts.months ?? 1), 1), 12)
+    const covered =
+      months > 1
+        ? `Your next <strong style="color:#0A192F;">${months} months</strong> are covered — <strong style="color:#0A192F;">${formatNaira(opts.pricePaid)}</strong> for the whole stretch.`
+        : `Paid: <strong style="color:#0A192F;">${formatNaira(opts.pricePaid)}</strong>.`
     const bodyHtml = `
       <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
         Welcome to the Kozy Circle, <strong style="color:#0A192F;">${firstName}</strong>.
@@ -1843,7 +1852,7 @@ export async function notifyMembershipActive(opts: {
       </p>
       <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
         <tr>
-          <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Your month</td>
+          <td style="padding: 8px 0; color: #6F88A8; width: 150px; vertical-align: top; border-bottom: 1px solid #F0F2F5;">Your month${months > 1 ? 's' : ''}</td>
           <td style="padding: 8px 0; color: #0A192F; border-bottom: 1px solid #F0F2F5;">Active until <strong>${fmtDate(opts.periodEnd)}</strong> (renews automatically unless you cancel).</td>
         </tr>
         <tr>
@@ -1856,7 +1865,7 @@ export async function notifyMembershipActive(opts: {
         </tr>
       </table>
       <p style="color: #6F88A8; line-height: 1.6; font-size: 13px; margin: 24px 0 0 0;">
-        Paid: <strong style="color:#0A192F;">${formatNaira(opts.pricePaid)}</strong>. Manage everything from the Membership tab in your portal.
+        ${covered} Manage everything from the Membership tab in your portal.
       </p>`
     const { subject, html } = staffEmailChrome({
       category: 'membership',
@@ -2012,6 +2021,305 @@ export async function notifyMemberOrderCancelled(opts: {
     await sendEmail({ to: opts.user.email, subject, html })
   } catch (e) {
     console.error('notifyMemberOrderCancelled failed:', e)
+  }
+}
+
+// =============================================================================
+// MEMBERSHIP RETENTION (phase 76) — the automated member relationship
+// =============================================================================
+// The monthly summary is the retention workhorse: it lands 3 days before the
+// member's period ends, shows the month in review (washes picked up, missed,
+// extras), and carries the prepopulated renewal CTA — with the multi-month
+// prepay options the owner asked for and the tier's extra bag/box upsell.
+// The paused email is the day-1 nudge for a member whose period ended
+// without a renewal. Both are triggered by /api/cron/member-emails behind
+// the memberEmailAutomation gate (test-safe until the office arms it).
+// =============================================================================
+
+/** Member-facing email chrome — same navy/gold language as the staff chrome
+ *  but WITHOUT the "Staff Console" subline (the phase-75 member emails
+ *  borrowed the staff header verbatim; these new ones read like the
+ *  member-facing mail they are). */
+function memberEmailChrome(opts: {
+  category: string
+  heading: string
+  bodyHtml: string
+  cta?: { label: string; url: string }
+  footer?: string
+}): { subject: string; html: string } {
+  const { category, heading, bodyHtml, cta, footer } = opts
+  const subject = `[Kozy Care · ${categoryTag(category)}] ${heading}`
+  const html = `
+  <!DOCTYPE html>
+  <html>
+  <body style="font-family: Georgia, serif; background: #F8F9FA; padding: 40px 0; margin: 0;">
+    <div style="max-width: 520px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(10,25,47,0.08);">
+      <div style="background: linear-gradient(135deg, #0A192F, #102740); padding: 32px 40px; text-align: center;">
+        <h1 style="color: #D4AF37; font-family: Georgia, serif; font-size: 28px; font-weight: 700; margin: 0;">Kozy Care</h1>
+        <p style="color: rgba(255,255,255,0.7); font-size: 11px; text-transform: uppercase; letter-spacing: 2px; margin: 4px 0 0 0;">Drycleaning &amp; Laundry · The Kozy Circle</p>
+      </div>
+      <div style="padding: 40px;">
+        <h2 style="color: #0A192F; font-family: Georgia, serif; font-size: 22px; margin: 0 0 16px 0;">${heading}</h2>
+        ${bodyHtml}
+        ${
+          cta
+            ? `<div style="text-align: center; margin: 28px 0 8px 0;">
+                 <a href="${cta.url}" style="display: inline-block; background: linear-gradient(135deg, #E3BE4F, #D4AF37, #B8962B); color: #0A192F; padding: 14px 32px; border-radius: 9999px; text-decoration: none; font-weight: 700; font-size: 15px; box-shadow: 0 4px 14px rgba(212,175,55,0.35);">${cta.label}</a>
+               </div>
+               <p style="color: #6F88A8; font-size: 12px; margin: 12px 0 0 0; line-height: 1.5;">Or paste this link into your browser:<br><span style="color: #0A192F; word-break: break-all;">${cta.url}</span></p>`
+            : ''
+        }
+        <p style="color: #6F88A8; font-size: 11px; margin: 32px 0 0 0; border-top: 1px solid #E2E5E9; padding-top: 16px; line-height: 1.6;">
+          ${
+            footer ||
+            'You receive this because you are a Kozy Circle member.<br>Kozy Care — Uncompromising care. Exceptional convenience.'
+          }
+        </p>
+      </div>
+    </div>
+  </body>
+  </html>`
+  return { subject, html }
+}
+
+/** A stat row for the summary table (kept identical in shape so the email
+ *  reads as one clean ledger). */
+function summaryRow(label: string, value: string, last = false) {
+  return `
+        <tr>
+          <td style="padding: 8px 0; color: #6F88A8; width: 190px; vertical-align: top;${last ? '' : ' border-bottom: 1px solid #F0F2F5;'}">${label}</td>
+          <td style="padding: 8px 0; color: #0A192F;${last ? '' : ' border-bottom: 1px solid #F0F2F5;'}">${value}</td>
+        </tr>`
+}
+
+/** The multi-month prepay block — plain links so the member lands on the
+ *  renewal panel with the month count already selected. */
+function monthsBlock(
+  unitPrice: number,
+  renewUrl: (months: number) => string
+): string {
+  const options = [3, 6, 12]
+    .map(
+      (m) =>
+        `<a href="${renewUrl(m)}" style="color: #0A192F; text-decoration: underline; text-decoration-color: #D4AF37; font-weight: 600;">${m} months — ${formatNaira(unitPrice * m)}</a>`
+    )
+    .join(
+      ' <span style="color: #D4AF37;">·</span> '
+    )
+  return `
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 16px 0 0 0;">
+        Prefer to think about laundry even less? Cover several months in one payment:
+        ${options}
+      </p>`
+}
+
+/** The monthly usage summary — the retention email. Lands ~3 days before the
+ *  period ends: the month in review + the prepopulated renewal + the
+ *  tier-appropriate bag/box upsell. */
+export async function notifyMembershipMonthlySummary(opts: {
+  user: { name: string; email: string }
+  planName: string
+  unitName: string
+  includedUnits: number
+  usedUnits: number
+  extraUnits: number
+  missedPickups: number
+  deliveredCount: number
+  periodStart: Date
+  periodEnd: Date
+  priceMonthly: number
+  /** CARD_AUTOMATIC: card on file + not cancelled → informational renewal
+   *  block. NEEDS_PAYMENT: transfer member, cancel-at-period-end, or paused —
+   *  the renewal CTA carries the email. */
+  renewalMode: 'CARD_AUTOMATIC' | 'NEEDS_PAYMENT'
+  renewUrl: string
+  contactPhone: string
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const days = Math.max(
+      0,
+      Math.ceil((opts.periodEnd.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+    )
+    const remaining = Math.max(0, opts.includedUnits - opts.usedUnits)
+    const monthLabel = new Date(opts.periodStart).toLocaleDateString('en-NG', {
+      month: 'long',
+    })
+
+    // ----- The month in review -----
+    const rows = [
+      summaryRow(
+        `${opts.unitName} pickups used`,
+        `<strong>${opts.usedUnits}</strong> of <strong>${opts.includedUnits}</strong> included — <strong>${remaining}</strong> still yours this month`
+      ),
+      summaryRow(
+        'Extra washes beyond plan',
+        opts.extraUnits > 0
+          ? `<strong>${opts.extraUnits}</strong> extra ${opts.unitName}${opts.extraUnits === 1 ? '' : 's'} (billed at the member rate)`
+          : 'None — you stayed inside your plan'
+      ),
+      summaryRow(
+        'Missed pickups',
+        opts.missedPickups > 0
+          ? `<strong style="color:#B8422B;">${opts.missedPickups}</strong> — we missed you${opts.missedPickups === 1 ? '' : 's'}; rebook and we'll collect at your usual window`
+          : 'None — every pickup day went smoothly'
+      ),
+      summaryRow(
+        'Delivered back to you',
+        opts.deliveredCount > 0
+          ? `<strong>${opts.deliveredCount}</strong> fresh ${opts.unitName}${opts.deliveredCount === 1 ? '' : 's'} returned`
+          : 'Your first delivery of the cycle is on its way'
+      ),
+      summaryRow(
+        'Where the month stands',
+        `Ends <strong>${fmtDate(opts.periodEnd)}</strong> — ${days} day${days === 1 ? '' : 's'} left`,
+        true
+      ),
+    ].join('')
+
+    // ----- The renewal block -----
+    let renewalHtml: string
+    let cta: { label: string; url: string } | undefined
+    if (opts.renewalMode === 'CARD_AUTOMATIC') {
+      renewalHtml = `
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 24px 0 0 0;">
+        Your next month starts automatically — <strong style="color:#0A192F;">${formatNaira(opts.priceMonthly)}</strong> charges your saved card on
+        <strong style="color:#0A192F;">${fmtDate(opts.periodEnd)}</strong>. Nothing to do, nothing to chase.
+      </p>`
+      cta = { label: 'View my membership', url: opts.renewUrl }
+    } else {
+      renewalHtml = `
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 15px; margin: 24px 0 0 0;">
+        Your next month is <strong style="color:#0A192F;">${formatNaira(opts.priceMonthly)}</strong> and starts
+        <strong style="color:#0A192F;">${fmtDate(opts.periodEnd)}</strong> — renew from your portal and your rider
+        collects at your usual window without a pause.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
+        Pay by card or bank transfer, whichever you prefer — the portal shows both.
+      </p>`
+      cta = {
+        label: `Renew my next month — ${formatNaira(opts.priceMonthly)}`,
+        url: opts.renewUrl,
+      }
+    }
+
+    const { subject, html } = memberEmailChrome({
+      category: 'membership',
+      heading: `Your ${monthLabel} with Kozy, ${firstName}`,
+      bodyHtml: `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        Here is your month on the <strong style="color:#0A192F;">${opts.planName}</strong> at a glance — the same numbers your portal shows.
+      </p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">${rows}</table>
+      ${renewalHtml}
+      ${
+        opts.renewalMode === 'NEEDS_PAYMENT'
+          ? monthsBlock(opts.priceMonthly, (m) => `${opts.renewUrl}&months=${m}`)
+          : ''
+      }
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
+        Running out of room on busy weeks? A <strong style="color:#0A192F;">second ${opts.unitName}</strong> can ride along with your renewal —
+        reply to this email or call <strong style="color:#0A192F;">${opts.contactPhone}</strong> and the office will set it up.
+      </p>`,
+      cta,
+      footer:
+        'You receive this monthly summary because you are a Kozy Circle member.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMembershipMonthlySummary failed:', e)
+  }
+}
+
+/** Day-1 reactivation nudge — the member's period ended without a renewal. */
+export async function notifyMembershipPaused(opts: {
+  user: { name: string; email: string }
+  planName: string
+  unitName: string
+  includedUnits: number
+  periodEnd: Date
+  priceMonthly: number
+  renewUrl: string
+  contactPhone: string
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const { subject, html } = memberEmailChrome({
+      category: 'membership',
+      heading: `Your ${opts.planName} has paused — one tap brings it back`,
+      bodyHtml: `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        <strong style="color:#0A192F;">${firstName}</strong>, your ${opts.planName} month ran to
+        <strong style="color:#0A192F;">${fmtDate(opts.periodEnd)}</strong> and we haven't seen a renewal yet —
+        so pickups are paused for now.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 12px 0;">
+        Nothing is lost: your <strong style="color:#0A192F;">${opts.unitName}</strong> is still yours, your history is intact, and your
+        <strong style="color:#0A192F;">${opts.includedUnits} × ${opts.unitName}</strong> pickups restart the moment you renew.
+        Reactivate for <strong style="color:#0A192F;">${formatNaira(opts.priceMonthly)}</strong> and your rider picks up right where you left off.
+      </p>
+      ${monthsBlock(opts.priceMonthly, (m) => `${opts.renewUrl}&months=${m}`)}
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 20px 0 0 0; border-top: 1px solid #F0F2F5; padding-top: 16px;">
+        Prefer to talk it through? Call <strong style="color:#0A192F;">${opts.contactPhone}</strong> — the office is glad to help.
+      </p>`,
+      cta: {
+        label: `Reactivate my membership — ${formatNaira(opts.priceMonthly)}`,
+        url: opts.renewUrl,
+      },
+      footer:
+        'You receive this because your Kozy Circle membership paused without a renewal.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMembershipPaused failed:', e)
+  }
+}
+
+/** A member claimed a multi-month bank-transfer renewal — office alert.
+ *  Confirmation stays human: the drill-down's Renew action (with the
+ *  claimed months prefilled) is the money-moving step. */
+export async function notifyAdminRenewalTransferPending(opts: {
+  member: { name: string; email: string }
+  planName: string
+  months: number
+  amount: number
+  transferReference: string
+  receiptUrl?: string | null
+}): Promise<void> {
+  try {
+    const config = await adminAlertConfig()
+    if (config.emails.length === 0) return
+    const targets = config.emails
+    const bodyHtml = `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        <strong style="color:#0A192F;">${opts.member.name}</strong> (${opts.member.email}) claims a
+        <strong style="color:#0A192F;">${opts.months}-month renewal</strong> on the
+        <strong style="color:#0A192F;">${opts.planName}</strong> — <strong style="color:#0A192F;">${formatNaira(opts.amount)}</strong> by bank transfer.
+      </p>
+      <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+        ${summaryRow('Transfer reference', `<strong>${opts.transferReference}</strong>`)}
+        ${summaryRow(
+          'Receipt',
+          opts.receiptUrl
+            ? `<a href="${opts.receiptUrl}" style="color: #0A192F; text-decoration: underline; text-decoration-color: #D4AF37;">attached by the member</a>`
+            : 'Not attached — verify against the bank statement'
+        )}
+        ${summaryRow(
+          'What to do',
+          'Memberships → the member\'s drill-down → Renew (months prefilled from the claim). Confirm only what actually landed.',
+          true
+        )}
+      </table>`
+    const { subject, html } = staffEmailChrome({
+      category: 'membership',
+      heading: `${opts.months}-month renewal transfer claimed — confirm it`,
+      bodyHtml,
+      cta: { label: 'Open Memberships', url: `${baseUrl()}/admin` },
+      footer: 'Kozy Care — the office side of the Kozy Circle.',
+    })
+    await Promise.all(targets.map((to) => sendEmail({ to, subject, html })))
+  } catch (e) {
+    console.error('notifyAdminRenewalTransferPending failed:', e)
   }
 }
 
