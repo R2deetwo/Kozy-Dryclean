@@ -278,7 +278,12 @@ async function handleMembershipChargeSuccess(data: any) {
   // ₦166,500 for 6, ₦324,000 for 12), so plain division misreads it. Match
   // the tier's actual price points first (deepest cover first, so no
   // rounded amount can shadow a deeper rung), then fall back to rounding.
-  const planForMonths = await db.subscriptionPlan.findUnique({ where: { id: sub.planId } })
+  // Phase 81: with a tier switch scheduled, the charge was priced on the
+  // plan being switched TO — the ladder match uses that plan.
+  const pendingPlanRow = sub.pendingPlanId
+    ? await db.subscriptionPlan.findUnique({ where: { id: sub.pendingPlanId } })
+    : null
+  const planForMonths = pendingPlanRow ?? (await db.subscriptionPlan.findUnique({ where: { id: sub.planId } }))
   const metaMonths = Number((data as any)?.metadata?.months)
   let inferredMonths = 1
   if (planForMonths && planForMonths.priceMonthly > 0 && amount > 0) {

@@ -43,6 +43,7 @@ import {
   PlusCircle,
   Printer,
   Eye,
+  ArrowLeftRight,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -564,6 +565,16 @@ function SubscribersList() {
                     {m.paymentMethod === 'PAYSTACK' ? 'card' : m.paymentMethod === 'BANK_TRANSFER' ? 'transfer' : 'unpaid'}
                     {m.periodEnd && ` · ${m.status === 'PENDING_ACTIVATION' ? 'starts on activation' : `renews ${formatDate(m.periodEnd)}`}`}
                   </p>
+                  {/* Phase 81: a member-scheduled tier switch, visible to the
+                      office BEFORE the money lands (the renew price is the
+                      pending plan's). */}
+                  {m.pendingPlan && (
+                    <p className="mt-1 flex items-center gap-1 text-[11px] font-medium text-navy-700">
+                      <ArrowLeftRight className="h-3 w-3 text-gold-600" />
+                      Switching to {m.pendingPlan.name} at next renewal ·{' '}
+                      {formatNaira(m.pendingPlan.priceMonthly)}/mo
+                    </p>
+                  )}
                   {/* Phase 75: the wash-floor line — last/next pickup at a glance. */}
                   <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-navy-300">
                     {m.lastPickupAt && (

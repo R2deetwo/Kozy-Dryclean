@@ -1387,6 +1387,8 @@ export interface ApiMembership {
   kitState: string
   kitDeliveredAt: string | null
   plan?: ApiMembershipPlan
+  // Phase 81: the member-scheduled tier switch (plan of the NEXT paid cycle).
+  pendingPlan?: ApiMembershipPlan | null
   usage?: ApiMembershipUsage | null
   transferReceipt?: string | null
   user?: { id: string; name: string; email: string; phone: string } | null
@@ -1571,6 +1573,37 @@ export function useMembershipCancel() {
       return data
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-membership'] }),
+  })
+}
+
+/** Phase 81 — the quiet tier switch. A pending request swaps the plan
+ * immediately (no money has moved); a live membership schedules the switch
+ * for the next paid cycle. `plan-change-undo` clears a scheduled switch. */
+export function useMembershipPlanChange() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: {
+      action: 'plan-change' | 'plan-change-undo'
+      planCode?: string
+      family?: 'KIT' | 'SHOES'
+    }) => {
+      const res = await fetch('/api/subscriptions/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) {
+        const err = new Error(data.message || data.error || 'Could not change the plan')
+        ;(err as any).code = data.error
+        throw err
+      }
+      return data as { membership: ApiMembership; effectiveStatus: string; applied?: string }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['my-membership'] })
+      qc.invalidateQueries({ queryKey: ['admin-memberships'] })
+    },
   })
 }
 

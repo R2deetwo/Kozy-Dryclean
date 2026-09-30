@@ -47,7 +47,7 @@ export async function GET(req: Request) {
 
   const rows = await db.subscription.findMany({
     orderBy: { createdAt: 'desc' },
-    include: { plan: true },
+    include: { plan: true, pendingPlan: true },
   })
 
   const plans = await getPlans(true)
@@ -195,7 +195,7 @@ export async function POST(req: Request) {
       status: { in: ['PENDING_ACTIVATION', 'ACTIVE', 'PAST_DUE'] },
       plan: { family: plan.family },
     },
-    include: { plan: true },
+    include: { plan: true, pendingPlan: true },
   })
   if (existing) {
     return NextResponse.json(
@@ -203,10 +203,10 @@ export async function POST(req: Request) {
         error: 'ALREADY_MEMBER',
         message:
           existing.status === 'PENDING_ACTIVATION'
-            ? `You already have ${existing.plan?.family === 'SHOES' ? 'a Shoe Club' : 'a membership'} waiting for payment confirmation — it will activate the moment your transfer is verified.`
+            ? `You already have ${existing.plan?.family === 'SHOES' ? 'a Shoe Club' : 'a membership'} request waiting for its first payment — it activates the moment your transfer is verified.`
             : existing.plan?.family === 'SHOES'
-              ? `You are already on the ${existing.plan?.name ?? 'Shoe Club'}. To switch clubs, cancel it first (it stays active until your current month ends), then subscribe to the new one.`
-              : `You are already on ${existing.plan?.name ?? 'a Kozy Circle plan'}. To switch tiers, cancel it first (it stays active until your current month ends), then subscribe to the new one.`,
+              ? `You are already on the ${existing.plan?.name ?? 'Shoe Club'}. To switch clubs, use Change plan in your portal's Membership tab — it takes effect at your next renewal.`
+              : `You are already on ${existing.plan?.name ?? 'a Kozy Circle plan'}. To switch tiers, use Change plan in your portal's Membership tab — it takes effect at your next renewal.`,
         subscription: rowToMembership(existing),
       },
       { status: 409 }
@@ -231,7 +231,7 @@ export async function POST(req: Request) {
   const sub = await db.subscription.update({
     where: { id: created.id },
     data: { paystackRef },
-    include: { plan: true },
+    include: { plan: true, pendingPlan: true },
   })
 
   // ----- Admin alert (never blocks the response) -----

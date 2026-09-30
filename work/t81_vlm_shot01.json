@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here is the verification and description:\n\n1.  **Is there a payment banner?** Yes. There is a prominent, gold-bordered card at the top of the main content area with the heading **\"Complete your payment first\"** and a yellow **\"Awaiting payment\"** badge.\n2.  **Is it positioned above the stat cards?** Yes. The payment banner is clearly positioned directly above the three stat cards (Active, Past, Guarantee).\n3.  **Payment Amount and Formatting:** The amount shown is **₦50,000** (Fifty Thousand Naira). It uses proper naira formatting, including the **₦** symbol and a comma as a thousands separator.\n4.  **Visual/Layout Issues:**\n    *   The layout appears clean and well-structured overall.\n    *   There are no obvious visual bugs or overlapping elements.\n    *   The hierarchy is clear: Header -> Payment Call-to-Action -> Summary Stats.\n    *   One minor observation is that the \"Sign out\" and \"Book pickup\" buttons in the header have slightly different styling (one outlined, one filled), which is standard for primary vs. secondary actions but worth noting for consistency if this were a design review.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790786383,
+  "id": "202610010039388a23de2e2b5242bc",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202610010039388a23de2e2b5242bc",
+  "usage": {
+    "completion_tokens": 257,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 477,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 734
+  }
+}

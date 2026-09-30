@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot of the **KozyCare members portal** (kozycare.ng/portal), here is a detailed description:\n\n### 1. Page Layout (Top to Bottom)\n\n*   **Browser Header:** The top of the screen shows a standard browser interface with multiple tabs open (Zai, Service, Kozy, etc.), the address bar displaying **`kozycare.ng/portal`**, and standard window controls.\n*   **Main Content Card:** The central focus is a single, large white card with rounded corners and a subtle shadow, centered on a light gray background. This card contains all the membership and payment information.\n    *   **Top Section (Status & Headline):** \n        *   Top-left: A small label in gold/brown text reads **\"ALMOST IN THE CIRCLE\"**.\n        *   Top-right: A pill-shaped badge with a light yellow background and dark text reads **\"Awaiting payment\"**.\n        *   Below this is the main headline in bold: **\"Complete your first payment\"**.\n    *   **Informational Text:** A paragraph explains that 4 Kozy Box pickups start once the first month is paid, mentioning payment by transfer or card, and notes that 3/6/12-month rates are available.\n    *   **Pricing Section:** Labeled **\"YOUR FIRST MONTH\"**, it displays the cost **\"₦50,000\"** in bold, followed by the text *\"one month · then the kinder 3/6/12-month rates open in this card\"*.\n    *   **Payment Action Buttons:** Two large, rounded buttons are placed side-by-side:\n        *   Left button: Light beige/gold color.\n        *   Right button: Dark navy blue/black color.\n    *   **Status Note:** A line of smaller gray text below the buttons states: *\"Card payments are not configured yet — bank transfer works today; your membership activates the moment the office confirms.\"*\n    *   **Bank Transfer Details Box:** A secondary box with a light cream/yellow background contains the specific transfer instructions.\n    *   **Footer Notes:** Two final paragraphs of text at the bottom of the card provide information about future renewals and adding a second box.\n\n### 2. Exact Text Quotes\n\n*   **Status Badges/Headlines:**\n    *   \"ALMOST IN THE CIRCLE\"\n    *   \"Awaiting payment\"\n    *   \"Complete your first payment\"\n*   **Descriptive Text:**\n    *   \"Your 4 × Kozy Box pickups start the moment your first month is paid — and your rider schedules the Kozy Box hand-over. Pay by transfer below (or by card when it is available); the 3/6/12-month kinder rates open right ofer.\" *(Note: \"ofer\" appears to be a typo for \"after\")*\n    *   \"YOUR FIRST MONTH\"\n*   **Amounts:**\n    *   \"**₦50,000**\" (Includes the Naira symbol ₦ and a comma as a thousands separator)\n    *   \"Pay **₦50,000** by card\" (On the button)\n    *   \"Transfer **₦50,000**\" (Inside the bank details box)\n    *   \"Send **50000**\" (In the instruction line; note this one lacks the Naira symbol and comma)\n*   **Bank Transfer Instructions (inside the cream box):**\n    *   \"Transfer ₦50,000\"\n    *   \"Bank: **MoniePoint MicroFinance Bank**\"\n    *   \"Account name: **Lake-Nuwa Investment**\"\n    *   \"Account number: **4929540910**\"\n    *   \"Reference: **KZY-RENEW-BF30HDRQ**\"\n    *   \"Send 50000 with reference KZY-RENEW-BF30HDRQ — your membership activates the moment the office confirms it. You can also reply to your summary email with the receipt.\"\n*   **Other Text:**\n    *   \"Card payments are not configured yet — bank transfer works today; your membership activates the moment the office confirms.\"\n    *   \"Once your first month is in, the standing ladder takes over — the longer you cover, the kinder the rate, always.\"\n    *   \"Need a second Kozy Box for the busy weeks? Reply to your summary email or call +234 803 175 5230 — we'll add it to your renewal.\"\n\n### 3. Payment Buttons Description\n\nThere are two primary payment action buttons located in the middle of the card:\n\n1.  **Left Button (\"Pay by card\"):**\n    *   **Color:** Light beige or pale gold background with dark gray/black text.\n    *   **Icon:** Features a small credit card icon on the left side of the text.\n    *   **Text:** \"Pay ₦50,000 by card\"\n    *   **Position:** Left side of the button row.\n\n2.  **Right Button (\"Pay by bank transfer\"):**\n    *   **Color:** Dark navy blue or charcoal black background with white text.\n    *   **Icon:** Features a small bank/building icon (classical facade) on the left side of the text.\n    *   **Text:** \"Pay by bank transfer\"\n    *   **Position:** Right side of the button row.\n\n*(Note: Based on the text \"Card payments are not configured yet,\" the left button may be disabled or non-functional, directing users to use the right-hand bank transfer option.)*",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790784378,
+  "id": "20261001000556e81e963745184b5e",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20261001000556e81e963745184b5e",
+  "usage": {
+    "completion_tokens": 1161,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1456,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2617
+  }
+}

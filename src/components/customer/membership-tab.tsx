@@ -30,6 +30,8 @@ import {
   AlertCircle,
   CreditCard,
   Landmark,
+  ArrowLeftRight,
+  BadgeCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -42,6 +44,7 @@ import {
   useMembershipCancel,
   useMembershipPickup,
   useMembershipPlans,
+  useMembershipPlanChange,
   type ApiMembership,
   type ApiMembershipPlan,
   type ApiMembershipUsage,
@@ -68,12 +71,17 @@ function tomorrowISO(): string {
 export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
   const { data, isLoading, refetch } = useMyMembership()
   const cancelMutation = useMembershipCancel()
+  // Phase 81 — the quiet tier switch (upgrade or downgrade; the member
+  // never sees the word "downgrade").
+  const planChangeMutation = useMembershipPlanChange()
   const [booking, setBooking] = useState<'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | null>(null)
   // Phase 70: when true, the shoes booking draws from the standalone Shoe
   // Club instead of the laundry tier's perk (a customer may hold both).
   const [bookingClub, setBookingClub] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState(false)
   const [confirmClubCancel, setConfirmClubCancel] = useState(false)
+  // Phase 81: the Change plan dialog (tier or club — same machinery).
+  const [changingPlan, setChangingPlan] = useState<null | 'KIT' | 'SHOES'>(null)
   // Prefill the pickup address from the profile the booking wizard also
   // reads (best-effort — an empty field is a perfectly good prompt).
   const [defaultAddress, setDefaultAddress] = useState('')
@@ -97,13 +105,18 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
   // Phase 75: the member's in-cycle bookings (live statuses + missed flags).
   const activity = data?.activity?.activity ?? []
 
-  // Phase 76: the prepopulated-renewal deep link — once the data is in,
-  // bring the renewal card into view so the email CTA lands exactly where
-  // the member expects to pay.
+  // Phase 76 → 81: the prepopulated-renewal deep link — once the data is in,
+  // bring the payment surface into view. A PENDING member's payment is the
+  // banner at the top of the portal (phase 81); a live member's is the
+  // renewal card below.
   useEffect(() => {
     if (!renewPrefill || isLoading || !membership) return
     const t = setTimeout(() => {
-      document.getElementById('kozy-renewal')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      const target =
+        (data?.effectiveStatus ?? membership.status) === 'PENDING_ACTIVATION'
+          ? 'kozy-first-payment'
+          : 'kozy-renewal'
+      document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }, 350)
     return () => clearTimeout(t)
   }, [renewPrefill, isLoading, membership])
@@ -145,6 +158,7 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
             clubStatus={clubStatus}
             onBook={openClubBooking}
             onCancel={() => setConfirmClubCancel(true)}
+            onChangePlan={() => setChangingPlan('SHOES')}
             onUndo={async () => {
               try {
                 await cancelMutation.mutateAsync({ action: 'cancel-undo', family: 'SHOES' })
@@ -156,13 +170,14 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
           />
         )}
 
-        {/* Phase 79 — a shoes-only member whose club payment never landed
-            gets the same completion card as the laundry tiers (the trap
-            fix covers BOTH families). Reactivation (PAST_DUE/LAPSED) rides
-            the same card. */}
+        {/* Phase 79 → 81 — a shoes-only member whose club payment never
+            landed gets the same banner as the laundry tiers (the trap fix
+            covers BOTH families) — the FIRST-PAYMENT banner at the top of
+            the portal, not this card. Reactivation (PAST_DUE/LAPSED)
+            still rides this card. */}
         {clubMembership &&
           clubPlan &&
-          ['PENDING_ACTIVATION', 'PAST_DUE', 'LAPSED'].includes(clubStatus) && (
+          ['PAST_DUE', 'LAPSED'].includes(clubStatus) && (
             <RenewalCard
               membership={clubMembership}
               plan={clubPlan}
@@ -230,10 +245,20 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
                   Kozy Circle · {plan?.name ?? 'Membership'}
                 </p>
               </div>
-              <p className="mt-1.5 font-serif text-2xl font-semibold">
-                {formatNaira(membership.pricePaid || plan?.priceMonthly || 0)}
-                <span className="text-sm font-normal text-navy-100/70"> / month</span>
-              </p>
+              {/* Phase 81: a pending member is NOT "in" yet — no naira-per-month
+                  headline (they have not paid anything). The card says what it is:
+                  a REQUEST, received. The payment itself lives in the banner at
+                  the top of the portal (every tab, front and center). */}
+              {status === 'PENDING_ACTIVATION' ? (
+                <p className="mt-1.5 font-serif text-2xl font-semibold">
+                  Membership request received
+                </p>
+              ) : (
+                <p className="mt-1.5 font-serif text-2xl font-semibold">
+                  {formatNaira(membership.pricePaid || plan?.priceMonthly || 0)}
+                  <span className="text-sm font-normal text-navy-100/70"> / month</span>
+                </p>
+              )}
             </div>
             <div className="flex flex-col items-end gap-2">
               <Badge variant="outline" className={`rounded-full border ${statusTone[status] ?? statusTone.ACTIVE} bg-white/95`}>
@@ -257,10 +282,49 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
             </p>
           )}
           {status === 'PENDING_ACTIVATION' && (
-            <p className="mt-3 text-xs leading-relaxed text-navy-100/80">
-              We received your membership — complete your first payment below and your month starts
-              the moment it is confirmed (card payments verify themselves instantly; transfers take
-              a human glance).
+            <div className="mt-3">
+              <p className="text-xs leading-relaxed text-navy-100/80">
+                We received your membership request — your month starts the moment your
+                first payment is confirmed (card payments verify themselves instantly;
+                transfers take a human glance).
+              </p>
+              <button
+                onClick={() =>
+                  document
+                    .getElementById('kozy-first-payment')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+                className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-gold-gradient px-4 py-2 text-xs font-semibold text-navy transition hover:opacity-90"
+              >
+                <CreditCard className="h-3.5 w-3.5" />
+                Complete your first payment
+              </button>
+            </div>
+          )}
+          {/* Phase 81: a scheduled tier switch — one quiet line, undoable. */}
+          {membership.pendingPlan && status !== 'PENDING_ACTIVATION' && (
+            <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-navy-100/80">
+              <ArrowLeftRight className="h-3.5 w-3.5 text-gold-400" />
+              <span>
+                Switching to {membership.pendingPlan.name} at your next renewal ·
+                {formatNaira(membership.pendingPlan.priceMonthly)}/month
+              </span>
+              <button
+                onClick={async () => {
+                  try {
+                    await planChangeMutation.mutateAsync({ action: 'plan-change-undo' })
+                    toast({
+                      title: 'Switch undone',
+                      description: `You'll stay on ${plan?.name ?? 'your current plan'} — nothing else changes.`,
+                    })
+                  } catch (e: any) {
+                    toast({ title: 'Could not undo', description: e?.message, variant: 'destructive' })
+                  }
+                }}
+                className="underline underline-offset-2 transition hover:text-white"
+              >
+                Undo
+              </button>
             </p>
           )}
         </div>
@@ -387,9 +451,22 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
                   : 'Your kit has been returned. Thank you for closing the loop cleanly.'}
             </div>
 
-            {/* ===== Cancel / undo ===== */}
+            {/* ===== Change plan / Cancel / undo ===== */}
+            {/* Phase 81 — the quiet switch: one small link, same visual voice
+                as the cancel link. Upgrades and downgrades ride the same door;
+                the word "downgrade" appears nowhere. */}
+            {status !== 'CANCELLED' && status !== 'LAPSED' && !membership.pendingPlan && (
+              <div className={status !== 'PENDING_ACTIVATION' ? 'mt-4 text-right' : 'mt-4'}>
+                <button
+                  onClick={() => setChangingPlan('KIT')}
+                  className="text-xs text-navy-300 underline-offset-2 transition hover:text-gold-600 hover:underline"
+                >
+                  Change plan
+                </button>
+              </div>
+            )}
             {status !== 'PENDING_ACTIVATION' && status !== 'LAPSED' && status !== 'CANCELLED' && (
-              <div className="mt-4 text-right">
+              <div className="mt-2 text-right">
                 {membership.cancelAtPeriodEnd ? (
                   <Button
                     size="sm"
@@ -423,20 +500,19 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
         )}
       </Card>
 
-      {/* ===== The payment card (phase 76 → 78 → 79) — the member's own
-          payment place. Near the month's end (or past it): the full
-          prepopulated renewal card with the whole standing ladder
+      {/* ===== The payment card (phase 76 → 78 → 79 → 81) — the LIVE
+          member's own payment place. Near the month's end (or past it): the
+          full prepopulated renewal card with the whole standing ladder
           (1/3/6/12 months). Mid-cycle: the same card collapses to ONE quiet
           line ("covered through … · months stack · add months early") so a
           member can always settle a quarter, half-year or year on their own
           — without the page ever shouting at them. This is where the monthly
           summary email's CTAs land.
-          PHASE 79: PENDING_ACTIVATION members get the card too — as the
-          "Complete your first payment" card. A member whose card checkout
-          never opened (or whose transfer never landed) previously had NO
-          payment surface at all while pending — the trap behind the office's
-          "subscribed but cannot pay" complaint. ===== */}
-      {plan && membership && status !== 'CANCELLED' && (
+          PHASE 81: PENDING_ACTIVATION members no longer render this card —
+          their first payment lives in the banner at the TOP of the portal
+          (every tab, front and center — the owner's direction), so there is
+          exactly ONE payment surface, never two. ===== */}
+      {plan && membership && status !== 'CANCELLED' && status !== 'PENDING_ACTIVATION' && (
         <RenewalCard
           membership={membership}
           plan={plan}
@@ -464,6 +540,7 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
           clubStatus={clubStatus}
           onBook={openClubBooking}
           onCancel={() => setConfirmClubCancel(true)}
+          onChangePlan={() => setChangingPlan('SHOES')}
           onUndo={async () => {
             try {
               await cancelMutation.mutateAsync({ action: 'cancel-undo', family: 'SHOES' })
@@ -475,11 +552,13 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
         />
       )}
 
-      {/* Phase 79 — the club's own payment card when the club is pending or
-          paused, for members who hold BOTH a tier and the club. */}
+      {/* Phase 79 → 81 — the club's own payment card when the club is
+          paused, for members who hold BOTH a tier and the club. A pending
+          club rides the first-payment banner at the top of the portal
+          instead — one payment surface, never two. */}
       {clubMembership &&
         clubPlan &&
-        ['PENDING_ACTIVATION', 'PAST_DUE', 'LAPSED'].includes(clubStatus) && (
+        ['PAST_DUE', 'LAPSED'].includes(clubStatus) && (
           <RenewalCard
             membership={clubMembership}
             plan={clubPlan}
@@ -555,6 +634,28 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
               toast({ title: 'Could not cancel', description: e?.message, variant: 'destructive' })
             }
           }}
+        />
+      )}
+
+      {/* ===== Change plan (phase 81) — the quiet tier switch ===== */}
+      {changingPlan === 'KIT' && membership && plan && (
+        <PlanChangeDialog
+          currentPlan={plan}
+          status={status}
+          periodEnd={membership.periodEnd}
+          scheduledPlan={membership.pendingPlan ?? null}
+          family="KIT"
+          onClose={() => setChangingPlan(null)}
+        />
+      )}
+      {changingPlan === 'SHOES' && clubMembership && clubPlan && (
+        <PlanChangeDialog
+          currentPlan={clubPlan}
+          status={clubStatus}
+          periodEnd={clubMembership.periodEnd}
+          scheduledPlan={clubMembership.pendingPlan ?? null}
+          family="SHOES"
+          onClose={() => setChangingPlan(null)}
         />
       )}
 
@@ -650,7 +751,8 @@ function RenewalCard({
   )
   const [earlyOpen, setEarlyOpen] = useState(false)
   const [appSettings, setAppSettings] = useState<KozyAppSettings | null>(null)
-  const [busy, setBusy] = useState<'card' | 'transfer' | null>(null)
+  const [busy, setBusy] = useState<'card' | 'transfer' | 'claim' | null>(null)
+  const [claimed, setClaimed] = useState(false)
   const [transfer, setTransfer] = useState<{
     bankName: string
     accountName: string
@@ -719,12 +821,15 @@ function RenewalCard({
     )
   }
 
-  const price = renewalPriceFor(plan.priceMonthly, effectiveMonths)
-  const saving = renewalSavingFor(plan.priceMonthly, effectiveMonths)
+  const price = renewalPriceFor((membership.pendingPlan ?? plan).priceMonthly, effectiveMonths)
+  const saving = renewalSavingFor((membership.pendingPlan ?? plan).priceMonthly, effectiveMonths)
   const paystackAvailable = appSettings?.paystackAvailable ?? false
 
-  const renew = async (method: 'PAYSTACK' | 'BANK_TRANSFER') => {
-    setBusy(method === 'PAYSTACK' ? 'card' : 'transfer')
+  // Phase 81 — the card's own payment paths, split in two for transfer:
+  //   • Pay by bank transfer → the reveal (instructions only, no claim)
+  //   • I've made payment → the claim the office acts on + the calm toast
+  const renew = async (method: 'PAYSTACK' | 'BANK_TRANSFER', claim = false) => {
+    setBusy(claim ? 'claim' : method === 'PAYSTACK' ? 'card' : 'transfer')
     try {
       const res = await fetch('/api/subscriptions/renew', {
         method: 'POST',
@@ -733,6 +838,7 @@ function RenewalCard({
           subscriptionId: membership.id,
           months: effectiveMonths,
           method,
+          ...(claim ? { claim: true } : {}),
         }),
       })
       const data = await res.json().catch(() => ({}))
@@ -746,6 +852,24 @@ function RenewalCard({
           description: data?.message ?? 'Please try again, or choose bank transfer below.',
           variant: 'destructive',
         })
+      } else if (claim) {
+        if (res.ok) {
+          setClaimed(true)
+          toast({
+            title: "We're verifying your payment",
+            description: pending
+              ? 'Thank you — the moment the office confirms your transfer, your membership will be activated shortly.'
+              : `Thank you — the moment the office confirms your transfer, your ${
+                  effectiveMonths > 1 ? `${effectiveMonths} months apply` : 'next month applies'
+                } as usual.`,
+          })
+        } else {
+          toast({
+            title: 'Could not record the payment',
+            description: data?.message ?? 'Please try again in a moment.',
+            variant: 'destructive',
+          })
+        }
       } else {
         if (res.ok && data.transfer) {
           setTransfer(data.transfer)
@@ -828,10 +952,21 @@ function RenewalCard({
                 : `You're covered through ${periodEnd ? formatDate(periodEnd.toISOString()) : 'your current month'}. Months added now simply stack onto that date — you never lose a day.`}
         </p>
 
+        {/* Phase 81 — a scheduled switch priced into this payment. */}
+        {membership.pendingPlan && !pending && (
+          <p className="mt-2 flex items-center gap-1.5 rounded-lg bg-navy-50 px-3 py-2 text-xs font-medium text-navy-700">
+            <ArrowLeftRight className="h-3.5 w-3.5 shrink-0 text-gold-600" />
+            This payment starts the {membership.pendingPlan.name} — your switch lands with it
+            ({formatNaira(membership.pendingPlan.priceMonthly)}/month from then on).
+          </p>
+        )}
+
         {/* The payment options — the standing ladder: next month, or a
             discounted 3 / 6 / 12-month cover, every discounted rung navy
             (brand). PENDING members see a single first-month line instead —
-            the ladder opens the moment the membership is live. */}
+            the ladder opens the moment the membership is live. Phase 81: the
+            ladder prices on the plan being switched TO when one is
+            scheduled. */}
         {pending ? (
           <div className="mt-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
@@ -851,7 +986,7 @@ function RenewalCard({
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {RENEWAL_MONTH_CHOICES.map((m) => {
-              const mSaving = renewalSavingFor(plan.priceMonthly, m)
+              const mSaving = renewalSavingFor((membership.pendingPlan ?? plan).priceMonthly, m)
               const selected = months === m
               return (
                 <button
@@ -872,7 +1007,7 @@ function RenewalCard({
                       selected && m > 1 ? 'text-gold-200' : 'opacity-80'
                     }`}
                   >
-                    {formatNaira(renewalPriceFor(plan.priceMonthly, m))}
+                    {formatNaira(renewalPriceFor((membership.pendingPlan ?? plan).priceMonthly, m))}
                   </span>
                   {m > 1 && mSaving > 0 && (
                     <span
@@ -899,7 +1034,9 @@ function RenewalCard({
         </div>
         )}
 
-        {/* The payment paths — same as the join checkout */}
+        {/* The payment paths — same two-step pattern as the banner: the
+            transfer button reveals the details, then hands the baton to
+            "I've made payment" (the claim the office acts on). */}
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <Button
             onClick={() => renew('PAYSTACK')}
@@ -914,19 +1051,38 @@ function RenewalCard({
             )}
             Pay {formatNaira(price)} by card
           </Button>
-          <Button
-            onClick={() => renew('BANK_TRANSFER')}
-            disabled={busy !== null}
-            variant="outline"
-            className="rounded-full border-navy-200 font-semibold text-navy hover:bg-navy hover:text-white"
-          >
-            {busy === 'transfer' ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Landmark className="mr-2 h-4 w-4" />
-            )}
-            Pay by bank transfer
-          </Button>
+          {!transfer ? (
+            <Button
+              onClick={() => renew('BANK_TRANSFER')}
+              disabled={busy !== null}
+              variant="outline"
+              className="rounded-full border-navy-200 font-semibold text-navy hover:bg-navy hover:text-white"
+            >
+              {busy === 'transfer' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Landmark className="mr-2 h-4 w-4" />
+              )}
+              Pay by bank transfer
+            </Button>
+          ) : (
+            <Button
+              onClick={() => renew('BANK_TRANSFER', true)}
+              disabled={busy !== null || claimed}
+              className={`rounded-full font-semibold ${
+                claimed ? 'bg-navy-50 text-navy-400' : 'bg-navy text-white hover:bg-navy-700'
+              }`}
+            >
+              {busy === 'claim' ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : claimed ? (
+                <BadgeCheck className="mr-2 h-4 w-4" />
+              ) : null}
+              {claimed
+                ? "Payment sent — awaiting the office's confirmation"
+                : "I've made payment"}
+            </Button>
+          )}
         </div>
         {!paystackAvailable && (
           <p className="mt-2 text-xs text-navy-300">
@@ -958,6 +1114,12 @@ function RenewalCard({
               </p>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-navy-300">{transfer.note}</p>
+            {claimed && (
+              <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-navy-700">
+                <BadgeCheck className="h-3.5 w-3.5 text-gold-600" />
+                You told us you&apos;ve paid — we&apos;re verifying it now.
+              </p>
+            )}
           </div>
         )}
 
@@ -1416,6 +1578,7 @@ function ShoeClubCard({
   onBook,
   onCancel,
   onUndo,
+  onChangePlan,
 }: {
   clubMembership: ApiMembership
   clubPlan: ApiMembershipPlan
@@ -1424,6 +1587,7 @@ function ShoeClubCard({
   onBook: () => void
   onCancel: () => void
   onUndo: () => void
+  onChangePlan: () => void
 }) {
   const statusTone: Record<string, string> = {
     ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -1491,8 +1655,30 @@ function ShoeClubCard({
           </div>
         )}
 
-        {clubStatus !== 'PENDING_ACTIVATION' && clubStatus !== 'LAPSED' && clubStatus !== 'CANCELLED' && (
+        {/* Phase 81 — the club's own quiet switch (SHOES1 ↔ SHOES3 ↔ SHOES5),
+            plus the scheduled-switch line. */}
+        {clubStatus !== 'CANCELLED' && clubStatus !== 'LAPSED' && !clubMembership.pendingPlan && (
           <div className="mt-4 text-right">
+            <button
+              onClick={onChangePlan}
+              className="text-xs text-navy-300 underline-offset-2 transition hover:text-gold-600 hover:underline"
+            >
+              Change plan
+            </button>
+          </div>
+        )}
+        {clubMembership.pendingPlan && clubStatus !== 'PENDING_ACTIVATION' && (
+          <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-navy-300">
+            <ArrowLeftRight className="h-3.5 w-3.5 text-gold-600" />
+            <span>
+              Switching to {clubMembership.pendingPlan.name} at your next renewal ·
+              {formatNaira(clubMembership.pendingPlan.priceMonthly)}/month
+            </span>
+          </p>
+        )}
+
+        {clubStatus !== 'PENDING_ACTIVATION' && clubStatus !== 'LAPSED' && clubStatus !== 'CANCELLED' && (
+          <div className="mt-2 text-right">
             {clubMembership.cancelAtPeriodEnd ? (
               <Button
                 size="sm"
@@ -1546,6 +1732,186 @@ function ConfirmClubCancelDialog({
             <XCircle className="mr-1.5 h-4 w-4" /> Cancel
           </Button>
         </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// =====================================================
+// PlanChangeDialog (phase 81) — the quiet tier switch
+// =====================================================
+// The owner's brief: money paths between tiers must work seamlessly, and a
+// downgrade must be POSSIBLE without ever being pushed — "don't put it all
+// in their face or make it too obvious that they can downgrade". So this is
+// one neutral "Change plan" door for both directions:
+//
+//   • every plan listed the same way (name, price, what it includes) —
+//     nothing labelled upgrade or downgrade, nothing flashing;
+//   • a LIVE membership schedules the switch for its next paid cycle —
+//     paid days untouched, no money moves at request time, undo any time;
+//   • a PENDING request (not paid yet) switches immediately — the member
+//     pays for the tier they actually want, never trapped by the
+//     one-membership-per-family rule.
+// =====================================================
+function PlanChangeDialog({
+  currentPlan,
+  status,
+  periodEnd,
+  scheduledPlan,
+  family,
+  onClose,
+}: {
+  currentPlan: ApiMembershipPlan
+  status: string
+  periodEnd: string | null
+  scheduledPlan: ApiMembershipPlan | null
+  family: 'KIT' | 'SHOES'
+  onClose: () => void
+}) {
+  const { data: plans } = useMembershipPlans(true)
+  const planChange = useMembershipPlanChange()
+  const [picked, setPicked] = useState<string | null>(null)
+  const isClub = family === 'SHOES'
+  const pending = status === 'PENDING_ACTIVATION'
+
+  const options = (plans ?? [])
+    .filter((p) => p.isActive && p.family === family && p.id !== currentPlan.id)
+    .sort((a, b) => a.priceMonthly - b.priceMonthly)
+
+  const pickedPlan = options.find((p) => p.code === picked)
+
+  const onConfirm = async () => {
+    if (!pickedPlan) return
+    try {
+      const res = await planChange.mutateAsync({
+        action: 'plan-change',
+        planCode: pickedPlan.code,
+        family,
+      })
+      onClose()
+      if (res.applied === 'immediately') {
+        toast({
+          title: `Your request is now on ${pickedPlan.name}`,
+          description: `Your first payment (at the top of your portal) is for the new plan — ${formatNaira(pickedPlan.priceMonthly)}.`,
+        })
+      } else {
+        toast({
+          title: 'Switch scheduled',
+          description: `From your next renewal you'll be on ${pickedPlan.name} at ${formatNaira(pickedPlan.priceMonthly)}/month. You can undo it any time before then.`,
+        })
+      }
+    } catch (e: any) {
+      toast({ title: 'Could not change the plan', description: e?.message, variant: 'destructive' })
+    }
+  }
+
+  const onUndo = async () => {
+    try {
+      await planChange.mutateAsync({ action: 'plan-change-undo', family })
+      onClose()
+      toast({
+        title: 'Switch undone',
+        description: `You'll stay on ${currentPlan.name} — nothing else changes.`,
+      })
+    } catch (e: any) {
+      toast({ title: 'Could not undo', description: e?.message, variant: 'destructive' })
+    }
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => (o ? null : onClose())}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-lg text-navy">Change plan</DialogTitle>
+          <DialogDescription>
+            {pending
+              ? `Your ${currentPlan.name} request hasn't been paid yet — switching now simply changes the plan you'll start on.`
+              : `Your ${currentPlan.name} runs until ${periodEnd ? formatDate(periodEnd) : 'the end of your paid month'}. A new plan takes over from your next renewal — the switch lands with that payment, and you can undo it any time before then.`}
+          </DialogDescription>
+        </DialogHeader>
+
+        {scheduledPlan && (
+          <div className="mt-2 rounded-xl border border-gold-200 bg-gold-50/60 p-3">
+            <p className="text-sm font-semibold text-navy">
+              Switching to {scheduledPlan.name} at your next renewal
+            </p>
+            <p className="mt-1 text-xs text-navy-300">
+              {formatNaira(scheduledPlan.priceMonthly)}/month from then on.
+            </p>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={onUndo}
+              disabled={planChange.isPending}
+              className="mt-2 rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+            >
+              <Undo2 className="mr-1.5 h-3.5 w-3.5" /> Undo — stay on {currentPlan.name}
+            </Button>
+          </div>
+        )}
+
+        <div className="mt-3 space-y-2">
+          {options.length === 0 && (
+            <p className="rounded-xl border border-dashed border-navy-200 p-4 text-center text-sm text-navy-300">
+              No other plans are available right now.
+            </p>
+          )}
+          {options.map((p) => {
+            const selected = picked === p.code
+            const descriptor = isClub
+              ? `${p.shoesPerMonth} pair${p.shoesPerMonth === 1 ? '' : 's'} of cleans a month`
+              : `${p.includedUnits} × ${p.unitName} pickups a month`
+            return (
+              <button
+                key={p.code}
+                type="button"
+                onClick={() => setPicked(p.code)}
+                className={
+                  selected
+                    ? 'flex w-full items-center justify-between gap-3 rounded-xl border-2 border-gold-300 bg-gold-50/50 p-3 text-left'
+                    : 'flex w-full items-center justify-between gap-3 rounded-xl border border-navy-100 p-3 text-left transition hover:border-gold-200'
+                }
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-navy">{p.name}</p>
+                  <p className="text-[11px] text-navy-300">{descriptor}</p>
+                </div>
+                <p className="shrink-0 font-serif text-lg font-bold text-navy">
+                  {formatNaira(p.priceMonthly)}
+                  <span className="text-[10px] font-normal text-navy-300"> /mo</span>
+                </p>
+              </button>
+            )
+          })}
+        </div>
+
+        <Button
+          onClick={onConfirm}
+          disabled={!pickedPlan || planChange.isPending}
+          className="mt-4 w-full rounded-full bg-gold-gradient font-semibold text-navy hover:opacity-90"
+        >
+          {planChange.isPending ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Switching…
+            </>
+          ) : pickedPlan ? (
+            pending ? (
+              <>Switch my request to {pickedPlan.name}</>
+            ) : (
+              <>
+                <ArrowLeftRight className="mr-2 h-4 w-4" />
+                Switch to {pickedPlan.name} at my next renewal
+              </>
+            )
+          ) : (
+            'Pick a plan above'
+          )}
+        </Button>
+        <p className="text-center text-[10px] text-navy-300">
+          {pending
+            ? 'Nothing is charged until your first payment'
+            : 'Nothing is charged now — the new plan starts with your next renewal'}
+        </p>
       </DialogContent>
     </Dialog>
   )

@@ -21,6 +21,7 @@ import {
   Store,
 } from 'lucide-react'
 import { useOrders, type ApiOrder } from '@/lib/hooks'
+import { useMyMembership } from '@/lib/hooks'
 import { formatNaira, formatDate } from '@/lib/types'
 import { OrderPipeline } from '@/components/shared/order-pipeline'
 import { Button } from '@/components/ui/button'
@@ -32,6 +33,7 @@ import { OrderDetailModal } from './order-detail-modal'
 import { InvoiceView } from './invoice-view'
 import { BookingWizard } from './booking-wizard'
 import { MembershipTab } from './membership-tab'
+import { FirstPaymentBanner } from './first-payment-banner'
 import { StoreTab } from './store-tab'
 import { motion } from 'framer-motion'
 
@@ -43,6 +45,9 @@ interface Props {
    *  preselected — the landing target of the monthly summary email buttons. */
   initialTab?: 'active' | 'invoices' | 'membership' | 'store'
   renewPrefill?: number
+  /** Phase 81: the first-payment deep link (?pay=1) — the pending member
+   *  lands on their payment banner at the very top, glowing. */
+  focusPayment?: boolean
   onBackToLanding?: () => void
 }
 
@@ -56,6 +61,7 @@ export function CustomerPortal({
   initialHighlight,
   initialTab,
   renewPrefill,
+  focusPayment,
 }: Props) {
   const { data: session, status } = useSession()
   const router = useRouter()
@@ -75,7 +81,14 @@ export function CustomerPortal({
   }
 
   if (!session) {
-    router.push('/login')
+    // Phase 81: a signed-out visitor chasing a payment link must come BACK
+    // to this exact portal (deep link intact) after signing in — not to a
+    // bare /portal where they would have to find the payment again.
+    router.push(
+      `/login?callbackUrl=${encodeURIComponent(
+        focusPayment ? '/portal?pay=1' : '/portal'
+      )}`
+    )
     return null
   }
 
@@ -110,6 +123,7 @@ export function CustomerPortal({
       highlightedId={selectedOrderId}
       initialTab={initialTab}
       renewPrefill={renewPrefill}
+      focusPayment={focusPayment}
       onSignOut={() => signOut({ callbackUrl: '/' })}
       onBackToLanding={() => router.push('/')}
       onBook={() => setView({ name: 'booking' })}
@@ -220,6 +234,7 @@ function CustomerDashboard({
   highlightedId,
   initialTab,
   renewPrefill,
+  focusPayment,
   onSignOut,
   onBackToLanding,
   onBook,
@@ -231,6 +246,7 @@ function CustomerDashboard({
   highlightedId?: string
   initialTab?: 'active' | 'invoices' | 'membership' | 'store'
   renewPrefill?: number
+  focusPayment?: boolean
   onSignOut: () => void
   onBackToLanding: () => void
   onBook: () => void
@@ -240,6 +256,10 @@ function CustomerDashboard({
   // Fetch orders from the real API (already RBAC-filtered server-side to this
   // user) — cursor-paginated, older orders load on demand.
   const { data: orders, isLoading, hasMore, loadMore, isFetchingMore } = useOrders()
+  // Phase 81: the member's own memberships — the SAME react-query cache the
+  // Membership tab reads (['my-membership']), so the banner and the tab share
+  // one fetch. Powers the first-payment banner above the stat cards.
+  const { data: membershipData } = useMyMembership()
   // Phase 77 — the Kozy Store: while the office keeps it dark this returns
   // enabled:false + an empty list and the tab never mounts (not even a hint
   // that a store exists). The landing page never carries the store at all.
@@ -269,6 +289,22 @@ function CustomerDashboard({
   const orderList = orders ?? []
   const activeOrders = orderList.filter((o) => !['DELIVERED', 'CANCELLED'].includes(o.status))
   const pastOrders = orderList.filter((o) => ['DELIVERED', 'CANCELLED'].includes(o.status))
+
+  // Phase 81 — the pending member's payment, front and center. A membership
+  // request that has not been paid yet renders its payment banner BETWEEN
+  // the welcome header and the Active/Past/Guarantee cards — above the tabs,
+  // visible on every tab, exactly where the owner asked for it. The tier
+  // comes first; a shoes-only customer sees their club banner instead.
+  const tierMembership = membershipData?.membership
+  const tierPlan = tierMembership?.plan
+  const tierPending =
+    Boolean(tierMembership && tierPlan) &&
+    (membershipData?.effectiveStatus ?? tierMembership?.status) === 'PENDING_ACTIVATION'
+  const clubMembership = membershipData?.shoeClub?.membership
+  const clubPlan = clubMembership?.plan
+  const clubPending =
+    Boolean(clubMembership && clubPlan) &&
+    (membershipData?.shoeClub?.effectiveStatus ?? clubMembership?.status) === 'PENDING_ACTIVATION'
 
   // Loading state
   if (isLoading) {
@@ -321,6 +357,27 @@ function CustomerDashboard({
       </header>
 
       <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        {/* Phase 81 — the first-payment banner: BELOW the welcome header,
+            ABOVE the Active/Past/Guarantee cards and the tabs. A pending
+            member sees their payment on every tab, without scrolling or
+            searching — the owner's "front and center". */}
+        {tierPending && tierMembership && tierPlan && (
+          <FirstPaymentBanner
+            membership={tierMembership}
+            plan={tierPlan}
+            family="KIT"
+            focus={focusPayment}
+          />
+        )}
+        {clubPending && clubMembership && clubPlan && (
+          <FirstPaymentBanner
+            membership={clubMembership}
+            plan={clubPlan}
+            family="SHOES"
+            focus={focusPayment && !tierPending}
+          />
+        )}
+
         {/* Stats */}
         <div className="mb-6 grid grid-cols-3 gap-2 sm:gap-3">
           <Card className="border-navy-100 shadow-navy">

@@ -253,6 +253,9 @@ export interface Membership {
   // renewal (member portal / admin drill-down) read it from here.
   paystackRef?: string | null
   plan?: MembershipPlan
+  // Phase 81: the member-scheduled tier switch — the plan the NEXT paid
+  // cycle runs on (set only for live memberships with a change queued).
+  pendingPlan?: MembershipPlan | null
   createdAt: string
   updatedAt: string
 }

@@ -87,6 +87,12 @@ export function MembershipsClient() {
   )
 
   const alreadyMember = Boolean(myMembership?.membership)
+  // Phase 81 — a PENDING member on this page is here to PAY, not to browse:
+  // their hero CTA becomes "Complete my first payment" → the banner at the
+  // top of their portal (the deep link carries the focus).
+  const pendingMember =
+    alreadyMember &&
+    (myMembership?.effectiveStatus ?? myMembership?.membership?.status) === 'PENDING_ACTIVATION'
 
   // Phase 80 — the join deep link: /memberships?join=ESSENTIALS re-opens the
   // exact plan's dialog. It arrives from the JoinDialog's own account step,
@@ -95,19 +101,29 @@ export function MembershipsClient() {
   // live AND the membership probe has settled (signed-out probes error — that
   // counts as settled and not-a-member); the param is stripped after use so a
   // refresh never re-triggers the dialog.
+  // Phase 81 — a PENDING member carrying a join link is taken STRAIGHT to
+  // their payment (they cannot join a second tier; the banner is where their
+  // money lives). A live member simply browses — their switch door is Change
+  // plan in the portal, never this page.
   useEffect(() => {
-    if (joinPlan || alreadyMember) return
+    if (joinPlan) return
     if (!activePlans.length) return
     if (!(membershipQuery.isSuccess || membershipQuery.isError)) return
     const code = new URLSearchParams(window.location.search).get('join')
     if (!code) return
+    if (pendingMember) {
+      window.history.replaceState({}, '', '/memberships')
+      window.location.href = '/portal?pay=1'
+      return
+    }
+    if (alreadyMember) return
     const target = activePlans.find(
       (p) => p.code.toUpperCase() === code.trim().toUpperCase()
     )
     if (!target) return
     setJoinPlan(target)
     window.history.replaceState({}, '', '/memberships')
-  }, [joinPlan, alreadyMember, activePlans, membershipQuery.isSuccess, membershipQuery.isError])
+  }, [joinPlan, alreadyMember, pendingMember, activePlans, membershipQuery.isSuccess, membershipQuery.isError])
 
   return (
     <div className="bg-linen">
@@ -157,13 +173,15 @@ export function MembershipsClient() {
             </p>
             <div className="mt-7 flex flex-wrap items-center justify-center gap-3 lg:justify-start">
               {alreadyMember ? (
-                <Link href="/portal">
+                <Link href={pendingMember ? '/portal?pay=1' : '/portal'}>
                   <Button
                     size="lg"
                     className="h-12 rounded-full bg-gold-gradient px-6 text-base font-semibold text-navy shadow-gold hover:opacity-90"
                   >
                     <BadgeCheck className="mr-2 h-5 w-5" />
-                    You&apos;re in the Circle — open your portal
+                    {pendingMember
+                      ? 'Your payment is waiting — complete it now'
+                      : "You're in the Circle — open your portal"}
                   </Button>
                 </Link>
               ) : (
@@ -487,7 +505,7 @@ export function MembershipsClient() {
                               toast({
                                 title: 'You are already in the Circle',
                                 description:
-                                  'To switch tiers, cancel from your portal first (it stays active to month end), then join the new circle.',
+                                  'To switch tiers, use Change plan in your portal\'s Membership tab — it takes effect at your next renewal.',
                               })
                               return
                             }
@@ -639,9 +657,10 @@ export function MembershipsClient() {
 
           <div className="mt-10 text-center">
             {alreadyMember ? (
-              <Link href="/portal">
+              <Link href={pendingMember ? '/portal?pay=1' : '/portal'}>
                 <Button className="rounded-full bg-navy px-8 text-white hover:bg-navy-600">
-                  Manage my membership <ArrowRight className="ml-2 h-4 w-4" />
+                  {pendingMember ? 'Complete my first payment' : 'Manage my membership'}{' '}
+                  <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             ) : (

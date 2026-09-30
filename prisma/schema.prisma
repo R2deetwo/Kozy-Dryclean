@@ -1113,6 +1113,8 @@ model SubscriptionPlan {
   // keys are configured. Null = manual/transfer renewals only.
   paystackPlanCode   String?
   subscriptions      Subscription[]
+  // Phase 81: memberships with a member-scheduled switch TO this plan.
+  pendingChanges     Subscription[] @relation("PendingPlanChange")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1193,6 +1195,17 @@ model Subscription {
   // table is the WHY and the WHEN — the answer to "have they washed this
   // month, how many pickups, did they miss one".
   events        SubscriptionEvent[] @relation("SubscriptionEvents")
+  // ----- Tier changes (phase 81) -----
+  // A member-requested plan switch inside the SAME family (laundry tier ↔
+  // laundry tier, club ↔ club): upgrade or the quiet downgrade. For a LIVE
+  // membership this is the plan the NEXT paid cycle runs on — the renew /
+  // verify engine (activateOrRenewSubscription) swaps planId → pendingPlanId
+  // the moment money lands, so a member never changes tier mid-cycle without
+  // paying, and never loses the days already paid. For a PENDING_ACTIVATION
+  // request (no money moved yet) the switch is applied immediately at the
+  // API level — nothing to prorate. Null = no change scheduled.
+  pendingPlanId String?
+  pendingPlan   SubscriptionPlan? @relation("PendingPlanChange", fields: [pendingPlanId], references: [id])
   // ----- Cancellation -----
   cancelAtPeriodEnd Boolean  @default(false)
   cancelledAt  DateTime?

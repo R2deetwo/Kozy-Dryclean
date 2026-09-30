@@ -438,6 +438,11 @@ export function effectiveUsage(
 /** Map a Prisma subscription row (with plan included) onto the client shape. */
 export function rowToMembership(row: any): Membership {
   const plan = row.plan ? rowToPlan(row.plan) : undefined
+  // Phase 81: the member-scheduled tier switch (present only for live
+  // memberships with a change queued). Surfaces so the portal can say
+  // "switching to X at your next renewal" and the admin drill-down can
+  // see it coming.
+  const pendingPlan = row.pendingPlan ? rowToPlan(row.pendingPlan) : undefined
   return {
     id: row.id,
     userId: row.userId,
@@ -447,6 +452,7 @@ export function rowToMembership(row: any): Membership {
     periodStart: row.periodStart?.toISOString?.() ?? null,
     periodEnd: row.periodEnd?.toISOString?.() ?? null,
     cancelAtPeriodEnd: Boolean(row.cancelAtPeriodEnd),
+    pendingPlan,
     unitsUsed: row.unitsUsed,
     extraUnitsUsed: row.extraUnitsUsed,
     shoesUsed: row.shoesUsed ?? 0,
@@ -476,13 +482,23 @@ export async function activateOrRenewSubscription(
   subscriptionId: string,
   opts: { pricePaid: number; method: string; cycles?: number }
 ): Promise<any> {
-  const sub = await db.subscription.findUnique({ where: { id: subscriptionId } })
+  const sub = await db.subscription.findUnique({
+    where: { id: subscriptionId },
+    include: { plan: true, pendingPlan: true },
+  })
   if (!sub) throw new Error('Subscription not found')
 
   // Phase 76: multi-month renewals — one payment can cover several cycles.
   // Clamped to a sane 1..12 so a bad payload can never mint a decade.
   const cycles = Math.min(Math.max(Math.round(opts.cycles ?? 1), 1), 12)
   const cycleMs = CYCLE_DAYS * 24 * 60 * 60 * 1000
+
+  // Phase 81: apply a member-scheduled tier switch with this payment — the
+  // new cycle (and its entitlements + kit language) run on the pending plan.
+  // Swapped atomically in the same update so a member never lands in a
+  // half-switched state.
+  const switchTo = sub.pendingPlan ?? null
+  const switchedFrom = switchTo ? sub.plan : null
 
   const now = new Date()
   const periodStart = now
@@ -507,6 +523,8 @@ export async function activateOrRenewSubscription(
       pricePaid: Math.round(opts.pricePaid),
       paymentMethod: opts.method,
       transferReceipt: null,
+      // Phase 81: the scheduled switch lands with the money.
+      ...(switchTo ? { planId: switchTo.id, pendingPlanId: null } : {}),
       // Unit counters reset for the new cycle; perk counters roll lazily
       // (their bookmarks are stamped so effectiveUsage can compute).
       unitsUsed: 0,
@@ -537,7 +555,15 @@ export async function activateOrRenewSubscription(
           method: opts.method,
           renewal: sub.status === 'ACTIVE',
           cycles,
+          ...(switchTo && switchedFrom
+            ? { planChanged: { from: switchedFrom.code, to: switchTo.code } }
+            : {}),
         }),
+        ...(switchTo && switchedFrom
+          ? {
+              note: `Tier switch applied with this payment: ${switchedFrom.name} → ${switchTo.name}.`,
+            }
+          : {}),
       },
     })
   } catch (e) {

@@ -146,16 +146,28 @@ export function JoinDialog({
         setDone('transfer-pending')
       }
     } catch (e: any) {
-      // Phase 79: ALREADY_MEMBER while PENDING_ACTIVATION now carries the
-      // completion path — point the member at their portal instead of a
-      // dead "waiting for verification" message.
+      // Phase 79 → 81: ALREADY_MEMBER carries the completion path — the
+      // member is taken STRAIGHT to their payment (the banner at the top of
+      // their portal), never left guessing where to pay. A pending request
+      // redirects immediately; a live member hears the switch message.
       const code = (e as any)?.code
-      const existing = (e as any)?.subscription as { id?: string } | undefined
+      const existing = (e as any)?.subscription as { id?: string; status?: string } | undefined
       if (code === 'ALREADY_MEMBER' && existing?.id) {
+        if (existing.status === 'PENDING_ACTIVATION') {
+          toast({
+            title: 'Your membership is waiting for its first payment',
+            description:
+              'Taking you straight to it — complete it by transfer (or card when available).',
+          })
+          setTimeout(() => {
+            window.location.href = '/portal?pay=1'
+          }, 900)
+          return
+        }
         toast({
-          title: 'Your membership is waiting for its first payment',
+          title: 'You are already a member',
           description:
-            'Complete it in a moment from your portal — pay by transfer (or card when available) right from the Membership tab.',
+            'To switch plans, use Change plan in your portal\'s Membership tab — it takes effect at your next renewal.',
         })
         return
       }
@@ -376,22 +388,22 @@ export function JoinDialog({
               {isClub ? (
                 <>
                   Transfer <strong className="text-navy">{formatNaira(plan.priceMonthly)}</strong> to
-                  the studio account (bank details are in your portal and your confirmation email).
-                  The moment our team verifies it, your monthly pairs unlock and you can book your
-                  first pickup.
+                  the studio account — the full details are waiting at the top of your portal,
+                  reference included. The moment our team verifies it, your monthly pairs unlock
+                  and you can book your first pickup.
                 </>
               ) : (
                 <>
                   Transfer <strong className="text-navy">{formatNaira(plan.priceMonthly)}</strong> to
-                  the studio account (bank details are in your portal and your confirmation email).
-                  The moment our team verifies it, your month starts and your rider schedules the kit
-                  hand-over.
+                  the studio account — the full details are waiting at the top of your portal,
+                  reference included. The moment our team verifies it, your month starts and your
+                  rider schedules the kit hand-over.
                 </>
               )}
             </p>
-            <Link href="/portal" className="mt-5 block">
+            <Link href="/portal?pay=1" className="mt-5 block">
               <Button className="w-full rounded-full bg-navy text-white hover:bg-navy-600">
-                Open my portal <ArrowRight className="ml-2 h-4 w-4" />
+                Take me to my payment <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
             </Link>
           </div>

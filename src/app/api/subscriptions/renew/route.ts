@@ -1,12 +1,12 @@
 // =============================================================================
 // POST /api/subscriptions/renew — a member renews (or reactivates) their own
-// membership, optionally prepaying months at a saving (phase 76 → 77 → 79)
+// membership, optionally prepaying months at a saving (phase 76 → 77 → 79 → 81)
 // =============================================================================
 // Authed customers only, own membership only. This is the endpoint behind the
-// email's renewal buttons and the portal's renewal card:
+// email's renewal buttons and the portal's payment surfaces:
 //
 //   body: { subscriptionId, months: 1|3|6|12,
-//           method: 'PAYSTACK' | 'BANK_TRANSFER', transferReceipt? }
+//           method: 'PAYSTACK' | 'BANK_TRANSFER', transferReceipt?, claim? }
 //
 //   PAYSTACK      → we initialize a Paystack transaction inline and return
 //                   the authorization URL. months=1 keeps the plan's
@@ -14,18 +14,27 @@
 //                   on); months>1 is a ONE-OFF charge at the discounted
 //                   prepay price (renewalPriceFor) that extends periodEnd on
 //                   the webhook (metadata.months).
-//   BANK_TRANSFER → we record a RENEWAL_INTENT ledger row (the claim, with
-//                   the receipt when the member attached one), alert the
-//                   office, and return the transfer instructions. Money
-//                   still moves only when the office confirms in the
-//                   drill-down (Renew, months prefilled from the claim).
+//   BANK_TRANSFER → returns the transfer instructions (bank, account,
+//                   reference — no side effects).
+//   BANK_TRANSFER + claim:true (phase 81) → the member pressed "I've made
+//                   payment": records the RENEWAL_INTENT ledger row (the
+//                   claim) and alerts the office. Kept SEPARATE from the
+//                   instructions call so the office is never pinged by a
+//                   member who merely opened the details (false alerts were
+//                   the old behavior — the claim and the instructions were
+//                   one call). The money still moves only when the office
+//                   confirms in the drill-down.
 //
 //   PHASE 79 — PENDING_ACTIVATION: a member whose FIRST payment never landed
 //   (card checkout failed / never opened — exactly the "subscribed but cannot
 //   pay" complaint) completes their first month HERE: months=1 only, the same
-//   transfer claim + card paths. This is the door out of the trap: the portal
-//   renders the completion card for pending members; re-subscribing stays
+//   transfer claim + card paths. This is the door out of the trap: the portal's
+//   first-payment banner renders for pending members; re-subscribing stays
 //   blocked (one membership per person).
+//
+//   PHASE 81 — a member with a SCHEDULED tier switch pays for the plan they
+//   are switching TO (the next cycle runs on it; the engine applies the swap
+//   when the money lands).
 // =============================================================================
 
 import { NextResponse, after } from 'next/server'
@@ -35,7 +44,7 @@ import { rateLimit } from '@/lib/rate-limit'
 import { getAppSettings } from '@/lib/app-settings'
 import { effectiveStatus } from '@/lib/subscriptions'
 import { notifyAdminRenewalTransferPending } from '@/lib/notifications'
-import { RENEWAL_MONTH_CHOICES, renewalPriceFor, renewalSavingFor } from '@/lib/types'
+import { RENEWAL_MONTH_CHOICES, renewalPriceFor, renewalSavingFor, formatNaira } from '@/lib/types'
 
 function baseUrl(): string {
   return (
@@ -92,7 +101,7 @@ export async function POST(req: Request) {
 
   const sub = await db.subscription.findUnique({
     where: { id: subscriptionId },
-    include: { plan: true },
+    include: { plan: true, pendingPlan: true },
   })
   if (!sub || !sub.plan) {
     return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
@@ -141,12 +150,24 @@ export async function POST(req: Request) {
 
   // The ONE pricing path: 1 month = plan price, 3 months = the discounted
   // prepay (the owner's ₦30,000 → ₦85,000 decision generalised per tier).
-  const amount = renewalPriceFor(sub.plan.priceMonthly, months)
-  const saving = renewalSavingFor(sub.plan.priceMonthly, months)
+  // Phase 81: with a tier switch scheduled, the next cycle runs on the NEW
+  // plan — the payment is for it.
+  const pricingPlan = sub.pendingPlan ?? sub.plan
+  const amount = renewalPriceFor(pricingPlan.priceMonthly, months)
+  const saving = renewalSavingFor(pricingPlan.priceMonthly, months)
   const transferReference = `KZY-RENEW-${sub.id.replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`
 
-  // ----- Bank transfer: claim + instructions, office confirms -----
-  if (method === 'BANK_TRANSFER') {
+  // ----- Bank transfer -----
+  // Phase 81 splits the old single call in two:
+  //   (a) instructions only (the member opened the transfer details — no
+  //       ledger row, no office ping),
+  //   (b) claim:true (the member pressed "I've made payment") — the
+  //       RENEWAL_INTENT ledger row + the office alert.
+  // The office alert therefore fires when a member SAYS they paid, not when
+  // they merely looked at the instructions.
+  const claiming = body?.claim === true
+
+  if (claiming) {
     try {
       await db.subscriptionEvent.create({
         data: {
@@ -160,24 +181,24 @@ export async function POST(req: Request) {
             isInitial: isInitialPayment,
             reference: transferReference,
             receipt: transferReceipt ? 'attached' : 'none',
+            planCode: pricingPlan.code,
           }),
           note: isInitialPayment
             ? `Member is completing their FIRST month (${transferReference}) — activate the membership when the transfer lands.`
-            : `Member claimed a ${months}-month renewal transfer (${transferReference})`,
+            : `Member said they've paid a ${months}-month renewal (${transferReference})`,
         },
       })
     } catch (e) {
       console.error('[memberships] RENEWAL_INTENT ledger write failed:', e)
     }
 
-    const settings = await getAppSettings()
     after(async () => {
       try {
         const user = await db.user.findUnique({ where: { id: userId } })
         if (user) {
           await notifyAdminRenewalTransferPending({
             member: { name: user.name, email: user.email },
-            planName: sub.plan!.name,
+            planName: pricingPlan.name,
             months,
             amount,
             transferReference,
@@ -189,7 +210,10 @@ export async function POST(req: Request) {
         console.error('[memberships] renewal transfer alert failed:', e)
       }
     })
+  }
 
+  if (method === 'BANK_TRANSFER') {
+    const settings = await getAppSettings()
     return NextResponse.json({
       transfer: {
         bankName: settings.bankName,
@@ -200,11 +224,12 @@ export async function POST(req: Request) {
         reference: transferReference,
         note:
           isInitialPayment
-            ? `Send ${amount} with reference ${transferReference} — your membership activates the moment the office confirms it. You can also reply to your summary email with the receipt.`
+            ? `Send ${formatNaira(amount)} with reference ${transferReference} — your membership activates the moment the office confirms it. You can also reply to your summary email with the receipt.`
             : saving > 0
-            ? `Send ${amount} with reference ${transferReference} — your ${months} months (₦${saving.toLocaleString()} saved) apply the moment the office confirms. You can also reply to your summary email with the receipt.`
+            ? `Send ${formatNaira(amount)} with reference ${transferReference} — your ${months} months (₦${saving.toLocaleString()} saved) apply the moment the office confirms. You can also reply to your summary email with the receipt.`
             : `Send the amount with reference ${transferReference} — your next month applies the moment the office confirms. You can also reply to your summary email with the receipt.`,
       },
+      claimed: claiming,
     })
   }
 
@@ -230,6 +255,9 @@ export async function POST(req: Request) {
   // the months so the multi-month charge extends the right number of cycles.
   // The initial payment (phase 79) rides the same shape — the webhook's
   // activateOrRenewSubscription branch activates a pending membership.
+  // Phase 81: a scheduled switch also rides along — the charge is priced on
+  // the plan being switched TO and the engine swaps the plan when the charge
+  // succeeds.
   const reference = `SUB-${sub.id}-R${Date.now().toString(36).toUpperCase()}`
   const amountKobo = Math.round(amount * 100)
 
@@ -249,14 +277,14 @@ export async function POST(req: Request) {
       // which becomes a normal recurring membership after its first charge.
       // A multi-month prepay is a ONE-OFF charge — no plan code, or Paystack
       // would ALSO recur it.
-      ...(months === 1 && sub.plan.paystackPlanCode
-        ? { plan: sub.plan.paystackPlanCode }
+      ...(months === 1 && pricingPlan.paystackPlanCode
+        ? { plan: pricingPlan.paystackPlanCode }
         : {}),
       callback_url: `${baseUrl()}/payment/callback?ref=${encodeURIComponent(reference)}`,
       metadata: {
         subscriptionId: sub.id,
-        planCode: sub.plan.code,
-        planName: sub.plan.name,
+        planCode: pricingPlan.code,
+        planName: pricingPlan.name,
         customerName: user.name,
         kind: 'membership',
         renewal: !isInitialPayment,
@@ -284,6 +312,6 @@ export async function POST(req: Request) {
     reference,
     amount,
     months,
-    recurring: months === 1 && Boolean(sub.plan.paystackPlanCode),
+    recurring: months === 1 && Boolean(pricingPlan.paystackPlanCode),
   })
 }

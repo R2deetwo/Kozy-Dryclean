@@ -114,23 +114,32 @@ export async function PATCH(
 
   const sub = await db.subscription.findUnique({
     where: { id },
-    include: { plan: true, user: { select: { id: true, name: true, email: true, phone: true } } },
+    include: { plan: true, pendingPlan: true, user: { select: { id: true, name: true, email: true, phone: true } } },
   })
   if (!sub) {
     return NextResponse.json({ error: 'Membership not found' }, { status: 404 })
   }
 
-  const sendActiveEmail = (pricePaid: number, periodEnd: Date, months = 1) =>
+  // Phase 81: the activation email describes the plan the cycle actually
+  // runs on — with a scheduled tier switch applied by the engine, that is
+  // the NEW plan (the caller passes the updated row).
+  const sendActiveEmail = (
+    pricePaid: number,
+    periodEnd: Date,
+    months = 1,
+    effective?: { plan?: { name: string; unitName: string; includedUnits: number } | null }
+  ) =>
     after(async () => {
       try {
-        if (sub.plan && sub.user?.email) {
+        const emailPlan = effective?.plan ?? sub.plan
+        if (emailPlan && sub.user?.email) {
           await notifyMembershipActive({
             user: { name: sub.user.name, email: sub.user.email },
-            planName: sub.plan.name,
+            planName: emailPlan.name,
             pricePaid,
             periodEnd,
-            unitName: sub.plan.unitName,
-            includedUnits: sub.plan.includedUnits,
+            unitName: emailPlan.unitName,
+            includedUnits: emailPlan.includedUnits,
             months,
           })
         }
@@ -192,19 +201,23 @@ export async function PATCH(
         Number.isFinite(bodyMonths) && bodyMonths >= 1 && bodyMonths <= 12
           ? Math.round(bodyMonths)
           : intentMonths
+      // Phase 81: with a member-scheduled tier switch, the cycle being paid
+      // for runs on the plan being switched TO — price it there (the engine
+      // applies the swap with this payment).
+      const pricingPlan = sub.pendingPlan ?? sub.plan
       const price =
         action === 'renew' &&
         Number.isFinite(Number(body?.pricePaid)) &&
         Number(body?.pricePaid) >= 0
           ? Math.round(Number(body?.pricePaid))
-          : renewalPriceFor(sub.plan?.priceMonthly ?? 0, months)
+          : renewalPriceFor(pricingPlan?.priceMonthly ?? 0, months)
       try {
         const updated = await activateOrRenewSubscription(id, {
           pricePaid: price,
           method: body?.method === 'PAYSTACK' ? 'PAYSTACK' : 'BANK_TRANSFER',
           cycles: months,
         })
-        sendActiveEmail(price, updated.periodEnd, months)
+        sendActiveEmail(price, updated.periodEnd, months, updated)
         console.log(
           `[memberships] ${adminName} ${action === 'verify' ? 'verified' : 'renewed'} membership ${id} (${sub.user?.email}) at ${price} naira for ${months} month${months === 1 ? '' : 's'}`
         )
@@ -239,7 +252,7 @@ export async function PATCH(
               ? body.reason.trim().slice(0, 300)
               : `Cancelled by ${adminName}`,
         },
-        include: { plan: true },
+        include: { plan: true, pendingPlan: true },
       })
       return NextResponse.json({ membership: rowToMembership(updated) })
     }
@@ -248,7 +261,7 @@ export async function PATCH(
       const updated = await db.subscription.update({
         where: { id },
         data: { kitState: 'WITH_MEMBER', kitDeliveredAt: new Date() },
-        include: { plan: true },
+        include: { plan: true, pendingPlan: true },
       })
       await recordSubscriptionEvent({
         subscriptionId: id,
@@ -266,7 +279,7 @@ export async function PATCH(
       const updated = await db.subscription.update({
         where: { id },
         data: { kitState: action === 'kit-returned' ? 'RETURNED' : 'REPLACED' },
-        include: { plan: true },
+        include: { plan: true, pendingPlan: true },
       })
       await recordSubscriptionEvent({
         subscriptionId: id,
@@ -290,7 +303,7 @@ export async function PATCH(
           curtainsUsed: 0,
           springCleanUsed: 0,
         },
-        include: { plan: true },
+        include: { plan: true, pendingPlan: true },
       })
       await recordSubscriptionEvent({
         subscriptionId: id,
@@ -329,7 +342,7 @@ export async function PATCH(
       const updated = await db.subscription.update({
         where: { id },
         data: { [counter]: after },
-        include: { plan: true },
+        include: { plan: true, pendingPlan: true },
       })
       await recordSubscriptionEvent({
         subscriptionId: id,
