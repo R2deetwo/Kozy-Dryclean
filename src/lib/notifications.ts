@@ -1808,7 +1808,9 @@ export async function notifyAdminNewSubscription(opts: {
         { label: 'Monthly', value: formatNaira(opts.plan.priceMonthly) },
         { label: 'Payment', value: opts.paymentMethod === 'PAYSTACK' ? 'Paystack (card)' : 'Bank transfer — awaiting receipt/verification' },
       ],
-      cta: { label: 'Open Memberships', url: `${baseUrl()}/admin` },
+      // Task 82: the CTA lands DIRECTLY on the Members tab — never a bare
+      // dashboard dump that still needs a second click.
+      cta: { label: 'Open Memberships', url: `${baseUrl()}/admin?tab=memberships` },
     })
     await deliverAdminAlert({
       type: 'SUBSCRIPTION',
@@ -1919,6 +1921,56 @@ export async function notifyMembershipCancelled(opts: {
 //   • USAGE nudge — an at-risk member sitting on an unused allowance.
 //   • RENEWAL reminder — a transfer member whose month is about to end.
 // =============================================================================
+
+/** Task 82 — the stuck-signup recovery email. A member whose FIRST payment
+ *  never landed gets ONE calm note pointing at the payment waiting in their
+ *  portal (the deep link lands on the banner). Frequency-capped by the sweep
+ *  (3-day grace, then at most every 14 days, max 3 per request) — this
+ *  template is the whole email; it never references anything but the
+ *  member's own request and their payment. */
+export async function notifyMembershipFirstPaymentNudge(opts: {
+  user: { name: string; email: string }
+  planName: string
+  priceMonthly: number
+  family: 'KIT' | 'SHOES'
+  payUrl: string
+  contactPhone: string
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const isClub = opts.family === 'SHOES'
+    const { subject, html } = memberEmailChrome({
+      category: 'membership',
+      heading: `Your ${opts.planName} is waiting for its first payment`,
+      bodyHtml: `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        <strong style="color:#0A192F;">${firstName}</strong>, we received your ${opts.planName} request — and it starts
+        the moment your first month is paid. Nothing has been charged and nothing is running yet.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 12px 0;">
+        Your payment is waiting in your portal, ready where you left it: one month at
+        <strong style="color:#0A192F;">${formatNaira(opts.priceMonthly)}</strong> by bank transfer
+        ${isClub ? '— and your pairs start coming back fresh the week it is confirmed' : '— and your first collection follows the moment it is confirmed'}.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
+        Rather start over or pick a different plan? The same page lets you change it — or call
+        <strong style="color:#0A192F;">${opts.contactPhone}</strong> and the office will sort it out in one call.
+      </p>`,
+      ctas: [
+        {
+          label: `Complete your first payment — ${formatNaira(opts.priceMonthly)}`,
+          url: opts.payUrl,
+          variant: 'gold',
+        },
+      ],
+      footer:
+        'You receive this because your membership request has not been paid yet.<br>Kozy Care — Uncompromising care. Exceptional convenience.',
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMembershipFirstPaymentNudge failed:', e)
+  }
+}
 
 /** "Your pickups are waiting" — sent to members flagged UNUSED_RISK / NO_USAGE_DATA. */
 export async function notifyMembershipUsageNudge(opts: {
@@ -2428,10 +2480,33 @@ export async function notifyAdminRenewalTransferPending(opts: {
         ? `First-month transfer claimed — activate ${opts.member.name}'s membership`
         : `${opts.months}-month renewal transfer claimed — confirm it`,
       bodyHtml,
-      cta: { label: 'Open Memberships', url: `${baseUrl()}/admin` },
+      // Task 82: the CTA lands DIRECTLY on the Members tab — never a bare
+      // dashboard dump that still needs a second click.
+      cta: { label: 'Open Memberships', url: `${baseUrl()}/admin?tab=memberships` },
       footer: 'Kozy Care — the office side of the Kozy Circle.',
     })
-    await Promise.all(targets.map((to) => sendEmail({ to, subject, html })))
+    // Task 82: the claim ALSO lands in the Operations feed (it used to be
+    // email-only — the owner found nothing to approve on the dashboard).
+    // deliverAdminAlert writes the NotificationEvent first (never throws)
+    // and delivers the mail; both carry the memberships deep link.
+    await deliverAdminAlert({
+      type: 'MEMBERSHIP_CLAIM',
+      title: opts.isInitial
+        ? `${opts.member.name} completed their first payment`
+        : `${opts.member.name} claims a ${opts.months}-month renewal`,
+      body: `${formatNaira(opts.amount)} by transfer · ref ${opts.transferReference}${opts.receiptUrl ? ' · receipt attached' : ''} · confirm in Members`,
+      emails: targets,
+      email: { subject, html },
+      enabled: config.newOrder,
+      data: {
+        memberEmail: opts.member.email,
+        months: opts.months,
+        amount: opts.amount,
+        reference: opts.transferReference,
+        isInitial: Boolean(opts.isInitial),
+      },
+      linkTab: 'memberships',
+    })
   } catch (e) {
     console.error('notifyAdminRenewalTransferPending failed:', e)
   }

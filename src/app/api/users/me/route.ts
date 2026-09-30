@@ -66,6 +66,20 @@ export async function GET() {
     return NextResponse.json({ error: 'ACCOUNT_GONE' }, { status: 401 })
   }
 
+  // Task 82 — the 12-hour console lease. The console heartbeat polls this
+  // route every 60s; an expired ADMIN/STAFF sign-in returns 401 here so the
+  // client signs the tab out itself (page middleware + every console API
+  // enforce the same lease server-side). Customers are untouched.
+  const role = (session.user as any)?.role
+  const loginAt = (session.user as any)?.consoleLoginAt
+  if (
+    (role === 'ADMIN' || role === 'STAFF') &&
+    typeof loginAt === 'number' &&
+    Date.now() - loginAt * 1000 > 12 * 60 * 60 * 1000
+  ) {
+    return NextResponse.json({ error: 'SESSION_EXPIRED' }, { status: 401 })
+  }
+
   return NextResponse.json({ user })
 }
 

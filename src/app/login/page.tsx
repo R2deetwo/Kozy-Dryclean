@@ -3,7 +3,7 @@
 import { useState, Suspense } from 'react'
 import { signIn, signOut, useSession } from 'next-auth/react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle, Send, UserCheck, LogOut } from 'lucide-react'
+import { ArrowLeft, Mail, Lock, Eye, EyeOff, AlertCircle, Send, UserCheck, LogOut, Info } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -177,6 +177,25 @@ function LoginForm() {
                 ? 'Sign in below with a different account'
                 : 'Sign in to your Kozy Care account'}
             </p>
+
+            {/* Task 82 — the two honest notices about browser sessions. One
+                browser holds ONE Kozy session: signing in here replaces any
+                other Kozy session open in this browser (the tab confusion the
+                owner hit while testing two accounts side by side), and an
+                expired console lease lands here from the middleware. */}
+            {searchParams.get('expired') === '1' && (
+              <div className="mb-4 rounded-lg bg-navy-50 px-3 py-2.5 text-xs text-navy-700 ring-1 ring-navy-200">
+                Your console session reached its 12-hour limit — please sign in again to keep the back office safe.
+              </div>
+            )}
+            <div className="mb-4 flex items-start gap-2 rounded-lg bg-linen-100 px-3 py-2 text-[11px] leading-relaxed text-navy-300">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <p>
+                One browser holds one Kozy session — signing in here replaces any other Kozy
+                session open in this browser. Testing two accounts? Use a private/incognito
+                window for the second one.
+              </p>
+            </div>
 
             {error && (
               <div className="mb-4 rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700 flex items-start gap-2 ring-1 ring-rose-200">

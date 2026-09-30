@@ -520,7 +520,7 @@ export function useDeleteUser() {
       }
       return (await res.json()) as {
         ok: true
-        deleted: { orders: number; reviews: number; payments: number }
+        deleted: { orders: number; reviews: number; payments: number; memberships: number }
       }
     },
     onSuccess: () => {
@@ -529,6 +529,8 @@ export function useDeleteUser() {
       qc.invalidateQueries({ queryKey: ['users'] })
       qc.invalidateQueries({ queryKey: ['orders'] })
       qc.invalidateQueries({ queryKey: ['payments'] })
+      // Task 82: a deleted member's roster row must vanish too.
+      qc.invalidateQueries({ queryKey: ['admin-memberships'] })
     },
   })
 }
@@ -1368,6 +1370,21 @@ export interface ApiMembershipUsage {
   springCleanRemaining: number
 }
 
+/** Task 82 — a member's open "I've made payment" transfer claim: the
+ *  RENEWAL_INTENT the office has not confirmed yet (months, amount,
+ *  reference). Present on both the admin roster rows and the member's own
+ *  membership payload; null once a CYCLE_START (confirmation) lands. */
+export interface ApiRenewalClaim {
+  months: number
+  amount: number
+  reference: string
+  isInitial: boolean
+  receipt: boolean
+  planCode: string | null
+  claimedAt: string
+  stale: boolean
+}
+
 export interface ApiMembership {
   id: string
   userId: string
@@ -1406,6 +1423,9 @@ export interface ApiMembership {
   lastPickupAt?: string | null
   nextPickupAt?: string | null
   nextPickupSlot?: string | null
+  // Task 82: the member's open "I've made payment" claim (admin roster +
+  // member portal render it; settled by the office's confirmation).
+  openClaim?: ApiRenewalClaim | null
 }
 
 /** Phase 75: one row of the member's in-cycle activity (a booking with its
@@ -1486,10 +1506,13 @@ export function useMyMembership() {
       activity: ApiMembershipActivityRow[]
       events: ApiSubscriptionEventRow[]
     } | null
+    // Task 82: the member's open transfer claim on the laundry tier.
+    openClaim?: ApiRenewalClaim | null
     shoeClub?: {
       membership: ApiMembership
       effectiveStatus: string
       usage: ApiMembershipUsage | null
+      openClaim?: ApiRenewalClaim | null
       activity?: {
         subscriptionId: string
         activity: ApiMembershipActivityRow[]
@@ -1560,7 +1583,13 @@ export function useMembershipPaystackInit() {
 export function useMembershipCancel() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async (input: 'cancel' | 'cancel-undo' | { action: 'cancel' | 'cancel-undo'; family?: 'KIT' | 'SHOES' }) => {
+    mutationFn: async (
+      input:
+        | 'cancel'
+        | 'cancel-undo'
+        | 'withdraw-request'
+        | { action: 'cancel' | 'cancel-undo' | 'withdraw-request'; family?: 'KIT' | 'SHOES' }
+    ) => {
       const body =
         typeof input === 'string' ? { action: input } : { action: input.action, family: input.family }
       const res = await fetch('/api/subscriptions/me', {

@@ -34,6 +34,8 @@ import {
   Inbox,
   ExternalLink,
   AlertTriangle,
+  Sparkles,
+  BadgeCheck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -64,6 +66,21 @@ const TYPE_META: Record<
     icon: Receipt,
     cls: 'bg-gold-100 text-gold-800',
     link: { label: 'Open payment queue', tab: 'payments' },
+  },
+  // Task 82 — the membership events finally carry deep links (they used to
+  // fall back to the generic TEST style with NO link, so the owner found
+  // "nothing to approve" on the dashboard after the email arrived).
+  SUBSCRIPTION: {
+    label: 'New membership',
+    icon: Sparkles,
+    cls: 'bg-emerald-100 text-emerald-800',
+    link: { label: 'Open Memberships', tab: 'memberships' },
+  },
+  MEMBERSHIP_CLAIM: {
+    label: 'Payment claimed',
+    icon: BadgeCheck,
+    cls: 'bg-gold-100 text-gold-800',
+    link: { label: 'Confirm in Memberships', tab: 'memberships' },
   },
   FEEDBACK: {
     label: 'Feedback',
@@ -231,9 +248,14 @@ export function NotificationsView({ onGoto }: { onGoto?: (tab: string) => void }
             return (
               <li
                 key={e.id}
+                onClick={() => meta.link && onGoto?.(meta.link.tab)}
                 className={cn(
                   'rounded-xl border bg-white p-4 shadow-sm transition',
-                  isUnread ? 'border-gold-300 bg-gold-50/40' : 'border-navy-100'
+                  isUnread ? 'border-gold-300 bg-gold-50/40' : 'border-navy-100',
+                  // Task 82 — the ROW is the button: a clickable card takes
+                  // the office straight to the place that needs them (the
+                  // small link stays as the visual affordance).
+                  meta.link && onGoto ? 'cursor-pointer hover:border-navy-300 hover:shadow-navy' : ''
                 )}
               >
                 <div className="flex items-start gap-3">

@@ -19,6 +19,7 @@ import {
   Gift,
   Crown,
   Store,
+  Footprints,
 } from 'lucide-react'
 import { useOrders, type ApiOrder } from '@/lib/hooks'
 import { useMyMembership } from '@/lib/hooks'
@@ -332,8 +333,14 @@ function CustomerDashboard({
               <h1 className="font-serif text-xl font-semibold tracking-tight text-navy sm:text-2xl truncate">
                 {displayName}
               </h1>
-              <p className="mt-0.5 text-xs text-navy-300 truncate">
-                {displayEmail}
+              <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-navy-300">
+                <span className="truncate">{displayEmail}</span>
+                {/* Task 82: the account is IDENTIFIED, not just greeted — one
+                    browser holds one Kozy session, so this chip makes it
+                    unmistakable which account this tab is signed in as. */}
+                <span className="inline-flex items-center gap-1 rounded-full bg-navy-50 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-navy-300 ring-1 ring-navy-100">
+                  Customer account
+                </span>
               </p>
             </div>
             <div className="flex gap-2 shrink-0">
@@ -367,6 +374,7 @@ function CustomerDashboard({
             plan={tierPlan}
             family="KIT"
             focus={focusPayment}
+            openClaim={membershipData?.openClaim ?? null}
           />
         )}
         {clubPending && clubMembership && clubPlan && (
@@ -375,6 +383,7 @@ function CustomerDashboard({
             plan={clubPlan}
             family="SHOES"
             focus={focusPayment && !tierPending}
+            openClaim={membershipData?.shoeClub?.openClaim ?? null}
           />
         )}
 
@@ -411,6 +420,67 @@ function CustomerDashboard({
             </CardContent>
           </Card>
         </div>
+
+        {/* Task 82 — the memberships glance: laundry and shoe care are TWO
+            products and never blur together on the dash. A member holding a
+            tier + the Shoe Club sees one line each, with the tier's included
+            shoe cleans called out INSIDE the shoe-care line ("x pairs from
+            {tier} included") — exactly the edge case the owner raised. */}
+        {(tierMembership || clubMembership) && (
+          <div className="mb-6 grid gap-2 sm:grid-cols-2">
+            {tierMembership && tierPlan && (
+              <Card className="border-navy-100 shadow-navy">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-navy-300 sm:text-xs">
+                    <Package className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Laundry · {tierPlan.name}
+                  </div>
+                  <p className="mt-1 text-sm font-medium text-navy">
+                    {tierPending ? (
+                      <>Request received — first payment waiting</>
+                    ) : (
+                      <>
+                        {membershipData?.usage?.unitsRemaining ?? 0} of{' '}
+                        {tierPlan.includedUnits} {tierPlan.unitName} pickups left
+                        {tierMembership.periodEnd && (
+                          <span className="font-normal text-navy-300">
+                            {' '}
+                            · renews {formatDate(tierMembership.periodEnd)}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+            {clubMembership && clubPlan && (
+              <Card className="border-gold-200 shadow-navy">
+                <CardContent className="p-3 sm:p-4">
+                  <div className="flex items-center gap-1.5 text-[10px] uppercase tracking-wide text-gold-700 sm:text-xs">
+                    <Footprints className="h-3 w-3 sm:h-3.5 sm:w-3.5" /> Shoe care · {clubPlan.name}
+                  </div>
+                  <p className="mt-1 text-sm font-medium text-navy">
+                    {clubPending ? (
+                      <>Request received — first payment waiting</>
+                    ) : (
+                      <>
+                        {membershipData?.shoeClub?.usage?.shoesRemaining ?? clubPlan.shoesPerMonth} of{' '}
+                        {clubPlan.shoesPerMonth} club pairs left
+                        {tierPlan && tierPlan.shoesPerMonth > 0 && !tierPending && (
+                          <span className="font-normal text-navy-300">
+                            {' '}
+                            · plus {tierPlan.shoesPerMonth} pair
+                            {tierPlan.shoesPerMonth === 1 ? '' : 's'} from {tierPlan.name} included
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
 
         {/* Loyalty card (phase 53) — "after 10 washes, the 11th is free".
             Appears ONLY from the 5th completed paid service (the owner's

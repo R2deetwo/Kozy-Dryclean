@@ -36,8 +36,12 @@ if not TOKEN:
 ROOT = "/home/z/my-project"
 
 # The proven source set (matches the live deployment's src/ tree exactly).
+# Task 82: bun.lock joins the set — without a lockfile `bun install` floats
+# to the registry's latest semver hits, and an upstream package update broke
+# the build ("bun install exited with 1"). The lock pins the exact versions
+# the local battery built and passed with.
 ROOT_FILES = [
-    ".gitignore", ".vercelignore", "README.md", "components.json",
+    ".gitignore", ".vercelignore", "README.md", "bun.lock", "components.json",
     "eslint.config.mjs", "next-env.d.ts", "next.config.ts", "package.json",
     "postcss.config.mjs", "tailwind.config.ts", "tsconfig.json", "vercel.json",
 ]
@@ -99,34 +103,49 @@ def main():
 
     for rel in files:
         data = open(os.path.join(ROOT, rel), "rb").read()
-        b64 = base64.b64encode(data).decode()
-        # The files API requires a per-file digest (sha1 of the CONTENT, hex)
-        # — the "sha1 manifest" of the phase-69 recipe.
+        # Task 82: the JSON batch array form of POST /v2/files now 400s
+        # ("File digest missing"). The current API form is ONE request per
+        # file: raw octet-stream body + the x-now-digest header (sha1 hex of
+        # the CONTENT). The digest doubles as the manifest sha below.
         digest = hashlib.sha1(data).hexdigest()
-        entry = {"file": f"src/{rel}", "data": b64, "encoding": "base64", "digest": digest}
-        batch.append(entry)
-        batch_bytes += len(b64)
-        if batch_bytes > 6_000_000 or len(batch) >= 80:
+        batch.append((f"src/{rel}", data, digest))
+        batch_bytes += len(data)
+        if batch_bytes > 8_000_000 or len(batch) >= 200:
             flush()
     flush()
 
     print(f"uploading in {len(batches)} batches...")
     for i, (b, nbytes) in enumerate(batches):
-        st, resp = api("POST", "/v2/files", b)
-        if st not in (200, 201) or not isinstance(resp, list):
-            print(f"  batch {i+1} FAILED: HTTP {st}")
-            print(json.dumps(resp)[:800])
-            sys.exit(1)
-        for item in resp:
-            if "sha" not in item:
-                print(f"  !! no sha for {item.get('file')}: {item}")
+        for path, data, digest in b:
+            req = urllib.request.Request(
+                f"{BASE}/v2/files?teamId={TEAM}",
+                data=data,
+                headers={
+                    "Authorization": f"Bearer {TOKEN}",
+                    "Content-Type": "application/octet-stream",
+                    "x-now-digest": digest,
+                },
+                method="POST",
+            )
+            try:
+                with urllib.request.urlopen(req, timeout=180) as r:
+                    r.read()
+                    uploaded.append((path, digest))
+            except urllib.error.HTTPError as e:
+                print(f"  upload FAILED {path}: HTTP {e.code}: {e.read().decode()[:300]}")
                 sys.exit(1)
-            uploaded.append((item["file"], item["sha"]))
         print(f"  batch {i+1}/{len(batches)}: {len(b)} files ({nbytes/1e6:.1f} MB) OK")
 
     print(f"uploaded {len(uploaded)} files")
 
     # ---- create the deployment (files MUST be an array) ----
+    # Task 82: installCommand switched bun → npm --ignore-scripts — Vercel's
+    # builder bun started failing ("bun install exited with 1") with no
+    # change on our side, and npm's new install-scripts security gate also
+    # interferes. --ignore-scripts skips ALL lifecycle scripts (including our
+    # postinstall `prisma generate`) — safe, because build:vercel runs
+    # `prisma migrate deploy ; prisma generate && next build` itself, and
+    # @prisma/engines 6.x ships its binaries inside the npm package.
     body = {
         "name": PROJECT,
         "target": "production",
@@ -134,7 +153,7 @@ def main():
         "projectSettings": {
             "framework": "nextjs",
             "buildCommand": "bun run build:vercel",
-            "installCommand": "bun install",
+            "installCommand": "npm install --legacy-peer-deps --ignore-scripts",
         },
     }
     st, dep = api("POST", "/v13/deployments", body)

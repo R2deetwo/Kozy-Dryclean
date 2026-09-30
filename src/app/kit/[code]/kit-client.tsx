@@ -41,7 +41,7 @@ interface KitOrder {
 }
 
 interface KitPayload {
-  scope: 'public' | 'rider' | 'office'
+  scope: 'public' | 'rider' | 'office' | 'member'
   member?: { name: string; email?: string; phone?: string }
   planName?: string
   unitName?: string
@@ -83,7 +83,7 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
 }
 
 export function KitScanClient({ code }: { code: string }) {
-  const { status: sessionStatus } = useSession()
+  const { status: sessionStatus, data: session } = useSession()
   const [data, setData] = useState<KitPayload | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -91,6 +91,7 @@ export function KitScanClient({ code }: { code: string }) {
   // `loading` is derived (no sync setState in the effect): pending session or
   // no payload yet. A scope swap after sign-in just swaps the card content.
   const loading = sessionStatus === 'loading' || (!data && !error)
+  const signedIn = sessionStatus === 'authenticated' && Boolean(session?.user)
 
   useEffect(() => {
     if (sessionStatus === 'loading') return
@@ -131,6 +132,23 @@ export function KitScanClient({ code }: { code: string }) {
       </div>
 
       <div className="mx-auto -mt-3 max-w-md px-4">
+        {/* Task 82 — the privacy ladder, VISIBLE: every scoped view says who
+            is looking, so a scanned tag never feels like an open door. */}
+        {!loading && !error && data && (
+          <div className="mb-3 flex justify-center">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-navy-300 shadow-sm ring-1 ring-navy-100">
+              <ShieldCheck className="h-3 w-3 text-gold-600" />
+              {data.scope === 'office'
+                ? 'Viewing as the Kozy office'
+                : data.scope === 'rider'
+                  ? 'Viewing as a Kozy rider'
+                  : data.scope === 'member'
+                    ? 'This is your kit — signed in as you'
+                    : 'Details are sign-in only'}
+            </span>
+          </div>
+        )}
+
         {loading && (
           <div className="flex justify-center py-14">
             <Loader2 className="h-6 w-6 animate-spin text-navy-300" />
@@ -147,7 +165,7 @@ export function KitScanClient({ code }: { code: string }) {
           </div>
         )}
 
-        {/* ----- Passer-by: the brand card ----- */}
+        {/* ----- Passer-by: the brand card (nothing personal, by design) ----- */}
         {!loading && !error && data?.scope === 'public' && (
           <div className="mt-4 space-y-3">
             <div className="rounded-2xl border border-navy-100 bg-white p-5 text-center shadow-navy">
@@ -168,7 +186,32 @@ export function KitScanClient({ code }: { code: string }) {
                   — a member is looking for it.
                 </p>
               )}
+              {/* Task 82 — the gate made visible: this tag's details are
+                  sign-in only. Members see their own kit; the office sees
+                  the wash-floor snapshot. A stranger sees nothing personal. */}
+              <p className="mt-3 rounded-xl border border-navy-100 bg-linen-50 p-2.5 text-xs leading-relaxed text-navy-300">
+                Member details on a kit tag are private — they are visible only
+                to the member signed into their own account or to the Kozy
+                office.
+              </p>
             </div>
+            {!signedIn ? (
+              <Link
+                href={`/login?callbackUrl=${encodeURIComponent(`/kit/${code}`)}`}
+                className="block rounded-full border border-navy-200 py-3 text-center text-sm font-semibold text-navy"
+              >
+                Is this your kit? Sign in to see it
+              </Link>
+            ) : (
+              <p className="rounded-xl bg-linen-50 p-3 text-center text-xs leading-relaxed text-navy-300">
+                You are signed in, but this kit belongs to another member — their
+                details stay private. Questions? Call the office on{' '}
+                <a href="tel:+2348031755230" className="font-semibold text-navy underline">
+                  0803 175 5230
+                </a>
+                .
+              </p>
+            )}
             <Link
               href="/"
               className="block rounded-full bg-gold-gradient py-3 text-center text-sm font-semibold text-navy"
@@ -178,7 +221,7 @@ export function KitScanClient({ code }: { code: string }) {
           </div>
         )}
 
-        {/* ----- Rider / office: the identification snapshot ----- */}
+        {/* ----- Rider / office / the member themselves: the snapshot ----- */}
         {!loading && !error && data && data.scope !== 'public' && (
           <div className="mt-4 space-y-3">
             {/* Member hero */}
@@ -186,7 +229,11 @@ export function KitScanClient({ code }: { code: string }) {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="text-[10px] font-semibold uppercase tracking-wide text-navy-300">
-                    {data.scope === 'office' ? 'Member' : 'Kozy Circle member'}
+                    {data.scope === 'office'
+                      ? 'Member'
+                      : data.scope === 'member'
+                        ? 'Your membership'
+                        : 'Kozy Circle member'}
                   </p>
                   <p className="mt-0.5 truncate font-serif text-xl font-semibold text-navy">
                     {data.member?.name ?? 'Member'}

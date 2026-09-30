@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1. **Memberships view:** Yes, the \"Members\" tab is active and displays the member roster with stat cards (Running members: 6, Kits: 1, etc.) and a member row for Tunde Bakare.\n2. **Amber claim line:** Yes, there is an amber warning banner stating \"3 memberships waiting on payment verification — the customer is watching their portal.\"\n3. **Layout:** Yes, the layout is clean and organized with a clear sidebar navigation, header filters, stat cards, status alerts, and a detailed member action card.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790793583,
+  "id": "202610010239391a78c1efa11c4df5",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202610010239391a78c1efa11c4df5",
+  "usage": {
+    "completion_tokens": 116,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1135,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1251
+  }
+}

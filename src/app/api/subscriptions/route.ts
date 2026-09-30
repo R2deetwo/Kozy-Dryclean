@@ -27,6 +27,7 @@ import {
   effectiveStatus,
   effectiveUsage,
   cycleHealth,
+  openRenewalClaimsFor,
 } from '@/lib/subscriptions'
 import { notifyAdminNewSubscription } from '@/lib/notifications'
 
@@ -95,6 +96,11 @@ export async function GET(req: Request) {
   }
 
   const now = new Date()
+  // Task 82 — every OPEN transfer claim on the roster, ONE query. This is
+  // the wiring the owner asked for: a member saying "I've made payment" now
+  // surfaces on the admin list itself (not only inside the record-renewal
+  // dialog), with months + amount + reference ready to confirm.
+  const openClaims = await openRenewalClaimsFor(rows.map((r) => r.id), now)
   const items = rows.map((r) => {
     const plan = r.plan ?? planById.get(r.planId)
     const subOrders = ordersBySub.get(r.id) ?? []
@@ -132,6 +138,8 @@ export async function GET(req: Request) {
       lastPickupAt: lastPickup?.pickedUpAt?.toISOString() ?? null,
       nextPickupAt: nextScheduled?.pickupDate?.toISOString() ?? null,
       nextPickupSlot: nextScheduled?.pickupTimeSlot ?? null,
+      // Task 82: the member's open "I've made payment" claim.
+      openClaim: openClaims.get(r.id) ?? null,
     }
   })
 

@@ -48,6 +48,7 @@ import {
   type ApiMembership,
   type ApiMembershipPlan,
   type ApiMembershipUsage,
+  type ApiRenewalClaim,
 } from '@/lib/hooks'
 
 const TIME_SLOTS = [
@@ -156,6 +157,8 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
             clubPlan={clubPlan}
             clubUsage={clubUsage}
             clubStatus={clubStatus}
+            tierName={null}
+            tierShoes={0}
             onBook={openClubBooking}
             onCancel={() => setConfirmClubCancel(true)}
             onChangePlan={() => setChangingPlan('SHOES')}
@@ -183,6 +186,7 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
               plan={clubPlan}
               status={clubStatus}
               cardId="kozy-renewal-club"
+              openClaim={club?.openClaim ?? null}
             />
           )}
 
@@ -343,10 +347,15 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
                 total={plan.includedUnits}
                 suffix={usage.unitsRemaining === 0 && usage.extraRemaining > 0 ? ` · ${usage.extraRemaining} extra left` : undefined}
               />
-              {plan.shoesPerMonth > 0 && (
+              {/* Task 82 — clothing and shoes stay SEPARATE on the dash. When
+                  the member also holds the Shoe Club, the tier's shoe
+                  allowance becomes a quiet note (the club card carries the
+                  pairs meter); on its own it stays a meter with its
+                  provenance spelled out — "included with your tier". */}
+              {plan.shoesPerMonth > 0 && !clubMembership && (
                 <UsageMeter
                   icon={Footprints}
-                  label="Shoe cleans (this month)"
+                  label="Shoe cleans (included with your tier)"
                   used={usage.shoesUsed}
                   total={plan.shoesPerMonth}
                 />
@@ -376,6 +385,22 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
                 />
               )}
             </div>
+
+            {/* Task 82 — the tier's shoe allowance, restated as a quiet
+                line when the Shoe Club card below carries the pairs meter:
+                x shoe cleans a month ride WITH this tier, counted separately
+                from the club's pairs. */}
+            {plan.shoesPerMonth > 0 && clubMembership && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-xl bg-linen-100 px-3 py-2 text-[11px] leading-relaxed text-navy-300">
+                <Footprints className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gold-600" />
+                <span>
+                  Your {plan.name} also includes{' '}
+                  <strong className="text-navy">{plan.shoesPerMonth} shoe{' '}
+                  clean{plan.shoesPerMonth === 1 ? '' : 's'} a month</strong> — tracked with your
+                  laundry pickups, separate from your Shoe Club pairs below.
+                </span>
+              </p>
+            )}
 
             {/* ===== Book pickups / perks ===== */}
             {status !== 'LAPSED' && status !== 'CANCELLED' && (
@@ -518,6 +543,7 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
           plan={plan}
           status={status}
           prefillMonths={renewPrefill}
+          openClaim={data?.openClaim ?? null}
         />
       )}
 
@@ -538,6 +564,8 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
           clubPlan={clubPlan}
           clubUsage={clubUsage}
           clubStatus={clubStatus}
+          tierName={membership ? plan?.name ?? null : null}
+          tierShoes={plan?.shoesPerMonth ?? 0}
           onBook={openClubBooking}
           onCancel={() => setConfirmClubCancel(true)}
           onChangePlan={() => setChangingPlan('SHOES')}
@@ -564,6 +592,7 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
             plan={clubPlan}
             status={clubStatus}
             cardId="kozy-renewal-club"
+            openClaim={club?.openClaim ?? null}
           />
         )}
 
@@ -735,6 +764,7 @@ function RenewalCard({
   status,
   prefillMonths,
   cardId,
+  openClaim,
 }: {
   membership: ApiMembership
   plan: ApiMembershipPlan
@@ -743,6 +773,12 @@ function RenewalCard({
   /** The deep-link anchor — the laundry card keeps #kozy-renewal; the Shoe
    *  Club card (phase 79) uses its own so the two never collide. */
   cardId?: string
+  /** Task 82 — the member's open "I've made payment" claim, straight from
+   *  the ledger. While one is open (and not stale) the card shows the
+   *  awaiting state across refreshes: the claimed months carry an
+   *  "awaiting confirmation" tag, the other months grey out, and the
+   *  payment buttons rest — no duplicate claims, ever. */
+  openClaim?: ApiRenewalClaim | null
 }) {
   const [months, setMonths] = useState<number>(
     (RENEWAL_MONTH_CHOICES as readonly number[]).includes(Number(prefillMonths))
@@ -784,6 +820,13 @@ function RenewalCard({
   // Phase 79 — a pending membership shows the completion card: the FIRST
   // payment, one month, no ladder (the ladder opens once it is live).
   const pending = status === 'PENDING_ACTIVATION'
+  // Task 82 — the SERVER-side claimed state: the open claim from the ledger
+  // (survives refresh; clears the moment the office confirms). A stale claim
+  // (> 14 days unconfirmed) no longer gates the member — they can pay again.
+  const claimOpen = Boolean(openClaim && !openClaim.stale)
+  const settled = claimed || claimOpen
+  // While a claim is open, the months under confirmation are the claim's.
+  const claimedMonths = claimOpen ? (openClaim as ApiRenewalClaim).months : 0
   // The full card when the month is actually running out (or already has);
   // mid-cycle, the quiet collapsed card carries the same machinery.
   const needsRenewal =
@@ -793,8 +836,10 @@ function RenewalCard({
   const effectiveMonths = pending ? 1 : months
 
   // ----- The quiet mid-cycle card: one calm line + an expand button -----
-  // A deep link (?renew=1&months=N) expands it straight away.
-  if (!needsRenewal && !earlyOpen && prefillMonths === undefined) {
+  // A deep link (?renew=1&months=N) expands it straight away. Task 82: a
+  // member with an open claim never sees the collapsed card — their payment
+  // is mid-flight and the awaiting state must stay visible.
+  if (!needsRenewal && !earlyOpen && !claimOpen && prefillMonths === undefined) {
     return (
       <Card className="border-navy-100 bg-white" id={cardId ?? 'kozy-renewal'}>
         <CardContent className="p-4 sm:p-5">
@@ -862,6 +907,15 @@ function RenewalCard({
               : `Thank you — the moment the office confirms your transfer, your ${
                   effectiveMonths > 1 ? `${effectiveMonths} months apply` : 'next month applies'
                 } as usual.`,
+          })
+        } else if (res.status === 409 && data?.error === 'CLAIM_ALREADY_OPEN') {
+          // Task 82 — the server already has a live claim: settle the card
+          // onto the awaiting state instead of showing an error (the member
+          // did nothing wrong — they just double-pressed across sessions).
+          setClaimed(true)
+          toast({
+            title: "We're already verifying your payment",
+            description: data?.message ?? 'The office is confirming your transfer — no need to send it again.',
           })
         } else {
           toast({
@@ -966,7 +1020,11 @@ function RenewalCard({
             (brand). PENDING members see a single first-month line instead —
             the ladder opens the moment the membership is live. Phase 81: the
             ladder prices on the plan being switched TO when one is
-            scheduled. */}
+            scheduled.
+            Task 82 — while a transfer claim awaits the office, the claimed
+            months carry an "awaiting confirmation" tag and every OTHER month
+            greys out (the owner's ask): the member cannot fire a second
+            claim at a different rung while one is mid-flight. */}
         {pending ? (
           <div className="mt-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
@@ -982,19 +1040,24 @@ function RenewalCard({
         ) : (
         <div className="mt-4">
           <p className="text-xs font-semibold uppercase tracking-wide text-navy-300">
-            How many months?
+            {claimOpen ? 'Months awaiting the office' : 'How many months?'}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             {RENEWAL_MONTH_CHOICES.map((m) => {
               const mSaving = renewalSavingFor((membership.pendingPlan ?? plan).priceMonthly, m)
               const selected = months === m
+              const underClaim = claimOpen && m === claimedMonths
+              const greyed = claimOpen && !underClaim
               return (
                 <button
                   key={m}
                   type="button"
+                  disabled={greyed}
                   onClick={() => setMonths(m)}
                   className={`rounded-full border px-4 py-2 text-sm font-semibold transition ${
-                    selected && m > 1
+                    greyed
+                      ? 'cursor-not-allowed border-navy-100 bg-linen-50 text-navy-200'
+                      : selected && m > 1
                       ? 'border-navy-500 bg-gradient-to-br from-navy-500 to-navy-700 text-white shadow-sm'
                       : selected
                         ? 'border-gold-400 bg-gold-gradient text-navy shadow-sm'
@@ -1004,12 +1067,16 @@ function RenewalCard({
                   {m === 1 ? '1 month' : `${m} months`}
                   <span
                     className={`ml-1.5 text-xs font-normal ${
-                      selected && m > 1 ? 'text-gold-200' : 'opacity-80'
+                      greyed
+                        ? 'text-navy-200'
+                        : selected && m > 1
+                          ? 'text-gold-200'
+                          : 'opacity-80'
                     }`}
                   >
                     {formatNaira(renewalPriceFor((membership.pendingPlan ?? plan).priceMonthly, m))}
                   </span>
-                  {m > 1 && mSaving > 0 && (
+                  {m > 1 && mSaving > 0 && !greyed && (
                     <span
                       className={`ml-1.5 rounded-full px-1.5 py-px text-[10px] font-bold uppercase tracking-wide ${
                         selected
@@ -1020,23 +1087,55 @@ function RenewalCard({
                       save {formatNaira(mSaving)}
                     </span>
                   )}
+                  {underClaim && (
+                    <span className="ml-1.5 rounded-full bg-gold-100 px-1.5 py-px text-[10px] font-bold uppercase tracking-wide text-gold-800 ring-1 ring-gold-300">
+                      awaiting confirmation
+                    </span>
+                  )}
                 </button>
               )
             })}
           </div>
-          {months > 1 && saving > 0 && (
+          {claimOpen ? (
+            <p className="mt-2 text-xs leading-relaxed text-navy-700">
+              You told us you&apos;ve paid for{' '}
+              <strong>{claimedMonths} month{claimedMonths === 1 ? '' : 's'}</strong>
+              {openClaim && openClaim.amount > 0 && <> ({formatNaira(openClaim.amount)})</>} — the
+              office is confirming it now. The other options open again the moment it&apos;s settled.
+            </p>
+          ) : months > 1 && saving > 0 ? (
             <p className="mt-2 text-xs text-navy-300">
               One payment of <strong className="text-navy">{formatNaira(price)}</strong> covers your next {months} months —
               <strong className="text-navy-700"> {formatNaira(saving)} less</strong> than paying month by month
               {months >= 6 ? ` (${formatNaira(Math.round(price / months))} a month)` : ''}.
             </p>
-          )}
+          ) : null}
         </div>
         )}
 
         {/* The payment paths — same two-step pattern as the banner: the
             transfer button reveals the details, then hands the baton to
-            "I've made payment" (the claim the office acts on). */}
+            "I've made payment" (the claim the office acts on).
+            Task 82 — while an open claim awaits the office, BOTH paths rest:
+            the money is already mid-flight and a second claim would only
+            confuse everyone. */}
+        {claimOpen ? (
+          <div className="mt-5 rounded-xl border border-gold-200 bg-gold-50/60 p-4 text-sm">
+            <p className="flex items-center gap-2 font-semibold text-navy">
+              <BadgeCheck className="h-4 w-4 text-gold-600" />
+              Payment sent — awaiting the office&apos;s confirmation
+            </p>
+            {openClaim && (
+              <p className="mt-1.5 text-xs leading-relaxed text-navy-300">
+                {openClaim.months} month{openClaim.months === 1 ? '' : 's'} ·{' '}
+                {openClaim.amount > 0 ? formatNaira(openClaim.amount) : 'the plan price'} · reference{' '}
+                <strong className="text-navy">{openClaim.reference}</strong> · noted{' '}
+                {formatDate(openClaim.claimedAt)}. Your membership updates the moment the
+                office confirms it — nothing else is needed from you.
+              </p>
+            )}
+          </div>
+        ) : (
         <div className="mt-5 grid gap-2 sm:grid-cols-2">
           <Button
             onClick={() => renew('PAYSTACK')}
@@ -1084,7 +1183,9 @@ function RenewalCard({
             </Button>
           )}
         </div>
-        {!paystackAvailable && (
+        )}
+
+        {!paystackAvailable && !claimOpen && (
           <p className="mt-2 text-xs text-navy-300">
             Card payments are not configured yet — bank transfer works today; your{' '}
             {pending ? 'membership activates' : months > 1 ? `${months} months apply` : 'next month applies'} the moment the office confirms.
@@ -1536,10 +1637,23 @@ function MemberPickupDialog({
 // =====================================================
 function JoinCard() {
   const { data: plans } = useMembershipPlans(true)
+  // Task 82 — the “plans start at” line speaks about the LAUNDRY LADDER only
+  // (The Essentials at ₦30,000). The Shoe Club (family=SHOES, from ₦3,000) is
+  // a SEPARATE product sold from the /services shoe-care section — quoting it
+  // here made the site claim “plans from ₦3,000” while the memberships page
+  // showed nothing under ₦30,000. It gets its own quiet line + link instead.
+  const laundryPlans = useMemo(
+    () => (plans ?? []).filter((p) => p.isActive && p.family !== 'SHOES'),
+    [plans]
+  )
   const cheapest = useMemo(
+    () => laundryPlans.sort((a, b) => a.priceMonthly - b.priceMonthly)[0],
+    [laundryPlans]
+  )
+  const clubCheapest = useMemo(
     () =>
       (plans ?? [])
-        .filter((p) => p.isActive)
+        .filter((p) => p.isActive && p.family === 'SHOES')
         .sort((a, b) => a.priceMonthly - b.priceMonthly)[0],
     [plans]
   )
@@ -1561,6 +1675,21 @@ function JoinCard() {
             Explore the plans <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
         </Link>
+        {/* Task 82 — the Shoe Club, on its own quiet line with its own door:
+            a shoes-only membership that is NOT one of the laundry tiers. */}
+        {clubCheapest && (
+          <p className="mt-4 border-t border-linen-100 pt-4 text-xs leading-relaxed text-navy-300">
+            Shoes only?{' '}
+            <Link
+              href="/services#shoe-club"
+              className="font-semibold text-navy underline underline-offset-2 transition hover:text-gold-700"
+            >
+              The Shoe Club
+            </Link>{' '}
+            is its own membership — {clubCheapest.shoesPerMonth} pairs of cleans a month from{' '}
+            {formatNaira(clubCheapest.priceMonthly)}, sold separately from the laundry plans.
+          </p>
+        )}
       </CardContent>
     </Card>
   )
@@ -1579,6 +1708,8 @@ function ShoeClubCard({
   onCancel,
   onUndo,
   onChangePlan,
+  tierName,
+  tierShoes,
 }: {
   clubMembership: ApiMembership
   clubPlan: ApiMembershipPlan
@@ -1588,6 +1719,11 @@ function ShoeClubCard({
   onCancel: () => void
   onUndo: () => void
   onChangePlan: () => void
+  /** Task 82 — the laundry tier this member also holds (if any), so the
+   *  club card can say plainly: your tier already includes X pairs — these
+   *  club pairs are separate and stack on top. */
+  tierName?: string | null
+  tierShoes?: number
 }) {
   const statusTone: Record<string, string> = {
     ACTIVE: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -1640,6 +1776,16 @@ function ShoeClubCard({
           Suede, leather and embellished pairs ride along on any booking with your{' '}
           {clubPlan.memberDiscountPct}% member discount.
         </p>
+
+        {/* Task 82 — the two shoe sources, named: club pairs here, tier
+            pairs over there. Never a merged mystery number. */}
+        {tierName && (tierShoes ?? 0) > 0 && (
+          <p className="mt-2 rounded-xl bg-linen-100 px-3 py-2 text-[11px] leading-relaxed text-navy-300">
+            These are your <strong className="text-navy">club pairs</strong>. Your {tierName} tier
+            separately includes <strong className="text-navy">{tierShoes} shoe clean{tierShoes === 1 ? '' : 's'} a
+            month</strong> — booked from your tier card above, each counted on its own.
+          </p>
+        )}
 
         {clubStatus !== 'LAPSED' && clubStatus !== 'CANCELLED' && (
           <div className="mt-5">

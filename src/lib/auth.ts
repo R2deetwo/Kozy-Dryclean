@@ -10,6 +10,22 @@ import CredentialsProvider from 'next-auth/providers/credentials'
 import { db } from './db'
 import bcrypt from 'bcryptjs'
 
+// ---------------------------------------------------------------------------
+// Task 82 — the console session lease (12 hours).
+// ---------------------------------------------------------------------------
+// The JWE that NextAuth issues re-stamps its own `exp` on every rotation
+// (now + session.maxAge), so a shorter admin TTL cannot ride the token's
+// expiry claim. Instead the sign-in moment is stamped as `consoleLoginAt`
+// (ONLY for ADMIN/STAFF sign-ins) and the lease is enforced from that claim
+// in three places:
+//   1. src/middleware.ts       — the edge: /admin is unreachable after 12h
+//   2. verifyLiveAccess()      — every console API call (requireRole)
+//   3. /api/users/me           — the console heartbeat signs the tab out
+// Customers (B2C/B2B) never carry the claim and keep their 30-day sessions.
+// A back-office sign-in therefore dies by noon after a midnight shift —
+// an abandoned admin tab is never a week-long open door.
+export const CONSOLE_SESSION_MAX_AGE_MS = 12 * 60 * 60 * 1000
+
 export const authOptions: NextAuthOptions = {
   providers: [
     CredentialsProvider({
@@ -85,6 +101,14 @@ export const authOptions: NextAuthOptions = {
       if (user) {
         token.id = user.id
         token.role = (user as any).role
+        // Task 82: stamp the console lease's start (admins + staff only).
+        // Persisted as a custom claim — it survives every token rotation,
+        // unlike the JWE's own exp which NextAuth re-stamps on each encode.
+        if ((user as any).role === 'ADMIN' || (user as any).role === 'STAFF') {
+          ;(token as any).consoleLoginAt = Math.floor(Date.now() / 1000)
+        } else {
+          delete (token as any).consoleLoginAt
+        }
       }
       return token
     },
@@ -93,6 +117,7 @@ export const authOptions: NextAuthOptions = {
       if (session.user) {
         ;(session.user as any).id = token.id
         ;(session.user as any).role = token.role
+        ;(session.user as any).consoleLoginAt = (token as any).consoleLoginAt ?? null
       }
       return session
     },
@@ -180,6 +205,20 @@ export async function verifyLiveAccess(
   const id = (session.user as any)?.id as string | undefined
   if (!role || !id) return null
   if (!CONSOLE_ROLES.includes(role as any)) return null
+
+  // Task 82: the 12-hour console lease. Checked BEFORE the database lookup
+  // so an expired back-office sign-in is refused even during a DB hiccup
+  // (the lease is self-contained in the token — no fail-open path).
+  const loginAt = (session.user as any)?.consoleLoginAt
+  if (
+    typeof loginAt === 'number' &&
+    Date.now() - loginAt * 1000 > CONSOLE_SESSION_MAX_AGE_MS
+  ) {
+    return blockedResponse(
+      'SESSION_EXPIRED',
+      'Your console session has expired — please sign in again.'
+    )
+  }
 
   const now = Date.now()
   let live = accessCache.get(id)

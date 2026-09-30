@@ -29,14 +29,16 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { BadgeCheck, CreditCard, Landmark, Loader2, Sparkles } from 'lucide-react'
+import { BadgeCheck, CreditCard, Landmark, Loader2, Sparkles, XCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
 import { formatNaira, type KozyAppSettings } from '@/lib/types'
 import { useQueryClient } from '@tanstack/react-query'
-import type { ApiMembership, ApiMembershipPlan } from '@/lib/hooks'
+import { useMembershipCancel } from '@/lib/hooks'
+import type { ApiMembership, ApiMembershipPlan, ApiRenewalClaim } from '@/lib/hooks'
 
 type TransferInfo = {
   bankName: string
@@ -53,6 +55,7 @@ export function FirstPaymentBanner({
   plan,
   family,
   focus,
+  openClaim,
 }: {
   membership: ApiMembership
   plan: ApiMembershipPlan
@@ -61,6 +64,11 @@ export function FirstPaymentBanner({
   /** The /portal?pay=1 deep link — scroll the banner into view and let it
    * glow for a beat so the member lands exactly on their payment. */
   focus?: boolean
+  /** Task 82 — the member's open "I've made payment" claim from the ledger.
+   *  While one is open, the banner shows the settled awaiting state even
+   *  after a refresh (the claim used to be a local React flag) and the
+   *  buttons rest — no duplicate claims. */
+  openClaim?: ApiRenewalClaim | null
 }) {
   const qc = useQueryClient()
   const ref = useRef<HTMLDivElement>(null)
@@ -72,6 +80,29 @@ export function FirstPaymentBanner({
 
   const isClub = family === 'SHOES'
   const paystackAvailable = appSettings?.paystackAvailable ?? false
+  // Task 82 — the SERVER-side claimed state (survives refresh; a stale
+  // claim older than 14 days lets the member start again).
+  const claimOpen = Boolean(openClaim && !openClaim.stale)
+  const settled = claimed || claimOpen
+
+  // Task 82 — the escape hatch: an unpaid request can be withdrawn cleanly
+  // (nothing was paid, the one-per-family slot frees for a fresh start).
+  const cancelMutation = useMembershipCancel()
+  const [confirmWithdraw, setConfirmWithdraw] = useState(false)
+  const onWithdraw = async () => {
+    try {
+      await cancelMutation.mutateAsync({ action: 'withdraw-request', family })
+      setConfirmWithdraw(false)
+      qc.invalidateQueries({ queryKey: ['my-membership'] })
+      toast({
+        title: 'Request withdrawn',
+        description:
+          "Nothing was paid, so nothing is lost — you can start again any time from the Memberships page, and we'll keep the kettle on.",
+      })
+    } catch (e: any) {
+      toast({ title: 'Could not withdraw', description: e?.message, variant: 'destructive' })
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -149,6 +180,15 @@ export function FirstPaymentBanner({
           title: "We're verifying your payment",
           description:
             'Thank you — the moment the office confirms your transfer, your membership will be activated shortly. Keep your reference handy just in case.',
+        })
+      } else if (res.status === 409 && data?.error === 'CLAIM_ALREADY_OPEN') {
+        // Task 82 — the ledger already holds a live claim (double-press or a
+        // second device): settle the banner, no error theatre.
+        setClaimed(true)
+        qc.invalidateQueries({ queryKey: ['my-membership'] })
+        toast({
+          title: "We're already verifying your payment",
+          description: data?.message ?? 'The office is confirming your transfer — no need to send it again.',
         })
       } else {
         toast({
@@ -253,7 +293,28 @@ export function FirstPaymentBanner({
             </p>
           </div>
 
-          {/* The payment paths */}
+          {/* The payment paths — Task 82: while an open claim awaits the
+              office, both paths rest (the money is already mid-flight). */}
+          {claimOpen ? (
+            <div className="mt-5 rounded-xl border border-gold-200 bg-gold-50/60 p-4 text-sm">
+              <p className="flex items-center gap-2 font-semibold text-navy">
+                <BadgeCheck className="h-4 w-4 text-gold-600" />
+                Payment sent — awaiting the office&apos;s confirmation
+              </p>
+              {openClaim && (
+                <p className="mt-1.5 text-xs leading-relaxed text-navy-300">
+                  {openClaim.amount > 0 ? formatNaira(openClaim.amount) : formatNaira(price)} ·
+                  reference <strong className="text-navy">{openClaim.reference}</strong> · noted{' '}
+                  {new Date(openClaim.claimedAt).toLocaleDateString('en-NG', {
+                    day: 'numeric',
+                    month: 'short',
+                  })}
+                  . Your membership activates the moment the office confirms it — nothing
+                  else is needed from you.
+                </p>
+              )}
+            </div>
+          ) : (
           <div className="mt-5 grid gap-2 sm:grid-cols-2">
             {/* Card — honestly unavailable until a Paystack key exists */}
             <Button
@@ -292,24 +353,25 @@ export function FirstPaymentBanner({
             ) : (
               <Button
                 onClick={claimTransfer}
-                disabled={busy !== null || claimed}
+                disabled={busy !== null || settled}
                 className={`rounded-full font-semibold ${
-                  claimed
+                  settled
                     ? 'bg-navy-50 text-navy-400'
                     : 'bg-navy text-white hover:bg-navy-700'
                 }`}
               >
                 {busy === 'claim' ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : claimed ? (
+                ) : settled ? (
                   <BadgeCheck className="mr-2 h-4 w-4" />
                 ) : null}
-                {claimed ? "Payment sent — awaiting the office's confirmation" : "I've made payment"}
+                {settled ? "Payment sent — awaiting the office's confirmation" : "I've made payment"}
               </Button>
             )}
           </div>
+          )}
 
-          {!paystackAvailable && (
+          {!paystackAvailable && !claimOpen && (
             <p className="mt-2 text-xs text-navy-300">
               Card payments are not configured yet — bank transfer works today, and your
               membership activates the moment the office confirms it.
@@ -345,7 +407,7 @@ export function FirstPaymentBanner({
                   </p>
                 </div>
                 <p className="mt-3 text-xs leading-relaxed text-navy-300">{transfer.note}</p>
-                {claimed && (
+                {settled && (
                   <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-navy-700">
                     <BadgeCheck className="h-3.5 w-3.5 text-gold-600" />
                     You told us you&apos;ve paid — we&apos;re verifying it now. Your membership
@@ -360,8 +422,60 @@ export function FirstPaymentBanner({
             Once your first month is in, the standing ladder takes over — the longer you
             cover, the kinder the rate, always.
           </p>
+
+          {/* Task 82 — the quiet exit: an UNPAID request can be withdrawn.
+              Never shown while a payment claim is mid-verification (money may
+              genuinely be in flight). */}
+          {!claimOpen && (
+            <div className="mt-2 text-right">
+              <button
+                onClick={() => setConfirmWithdraw(true)}
+                className="text-[11px] text-navy-300 underline-offset-2 transition hover:text-rose-500 hover:underline"
+              >
+                Not the right time? Withdraw this request
+              </button>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      {/* The withdraw confirm — plain words, no dark patterns */}
+      <Dialog open={confirmWithdraw} onOpenChange={(o) => !o && setConfirmWithdraw(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="font-serif text-lg text-navy">
+              Withdraw your {isClub ? 'club' : 'membership'} request?
+            </DialogTitle>
+            <DialogDescription>
+              Nothing has been paid, so nothing is lost — the request simply goes away and
+              your account stays exactly as it is. You can start again any time from the
+              Memberships page, on this or any other plan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-2 flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setConfirmWithdraw(false)}
+              className="flex-1 rounded-full border-navy-200 text-navy"
+            >
+              Keep it
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={onWithdraw}
+              disabled={cancelMutation.isPending}
+              className="flex-1 rounded-full"
+            >
+              {cancelMutation.isPending ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="mr-1.5 h-4 w-4" />
+              )}
+              Withdraw it
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </motion.div>
   )
 }

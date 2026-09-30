@@ -446,11 +446,15 @@ function CustomerDetailModal({
       { id: user.id, confirm: 'DELETE' },
       {
         onSuccess: (data) => {
+          const bits = [
+            `${data.deleted.orders} order${data.deleted.orders === 1 ? '' : 's'}`,
+            ...(data.deleted.memberships
+              ? [`${data.deleted.memberships} membership${data.deleted.memberships === 1 ? '' : 's'}`]
+              : []),
+          ]
           toast({
             title: 'Customer deleted',
-            description: `${user.name} and ${data.deleted.orders} order${
-              data.deleted.orders === 1 ? '' : 's'
-            } were permanently removed.`,
+            description: `${user.name} and ${bits.join(', ')} were permanently removed.`,
             variant: 'destructive',
           })
           setConfirmOpen(false)
@@ -655,8 +659,9 @@ function CustomerDetailModal({
                 Permanently delete this customer — for duplicate or junk entries (e.g. a
                 re-registration after a mistyped email). This removes{' '}
                 <strong>their entire history</strong>: {orders.length} order
-                {orders.length === 1 ? '' : 's'}, payment records, receipts, reviews and
-                all stats attached to them. <strong>It cannot be undone.</strong>
+                {orders.length === 1 ? '' : 's'}, payment records, receipts, reviews, their
+                membership(s) and usage history, and all stats attached to them.{' '}
+                <strong>It cannot be undone.</strong>
               </p>
               <Button
                 variant="outline"
@@ -681,8 +686,8 @@ function CustomerDetailModal({
             <AlertDialogDescription className="text-left">
               This will <strong>permanently erase</strong> {user.name} ({user.email}) along
               with <strong>all {orders.length} of their order{orders.length === 1 ? '' : 's'}</strong>,
-              payment records and receipts, reviews, and every stat attached to this
-              account. <strong>This action cannot be undone or recovered.</strong>
+              payment records and receipts, reviews, any membership they hold, and every stat
+              attached to this account. <strong>This action cannot be undone or recovered.</strong>
               <br />
               <br />
               If this entry is a duplicate (the customer re-registered), make sure you are

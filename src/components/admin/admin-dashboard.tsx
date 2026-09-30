@@ -85,6 +85,34 @@ const DEEP_LINK_MAP: Record<string, { tab: Tab; sub?: string }> = {
   help: { tab: 'help' },
 }
 
+// -----------------------------------------------------------------------------
+// Task 82 — /admin?tab=<key> on arrival (the email CTAs use it). Old linkTab
+// keys are accepted through the same DEEP_LINK_MAP. Applied in an EFFECT
+// (not useState init) so the first client render matches the server HTML —
+// no hydration mismatch. Enabled only for admins: the email CTA targets are
+// admin tabs, and STAFF must stay on their operational side.
+// -----------------------------------------------------------------------------
+function useAdminDeepTabParam(onArrive: (tab: Tab) => void, enabled: boolean) {
+  const applied = useRef(false)
+  useEffect(() => {
+    // Wait for the session to settle the role (it loads async) — but apply
+    // at most once per page visit, so in-app navigation is never fought by
+    // a stale URL param.
+    if (!enabled || applied.current) return
+    applied.current = true
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const key = params.get('tab')
+      if (!key) return
+      const target = DEEP_LINK_MAP[key]?.tab
+      if (target) onArrive(target)
+    } catch {
+      /* no param or malformed URL — stay on the overview */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled])
+}
+
 export function AdminDashboard() {
   // Real signed-in identity (the old header hardcoded a fake
   // "admin@kozy.ng" account that doesn't exist — audit finding).
@@ -188,6 +216,10 @@ export function AdminDashboard() {
   const [tab, setTab] = useState<Tab>('overview')
   // Sub-tab targets for deep links (operations → payments etc.).
   const [deepSub, setDeepSub] = useState<{ operations?: string; customers?: string; team?: string }>({})
+  // Task 82 — an email CTA (/admin?tab=memberships) lands the office straight
+  // on the tab that needs them. Applied once, after the console gate has
+  // settled the role (admin-only tabs are only honoured for admins).
+  useAdminDeepTabParam((t) => setTab(t), isAdmin)
   // Phase 62: the global branch switcher. 'ALL' | branch id.
   const [branchFilter, setBranchFilter] = useState<string>('ALL')
   const branchId = branchFilter === 'ALL' ? null : branchFilter

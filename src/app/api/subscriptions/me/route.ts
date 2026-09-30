@@ -16,6 +16,14 @@
 // PATCH actions:
 //   'cancel' / 'cancel-undo' — the classy at-period-end cancellation (and
 //       its undo). Hard immediate cancellation stays an admin action.
+//       Task 82: both now write ledger rows (CANCELLATION_SCHEDULED /
+//       CANCELLATION_UNDONE) so the office sees the WHY in the drill-down,
+//       and the daily sweep applies the scheduled end (status → CANCELLED)
+//       once the paid period actually runs out.
+//   'withdraw-request' (Task 82) — a member whose FIRST payment never landed
+//       can withdraw the whole request: nothing was paid, so the membership
+//       is cancelled cleanly and the one-per-family slot frees up for a
+//       fresh start. The escape hatch for stuck signups.
 //   'plan-change' (phase 81) — { planCode }: switch tier inside the SAME
 //       family. A PENDING_ACTIVATION request swaps the plan immediately (no
 //       money has moved, nothing to prorate). A live membership schedules
@@ -31,7 +39,7 @@ import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
-import { effectiveStatus, effectiveUsage, rowToMembership, getSubscriptionActivity, recordSubscriptionEvent } from '@/lib/subscriptions'
+import { effectiveStatus, effectiveUsage, rowToMembership, getSubscriptionActivity, recordSubscriptionEvent, openRenewalClaim } from '@/lib/subscriptions'
 import { notifyMembershipCancelled } from '@/lib/notifications'
 
 async function loadCurrent(userId: string, family: 'KIT' | 'SHOES' = 'KIT') {
@@ -59,9 +67,16 @@ export async function GET() {
   // Phase 75: the member's in-cycle activity — every booking with its live
   // status, the missed-pickup flag, and the ledger tail. The portal's
   // "Your pickups this month" section renders straight from this.
-  const [tierActivity, clubActivity] = await Promise.all([
+  const [tierActivity, clubActivity, tierClaim, clubClaim] = await Promise.all([
     row ? getSubscriptionActivity(row.id, { eventLimit: 12 }) : Promise.resolve(null),
     club ? getSubscriptionActivity(club.id, { eventLimit: 8 }) : Promise.resolve(null),
+    // Task 82: the member's open "I've made payment" claim, server-side —
+    // the claimed state used to live only in the button's React state and
+    // vanished on refresh (letting a member claim twice). Now the portal
+    // renders the awaiting state from the ledger, and it clears the moment
+    // the office's confirmation lands (CYCLE_START settles the claim).
+    row ? openRenewalClaim(row.id) : Promise.resolve(null),
+    club ? openRenewalClaim(club.id) : Promise.resolve(null),
   ])
 
   const plan = row?.plan
@@ -85,6 +100,8 @@ export async function GET() {
         )
       : null,
     activity: tierActivity,
+    // Task 82: the open transfer claim (null once the office confirms).
+    openClaim: tierClaim,
     // Phase 70: the standalone Shoe Club, when this customer holds one.
     shoeClub: club
       ? {
@@ -106,6 +123,7 @@ export async function GET() {
               )
             : null,
           activity: clubActivity,
+          openClaim: clubClaim,
         }
       : null,
   })
@@ -257,8 +275,68 @@ export async function PATCH(req: Request) {
     })
   }
 
+  // ----- Task 82: withdraw an UNPAID request (the stuck-signup escape hatch) -----
+  if (action === 'withdraw-request') {
+    const row = await loadCurrent(userId, family)
+    if (!row) {
+      return NextResponse.json(
+        { error: 'NOT_FOUND', message: 'No membership request to withdraw.' },
+        { status: 404 }
+      )
+    }
+    if (row.status !== 'PENDING_ACTIVATION') {
+      return NextResponse.json(
+        {
+          error: 'NOT_PENDING',
+          message:
+            'Only an unpaid request can be withdrawn — this membership is already running. Use “Cancel membership” below to end it at month end instead.',
+        },
+        { status: 409 }
+      )
+    }
+    // A claim awaiting the office must NOT be silently withdrawn — money
+    // may genuinely be mid-flight. Point the member at the office instead.
+    const claim = await openRenewalClaim(row.id)
+    if (claim && !claim.stale) {
+      return NextResponse.json(
+        {
+          error: 'PAYMENT_UNDER_REVIEW',
+          message:
+            'We’re already confirming a payment you sent for this request — withdrawing it now would be premature. Give the office a moment, or call us and we’ll sort it out in one call.',
+        },
+        { status: 409 }
+      )
+    }
+    const withdrawn = await db.subscription.update({
+      where: { id: row.id },
+      data: {
+        status: 'CANCELLED',
+        cancelAtPeriodEnd: false,
+        cancelledAt: new Date(),
+        cancelledReason: 'Request withdrawn by member before any payment',
+        transferReceipt: null,
+      },
+      include: { plan: true, pendingPlan: true },
+    })
+    await recordSubscriptionEvent({
+      subscriptionId: row.id,
+      kind: 'REQUEST_WITHDRAWN',
+      delta: 0,
+      count: 0,
+      meta: { plan: row.plan?.code ?? null },
+      note: 'Member withdrew the unpaid request — the slot is free for a fresh start.',
+    })
+    return NextResponse.json({
+      membership: rowToMembership(withdrawn),
+      effectiveStatus: 'CANCELLED',
+    })
+  }
+
   if (action !== 'cancel' && action !== 'cancel-undo') {
-    return NextResponse.json({ error: 'action must be "cancel", "cancel-undo", "plan-change" or "plan-change-undo"' }, { status: 400 })
+    return NextResponse.json(
+      { error: 'action must be "cancel", "cancel-undo", "withdraw-request", "plan-change" or "plan-change-undo"' },
+      { status: 400 }
+    )
   }
 
   const row = await loadCurrent(userId, family)
@@ -290,9 +368,25 @@ export async function PATCH(req: Request) {
     data: {
       cancelAtPeriodEnd,
       // A cancelled-then-undone membership: clear any recorded reason.
-      ...(cancelAtPeriodEnd ? {} : { cancelledAt: null, cancelledReason: null }),
+      ...(cancelAtPeriodEnd
+        ? { cancelledAt: new Date(), cancelledReason: 'Member chose not to renew — runs to period end' }
+        : { cancelledAt: null, cancelledReason: null }),
     },
     include: { plan: true },
+  })
+
+  // Task 82 — the WHY on the office ledger. The drill-down now shows the
+  // member's cancellation (and its undo) with timestamps, same as every
+  // other entitlement movement.
+  await recordSubscriptionEvent({
+    subscriptionId: row.id,
+    kind: cancelAtPeriodEnd ? 'CANCELLATION_SCHEDULED' : 'CANCELLATION_UNDONE',
+    delta: 0,
+    count: 0,
+    meta: { plan: row.plan?.code ?? null, periodEnd: row.periodEnd?.toISOString() ?? null },
+    note: cancelAtPeriodEnd
+      ? 'Member asked for the membership to rest at period end.'
+      : 'Member undid the cancellation — the membership keeps renewing.',
   })
 
   if (cancelAtPeriodEnd) {

@@ -34,10 +34,12 @@ import {
   nudgeFacts,
   higherPlanFor,
   recordSubscriptionEvent,
+  openRenewalClaim,
 } from '@/lib/subscriptions'
 import {
   notifyMembershipMonthlySummary,
   notifyMembershipPaused,
+  notifyMembershipFirstPaymentNudge,
 } from '@/lib/notifications'
 import { getStoreProducts } from '@/lib/kozy-store'
 
@@ -81,7 +83,7 @@ export function memberEmailTestMode(): boolean {
 export type SweepOutcome = 'SENT' | 'SUPPRESSED' | 'SKIPPED_SENT_ALREADY' | 'DRY_RUN'
 
 export interface SweepDetail {
-  job: 'summary' | 'paused'
+  job: 'summary' | 'paused' | 'first-payment'
   member: { name: string; email: string }
   planName: string
   outcome: SweepOutcome
@@ -96,6 +98,9 @@ export interface SweepResult {
   allowlist: string
   summaryCandidates: number
   pausedCandidates: number
+  /** Task 82 */
+  cancellationsApplied: number
+  firstPaymentCandidates: number
   sent: number
   suppressed: number
   skipped: number
@@ -130,6 +135,7 @@ export interface SubWithPlan {
   id: string
   userId: string
   status: string
+  createdAt: Date
   periodStart: Date | null
   periodEnd: Date | null
   cancelAtPeriodEnd: boolean
@@ -360,6 +366,122 @@ export async function sendPausedFor(
   }
 }
 
+// =============================================================================
+// Task 82 — CANCELLATION, closed end to end
+// =============================================================================
+// A member asking to cancel sets cancelAtPeriodEnd and the membership keeps
+// running to its paid end. Until now NOTHING ever flipped it to CANCELLED
+// when that end arrived — the row drifted through PAST_DUE/LAPSED with a
+// "not renewing" chip forever, and the paused-reactivation email chased
+// people who had explicitly asked to leave. This step applies the scheduled
+// end (status → CANCELLED, ledger row, no email — the member already got
+// their cancellation confirmation when they asked) BEFORE the email jobs,
+// so the paused email naturally skips them.
+// =============================================================================
+export async function applyScheduledCancellations(
+  opts: { dry?: boolean } = {}
+): Promise<{ applied: number; ids: string[] }> {
+  const due = await db.subscription.findMany({
+    where: {
+      status: 'ACTIVE',
+      cancelAtPeriodEnd: true,
+      periodEnd: { lt: new Date() },
+    },
+    select: { id: true },
+  })
+  if (opts.dry || due.length === 0) {
+    return { applied: 0, ids: [] }
+  }
+  for (const row of due) {
+    try {
+      await db.subscription.update({
+        where: { id: row.id },
+        data: {
+          status: 'CANCELLED',
+          cancelAtPeriodEnd: false,
+          cancelledAt: new Date(),
+          cancelledReason: 'Member chose not to renew — applied at period end',
+        },
+      })
+      await recordSubscriptionEvent({
+        subscriptionId: row.id,
+        kind: 'CANCELLED_APPLIED',
+        delta: 0,
+        count: 0,
+        note: 'The scheduled cancellation landed — the membership rested at its paid end (automation).',
+      })
+    } catch (e) {
+      console.error('[member-emails] cancellation apply failed:', row.id, e)
+    }
+  }
+  return { applied: due.length, ids: due.map((d) => d.id) }
+}
+
+// =============================================================================
+// Task 82 — Job 3: the first-payment nudge (the stuck-signup recovery)
+// =============================================================================
+// A member who joined but whose first payment never landed (card checkout
+// unavailable at the time, transfer never sent) gets ONE calm email pointing
+// at their waiting payment — the deep link lands on the banner. Frequency
+// constitution: not before day 3 (they may just be slow), then at most once
+// every 14 days, at most 3 per pending membership, and it stops the moment
+// the membership activates or the request is withdrawn. Everything is
+// counted from the append-only ledger (FIRST_PAYMENT_NUDGED rows), so the
+// sweep stays idempotent no matter how often it runs.
+// =============================================================================
+const FIRST_NUDGE_MIN_AGE_MS = 3 * 24 * 60 * 60 * 1000
+const FIRST_NUDGE_GAP_DAYS = 14
+const FIRST_NUDGE_MAX = 3
+
+export async function sendFirstPaymentNudgeFor(
+  sub: SubWithPlan,
+  opts: { dry?: boolean; overrideTo?: string } = {}
+): Promise<{ outcome: SweepOutcome; subjectHint: string }> {
+  const settings = await getAppSettings()
+  const subjectHint = `Your ${sub.plan!.name} is waiting for its first payment`
+  if (opts.dry) return { outcome: 'DRY_RUN', subjectHint }
+  await notifyMembershipFirstPaymentNudge({
+    user: { name: sub.user!.name, email: opts.overrideTo ?? sub.user!.email },
+    planName: sub.plan!.name,
+    priceMonthly: sub.plan!.priceMonthly,
+    family: sub.plan!.code.startsWith('SHOES') ? 'SHOES' : 'KIT',
+    payUrl: `${baseUrl()}/portal?pay=1`,
+    contactPhone: settings.contactPhone,
+  })
+  return { outcome: 'SENT', subjectHint }
+}
+
+/** How many nudges this pending request has already had, and when the last
+ *  one went out — read straight from the ledger. */
+async function firstNudgeFacts(subscriptionId: string): Promise<{ count: number; lastAt: number | null }> {
+  const rows = await db.subscriptionEvent.findMany({
+    where: { subscriptionId, kind: 'FIRST_PAYMENT_NUDGED' },
+    select: { createdAt: true },
+    orderBy: { createdAt: 'desc' },
+  })
+  return {
+    count: rows.length,
+    lastAt: rows.length ? new Date(rows[0].createdAt).getTime() : null,
+  }
+}
+
+async function markFirstNudgeSent(subscriptionId: string): Promise<void> {
+  try {
+    await db.subscriptionEvent.create({
+      data: {
+        subscriptionId,
+        kind: 'FIRST_PAYMENT_NUDGED',
+        delta: 0,
+        count: 0,
+        meta: JSON.stringify({ automation: true }),
+        note: 'First-payment nudge emailed — the payment is waiting in their portal',
+      },
+    })
+  } catch (e) {
+    console.error('[member-emails] nudge dedupe write failed:', e)
+  }
+}
+
 /** The daily pass. Safe to run any time: idempotent per cycle via the
  *  ledger. Member emails are ALWAYS ON (phase 77) — the only suppression
  *  is our own test mode, which never exists in production. */
@@ -374,11 +496,20 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
     allowlist,
     summaryCandidates: 0,
     pausedCandidates: 0,
+    cancellationsApplied: 0,
+    firstPaymentCandidates: 0,
     sent: 0,
     suppressed: 0,
     skipped: 0,
     details: [],
   }
+
+  // ----- Task 82, step 0: apply scheduled cancellations -----
+  // Members who asked to rest get their CANCELLED status the day after their
+  // paid period ends — before any email job runs, so the paused email never
+  // chases someone who explicitly left.
+  const cancellations = await applyScheduledCancellations(opts)
+  result.cancellationsApplied = cancellations.applied
 
   const now = Date.now()
   const subs = (await db.subscription.findMany({
@@ -511,6 +642,77 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
         subjectHint,
       })
     }
+  }
+
+  // ----- Task 82, Job 3: the first-payment nudge (stuck signups) -----
+  // A PENDING_ACTIVATION membership older than 3 days with no open claim
+  // (nothing mid-verification) gets at most 3 calm nudges, 14 days apart,
+  // pointing at the banner waiting in their portal. This is the recovery
+  // path for members who joined at a time when their payment simply could
+  // not be completed — the moment they log in (or follow this email), the
+  // payment is right there.
+  const pendingSubs = (await db.subscription.findMany({
+    where: { status: 'PENDING_ACTIVATION' },
+    include: {
+      plan: true,
+      user: { select: { id: true, name: true, email: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  })) as unknown as SubWithPlan[]
+
+  for (const sub of pendingSubs) {
+    if (!sub.plan || !sub.user?.email) continue
+    const ageMs = now - new Date(sub.createdAt).getTime()
+    if (ageMs < FIRST_NUDGE_MIN_AGE_MS) continue // grace — they may just be slow
+
+    // A payment note mid-verification needs a human glance, not another
+    // email — the nudge skips members whose claim is already with the office.
+    const openClaim = await openRenewalClaim(sub.id)
+    if (openClaim && !openClaim.stale) continue
+
+    const { count, lastAt } = await firstNudgeFacts(sub.id)
+    if (count >= FIRST_NUDGE_MAX) {
+      result.skipped++
+      result.details.push({
+        job: 'first-payment',
+        member: { name: sub.user.name, email: sub.user.email },
+        planName: sub.plan.name,
+        outcome: 'SKIPPED_SENT_ALREADY',
+        reason: `Nudge cap reached (${count}/${FIRST_NUDGE_MAX}) — the office takes it from here`,
+      })
+      continue
+    }
+    if (lastAt !== null && now - lastAt < FIRST_NUDGE_GAP_DAYS * 24 * 60 * 60 * 1000) {
+      continue // inside the 14-day quiet gap — no detail row, pure silence
+    }
+
+    result.firstPaymentCandidates++
+    const safe = !testMode || isTestSafeRecipient(sub.user.email, allowlist)
+    if (!safe) {
+      result.suppressed++
+      result.details.push({
+        job: 'first-payment',
+        member: { name: sub.user.name, email: sub.user.email },
+        planName: sub.plan.name,
+        outcome: 'SUPPRESSED',
+        reason:
+          'Test mode is ON and this recipient is outside the test allowlist — logged only; production sends to every member',
+      })
+      continue
+    }
+    const { outcome, subjectHint } = await sendFirstPaymentNudgeFor(sub, opts)
+    if (outcome === 'SENT') {
+      await markFirstNudgeSent(sub.id)
+      result.sent++
+    }
+    result.details.push({
+      job: 'first-payment',
+      member: { name: sub.user.name, email: sub.user.email },
+      planName: sub.plan.name,
+      outcome,
+      reason: opts.dry ? 'Dry run — planned only' : 'First-payment nudge sent',
+      subjectHint,
+    })
   }
 
   return result

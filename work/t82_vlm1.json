@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "**Image 1 (Admin Console):**\n1.  **Yes**, the 'Members' tab is active (dark background) and positioned first.\n2.  **Yes**, there is an amber highlight line for \"Zainab Musa\" containing the reference **KZY-RENEW-T82DEJ1**.\n3.  **No**, the layout is clean with no visible glitches or overlaps.\n\n**Image 2 (Member Portal):**\n1.  **Yes**, the 'Membership' tab is active and is the right-most/primary tab in that specific sub-navigation.\n2.  **Yes**, there is an amber notification box mentioning a payment sent with the reference **KZY-RENEW-T82TEST1**.\n3.  **No**, the layout appears well-structured and fully readable.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1790790433,
+  "id": "202610010147070e59cbd1267c4501",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202610010147070e59cbd1267c4501",
+  "usage": {
+    "completion_tokens": 167,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3962,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 4129
+  }
+}

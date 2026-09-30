@@ -470,6 +470,124 @@ export function rowToMembership(row: any): Membership {
 
 // ----- Activation / renewal (shared by admin verify + Paystack webhook) -----
 
+// =============================================================================
+// THE OPEN TRANSFER CLAIM (Task 82) — "I've made payment", wired properly
+// =============================================================================
+// A member pressing "I've made payment" writes a RENEWAL_INTENT ledger row.
+// Until the office confirms (a CYCLE_START lands — verify, renew, webhook),
+// that claim is OPEN: the member's card must show it (greyed months, no
+// duplicate claims — the claimed state used to live only in React state and
+// evaporated on refresh), and the office roster must show it (the claim was
+// invisible on the admin list until this task — "nothing on the admin side").
+//
+// A claim with no confirmation after CLAIM_STALE_DAYS stops gating the member
+// (they can pay again) but stays visible to the office for reconciliation.
+// =============================================================================
+
+export const CLAIM_STALE_DAYS = 14
+
+export interface RenewalClaim {
+  months: number
+  amount: number
+  reference: string
+  /** true = the claim completes a PENDING_ACTIVATION first payment. */
+  isInitial: boolean
+  receipt: boolean
+  planCode: string | null
+  claimedAt: string
+  /** True when older than CLAIM_STALE_DAYS without a confirmation. */
+  stale: boolean
+}
+
+function claimFromEvent(
+  intent: { meta: string | null; createdAt: Date },
+  now: Date = new Date()
+): RenewalClaim | null {
+  let meta: Record<string, unknown> = {}
+  try {
+    meta = JSON.parse(intent.meta ?? '{}')
+  } catch {
+    return null
+  }
+  const months = Math.round(Number(meta.months))
+  if (!Number.isFinite(months) || months < 1) return null
+  const claimedAt = new Date(intent.createdAt)
+  const stale = now.getTime() - claimedAt.getTime() > CLAIM_STALE_DAYS * 24 * 60 * 60 * 1000
+  return {
+    months: Math.min(months, 12),
+    amount: Math.max(0, Math.round(Number(meta.amount) || 0)),
+    reference: String(meta.reference ?? 'transfer'),
+    isInitial: Boolean(meta.isInitial),
+    receipt: Boolean(meta.receipt) && meta.receipt !== 'none',
+    planCode: typeof meta.planCode === 'string' ? meta.planCode : null,
+    claimedAt: claimedAt.toISOString(),
+    stale,
+  }
+}
+
+/**
+ * The member's open transfer claim, or null. Open = the newest RENEWAL_INTENT
+ * with NO newer CYCLE_START (the office's confirmation settles every claim
+ * before it — approving a different amount still clears the member's
+ * "awaiting" state, which is the honest outcome: the office has acted).
+ */
+export async function openRenewalClaim(
+  subscriptionId: string,
+  now: Date = new Date()
+): Promise<RenewalClaim | null> {
+  const events = await db.subscriptionEvent.findMany({
+    where: {
+      subscriptionId,
+      kind: { in: ['RENEWAL_INTENT', 'CYCLE_START'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 20,
+    select: { kind: true, meta: true, createdAt: true },
+  })
+  const latestIntent = events.find((e) => e.kind === 'RENEWAL_INTENT')
+  if (!latestIntent) return null
+  const settled = events.some(
+    (e) => e.kind === 'CYCLE_START' && e.createdAt > latestIntent.createdAt
+  )
+  if (settled) return null
+  return claimFromEvent(latestIntent, now)
+}
+
+/**
+ * Batch version for the admin roster: ONE query for all listed memberships,
+ * same settlement rule per subscription. Returns a map of subscriptionId →
+ * open claim (unsettled claims only — stale ones included so the office can
+ * reconcile old money).
+ */
+export async function openRenewalClaimsFor(
+  subscriptionIds: string[],
+  now: Date = new Date()
+): Promise<Map<string, RenewalClaim>> {
+  const out = new Map<string, RenewalClaim>()
+  if (subscriptionIds.length === 0) return out
+  const events = await db.subscriptionEvent.findMany({
+    where: {
+      subscriptionId: { in: subscriptionIds },
+      kind: { in: ['RENEWAL_INTENT', 'CYCLE_START'] },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 500,
+    select: { subscriptionId: true, kind: true, meta: true, createdAt: true },
+  })
+  for (const subId of subscriptionIds) {
+    const mine = events.filter((e) => e.subscriptionId === subId)
+    const latestIntent = mine.find((e) => e.kind === 'RENEWAL_INTENT')
+    if (!latestIntent) continue
+    const settled = mine.some(
+      (e) => e.kind === 'CYCLE_START' && e.createdAt > latestIntent.createdAt
+    )
+    if (settled) continue
+    const claim = claimFromEvent(latestIntent, now)
+    if (claim) out.set(subId, claim)
+  }
+  return out
+}
+
 /**
  * Activate a fresh subscription or renew an existing cycle. Resets the unit
  * counters belonging to the new cycle and lazily rolls the quarter/year

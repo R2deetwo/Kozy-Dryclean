@@ -42,7 +42,7 @@ import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
 import { getAppSettings } from '@/lib/app-settings'
-import { effectiveStatus } from '@/lib/subscriptions'
+import { effectiveStatus, openRenewalClaim } from '@/lib/subscriptions'
 import { notifyAdminRenewalTransferPending } from '@/lib/notifications'
 import { RENEWAL_MONTH_CHOICES, renewalPriceFor, renewalSavingFor, formatNaira } from '@/lib/types'
 
@@ -167,7 +167,28 @@ export async function POST(req: Request) {
   // they merely looked at the instructions.
   const claiming = body?.claim === true
 
+  // ----- Task 82: one open claim at a time -----
+  // The claimed state now lives in the ledger (not React state), so the
+  // server must police duplicates too: while a non-stale claim awaits the
+  // office, a second claim is refused — the member sees "we're verifying
+  // your payment", and the office inbox stays quiet. A claim older than
+  // CLAIM_STALE_DAYS stops gating (the office never confirmed it — the
+  // member is not stuck forever).
   if (claiming) {
+    const existing = await openRenewalClaim(sub.id)
+    if (existing && !existing.stale) {
+      return NextResponse.json(
+        {
+          error: 'CLAIM_ALREADY_OPEN',
+          message:
+            'We already have your payment note from ' +
+            new Date(existing.claimedAt).toLocaleDateString('en-NG', { day: 'numeric', month: 'short' }) +
+            ` (${existing.months} month${existing.months === 1 ? '' : 's'}, ${formatNaira(existing.amount)}, ${existing.reference}) — the office is confirming it now. No need to send it again.`,
+          claim: existing,
+        },
+        { status: 409 }
+      )
+    }
     try {
       await db.subscriptionEvent.create({
         data: {

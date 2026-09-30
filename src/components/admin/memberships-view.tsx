@@ -3,13 +3,15 @@
 // =============================================================================
 // MembershipsView — ADMIN: the Kozy Circle control room (phase 62)
 // =============================================================================
-// Two tabs:
+// Two tabs (Task 82: Subscribers opens FIRST — the office comes here for the
+// member roster (verify transfers, renew months, kits) far more often than to
+// re-price the plans, so the people are the landing view, not the numbers):
+//   Subscribers— the member roster: status, cycle, usage, renewal actions,
+//                transfer verification and the kit lifecycle.
 //   Plans      — every number the owner quoted is editable here: prices,
 //                bag counts, extra-unit rates, perk limits, discounts. Saving
 //                also syncs Paystack recurring plans (best-effort) so card
 //                members auto-renew at the new price.
-//   Subscribers— the member roster: status, cycle, usage, renewal actions,
-//                transfer verification and the kit lifecycle.
 // =============================================================================
 
 import { useEffect, useMemo, useState } from 'react'
@@ -68,7 +70,9 @@ const field =
   'h-9 w-full rounded-lg border border-navy-200 bg-white px-3 text-sm text-navy focus:border-gold-400 focus:outline-none'
 
 export function MembershipsView() {
-  const [tab, setTab] = useState<'plans' | 'subscribers'>('plans')
+  // Task 82: Members (the roster) is the default tab — the owner asked for
+  // people first, pricing second.
+  const [tab, setTab] = useState<'plans' | 'subscribers'>('subscribers')
 
   return (
     <div className="p-4 sm:p-6">
@@ -85,11 +89,11 @@ export function MembershipsView() {
 
       <Tabs value={tab} onValueChange={(v) => setTab(v as 'plans' | 'subscribers')}>
         <TabsList className="bg-linen-200">
+          <TabsTrigger value="subscribers" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
+            <Users className="mr-1.5 h-3.5 w-3.5" /> Members
+          </TabsTrigger>
           <TabsTrigger value="plans" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
             <CircleDollarSign className="mr-1.5 h-3.5 w-3.5" /> Plans &amp; pricing
-          </TabsTrigger>
-          <TabsTrigger value="subscribers" className="data-[state=active]:bg-navy data-[state=active]:text-white text-navy-300">
-            <Users className="mr-1.5 h-3.5 w-3.5" /> Subscribers
           </TabsTrigger>
         </TabsList>
 
@@ -575,6 +579,40 @@ function SubscribersList() {
                       {formatNaira(m.pendingPlan.priceMonthly)}/mo
                     </p>
                   )}
+                  {/* Task 82 — the member's OPEN "I've made payment" claim,
+                      visible right on the roster (this was the missing wire:
+                      the member's portal showed the awaiting state but the
+                      admin list showed nothing). One click opens Record
+                      renewal pre-filled with the claimed months + amount. */}
+                  {m.openClaim && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-1.5 text-[11px] text-amber-800">
+                      <BadgeCheck className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                      <span className="font-semibold">
+                        {m.openClaim.isInitial ? 'First payment note:' : "Member said they've paid:"}
+                      </span>
+                      <span>
+                        {m.openClaim.months} month{m.openClaim.months === 1 ? '' : 's'} ·{' '}
+                        {m.openClaim.amount > 0 ? formatNaira(m.openClaim.amount) : 'plan price'}
+                      </span>
+                      <span className="font-mono">{m.openClaim.reference}</span>
+                      <span>· {formatDate(m.openClaim.claimedAt)}</span>
+                      {m.openClaim.stale && (
+                        <span className="font-semibold">(unconfirmed for 14+ days — reconcile it)</span>
+                      )}
+                      <button
+                        onClick={() => {
+                          setRenewFor(m)
+                          setRenewMonths(m.openClaim!.months)
+                          setRenewPrice(
+                            String(m.openClaim!.amount || m.plan?.priceMonthly || '')
+                          )
+                        }}
+                        className="ml-auto rounded-full bg-amber-500 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white transition hover:bg-amber-600"
+                      >
+                        {m.openClaim.isInitial ? 'Verify it' : 'Confirm months'}
+                      </button>
+                    </div>
+                  )}
                   {/* Phase 75: the wash-floor line — last/next pickup at a glance. */}
                   <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-navy-300">
                     {m.lastPickupAt && (
@@ -801,13 +839,18 @@ function SubscribersList() {
             for goodwill pricing if needed.
           </p>
           {/* The months being confirmed — next month or the discounted
-              prepay ladder (3/6/12); a claimed transfer prefills both */}
+              prepay ladder (3/6/12); a claimed transfer prefills both.
+              Task 82 — while a claim is open, the CLAIMED rung is anchored
+              (gold) and the other rungs grey out (the owner's ask). They
+              stay clickable: the office confirms what ACTUALLY landed, which
+              is sometimes a different rung than the member claimed. */}
           <div className="mt-3">
             <label className="text-xs font-medium text-navy">Months being paid</label>
             <div className="mt-1.5 flex flex-wrap gap-1.5">
               {RENEWAL_MONTH_CHOICES.map((m) => {
                 const unit = renewFor?.plan?.priceMonthly ?? renewFor?.pricePaid ?? 0
                 const mSaving = renewalSavingFor(unit, m)
+                const isClaimed = Boolean(renewClaim && renewClaim.months === m)
                 return (
                   <button
                     key={m}
@@ -820,10 +863,19 @@ function SubscribersList() {
                       'rounded-full border px-3 py-1.5 text-xs font-semibold transition',
                       renewMonths === m
                         ? 'border-gold-400 bg-gold-gradient text-navy'
-                        : 'border-navy-200 bg-white text-navy-300 hover:text-navy'
+                        : isClaimed
+                          ? 'border-amber-300 bg-amber-50 text-amber-800'
+                          : renewClaim
+                            ? 'border-navy-100 bg-linen-50 text-navy-200'
+                            : 'border-navy-200 bg-white text-navy-300 hover:text-navy'
                     )}
                   >
                     {m === 1 ? '1 month' : `${m} months`}
+                    {isClaimed && (
+                      <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-800">
+                        claimed
+                      </span>
+                    )}
                     {m > 1 && mSaving > 0 && (
                       <span
                         className={cn(
@@ -841,7 +893,9 @@ function SubscribersList() {
               })}
             </div>
             <p className="mt-1 text-[10px] text-navy-300">
-              3, 6 and 12 months each pre-fill their discounted ladder amount — the claimed transfer amount overrides it when one is open.
+              {renewClaim
+                ? 'The claimed rung is anchored — confirm only what actually landed (a different rung stays selectable).'
+                : '3, 6 and 12 months each pre-fill their discounted ladder amount.'}
             </p>
             {renewClaim && (
               <p className="mt-1.5 text-[11px] leading-relaxed text-gold-700">

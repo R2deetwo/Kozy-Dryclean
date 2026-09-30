@@ -13,12 +13,18 @@
 //     defence against a misfired request (the UI also makes the admin type
 //     the word before the button unlocks).
 //   - EVERYTHING attached to the customer is removed in ONE transaction:
-//     their orders (with payments, receipts, status history, condition
-//     photos and reviews), their verification tokens and driver GPS record.
-//     Reviews this admin APPROVED on other customers' orders survive — the
-//     approver link is simply detached.
+//     their memberships (with the full activity ledger — Task 82: this was
+//     the silent FK failure — a member with a subscription could never be
+//     deleted because the database rightly refuses to orphan the money
+//     trail), their orders (with payments, receipts, status history,
+//     condition photos and reviews), their verification tokens and driver
+//     GPS record. Reviews this admin APPROVED on other customers' orders
+//     survive — the approver link is simply detached.
+//   - RIDERS WITH PAYOUT HISTORY are refused (Task 82): money the office
+//     actually paid them is an audit trail that must outlive the account —
+//     revoke the rider instead of deleting.
 //   - The response reports exactly what was deleted, so the UI can show
-//     "Removed 2 orders, 1 review… " instead of a bare "done".
+//     "Removed 2 orders, 1 membership… " instead of a bare "done".
 // =============================================================================
 
 import { NextResponse } from 'next/server'
@@ -171,14 +177,45 @@ export async function DELETE(
   }
 
   // ----- Count what will be lost (for the response + audit log) -----
-  const [orderCount, reviewCount] = await Promise.all([
+  const [orderCount, reviewCount, subscriptionCount, payoutCount] = await Promise.all([
     db.order.count({ where: { userId: id } }),
     db.review.count({ where: { userId: id } }),
+    db.subscription.count({ where: { userId: id } }),
+    db.riderPayout.count({ where: { riderId: id } }),
   ])
+
+  // ----- Task 82: rider money guard (BEFORE the transaction) -----
+  // A rider the office has actually PAID carries a financial audit trail
+  // that must outlive their account — deleting it would erase who was paid,
+  // how much and when. Revoke their access instead.
+  if (payoutCount > 0) {
+    return NextResponse.json(
+      {
+        error: `${user.name} has ${payoutCount} payout record${payoutCount === 1 ? '' : 's'} in the books — money history must be kept. Pause or revoke their access from the Team → Riders tab instead of deleting.`,
+      },
+      { status: 400 }
+    )
+  }
 
   // ----- Cascade delete (single transaction: all-or-nothing) -----
   try {
     const deleted = await db.$transaction(async (tx) => {
+      // 0. Task 82 — detach every audit link this user's WORK left on rows
+      //    that must SURVIVE (payments they verified, statuses they moved,
+      //    anomalies they raised, payouts/settlements they recorded, ledger
+      //    rows they adjusted). These FKs are nullable; the DB would SET NULL
+      //    most of them, but detaching explicitly keeps the order of
+      //    operations obvious and the behaviour identical everywhere.
+      await tx.subscriptionEvent.updateMany({
+        where: { recordedById: id },
+        data: { recordedById: null },
+      })
+      await tx.payment.updateMany({ where: { verifiedById: id }, data: { verifiedById: null } })
+      await tx.statusEvent.updateMany({ where: { actorId: id }, data: { actorId: null } })
+      await tx.orderAnomaly.updateMany({ where: { actorId: id }, data: { actorId: null } })
+      await tx.riderPayout.updateMany({ where: { recordedById: id }, data: { recordedById: null } })
+      await tx.partnerSettlement.updateMany({ where: { recordedById: id }, data: { recordedById: null } })
+
       // 1. Detach approvals this user made AS ADMIN on other customers'
       //    reviews (those reviews belong to other orders and must survive —
       //    only the "approved by" attribution is cleared).
@@ -187,33 +224,51 @@ export async function DELETE(
         data: { approvedById: null },
       })
 
-      // 2. Verification tokens (their pending email-verification links die
+      // 2. Task 82 — the membership trail: the activity ledger FIRST (its
+      //    subscriptionId FK is RESTRICT), then the memberships themselves
+      //    (kits, pending switches, receipts — nothing of the money path
+      //    survives half-deleted). This is what used to blow the whole
+      //    transaction up with a foreign-key error whenever the customer
+      //    held a membership or a pending request.
+      const eventsRemoved = await tx.subscriptionEvent.deleteMany({
+        where: { subscription: { userId: id } },
+      })
+      const subscriptionsRemoved = await tx.subscription.deleteMany({
+        where: { userId: id },
+      })
+
+      // 3. Verification tokens (their pending email-verification links die
       //    with the account).
       await tx.verificationToken.deleteMany({ where: { userId: id } })
 
-      // 3. Driver GPS record (only exists if this was a rider).
+      // 4. Driver GPS record (only exists if this was a rider).
       await tx.driverLocation.deleteMany({ where: { driverId: id } })
 
-      // 4. Their orders — cascades within the DB remove each order's
+      // 5. Their orders — cascades within the DB remove each order's
       //    payments (with receipt screenshots), status events, garment
       //    condition photos, and any review attached to those orders.
       const ordersRemoved = await tx.order.deleteMany({ where: { userId: id } })
 
-      // 5. Any remaining reviews they authored (safety net — normally the
+      // 6. Any remaining reviews they authored (safety net — normally the
       //    order cascade above already took them).
       const reviewsRemoved = await tx.review.deleteMany({ where: { userId: id } })
 
-      // 6. Finally the user row itself. Orders they merely DROVE (driverId)
+      // 7. Finally the user row itself. Orders they merely DROVE (driverId)
       //    stay with the business — the optional driver link nulls itself.
       await tx.user.delete({ where: { id } })
 
-      return { orders: ordersRemoved.count, reviews: reviewsRemoved.count }
+      return {
+        orders: ordersRemoved.count,
+        reviews: reviewsRemoved.count,
+        subscriptions: subscriptionsRemoved.count,
+        events: eventsRemoved.count,
+      }
     })
 
     console.log(
       `[CRM] Admin ${session.user?.email} deleted user ${user.email} (${user.id}) — ` +
-        `${deleted.orders} order(s), ${deleted.reviews} review(s), payments included. ` +
-        `Pre-check counts: orders=${orderCount} reviews=${reviewCount}`
+        `${deleted.orders} order(s), ${deleted.subscriptions} membership(s), ${deleted.events} ledger row(s), ${deleted.reviews} review(s), payments included. ` +
+        `Pre-check counts: orders=${orderCount} reviews=${reviewCount} subs=${subscriptionCount}`
     )
 
     return NextResponse.json({
@@ -221,6 +276,7 @@ export async function DELETE(
       deleted: {
         orders: deleted.orders,
         reviews: deleted.reviews,
+        memberships: deleted.subscriptions,
         // payments ride along with the orders (DB cascade) — report the
         // pre-count we can compute cheaply
         payments: orderCount,
@@ -228,10 +284,18 @@ export async function DELETE(
     })
   } catch (e: any) {
     console.error('User deletion failed:', e)
+    // Task 82: name the likeliest cause instead of a bare "failed" — the
+    // admin should be able to act without calling support.
+    const constraint = String(e?.meta?.message ?? e?.message ?? '')
+    const hint = constraint.includes('foreign key')
+      ? ' A record still linked to this account blocked it — nothing was removed.'
+      : ''
     return NextResponse.json(
       {
         error:
-          'The deletion failed and NOTHING was removed (all-or-nothing transaction). Please try again or contact support.',
+          'The deletion failed and NOTHING was removed (all-or-nothing transaction).' +
+          hint +
+          ' Please try again or contact support.',
       },
       { status: 500 }
     )

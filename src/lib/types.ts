@@ -873,6 +873,10 @@ export type NotificationEventType =
   | 'STAFF_INVITE'
   | 'CAMPAIGN_SENT'
   | 'SUBSCRIPTION'
+  // Task 82 — a member pressed "I've made payment" (first month or a
+  // multi-month renewal): the office confirms it in Members → the roster
+  // row carries the open claim with its Confirm button.
+  | 'MEMBERSHIP_CLAIM'
   | 'PARTNER_APPLICATION'
   | 'TEST'
 
