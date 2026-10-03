@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided, here are the answers to your checks:\n\n1.  **WhatsApp link/button:** **Yes.** There is a clear \"WhatsApp us\" link with a phone icon and the number +234 803 175 5230 in the \"CONTACT US\" section.\n2.  **Embedded Google Map:** **No.** While there is a large rectangular placeholder box where a map would typically be (with the caption \"Kozy Care on Google Maps\"), it appears to be an empty container or failed to load; there is no visible map or pin.\n3.  **'Review us on Google' link:** **Yes.** It is listed under the \"QUICK LINKS\" column with a star icon.\n4.  **Layout problems:** **No.** The layout looks clean. Text is legible, elements are well-spaced within their grid columns, icons are intact, and nothing appears to be overlapping or cut off.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791017662,
+  "id": "20261003165418441ca420ce704421",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20261003165418441ca420ce704421",
+  "usage": {
+    "completion_tokens": 199,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1332,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1531
+  }
+}

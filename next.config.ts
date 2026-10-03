@@ -32,6 +32,11 @@ const nextConfig: NextConfig = {
               "img-src 'self' data: https:",
               // Connect: self (API routes), Supabase, Paystack (in production)
               "connect-src 'self' https://*.supabase.co https://api.paystack.co",
+              // Frames: the keyless Google Maps embed of our Business Profile
+              // pin in the footer (Task 85). Only google.com is allowed —
+              // nothing else can be framed. Paystack inline would join this
+              // list when wired.
+              "frame-src 'self' https://www.google.com https://maps.google.com",
               // Form actions: self only (Paystack uses fetch, not form posts)
               "form-action 'self'",
               // Frames: deny by default (Paystack inline uses an iframe in prod — add when wired)

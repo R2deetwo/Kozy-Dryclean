@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Yes, there is an embedded Google Map with a red location pin, and the WhatsApp link is visible.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791017915,
+  "id": "20261003165834398ba4532b744631",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20261003165834398ba4532b744631",
+  "usage": {
+    "completion_tokens": 22,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1286,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1308
+  }
+}

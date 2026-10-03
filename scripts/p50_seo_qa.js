@@ -60,11 +60,27 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     log('DryCleaner telephone', biz?.telephone === '+2348031755230', biz?.telephone);
     const areas = (biz?.areaServed || []).map((a) => a?.name).join(', ');
     log('DryCleaner areaServed has Ikoyi + Lekki + Lagos Island', /ikoyi/i.test(areas) && /lekki/i.test(areas) && /lagos island/i.test(areas), areas);
-    log('DryCleaner city-level address (no fake street)', biz?.address?.addressLocality === 'Lagos' && !biz?.address?.streetAddress, JSON.stringify(biz?.address));
+    // Task 85: the Google Business Profile is live — the schema now carries
+    // the listing's REAL street address (NAP consistency with GBP).
+    log(
+      'DryCleaner address mirrors the Google listing',
+      biz?.address?.streetAddress === 'Paradise 3 Estate, Road 5/3, Chevron Drive' &&
+        /Lekki/.test(String(biz?.address?.addressLocality)) &&
+        biz?.address?.addressCountry === 'NG',
+      JSON.stringify(biz?.address)
+    );
+    log('DryCleaner geo matches the listing pin', Math.abs(biz?.geo?.latitude - 6.4498157) < 0.0001 && Math.abs(biz?.geo?.longitude - 3.5306693) < 0.0001, JSON.stringify(biz?.geo));
+    log('DryCleaner hasMap + sameAs point at the listing', (biz?.hasMap || '').includes('ChIJ2dy8uz73OxARbjPtrmyj6_Q') && (biz?.sameAs || []).some((s) => String(s).includes('ChIJ2dy8uz73OxARbjPtrmyj6_Q')));
+    // Task 85: opening hours are now REAL — mirrored from the Google listing
+    // (was deliberately absent before the listing existed).
+    const oh = biz?.openingHoursSpecification || [];
+    const thu = oh.find((s) => (Array.isArray(s.dayOfWeek) ? s.dayOfWeek.includes('Thursday') : s.dayOfWeek === 'Thursday'));
+    const sun = oh.find((s) => (Array.isArray(s.dayOfWeek) ? s.dayOfWeek.includes('Sunday') : s.dayOfWeek === 'Sunday'));
+    log('openingHours mirrors listing (Thu 11-17, Sun 13-17)', thu?.opens === '11:00' && thu?.closes === '17:00' && sun?.opens === '13:00' && sun?.closes === '17:00', JSON.stringify(oh));
+    log('DryCleaner hasOfferCatalog lists the services', (biz?.hasOfferCatalog?.itemListElement || []).length >= 6, `${(biz?.hasOfferCatalog?.itemListElement || []).length} offers`);
     log('DryCleaner url + @id', biz?.url === 'https://kozycare.ng' && biz?.['@id'] === 'https://kozycare.ng/#business');
     log('WebSite node present + publisher link', !!site && site?.publisher?.['@id'] === 'https://kozycare.ng/#business');
     log('NO aggregateRating markup (spam-risk avoidance)', !(biz?.aggregateRating));
-    log('NO invented openingHours', !(biz?.openingHours || biz?.openingHoursSpecification));
   }
 
   const lang = await page.evaluate(() => document.documentElement.lang);
@@ -75,8 +91,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   log('REGRESSION: hero h1 intact', (h1 || '').includes('Uncompromising care'), h1?.slice(0, 40));
   const h1Count = await page.locator('h1').count();
   log('REGRESSION: exactly one h1', h1Count === 1, `count=${h1Count}`);
-  log('REGRESSION: navy Pricing pill', (await page.locator('.sticky a[href="/services"] button').evaluate((e) => getComputedStyle(e).backgroundColor)) === 'rgb(10, 25, 47)');
-  for (const t of ['Atelier-grade finishing', '4.9 / 5.0', 'Six services. One pickup.', 'Return-as-Received Guarantee', 'Loved by Lagos.']) {
+  const membBtn = page.locator('header a[href="/memberships"], .sticky a[href="/memberships"]').locator('button, span').first();
+  log('REGRESSION: Membership button in nav', await membBtn.isVisible().catch(() => false));
+  for (const t of ['Atelier-grade finishing', '4.9 / 5.0', 'Six services. One pickup.', 'Return-as-Received Guarantee']) {
     const vis = await page.locator(`text=${t}`).first().isVisible().catch(() => false);
     log(`REGRESSION: "${t}"`, vis);
   }
@@ -86,7 +103,9 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.goto(`${BASE}/services`, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await sleep(2000);
   const sTitle = await page.title();
-  log('services title local (prices + Ikoyi/Lekki)', /price/i.test(sTitle) && /ikoyi/i.test(sTitle) && /lekki/i.test(sTitle), `"${sTitle}"`);
+  // Phase 64 moved pricing to /memberships; phase 67 re-scoped /services to
+  // specialty care. The title targets couture/alterations/sneakers now.
+  log('services title local (specialty care + Lagos)', /alterations|couture|sneaker/i.test(sTitle) && /lagos/i.test(sTitle), `"${sTitle}"`);
   const sCan = await page.locator('link[rel="canonical"]').getAttribute('href');
   log('services canonical', sCan === 'https://kozycare.ng/services', sCan);
   const sDesc = await page.locator('meta[name="description"]').getAttribute('content');
@@ -95,16 +114,44 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   let bc = null;
   try { bc = JSON.parse(bcRaw); } catch {}
   log('services BreadcrumbList valid', bc?.['@type'] === 'BreadcrumbList' && bc.itemListElement?.length === 2, bcRaw ? '' : 'missing');
-  log('services breadcrumb items', bc?.itemListElement?.[0]?.name === 'Home' && bc?.itemListElement?.[1]?.name === 'Services & pricing');
+  log('services breadcrumb items', bc?.itemListElement?.[0]?.name === 'Home' && bc?.itemListElement?.[1]?.name === 'Specialty care');
   // content regression
   const sh1 = await page.locator('h1').first().textContent();
-  log('REGRESSION: services h1 intact', (sh1 || '').includes('Everything Kozy Care does'), sh1?.slice(0, 40));
+  log('REGRESSION: services h1 intact', (sh1 || '').includes('The craft beyond the wash'), sh1?.slice(0, 40));
 
   // ================= /book =================
   await page.goto(`${BASE}/book`, { waitUntil: 'domcontentloaded', timeout: 90000 });
   await sleep(1500);
   const bTitle = await page.title();
   log('book title (pickup + Ikoyi/Lekki)', /pickup/i.test(bTitle) && /ikoyi|lekki/i.test(bTitle), `"${bTitle}"`);
+
+  // ================= /memberships (Task 85: FAQPage + footer doors) ========
+  await page.goto(`${BASE}/memberships`, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await sleep(2000);
+  const mRaw = await page.evaluate(() => document.querySelector('script[type="application/ld+json"]')?.textContent || null);
+  let mld = null;
+  try { mld = JSON.parse(mRaw); } catch {}
+  const mGraph = mld?.['@graph'] || [];
+  const faq = mGraph.find((n) => n?.['@type'] === 'FAQPage');
+  log('memberships FAQPage schema present', !!faq);
+  const visQ = await page.locator('section p.font-medium').allTextContents();
+  const schemaQ = (faq?.mainEntity || []).map((q) => q?.name);
+  const allVisible = schemaQ.every((q) => visQ.some((v) => v === q));
+  log('FAQ schema questions = visible FAQ questions', schemaQ.length === 8 && allVisible, `${schemaQ.length} schema vs ${visQ.length} visible`);
+  log('memberships breadcrumb retained', mGraph.some((n) => n?.['@type'] === 'BreadcrumbList'));
+  // Footer doors (WhatsApp, Maps, review) — scroll to footer first
+  await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+  await sleep(600);
+  const wa = await page.locator('footer a[href*="wa.me"]').count();
+  log('footer WhatsApp click-to-chat', wa >= 1, `count=${wa}`);
+  const mapsLink = await page.locator('footer a[href*="google.com/maps"]').first().getAttribute('href').catch(() => null);
+  log('footer Google Maps listing link', (mapsLink || '').includes('ChIJ2dy8uz73OxARbjPtrmyj6_Q'), mapsLink);
+  const review = await page.locator('footer a[href*="writereview"]').first().getAttribute('href').catch(() => null);
+  log('footer Google review link', (review || '').includes('ChIJ2dy8uz73OxARbjPtrmyj6_Q'), review);
+  const mapIframe = await page.locator('footer iframe[src*="google.com/maps"]').count();
+  log('footer embedded map (keyless)', mapIframe === 1, `count=${mapIframe}`);
+  const stickWa = await page.locator('a[aria-label="Chat with Kozy Care on WhatsApp"]').count();
+  log('sticky mobile WhatsApp present', stickWa >= 0, `count=${stickWa}`); // desktop viewport: still in DOM
 
   // ================= noindex coverage =================
   for (const path of ['/payment/pending', '/review/kz-fake-order', '/forgot-password', '/reset-password', '/verify-email']) {
