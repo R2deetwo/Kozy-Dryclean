@@ -842,18 +842,18 @@ export function SettingsView() {
                 </CardContent>
               </Card>
 
-              {/* Delivery + handwash */}
+              {/* Delivery + wash modes */}
               <Card className="border-navy-100 shadow-navy">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 font-serif text-navy">
-                    <Truck className="h-4 w-4 text-gold-400" /> Delivery & Wash Surcharges
+                    <Truck className="h-4 w-4 text-gold-400" /> Delivery & Wash Pricing
                   </CardTitle>
                   <p className="text-xs text-navy-300">
-                    First delivery is always free — these rates apply after that, and to
-                    the handwash option on the order form.
+                    First delivery is always free — these rates apply after that, and
+                    to the wash options on the order form.
                   </p>
                 </CardHeader>
-                <CardContent className="grid gap-4 sm:grid-cols-2">
+                <CardContent className="grid gap-4 sm:grid-cols-3">
                   <div>
                     <Label htmlFor="delivery-fee" className="text-xs uppercase tracking-wide text-navy-300">
                       Delivery fee after the first free one (₦)
@@ -887,6 +887,25 @@ export function SettingsView() {
                     <p className="mt-1 text-xs text-navy-300">
                       Machine wash stays free of surcharge — this is the gentle-care premium
                       for hand-finished pieces.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="iron-only-pct" className="text-xs uppercase tracking-wide text-navy-300">
+                      Iron-only rate (% of item prices)
+                    </Label>
+                    <Input
+                      id="iron-only-pct"
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={app.ironOnlyPercent}
+                      onChange={(e) => setApp({ ironOnlyPercent: Number(e.target.value) || 0 })}
+                      className="mt-1.5 w-32"
+                    />
+                    <p className="mt-1 text-xs text-navy-300">
+                      Iron-only orders skip the wash — clothes come back pressed and folded
+                      at this share of the listed prices. Benchmark: Orange Laundromat
+                      charges ~50–67% of wash &amp; iron for iron-only.
                     </p>
                   </div>
                 </CardContent>

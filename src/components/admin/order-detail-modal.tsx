@@ -352,7 +352,11 @@ export function OrderDetailModal({ order, isAdmin = false, onClose, onViewInvoic
             )}
             {order.modeOfWash && (
               <Badge className="rounded-full bg-blue-100 text-blue-800">
-                {order.modeOfWash === 'HANDWASH' ? 'Handwash' : 'Machine wash'}
+                {order.modeOfWash === 'HANDWASH'
+                  ? 'Handwash'
+                  : order.modeOfWash === 'IRON_ONLY'
+                    ? 'Iron only'
+                    : 'Machine wash'}
               </Badge>
             )}
             {order.promoCode && (

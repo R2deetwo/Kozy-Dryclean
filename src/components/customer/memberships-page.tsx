@@ -53,7 +53,7 @@ import { PricingTables } from './pricing-tables'
 import { StickyMobileCta } from './sticky-mobile-cta'
 import { JoinDialog } from './join-dialog'
 import { Logo } from '@/components/shell/logo'
-import { formatNaira } from '@/lib/types'
+import { formatNaira, WEEKLY_KIT_COPY, PEOPLE_PER_TIER } from '@/lib/types'
 import {
   useMembershipPlans,
   useMyMembership,
@@ -326,21 +326,21 @@ export function MembershipsClient() {
               {
                 icon: Briefcase,
                 label: '“Always in work clothes”',
-                line: 'Shirts and suits, Monday to Friday. One weekly bag keeps up.',
+                line: 'One person, kitted for the week — shirts, trousers and socks, Monday to Sunday.',
                 cta: 'Start with The Essentials',
                 href: '#tier-essentials',
               },
               {
                 icon: Users,
                 label: '“Dressing a whole family”',
-                line: 'Everyone’s weekly load — school, work, weekend — plus the beds.',
+                line: 'Three people’s weekly load — school, work, weekend — plus the beds and sheets.',
                 cta: 'Start with The Household',
                 href: '#tier-household',
               },
               {
                 icon: Home,
                 label: '“Running a full home”',
-                line: 'Duvets, curtains and a yearly deep clean, all inside one plan.',
+                line: 'Five people, plus duvets, curtains and a yearly deep clean — all inside one plan.',
                 cta: 'Start with The Whole Home',
                 href: '#tier-wholehome',
               },
@@ -452,8 +452,16 @@ export function MembershipsClient() {
                           </p>
                           <p className="mt-0.5 text-[10px] leading-relaxed text-navy-300">
                             {plan.unitKind === 'bag'
-                              ? 'The long laundry bag — your weekly wash & fold'
-                              : 'The big box — the whole household, weekly'}
+                              ? 'One bag = one person’s week'
+                              : `One box = ${PEOPLE_PER_TIER[plan.code] ?? 3} people’s week`}
+                          </p>
+                          {/* Oct 2026 directive — what a full week actually holds,
+                              spelled out once per card so nobody has to guess
+                              what “a bag of clothes” means. */}
+                          <p className="mt-1 border-t border-navy-100 pt-1 text-[10px] leading-relaxed text-navy-300">
+                            {plan.unitKind === 'bag'
+                              ? WEEKLY_KIT_COPY
+                              : `${(PEOPLE_PER_TIER[plan.code] ?? 3) * 7} of each — ${PEOPLE_PER_TIER[plan.code] ?? 3}× the weekly kit (${WEEKLY_KIT_COPY})`}
                           </p>
                           {plan.shoesPerMonth > 0 && (
                             <p className="mt-1.5 border-t border-navy-100 pt-1.5 text-[10px] font-semibold text-gold-700">
@@ -471,7 +479,7 @@ export function MembershipsClient() {
                           </Perk>
                           {plan.maxExtraUnits > 0 && (
                             <Perk included>
-                              Extra {plan.unitKind}s when you need them — {formatNaira(plan.extraUnitPrice)} each
+                              Extra {plan.unitKind === 'box' ? 'boxes' : `${plan.unitKind}s`} when you need them — {formatNaira(plan.extraUnitPrice)} each
                             </Perk>
                           )}
                           <Perk included={plan.shoesPerMonth > 0}>
@@ -481,8 +489,13 @@ export function MembershipsClient() {
                           </Perk>
                           <Perk included={plan.duvetsPerQuarter > 0}>
                             {plan.duvetsPerQuarter > 0
-                              ? `${plan.duvetsPerQuarter} duvet washes free, every 3 months`
+                              ? `${plan.duvetsPerQuarter} duvet wash${plan.duvetsPerQuarter === 1 ? '' : 'es'} free, every 3 months`
                               : 'Duvet washing — starts with The Household'}
+                          </Perk>
+                          <Perk included={(plan.bedsheetsPerMonth ?? 0) > 0}>
+                            {(plan.bedsheetsPerMonth ?? 0) > 0
+                              ? `${plan.bedsheetsPerMonth} bed sheet${plan.bedsheetsPerMonth === 1 ? '' : 's'} washed every month — ${Math.round((plan.bedsheetsPerMonth ?? 0) / 2)} every two weeks`
+                              : 'Bed sheets — start with The Household'}
                           </Perk>
                           <Perk included={plan.curtainsPerQuarter > 0}>
                             {plan.curtainsPerQuarter > 0
@@ -632,12 +645,16 @@ export function MembershipsClient() {
                 a: 'A half-full bag still counts as one of your pickups (the rider still rides). An overflowing one becomes an extra pickup — up to two a month at the plan rate, charged on that order. Nothing surprises you.',
               },
               {
+                q: 'What exactly fits in one bag?',
+                a: 'One bag is one person’s full week: 7 collared or long-sleeve shirts, 7 inner vests, 7 underwear, 7 trousers and 7 pairs of socks — fresh and kitted for a full week, every week. The Household box holds three people’s week (21 of each) and The Whole Home box holds five (35 of each), collected weekly. Need more of anything? Extras ride along at your member discount.',
+              },
+              {
                 q: 'What happens to the bag or box if I leave?',
                 a: 'It returns with your final delivery and that closes the chapter cleanly. If it does not come back, the replacement fee on your plan covers it — no deposits, no drama.',
               },
               {
-                q: 'When do my duvets and curtains refresh?',
-                a: 'Duvet and curtain perks reset every 3 months; the yearly deep clean resets each January. Your portal always shows what is left, so there is nothing to remember.',
+                q: 'When do my duvets, sheets and curtains refresh?',
+                a: 'Bed sheets refresh with your monthly cycle (The Household includes 4 a month — two every two weeks; The Whole Home, 6). Duvet and curtain perks reset every 3 months; the yearly deep clean resets each January. Your portal always shows what is left, so there is nothing to remember.',
               },
               {
                 q: 'Can I really cancel any time?',
@@ -701,9 +718,9 @@ export function MembershipsClient() {
 // the icon and the one-glance "who is this for" line.
 // -----------------------------------------------------------------------------
 const TIER_PRESENTATION: Record<string, { icon: LucideIcon; who: string }> = {
-  ESSENTIALS: { icon: ShoppingBag, who: 'For one busy person' },
-  HOUSEHOLD: { icon: Users, who: 'For a family' },
-  WHOLEHOME: { icon: Home, who: 'For a full house — beds, curtains, all' },
+  ESSENTIALS: { icon: ShoppingBag, who: 'For one person' },
+  HOUSEHOLD: { icon: Users, who: 'For three people — a family or flatmates' },
+  WHOLEHOME: { icon: Home, who: 'For five people — the whole house' },
   __default: { icon: Package, who: 'A Kozy Circle plan' },
 }
 

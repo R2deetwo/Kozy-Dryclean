@@ -1095,6 +1095,12 @@ model SubscriptionPlan {
   duvetsPerQuarter   Int     @default(0)
   curtainsPerQuarter Int     @default(0)
   springCleanPerYear Int     @default(0)
+  // Bed sheets washed per MONTHLY cycle (Oct 2026 client directive — the
+  // tiers are sized by PEOPLE: Household = 3 people incl. 4 sheets a month
+  // (two every two weeks); Whole Home = 5 people incl. 6). Resets with the
+  // cycle like bag/box units and shoe pairs — consumed via the member
+  // pickup route (kind=bedsheet).
+  bedsheetsPerMonth  Int     @default(0)
   // Pairs of shoes cleaned per MONTHLY cycle (phase 70 — the shoe perk).
   // One "pair" = the standard sneaker/canvas clean (upper, midsole, laces,
   // deodorize); premium materials (suede, nubuck, leather, embellished)
@@ -1172,6 +1178,7 @@ model Subscription {
   duvetsUsed     Int @default(0) // this calendar quarter
   curtainsUsed   Int @default(0)
   springCleanUsed Int @default(0) // this calendar year
+  bedsheetsUsed  Int @default(0) // this monthly cycle (kind=bedsheet perk)
   // Reset bookmarks — when the counters were last zeroed (renewal resets
   // units; quarter/year rolls reset the perk counters lazily at read time).
   usageCycleKey String? // "2026-09-01" — the cycle the unit counters belong to

@@ -14,6 +14,9 @@
 //   kind=duvet|curtain → the tier's quarterly perk (count against the
 //                         quarter's allowance).
 //   kind=spring-clean  → the annual perk (The Whole Home).
+//   kind=bedsheet      → the tier's MONTHLY sheet allowance (Household = 4,
+//                         Whole Home = 6 — Oct 2026 client directive, “two
+//                         every two weeks”). Resets with the cycle, like shoes.
 //   kind=shoes         → the tier's monthly shoe-clean pairs (phase 70).
 //                         One pair = the standard sneaker/canvas clean;
 //                         premium materials stay à-la-carte. Resets with
@@ -38,6 +41,7 @@ const PERK_LABEL: Record<string, { id: string; name: (plan: string) => string }>
   curtain: { id: 'member_perk_curtain', name: (p) => `Curtain care — included (${p})` },
   'spring-clean': { id: 'member_perk_spring', name: (p) => `Spring clean — rugs & heavy materials (${p})` },
   shoes: { id: 'member_perk_shoes', name: (p) => `Shoe clean — included (${p})` },
+  bedsheet: { id: 'member_perk_bedsheet', name: (p) => `Bed sheet wash — included (${p})` },
 }
 
 export async function POST(req: Request) {
@@ -161,6 +165,15 @@ export async function POST(req: Request) {
         {
           error: 'PERK_EXCEEDED',
           message: `Your plan includes ${plan.duvetsPerQuarter} duvet wash${plan.duvetsPerQuarter === 1 ? '' : 'es'} per quarter — ${usage.duvetsRemaining} left until the next quarter.`,
+        },
+        { status: 400 }
+      )
+    }
+    if (kind === 'bedsheet' && count > usage.bedsheetsRemaining) {
+      return NextResponse.json(
+        {
+          error: 'PERK_EXCEEDED',
+          message: `Your plan includes ${plan.bedsheetsPerMonth} bed sheet wash${plan.bedsheetsPerMonth === 1 ? '' : 'es'} this month — ${usage.bedsheetsRemaining} left until your next cycle.`,
         },
         { status: 400 }
       )
@@ -321,6 +334,11 @@ export async function POST(req: Request) {
     // resets at renewal (activateOrRenewSubscription), never lazily.
     usagePatch.shoesUsed = (sub.shoesUsed ?? 0) + perkCount
     usagePatch.usageCycleKey = sub.periodStart ? sub.usageCycleKey ?? 'seed' : 'seed'
+  } else if (kind === 'bedsheet') {
+    // Monthly-cycle perk (Oct 2026 directive): sheets reset with the cycle
+    // like shoes — never lazily.
+    usagePatch.bedsheetsUsed = (sub.bedsheetsUsed ?? 0) + perkCount
+    usagePatch.usageCycleKey = sub.periodStart ? sub.usageCycleKey ?? 'seed' : 'seed'
   } else if (kind === 'curtain') {
     const rolled = (sub.usageQuarterKey ?? '') !== quarterKey()
     usagePatch.curtainsUsed = (rolled ? 0 : sub.curtainsUsed) + perkCount
@@ -353,6 +371,7 @@ export async function POST(req: Request) {
       curtain: 'CURTAIN',
       'spring-clean': 'SPRING',
       shoes: 'SHOES',
+      bedsheet: 'BEDSHEET',
     }
     const qty = kind === 'unit' ? count : perkCount
     await recordSubscriptionEvent({

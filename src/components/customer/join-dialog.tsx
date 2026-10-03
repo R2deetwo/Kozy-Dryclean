@@ -25,7 +25,7 @@ import { ArrowRight, BadgeCheck, Banknote, CreditCard, Loader2, LogIn, LogOut, U
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
-import { formatNaira } from '@/lib/types'
+import { formatNaira, PEOPLE_PER_TIER } from '@/lib/types'
 import {
   useAppSettings,
   useSubscribe,
@@ -191,7 +191,7 @@ export function JoinDialog({
               <DialogDescription>
                 {isClub
                   ? `${plan.shoesPerMonth} pair${plan.shoesPerMonth === 1 ? '' : 's'} cleaned a month · free pickup & delivery · ${plan.memberDiscountPct}% off everything else`
-                  : `${plan.includedUnits} × ${plan.unitName} pickups a month · free delivery · ${plan.memberDiscountPct}% off everything else`}
+                  : `${PEOPLE_PER_TIER[plan.code] ?? 1} person${(PEOPLE_PER_TIER[plan.code] ?? 1) === 1 ? '' : 's'}, kitted every week · ${plan.includedUnits} × ${plan.unitName} pickups a month · ${plan.memberDiscountPct}% off everything else`}
               </DialogDescription>
             </DialogHeader>
 

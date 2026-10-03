@@ -16,6 +16,7 @@ import {
   Package,
   RefreshCcw,
   BedDouble,
+  BedSingle,
   Layers,
   Sun,
   Footprints,
@@ -75,7 +76,7 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
   // Phase 81 — the quiet tier switch (upgrade or downgrade; the member
   // never sees the word "downgrade").
   const planChangeMutation = useMembershipPlanChange()
-  const [booking, setBooking] = useState<'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | null>(null)
+  const [booking, setBooking] = useState<'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | 'bedsheet' | null>(null)
   // Phase 70: when true, the shoes booking draws from the standalone Shoe
   // Club instead of the laundry tier's perk (a customer may hold both).
   const [bookingClub, setBookingClub] = useState(false)
@@ -129,7 +130,7 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
   const clubUsage = club?.usage
   const clubStatus = club?.effectiveStatus ?? clubMembership?.status ?? 'PENDING_ACTIVATION'
 
-  const openTierBooking = (kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes') => {
+  const openTierBooking = (kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | 'bedsheet') => {
     setBookingClub(false)
     setBooking(kind)
   }
@@ -368,6 +369,16 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
                   total={plan.duvetsPerQuarter}
                 />
               )}
+              {/* Oct 2026 directive — the monthly sheet allowance rides with
+                  the Household/Whole Home tiers (“two every two weeks”). */}
+              {plan.bedsheetsPerMonth > 0 && (
+                <UsageMeter
+                  icon={BedSingle}
+                  label="Bed sheet washes (this month)"
+                  used={usage.bedsheetsUsed ?? 0}
+                  total={plan.bedsheetsPerMonth}
+                />
+              )}
               {plan.curtainsPerQuarter > 0 && (
                 <UsageMeter
                   icon={Layers}
@@ -436,6 +447,18 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
                     >
                       <BedDouble className="mr-1.5 h-3.5 w-3.5" /> Duvet wash
                       {usage.duvetsRemaining === 0 && ' (quarter used)'}
+                    </Button>
+                  )}
+                  {plan.bedsheetsPerMonth > 0 && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => openTierBooking('bedsheet')}
+                      disabled={status === 'PENDING_ACTIVATION' || (usage.bedsheetsRemaining ?? 0) === 0}
+                      className="rounded-full border-navy-200 text-navy hover:bg-navy hover:text-white"
+                    >
+                      <BedSingle className="mr-1.5 h-3.5 w-3.5" /> Bed sheet wash
+                      {(usage.bedsheetsRemaining ?? 0) === 0 && ' (month used)'}
                     </Button>
                   )}
                   {plan.curtainsPerQuarter > 0 && (
@@ -633,9 +656,11 @@ export function MembershipTab({ renewPrefill }: { renewPrefill?: number }) {
                   ? usage?.shoesRemaining ?? 0
                   : booking === 'duvet'
                     ? usage?.duvetsRemaining ?? 0
-                    : booking === 'curtain'
-                      ? usage?.curtainsRemaining ?? 0
-                      : usage?.springCleanRemaining ?? 0
+                    : booking === 'bedsheet'
+                      ? usage?.bedsheetsRemaining ?? 0
+                      : booking === 'curtain'
+                        ? usage?.curtainsRemaining ?? 0
+                        : usage?.springCleanRemaining ?? 0
             }
             onClose={() => setBooking(null)}
             onBooked={() => {
@@ -1427,7 +1452,7 @@ function MemberPickupDialog({
   onClose,
   onBooked,
 }: {
-  kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes'
+  kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | 'bedsheet'
   plan: { unitName: string; unitKind: string; extraUnitPrice: number; maxExtraUnits: number }
   defaultAddress: string
   remaining: number
@@ -1458,6 +1483,12 @@ function MemberPickupDialog({
       title: 'Book your duvet wash',
       desc: 'Included with your plan this quarter — freshened, aired and returned.',
       countLabel: 'Duvets',
+      max: Math.max(1, remaining),
+    },
+    bedsheet: {
+      title: 'Book your bed sheet wash',
+      desc: 'Included with your plan this month — send two every two weeks and the beds never wait. Sheets return fresh, pressed and folded.',
+      countLabel: 'Bed sheets',
       max: Math.max(1, remaining),
     },
     curtain: {

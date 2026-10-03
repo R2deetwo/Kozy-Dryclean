@@ -139,6 +139,7 @@ export async function PUT(req: NextRequest) {
   flag('adminAlertsPaymentPending')
   pct('deliveryFee', 0, 100000)
   pct('handwashSurchargePercent', 0, 200)
+  pct('ironOnlyPercent', 0, 100)
   pct('guaranteeMinGarments', 0, 100)
   pct('guaranteeMinOrderValue', 0, 1000000)
   pct('firstOrderDiscountPercent', 0, 50)

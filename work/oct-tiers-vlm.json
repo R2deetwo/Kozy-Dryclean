@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the screenshot, here is the detailed report for each of the three pricing tiers:\n\n### **Card 1: The Essentials**\n*   **Tier Name:** The Essentials\n*   **Who-for Line:** FOR ONE PERSON\n*   **Monthly Price:** ₦30,000 / month\n*   **Bag/Box Weekly Contents:**\n    *   **4 × Kozy Bag pickups a month** (One bag – one person’s week)\n    *   7 shirts · 7 vests · 7 underwear · 7 trousers · 7 pairs of socks\n    *   **+1 pair of shoes every month**\n*   **Bed Sheets:** 1 bed sheet washed every month (– 2 every two weeks)\n*   **Duvets:** Duvet washing – starts with The Household\n*   **Layout Issues:** None observed.\n\n---\n\n### **Card 2: The Household** *(Most Chosen)*\n*   **Tier Name:** The Household\n*   **Who-for Line:** FOR THREE PEOPLE — A FAMILY OR FLATMATES\n*   **Monthly Price:** ₦50,000 / month\n*   **Bag/Box Weekly Contents:**\n    *   **4 × Kozy Box pickups a month** (One box = 3 people's week)\n    *   21 of each – 3× the weekly kit (**7 shirts · 7 vests · 7 underwear · 7 trousers · 7 pairs of socks**)\n    *   **+ 3 pairs of shoes every month**\n*   **Bed Sheets:** 4 bed sheets washed every month (– 2 every two weeks)\n*   **Duvets:** 2 duvet washes free, every 3 months\n*   **Layout Issues:** None observed.\n\n---\n\n### **Card 3: The Whole Home**\n*   **Tier Name:** The Whole Home\n*   **Who-for Line:** FOR FIVE PEOPLE — THE WHOLE HOUSE\n*   **Monthly Price:** ₦80,000 / month\n*   **Bag/Box Weekly Contents:**\n    *   **4 × Kozy Box pickups a month** (One box – 3 people's week)\n    *   35 of each – 5× the weekly kit (**7 shirts · 7 vests · 7 underwear · 7 trousers · 7 pairs of socks**)\n    *   **+ 5 pairs of shoes every month**\n*   **Bed Sheets:** 6 bed sheets washed every month (– 3 every two weeks)\n*   **Duvets:** 3 duvet washes free, every 3 months\n*   **Layout Issues:** \n    *   **Text Overflow/Truncation:** In the \"Who-for\" description at the top of this card, the text is cut off. It reads \"...the curtains and a yearly deep clean.\" but appears to be missing the end of the sentence (likely \"...the box.\" or similar) due to the container's height or padding constraints.\n    *   **Inconsistency Note:** The sub-text under the pickup frequency says \"One box – **3** people's week\", which contradicts the main heading that states it is \"For **five** people\". This is likely a copy-paste error from the middle tier.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791013608,
+  "id": "2026100315463736fe7b0b156f4c06",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026100315463736fe7b0b156f4c06",
+  "usage": {
+    "completion_tokens": 681,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1744,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2425
+  }
+}

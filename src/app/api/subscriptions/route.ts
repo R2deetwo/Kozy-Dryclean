@@ -124,6 +124,7 @@ export async function GET(req: Request) {
               duvetsUsed: r.duvetsUsed,
               curtainsUsed: r.curtainsUsed,
               springCleanUsed: r.springCleanUsed,
+              bedsheetsUsed: r.bedsheetsUsed ?? 0,
               usageQuarterKey: r.usageQuarterKey,
               usageYearKey: r.usageYearKey,
             },

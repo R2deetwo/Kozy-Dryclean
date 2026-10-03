@@ -87,7 +87,11 @@ export function OrderDetailModal({ order, onClose, onViewInvoice }: Props) {
               )}
               {order.modeOfWash && (
                 <Badge className="rounded-full bg-blue-100 text-blue-800">
-                  {order.modeOfWash === 'HANDWASH' ? 'Handwash care' : 'Machine wash'}
+                  {order.modeOfWash === 'HANDWASH'
+                    ? 'Handwash care'
+                    : order.modeOfWash === 'IRON_ONLY'
+                      ? 'Iron only'
+                      : 'Machine wash'}
                 </Badge>
               )}
               {order.promoCode && (

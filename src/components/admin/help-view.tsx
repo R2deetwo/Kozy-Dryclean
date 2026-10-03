@@ -221,6 +221,12 @@ export function HelpView() {
               note: 'Added when the customer picks Handwash as their Mode of Wash. Machine wash is standard price.',
             },
             {
+              icon: Shirt,
+              label: 'Iron-only rate',
+              value: `${app.ironOnlyPercent}% of item prices`,
+              note: 'When the customer picks Iron Only, the wash is skipped — pressing and folding is billed at this share of the catalog price (market benchmark: ~50–67% of wash & iron).',
+            },
+            {
               icon: CircleCheckBig,
               label: 'Guarantee eligibility',
               value: `${app.guaranteeMinGarments} garments or ${formatNaira(app.guaranteeMinOrderValue)}`,

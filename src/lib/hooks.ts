@@ -1349,6 +1349,8 @@ export interface ApiMembershipPlan {
   curtainsPerQuarter: number
   springCleanPerYear: number
   shoesPerMonth: number
+  // Oct 2026 — the monthly sheet allowance (Household 4 / Whole Home 6).
+  bedsheetsPerMonth: number
   concierge: boolean
   memberDiscountPct: number
   prioritySlots: boolean
@@ -1368,6 +1370,8 @@ export interface ApiMembershipUsage {
   curtainsRemaining: number
   springCleanUsed: number
   springCleanRemaining: number
+  bedsheetsUsed: number
+  bedsheetsRemaining: number
 }
 
 /** Task 82 — a member's open "I've made payment" transfer claim: the
@@ -1401,6 +1405,7 @@ export interface ApiMembership {
   duvetsUsed: number
   curtainsUsed: number
   springCleanUsed: number
+  bedsheetsUsed: number
   kitState: string
   kitDeliveredAt: string | null
   plan?: ApiMembershipPlan
@@ -1641,7 +1646,7 @@ export function useMembershipPickup() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: async (input: {
-      kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes'
+      kind: 'unit' | 'duvet' | 'curtain' | 'spring-clean' | 'shoes' | 'bedsheet'
       count?: number
       pickupAddress: string
       pickupDate: string

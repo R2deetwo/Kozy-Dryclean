@@ -201,9 +201,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const [items, setItems] = useState<Record<string, number>>({})
   // Mode of wash — required choice on retail orders (client-requested
   // order-form option). MACHINE is standard; HANDWASH adds the gentle-care
-  // surcharge. Kept as null until the customer picks, so the choice is
-  // genuinely explicit.
-  const [modeOfWash, setModeOfWash] = useState<'MACHINE' | 'HANDWASH' | null>(null)
+  // surcharge; IRON_ONLY skips the wash and pays a share of the catalog
+  // price (Oct 2026 client directive — “some customers just want pressing”).
+  // Kept as null until the customer picks, so the choice is genuinely explicit.
+  const [modeOfWash, setModeOfWash] = useState<'MACHINE' | 'HANDWASH' | 'IRON_ONLY' | null>(null)
   // Optional offer/coupon code. First order: the classic hotel/corporate
   // offer (e.g. HOTEL15) — any order: general coupon codes from newsletters
   // and promos (phase 36).
@@ -500,7 +501,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     if (d.serviceSpeed === 'EXPRESS_48' || d.serviceSpeed === 'EXPRESS_24') {
       setServiceSpeed(d.serviceSpeed)
     }
-    if (d.modeOfWash === 'MACHINE' || d.modeOfWash === 'HANDWASH') {
+    if (d.modeOfWash === 'MACHINE' || d.modeOfWash === 'HANDWASH' || d.modeOfWash === 'IRON_ONLY') {
       setModeOfWash(d.modeOfWash)
     }
     if (typeof d.promoCode === 'string') setPromoCode(d.promoCode)
@@ -620,7 +621,6 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     !express24Allowed && serviceSpeed === 'EXPRESS_24' ? 'STANDARD' : serviceSpeed
   const speedOption =
     SERVICE_SPEEDS.find((s) => s.id === effectiveSpeed) ?? SERVICE_SPEEDS[0]
-  const expressSurcharge = Math.round(subtotal * speedOption.surcharge)
   // Staged photos (server-side) — the count that gates the guarantee, not
   // tiles still uploading or failed ones.
   const stagedPhotoCount = photos.filter((p) => p.status === 'done').length
@@ -628,12 +628,23 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     type === 'ITEM' && !isGuest && stagedPhotoCount > 0 && guaranteeAck
 
   // ----- Phase-14 pricing components -----
-  // Handwash gentle-care surcharge: +50% (admin-tunable) of the cleaning
-  // subtotal — machine wash is standard and free of surcharge.
+  // Mode of wash shapes the cleaning base exactly as the server will at
+  // checkout: handwash adds the gentle-care surcharge (+50%, admin-tunable)
+  // on top of the catalog subtotal; iron-only REPLACES the subtotal with a
+  // share of it (60% default, admin-tunable) — the wash is skipped, so the
+  // customer pays less, not more. Machine wash is standard, no adjustment.
+  const ironPct = Math.max(0, Math.min(100, appSettings.ironOnlyPercent))
+  const cleaningBase =
+    type === 'ITEM' && modeOfWash === 'IRON_ONLY' ? Math.round(subtotal * (ironPct / 100)) : subtotal
   const handwashSurcharge =
     type === 'ITEM' && modeOfWash === 'HANDWASH'
       ? Math.round(subtotal * (appSettings.handwashSurchargePercent / 100))
       : 0
+  const ironOnlySaving =
+    type === 'ITEM' && modeOfWash === 'IRON_ONLY' ? subtotal - cleaningBase : 0
+  // Express premium rides on the mode-adjusted base (iron-only pays the
+  // premium on the smaller charge — mirrors the server's checkout math).
+  const expressSurcharge = Math.round(cleaningBase * speedOption.surcharge)
   // Delivery: free on the first order, the going rate (admin-tunable)
   // afterwards. Estimate only — the server re-verifies at order time.
   const deliveryFeeEstimate = isFirstOrder ? 0 : appSettings.deliveryFee
@@ -678,7 +689,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     (guestPhone.trim().length >= 7 ? `&phone=${encodeURIComponent(guestPhone.trim())}` : '')
   // Discounts apply to the SERVICE charge (cleaning + handwash + express),
   // never to the delivery fee — mirrors the server's math exactly.
-  const serviceSubtotal = subtotal + handwashSurcharge + expressSurcharge
+  const serviceSubtotal = cleaningBase + handwashSurcharge + expressSurcharge
   // A FIXED coupon subtracts its naira amount (never more than the service
   // charge) — mirrors computeCouponAmount on the server.
   const couponFlatAmount =
@@ -699,7 +710,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
     onlineDiscountPct +
     couponPct
   const discount = serviceSubtotal * (discountPercent / 100)
-  const grossTotal = subtotal + expressSurcharge
+  const grossTotal = cleaningBase + expressSurcharge
   const total =
     Math.max(0, Math.round(serviceSubtotal - discount - couponFlatAmount)) + deliveryFeeEstimate
 
@@ -1778,8 +1789,10 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
 
                   {/* MODE OF WASH — required order-form option (client directive:
                       "customer special request, on mode of wash of clothes,
-                      either handwash or Machine wash"). Machine is standard;
-                      handwash adds the gentle-care surcharge. */}
+                      either handwash or Machine wash"; Oct 2026: iron-only
+                      joined the list). Machine is standard; handwash adds the
+                      gentle-care surcharge; iron-only pays a share of the
+                      catalog price because the wash is skipped. */}
                   {type === 'ITEM' && (
                     <div className="mt-6">
                       <div className="flex items-center justify-between">
@@ -1788,7 +1801,7 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                         </p>
                         <p className="text-[10px] text-navy-300">Required</p>
                       </div>
-                      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                      <div className="mt-2 grid gap-2 sm:grid-cols-3">
                         <button
                           type="button"
                           onClick={() => setModeOfWash('MACHINE')}
@@ -1843,11 +1856,53 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                             </p>
                           </div>
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => setModeOfWash('IRON_ONLY')}
+                          aria-pressed={modeOfWash === 'IRON_ONLY'}
+                          className={cn(
+                            'flex items-start gap-3 rounded-xl border-2 p-3 text-left transition',
+                            modeOfWash === 'IRON_ONLY'
+                              ? 'border-gold-400 bg-gold-50/60 ring-1 ring-gold-200'
+                              : 'border-navy-100 hover:border-gold-200'
+                          )}
+                        >
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-navy-100 text-navy">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 9c1.5-2 3-2 4.5 0S12 11 13.5 9 17 7 18.5 9" transform="translate(0 -1)" />
+                              <path d="M4 14h16" />
+                              <path d="M5 18h14" />
+                              <path d="M6 3.5c.7.7.7 1.8 0 2.5" />
+                              <path d="M9 3.5c.7.7.7 1.8 0 2.5" />
+                              <path d="M12 3.5c.7.7.7 1.8 0 2.5" />
+                              <path d="M15 3.5c.7.7.7 1.8 0 2.5" />
+                              <path d="M18 3.5c.7.7.7 1.8 0 2.5" />
+                            </svg>
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-navy">
+                              Iron Only{' '}
+                              <span className="ml-1 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-bold text-green-700">
+                                −{100 - ironPct}%
+                              </span>
+                            </p>
+                            <p className="text-xs text-navy-300">
+                              Already clean? We press, fold and return — you pay less.
+                            </p>
+                          </div>
+                        </button>
                       </div>
                       {modeOfWash === 'HANDWASH' && (
                         <p className="mt-2 text-[11px] leading-snug text-navy-300">
                           Handwash adds {appSettings.handwashSurchargePercent}% of your cleaning
                           subtotal — every piece is washed and finished by hand.
+                        </p>
+                      )}
+                      {modeOfWash === 'IRON_ONLY' && (
+                        <p className="mt-2 text-[11px] leading-snug text-navy-300">
+                          Iron only costs {ironPct}% of the listed cleaning prices — the wash is
+                          skipped, your clothes come back pressed, folded and packaged
+                          (you save {formatNaira(ironOnlySaving)} on this basket).
                         </p>
                       )}
                     </div>
@@ -2478,6 +2533,19 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                           {alterationNotes.trim().length > 220
                             ? `${alterationNotes.trim().slice(0, 220)}…`
                             : alterationNotes.trim()}
+                        </li>
+                      )}
+                      {ironOnlySaving > 0 && (
+                        <li className="flex items-center justify-between text-navy-300">
+                          <span className="flex items-center gap-1">
+                            <svg className="h-3.5 w-3.5 text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M4 9c1.5-2 3-2 4.5 0S12 11 13.5 9 17 7 18.5 9" transform="translate(0 -1)" />
+                              <path d="M4 14h16" />
+                              <path d="M5 18h14" />
+                            </svg>
+                            Iron only — wash skipped ({ironPct}% of list prices)
+                          </span>
+                          <span>−{formatNaira(ironOnlySaving)}</span>
                         </li>
                       )}
                       {handwashSurcharge > 0 && (

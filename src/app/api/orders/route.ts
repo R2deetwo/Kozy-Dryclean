@@ -350,7 +350,7 @@ export async function POST(req: Request) {
   // required field. KG/corporate orders skip it (washed by weight).
   if (type === 'ITEM' && !modeOfWash) {
     return NextResponse.json(
-      { error: 'MODE_OF_WASH_REQUIRED', message: 'Please choose a mode of wash (handwash or machine wash) for your order.' },
+      { error: 'MODE_OF_WASH_REQUIRED', message: 'Please choose a mode of wash (machine wash, handwash or iron only) for your order.' },
       { status: 400 }
     )
   }
@@ -572,12 +572,18 @@ export async function POST(req: Request) {
       }
     }
 
-    // ----- Handwash surcharge + express premium (hoisted: the coupon rules
+    // ----- Mode of wash + express premium (hoisted: the coupon rules
     // and the final total both need the full SERVICE charge) -----
     // Handwash is per-garment labour-intensive care: +50% of the item
     // cleaning subtotal (admin-tunable). Machine wash is standard — no fee.
-    // Express surcharge on the item subtotal; percentage discounts apply to
-    // the combined service charge (item cleaning + express premium).
+    // Iron Only (Oct 2026 client directive) skips the wash entirely: the
+    // clothes come back pressed and folded at a SHARE of the catalog price
+    // (60% default, admin-tunable — market check: Orange Laundromat lists
+    // iron-only at ~50–67% of their wash & iron rate). Percentage discounts
+    // and the express premium all apply to the actual service charge.
+    const ironPct = Math.min(100, Math.max(0, appSettings.ironOnlyPercent))
+    const cleaningBase =
+      modeOfWash === 'IRON_ONLY' ? Math.round(subtotal * (ironPct / 100)) : subtotal
     const handwashSurcharge =
       modeOfWash === 'HANDWASH'
         ? Math.round(subtotal * (appSettings.handwashSurchargePercent / 100))
@@ -585,11 +591,16 @@ export async function POST(req: Request) {
     if (handwashSurcharge > 0) {
       appliedDiscounts.push(`Handwash care (+${appSettings.handwashSurchargePercent}% of cleaning)`)
     }
-    const expressSurcharge = Math.round(subtotal * speed.surcharge)
+    if (modeOfWash === 'IRON_ONLY' && ironPct < 100) {
+      appliedDiscounts.push(
+        `Iron only (${ironPct}% of cleaning prices — wash skipped, ${100 - ironPct}% saved)`
+      )
+    }
+    const expressSurcharge = Math.round(cleaningBase * speed.surcharge)
     if (expressSurcharge > 0) {
       appliedDiscounts.push(`${speed.label} surcharge (+${Math.round(speed.surcharge * 100)}%)`)
     }
-    const serviceTotal = subtotal + handwashSurcharge + expressSurcharge
+    const serviceTotal = cleaningBase + handwashSurcharge + expressSurcharge
 
     let totalDiscount = 0
 

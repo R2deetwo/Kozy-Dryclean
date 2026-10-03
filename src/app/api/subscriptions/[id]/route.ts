@@ -302,6 +302,7 @@ export async function PATCH(
           duvetsUsed: 0,
           curtainsUsed: 0,
           springCleanUsed: 0,
+          bedsheetsUsed: 0,
         },
         include: { plan: true, pendingPlan: true },
       })
@@ -319,7 +320,7 @@ export async function PATCH(
     // ----- Phase 75: the retention desk -----
 
     case 'adjust-usage': {
-      // { counter: 'unitsUsed' | 'shoesUsed' | 'duvetsUsed' | 'curtainsUsed' | 'springCleanUsed',
+      // { counter: 'unitsUsed' | 'shoesUsed' | 'duvetsUsed' | 'bedsheetsUsed' | 'curtainsUsed' | 'springCleanUsed',
       //   delta: signed int, note: required }
       const counter = typeof body?.counter === 'string' ? body.counter : ''
       const delta = Math.round(Number(body?.delta))

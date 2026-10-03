@@ -70,6 +70,7 @@ export async function GET(
           duvetsUsed: sub.duvetsUsed,
           curtainsUsed: sub.curtainsUsed,
           springCleanUsed: sub.springCleanUsed,
+          bedsheetsUsed: sub.bedsheetsUsed ?? 0,
           usageQuarterKey: sub.usageQuarterKey,
           usageYearKey: sub.usageYearKey,
         },

@@ -26,8 +26,10 @@ export type OrderType = 'ITEM' | 'KG'
 
 // Mode of wash — customer-selected on the order form (retail orders).
 // Handwash is labour-intensive per-garment care and carries a surcharge
-// (percentage of the item subtotal, admin-tunable in AppSetting).
-export type ModeOfWash = 'MACHINE' | 'HANDWASH'
+// (percentage of the item subtotal, admin-tunable in AppSetting). Iron Only
+// skips the wash entirely — clothes come back pressed and folded at a SHARE
+// of the catalog price (also admin-tunable).
+export type ModeOfWash = 'MACHINE' | 'HANDWASH' | 'IRON_ONLY'
 
 export type PaymentMethod = 'BANK_TRANSFER' | 'PAYSTACK'
 export type PaymentStatus = 'PENDING' | 'VERIFIED' | 'REJECTED'
@@ -194,6 +196,22 @@ export interface Branch {
 // =====================================================
 // MEMBERSHIPS (phase 62) — The Kozy Circle
 // =====================================================
+// ----- The weekly kit (Oct 2026 client directive) -----
+// The tiers are sized by PEOPLE: 1 (Essentials), 3 (Household), 5 (Whole
+// Home). One Kozy Bag holds one person's full week — 7 collared/long-sleeve
+// shirts, 7 inner vests, 7 underwear, 7 trousers, 7 pairs of socks — “fresh
+// and kitted for a full week”. The bag/box system itself is UNCHANGED (the
+// box simply holds 3× / 5× the weekly kit). These constants are CLIENT-SAFE
+// presentation copy (types.ts imports no server code) so every surface —
+// marketing, portal, admin — tells the same story.
+export const WEEKLY_KIT_COPY =
+  '7 shirts · 7 vests · 7 underwear · 7 trousers · 7 pairs of socks'
+export const PEOPLE_PER_TIER: Record<string, number> = {
+  ESSENTIALS: 1,
+  HOUSEHOLD: 3,
+  WHOLEHOME: 5,
+}
+
 export interface MembershipPlan {
   id: string
   code: string // ESSENTIALS | HOUSEHOLD | WHOLEHOME | SHOES2 | SHOES4 | SHOES6
@@ -215,6 +233,11 @@ export interface MembershipPlan {
   curtainsPerQuarter: number
   springCleanPerYear: number
   shoesPerMonth: number
+  // Bed sheets washed per MONTHLY cycle (client directive Oct 2026: the
+  // Household tier — 3 people — includes 4 sheets a month, delivered as two
+  // every two weeks; the Whole Home — 5 people — six). Resets with the
+  // cycle exactly like bag/box units and shoe pairs.
+  bedsheetsPerMonth: number
   concierge: boolean
   memberDiscountPct: number
   prioritySlots: boolean
@@ -246,6 +269,7 @@ export interface Membership {
   duvetsUsed: number
   curtainsUsed: number
   springCleanUsed: number
+  bedsheetsUsed: number
   kitState: string
   kitDeliveredAt: string | null
   // Phase 76: the Paystack transaction reference (SUB-… / SUB-…-R…) — the
@@ -546,6 +570,17 @@ export const DEFAULT_DELIVERY_FEE = 1500
  *  simple to communicate. Admin-tunable. */
 export const DEFAULT_HANDWASH_SURCHARGE_PERCENT = 50
 
+/** Iron-only rate as a share of the catalog item price. The clothes are
+ *  already clean — Kozy presses, folds and returns them, so the customer
+ *  pays a fraction of the wash & iron price. Market check (Oct 2026):
+ *  Orange Laundromat (Lagos, the most transparent competitor list) prices
+ *  "Iron Only" at ~50–67% of their "Wash & Iron" rate across the catalog
+ *  (shirt ₦600 vs ₦1,000; trousers ₦900 vs ₦1,200; gown ₦1,500 vs ₦2,650) —
+ *  60% is the mid-band. Alpha Dry Cleaners prices pressing at roughly the
+ *  item price minus ₦100, which lands in the same band for everyday items.
+ *  Admin-tunable. */
+export const DEFAULT_IRON_ONLY_PERCENT = 60
+
 /** First-order discount for every new customer (10% — client directive
  *  Aug 2026: "make it 10% off first order because you already give 5% for
  *  uploading pic"). The picture-upload guarantee discount (5%) is separate
@@ -611,6 +646,8 @@ export interface KozyAppSettings {
   // Commercial terms
   deliveryFee: number
   handwashSurchargePercent: number
+  // Iron-only rate (% of the catalog item price) — see the constant above.
+  ironOnlyPercent: number
   guaranteeMinGarments: number
   guaranteeMinOrderValue: number
   firstOrderDiscountPercent: number
@@ -679,6 +716,7 @@ export function defaultAppSettings(): KozyAppSettings {
     adminAlertsPaymentPending: true,
     deliveryFee: DEFAULT_DELIVERY_FEE,
     handwashSurchargePercent: DEFAULT_HANDWASH_SURCHARGE_PERCENT,
+    ironOnlyPercent: DEFAULT_IRON_ONLY_PERCENT,
     guaranteeMinGarments: DEFAULT_GUARANTEE_MIN_GARMENTS,
     guaranteeMinOrderValue: DEFAULT_GUARANTEE_MIN_ORDER_VALUE,
     firstOrderDiscountPercent: FIRST_ORDER_DISCOUNT_PERCENT,

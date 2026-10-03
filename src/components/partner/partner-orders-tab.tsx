@@ -175,6 +175,11 @@ export function PartnerOrdersTab({ data, suspended }: { data: ApiPartnerPortalDa
                       <Scissors className="h-3 w-3" /> Handwash
                     </span>
                   )}
+                  {o.modeOfWash === 'IRON_ONLY' && (
+                    <span className="flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 font-semibold text-amber-300">
+                      <Scissors className="h-3 w-3" /> Iron only
+                    </span>
+                  )}
                   {o.pickedUpAt && (
                     <span className="flex items-center gap-1 text-slate-500">
                       <Clock className="h-3 w-3" /> collected {fmtWhen(o.pickedUpAt)}

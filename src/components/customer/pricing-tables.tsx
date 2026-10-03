@@ -245,29 +245,40 @@ export function PricingTables({ onBook }: Props) {
               {/* Mode of wash pricing — visibility requested by the
                   client (handwash is the LABOUR premium: every piece is
                   washed and finished by hand, so it costs MORE than
-                  machine wash, not less). Percent comes live from
+                  machine wash, not less; iron-only is the flip side — the
+                  wash is skipped, so it costs LESS). Percent comes live from
                   AppSetting so admin tuning reflects here instantly. */}
               <div className="mt-4 flex flex-col items-start justify-between gap-3 rounded-xl border border-navy-100 bg-white p-4 sm:flex-row sm:items-center">
                 <div className="flex items-start gap-3">
                   <Droplets className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
                   <div>
                     <p className="text-sm font-semibold text-navy">
-                      Machine or handwash — you choose at checkout.
+                      Machine, handwash or iron-only — you choose at checkout.
                     </p>
                     <p className="mt-0.5 text-xs leading-relaxed text-navy-300">
-                      Every price above is standard machine wash. Handwash adds{' '}
+                      Every price above is standard machine wash (washed, ironed and
+                      folded). Handwash adds{' '}
                       <span className="font-semibold text-navy">
                         +{appSettings.handwashSurchargePercent}%
                       </span>{' '}
-                      to your cleaning subtotal — each piece is washed and finished
-                      by hand, which takes more time and expert care, so it carries
-                      a premium.
+                      — each piece is washed and finished by hand, which takes more
+                      time and expert care. Iron only costs{' '}
+                      <span className="font-semibold text-navy">
+                        {appSettings.ironOnlyPercent}%
+                      </span>{' '}
+                      of the listed prices — your clothes come back pressed, folded
+                      and packaged without being washed.
                     </p>
                   </div>
                 </div>
-                <Badge className="shrink-0 bg-gold-100 text-gold-800 hover:bg-gold-100">
-                  Handwash +{appSettings.handwashSurchargePercent}%
-                </Badge>
+                <div className="flex shrink-0 gap-2">
+                  <Badge className="bg-gold-100 text-gold-800 hover:bg-gold-100">
+                    Handwash +{appSettings.handwashSurchargePercent}%
+                  </Badge>
+                  <Badge className="bg-green-100 text-green-800 hover:bg-green-100">
+                    Iron only {appSettings.ironOnlyPercent}%
+                  </Badge>
+                </div>
               </div>
 
               {/* Pickup & delivery pricing — transparency requested by the

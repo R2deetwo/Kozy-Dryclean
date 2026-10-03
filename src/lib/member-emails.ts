@@ -146,6 +146,7 @@ export interface SubWithPlan {
   duvetsUsed: number
   curtainsUsed: number
   springCleanUsed: number
+  bedsheetsUsed: number
   usageQuarterKey: string | null
   usageYearKey: string | null
   plan: {
@@ -160,6 +161,7 @@ export interface SubWithPlan {
     duvetsPerQuarter: number
     curtainsPerQuarter: number
     springCleanPerYear: number
+    bedsheetsPerMonth: number
   } | null
   user: { id: string; name: string; email: string } | null
 }

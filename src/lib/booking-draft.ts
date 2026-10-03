@@ -39,8 +39,9 @@ export interface BookingDraft {
   pickupSlot: string
   /** Turnaround tier (retail orders only) */
   serviceSpeed?: ServiceSpeed
-  /** Mode of wash — required choice on retail orders (Phase 14) */
-  modeOfWash?: 'MACHINE' | 'HANDWASH'
+  /** Mode of wash — required choice on retail orders (Phase 14; Iron Only
+   *  joined the list Oct 2026) */
+  modeOfWash?: 'MACHINE' | 'HANDWASH' | 'IRON_ONLY'
   /** Offer code being redeemed at checkout (e.g. HOTEL15) */
   promoCode?: string
   /** Alterations note (Phase 17): what the seamstress should change on

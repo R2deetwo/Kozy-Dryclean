@@ -32,6 +32,7 @@ export const APP_SETTING_KEYS = [
   'admin_alerts_payment_pending',
   'delivery_fee',
   'handwash_surcharge_percent',
+  'iron_only_percent',
   'guarantee_min_garments',
   'guarantee_min_order_value',
   'first_order_discount_percent',
@@ -96,6 +97,7 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     adminAlertsPaymentPending: bool('admin_alerts_payment_pending', d.adminAlertsPaymentPending),
     deliveryFee: num('delivery_fee', d.deliveryFee),
     handwashSurchargePercent: num('handwash_surcharge_percent', d.handwashSurchargePercent),
+    ironOnlyPercent: num('iron_only_percent', d.ironOnlyPercent),
     guaranteeMinGarments: num('guarantee_min_garments', d.guaranteeMinGarments),
     guaranteeMinOrderValue: num('guarantee_min_order_value', d.guaranteeMinOrderValue),
     firstOrderDiscountPercent: num('first_order_discount_percent', d.firstOrderDiscountPercent),
@@ -143,6 +145,7 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
       admin_alerts_payment_pending: JSON.stringify(d.adminAlertsPaymentPending),
       delivery_fee: JSON.stringify(d.deliveryFee),
       handwash_surcharge_percent: JSON.stringify(d.handwashSurchargePercent),
+      iron_only_percent: JSON.stringify(d.ironOnlyPercent),
       guarantee_min_garments: JSON.stringify(d.guaranteeMinGarments),
       guarantee_min_order_value: JSON.stringify(d.guaranteeMinOrderValue),
       first_order_discount_percent: JSON.stringify(d.firstOrderDiscountPercent),
@@ -205,6 +208,8 @@ export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<
   if (patch.deliveryFee !== undefined) map.delivery_fee = JSON.stringify(Math.round(patch.deliveryFee))
   if (patch.handwashSurchargePercent !== undefined)
     map.handwash_surcharge_percent = JSON.stringify(patch.handwashSurchargePercent)
+  if (patch.ironOnlyPercent !== undefined)
+    map.iron_only_percent = JSON.stringify(Math.round(patch.ironOnlyPercent))
   if (patch.guaranteeMinGarments !== undefined)
     map.guarantee_min_garments = JSON.stringify(Math.round(patch.guaranteeMinGarments))
   if (patch.guaranteeMinOrderValue !== undefined)

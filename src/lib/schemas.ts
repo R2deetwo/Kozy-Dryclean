@@ -65,7 +65,7 @@ export const CreateOrderSchema = z.object({
   serviceSpeed: ServiceSpeedSchema.optional().default('STANDARD'),
   // Mode of wash (retail orders) — required by the order form. Machine wash
   // is standard; handwash carries a per-item surcharge priced server-side.
-  modeOfWash: z.enum(['MACHINE', 'HANDWASH']).optional(),
+  modeOfWash: z.enum(['MACHINE', 'HANDWASH', 'IRON_ONLY']).optional(),
   // Optional offer code (e.g. HOTEL15 for the hotel & corporate first-order
   // deal). Validated and priced server-side — an unknown/inactive code is
   // ignored with a warning instead of failing the booking.
@@ -151,8 +151,10 @@ export const StagePhotoSchema = z.object({
 // Bag/Box regulates volume. `kind` selects the entitlement being consumed:
 //   unit        — a bag/box pickup (included allowance first, extras billed)
 //   duvet / curtain / spring-clean — the tier's included perk services
+//   bedsheet    — the tier's monthly sheet allowance (Household 4 / Whole
+//                 Home 6 — client directive Oct 2026, “two every two weeks”)
 export const MemberPickupSchema = z.object({
-  kind: z.enum(['unit', 'duvet', 'curtain', 'spring-clean', 'shoes']),
+  kind: z.enum(['unit', 'duvet', 'curtain', 'spring-clean', 'shoes', 'bedsheet']),
   // How many bags/boxes this pickup collects (kind=unit) or how many perk
   // items to include (duvet/curtain/shoe counts; spring-clean is always 1).
   count: z.number().int().min(1).max(4).optional().default(1),

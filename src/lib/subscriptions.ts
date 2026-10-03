@@ -50,16 +50,27 @@ interface PlanSeed {
   curtainsPerQuarter: number
   springCleanPerYear: number
   shoesPerMonth: number
+  bedsheetsPerMonth: number
   concierge: boolean
   memberDiscountPct: number
   prioritySlots: boolean
 }
 
+// ----- The weekly kit (Oct 2026 client directive) -----
+// The tiers are sized by PEOPLE: 1 (Essentials), 3 (Household), 5 (Whole
+// Home). One Kozy Bag holds one person's full week — 7 collared/long-sleeve
+// shirts, 7 inner vests, 7 underwear, 7 trousers, 7 pairs of socks — “fresh
+// and kitted for a full week”. The bag/box system itself is UNCHANGED (the
+// box simply holds 3× / 5× the weekly kit). The presentation copy lives in
+// types.ts (WEEKLY_KIT_COPY / PEOPLE_PER_TIER) so client surfaces can share
+// it without importing this server module.
+
 export const DEFAULT_PLANS: PlanSeed[] = [
   {
     code: 'ESSENTIALS',
     name: 'The Essentials',
-    tagline: 'One person’s clothes, every week. Bag goes out, clean clothes come back.',
+    tagline:
+      'One person, kitted for a full week — seven shirts, vests, underwear, trousers and pairs of socks in every bag.',
     family: 'KIT',
     priceMonthly: 30000,
     sortOrder: 1,
@@ -73,6 +84,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
     shoesPerMonth: 1,
+    bedsheetsPerMonth: 0,
     concierge: false,
     memberDiscountPct: 5,
     prioritySlots: false,
@@ -80,7 +92,8 @@ export const DEFAULT_PLANS: PlanSeed[] = [
   {
     code: 'HOUSEHOLD',
     name: 'The Household',
-    tagline: 'The whole family’s weekly load in one big box — plus the beds.',
+    tagline:
+      'Three people, kitted for the week — three times the Essentials kit in one box, plus the beds.',
     family: 'KIT',
     priceMonthly: 50000,
     sortOrder: 2,
@@ -90,10 +103,11 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     extraUnitPrice: 7500,
     maxExtraUnits: 2,
     replacementFee: 12000,
-    duvetsPerQuarter: 3,
+    duvetsPerQuarter: 2,
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
     shoesPerMonth: 3,
+    bedsheetsPerMonth: 4,
     concierge: false,
     memberDiscountPct: 10,
     prioritySlots: false,
@@ -101,7 +115,8 @@ export const DEFAULT_PLANS: PlanSeed[] = [
   {
     code: 'WHOLEHOME',
     name: 'The Whole Home',
-    tagline: 'Everything in the house — the box, the duvets, the curtains, and one deep clean a year.',
+    tagline:
+      'Five people, kitted for the week — five times the kit, plus the beds, the curtains and a yearly deep clean.',
     family: 'KIT',
     priceMonthly: 80000,
     sortOrder: 3,
@@ -115,6 +130,7 @@ export const DEFAULT_PLANS: PlanSeed[] = [
     curtainsPerQuarter: 6,
     springCleanPerYear: 1,
     shoesPerMonth: 5,
+    bedsheetsPerMonth: 6,
     concierge: false,
     memberDiscountPct: 15,
     prioritySlots: true,
@@ -166,6 +182,7 @@ export const DEFAULT_SHOE_CLUB: PlanSeed[] = [
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
     shoesPerMonth: 2,
+    bedsheetsPerMonth: 0,
     concierge: false,
     memberDiscountPct: 5,
     prioritySlots: false,
@@ -187,6 +204,7 @@ export const DEFAULT_SHOE_CLUB: PlanSeed[] = [
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
     shoesPerMonth: 4,
+    bedsheetsPerMonth: 0,
     concierge: false,
     memberDiscountPct: 10,
     prioritySlots: false,
@@ -208,6 +226,7 @@ export const DEFAULT_SHOE_CLUB: PlanSeed[] = [
     curtainsPerQuarter: 0,
     springCleanPerYear: 0,
     shoesPerMonth: 6,
+    bedsheetsPerMonth: 0,
     concierge: false,
     memberDiscountPct: 15,
     prioritySlots: false,
@@ -237,6 +256,7 @@ export function rowToPlan(row: any): MembershipPlan {
     curtainsPerQuarter: row.curtainsPerQuarter,
     springCleanPerYear: row.springCleanPerYear,
     shoesPerMonth: row.shoesPerMonth ?? 0,
+    bedsheetsPerMonth: row.bedsheetsPerMonth ?? 0,
     concierge: row.concierge,
     memberDiscountPct: row.memberDiscountPct,
     prioritySlots: row.prioritySlots,
@@ -331,6 +351,7 @@ export async function savePlans(
       'curtainsPerQuarter',
       'springCleanPerYear',
       'shoesPerMonth',
+      'bedsheetsPerMonth',
       'memberDiscountPct',
     ] as const
     for (const k of numericKeys) {
@@ -407,10 +428,11 @@ export function effectiveUsage(
     duvetsUsed: number
     curtainsUsed: number
     springCleanUsed: number
+    bedsheetsUsed: number
     usageQuarterKey?: string | null
     usageYearKey?: string | null
   },
-  plan: { includedUnits: number; maxExtraUnits: number; shoesPerMonth: number; duvetsPerQuarter: number; curtainsPerQuarter: number; springCleanPerYear: number }
+  plan: { includedUnits: number; maxExtraUnits: number; shoesPerMonth: number; duvetsPerQuarter: number; curtainsPerQuarter: number; springCleanPerYear: number; bedsheetsPerMonth: number }
 ) {
   const quarterRolled = (sub.usageQuarterKey ?? '') !== quarterKey()
   const yearRolled = (sub.usageYearKey ?? '') !== yearKey()
@@ -419,6 +441,7 @@ export function effectiveUsage(
   const duvetsUsed = quarterRolled ? 0 : sub.duvetsUsed
   const curtainsUsed = quarterRolled ? 0 : sub.curtainsUsed
   const springCleanUsed = yearRolled ? 0 : sub.springCleanUsed
+  const bedsheetsUsed = sub.bedsheetsUsed ?? 0
   return {
     unitsUsed,
     unitsRemaining: Math.max(0, plan.includedUnits - unitsUsed),
@@ -432,6 +455,8 @@ export function effectiveUsage(
     curtainsRemaining: Math.max(0, plan.curtainsPerQuarter - curtainsUsed),
     springCleanUsed,
     springCleanRemaining: Math.max(0, plan.springCleanPerYear - springCleanUsed),
+    bedsheetsUsed,
+    bedsheetsRemaining: Math.max(0, plan.bedsheetsPerMonth - bedsheetsUsed),
   }
 }
 
@@ -459,6 +484,7 @@ export function rowToMembership(row: any): Membership {
     duvetsUsed: row.duvetsUsed,
     curtainsUsed: row.curtainsUsed,
     springCleanUsed: row.springCleanUsed,
+    bedsheetsUsed: row.bedsheetsUsed ?? 0,
     kitState: row.kitState,
     kitDeliveredAt: row.kitDeliveredAt?.toISOString?.() ?? null,
     paystackRef: row.paystackRef ?? null,
@@ -648,6 +674,7 @@ export async function activateOrRenewSubscription(
       unitsUsed: 0,
       extraUnitsUsed: 0,
       shoesUsed: 0,
+      bedsheetsUsed: 0,
       usageCycleKey: cycleKey(periodStart),
       usageQuarterKey: quarterKey(),
       usageYearKey: yearKey(),
@@ -700,15 +727,16 @@ export async function activateOrRenewSubscription(
 // =============================================================================
 
 /** Kinds that consume allowance (their refund twins carry _REFUND). */
-export const BOOKING_KINDS = ['UNIT', 'SHOES', 'DUVET', 'CURTAIN', 'SPRING'] as const
+export const BOOKING_KINDS = ['UNIT', 'SHOES', 'DUVET', 'CURTAIN', 'SPRING', 'BEDSHEET'] as const
 export type BookingKind = (typeof BOOKING_KINDS)[number]
 
-export const KIND_COUNTER: Record<BookingKind, 'unitsUsed' | 'shoesUsed' | 'duvetsUsed' | 'curtainsUsed' | 'springCleanUsed'> = {
+export const KIND_COUNTER: Record<BookingKind, 'unitsUsed' | 'shoesUsed' | 'duvetsUsed' | 'curtainsUsed' | 'springCleanUsed' | 'bedsheetsUsed'> = {
   UNIT: 'unitsUsed',
   SHOES: 'shoesUsed',
   DUVET: 'duvetsUsed',
   CURTAIN: 'curtainsUsed',
   SPRING: 'springCleanUsed',
+  BEDSHEET: 'bedsheetsUsed',
 }
 
 /**

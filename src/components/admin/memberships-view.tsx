@@ -23,6 +23,7 @@ import {
   CircleDollarSign,
   Package,
   BedDouble,
+  BedSingle,
   Layers,
   Sun,
   Footprints,
@@ -216,6 +217,7 @@ function PlansEditor() {
                 <NumField label="Kit replacement fee (₦)" value={d.replacementFee} onChange={num(d.id, 'replacementFee')} money />
                 <NumField label="Member discount (%)" value={d.memberDiscountPct} onChange={num(d.id, 'memberDiscountPct')} />
                 <NumField label="Duvets / quarter" value={d.duvetsPerQuarter} onChange={num(d.id, 'duvetsPerQuarter')} />
+                <NumField label="Bed sheets / month" value={d.bedsheetsPerMonth ?? 0} onChange={num(d.id, 'bedsheetsPerMonth')} />
                 <NumField label="Curtain panels / quarter" value={d.curtainsPerQuarter} onChange={num(d.id, 'curtainsPerQuarter')} />
                 <NumField label="Spring cleans / year" value={d.springCleanPerYear} onChange={num(d.id, 'springCleanPerYear')} />
                 <NumField label="Shoe pairs / month" value={d.shoesPerMonth} onChange={num(d.id, 'shoesPerMonth')} />
@@ -644,6 +646,9 @@ function SubscribersList() {
                     )}
                     {m.plan.duvetsPerQuarter > 0 && (
                       <UsageChip icon={BedDouble} used={m.usage.duvetsUsed} total={m.plan.duvetsPerQuarter} label="duvets/q" />
+                    )}
+                    {(m.plan.bedsheetsPerMonth ?? 0) > 0 && (
+                      <UsageChip icon={BedSingle} used={m.usage.bedsheetsUsed ?? 0} total={m.plan.bedsheetsPerMonth ?? 0} label="sheets/mo" />
                     )}
                     {m.plan.curtainsPerQuarter > 0 && (
                       <UsageChip icon={Layers} used={m.usage.curtainsUsed} total={m.plan.curtainsPerQuarter} label="curtains/q" />
@@ -1196,6 +1201,7 @@ function MemberDrilldown({
                     <option value="unitsUsed">Bag/box pickups</option>
                     <option value="shoesUsed">Shoe pairs</option>
                     <option value="duvetsUsed">Duvets</option>
+                    <option value="bedsheetsUsed">Bed sheets</option>
                     <option value="curtainsUsed">Curtains</option>
                     <option value="springCleanUsed">Spring cleans</option>
                   </select>
