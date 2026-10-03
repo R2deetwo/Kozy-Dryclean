@@ -1534,6 +1534,11 @@ export interface ApiMembership {
   // Task 82: the member's open "I've made payment" claim (admin roster +
   // member portal render it; settled by the office's confirmation).
   openClaim?: ApiRenewalClaim | null
+  // Task 88: everything this member has ever PAID for the plan itself —
+  // sum of the CYCLE_START ledger payments (legacy rows fall back to the
+  // row's own pricePaid). A member's laundry orders are zero-naira by
+  // design, so the CRM's "Total Spent" adds this to their order value.
+  lifetimePaid?: number
 }
 
 /** Phase 75: one row of the member's in-cycle activity (a booking with its

@@ -20,8 +20,9 @@ import {
   MailX,
   Award,
   HeartPulse,
+  Crown,
 } from 'lucide-react'
-import { useUsers, useOrders, useDeleteUser, ADMIN_POLL } from '@/lib/hooks'
+import { useUsers, useOrders, useDeleteUser, useAdminMemberships, ADMIN_POLL } from '@/lib/hooks'
 import { useMemo } from 'react'
 import { formatNaira, formatDate } from '@/lib/types'
 import {
@@ -114,6 +115,14 @@ export function CustomersView() {
     refetchInterval: ADMIN_POLL.medium,
     refetchOnWindowFocus: true,
   })
+  // Task 88 — the memberships roster. A member's laundry orders are
+  // zero-naira BY DESIGN (the plan covers them): the money they actually
+  // paid lives on the membership. Without joining it in here, a loyal
+  // ₦50,000/month member read as "spent nothing" in Total Spent — the
+  // exact gap the owner flagged.
+  const { data: memberships } = useAdminMemberships({
+    refetchInterval: ADMIN_POLL.slow,
+  })
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<'all' | 'B2C' | 'B2B'>('all')
   const [healthFilter, setHealthFilter] = useState<'all' | 'vip' | 'loyal' | 'cooling' | 'atrisk'>('all')
@@ -131,14 +140,49 @@ export function CustomersView() {
   // Every customer's health is computed from their own order rhythm
   // (cadence, recency, value), and VIP is a cohort call — the top decile of
   // lifetime value among customers with delivered orders. One pass, memo'd;
-  // re-computes as the orders poll refreshes.
+  // re-computes as the orders poll refreshes. Task 88: lifetime value now
+  // INCLUDES confirmed plan payments (membershipSpend below) — a paying
+  // member is by definition one of the most valuable people in the book.
+  const memberSpendByUser = useMemo(() => {
+    const m = new Map<string, number>()
+    for (const sub of memberships ?? []) {
+      m.set(sub.userId, (m.get(sub.userId) ?? 0) + (sub.lifetimePaid ?? 0))
+    }
+    return m
+  }, [memberships])
+  const membershipByUser = useMemo(() => {
+    const m = new Map<string, { plan: string; status: string; lifetimePaid: number }>()
+    // One membership per customer is enforced at the API; when history
+    // coexists (e.g. a cancelled row beside a fresh join) the LIVE one is
+    // what the CRM should badge, and a cancelled past should not.
+    const rank = (s: string) =>
+      s === 'ACTIVE' ? 3 : s === 'PAST_DUE' ? 2 : s === 'PENDING_ACTIVATION' ? 1 : 0
+    for (const sub of memberships ?? []) {
+      const existing = m.get(sub.userId)
+      if (!existing || rank(sub.status) > rank(existing.status)) {
+        m.set(sub.userId, {
+          plan: sub.plan?.name ?? 'Plan',
+          status: sub.status,
+          lifetimePaid: sub.lifetimePaid ?? 0,
+        })
+      }
+    }
+    return m
+  }, [memberships])
   const healthById = useMemo(() => {
     const map = new Map<string, CustomerHealth>()
     for (const u of customers) {
-      map.set(u.id, computeCustomerHealth((orders ?? []).filter((o) => o.userId === u.id)))
+      map.set(
+        u.id,
+        computeCustomerHealth(
+          (orders ?? []).filter((o) => o.userId === u.id),
+          undefined,
+          memberSpendByUser.get(u.id) ?? 0
+        )
+      )
     }
     return map
-  }, [customers, orders])
+  }, [customers, orders, memberSpendByUser])
   const vipSet = useMemo(
     () => vipCustomerIds(customers.map((u) => ({ id: u.id, health: healthById.get(u.id)! }))),
     [customers, healthById]
@@ -178,20 +222,10 @@ export function CustomersView() {
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="mb-4">
-        <h1 className="text-lg font-bold tracking-tight text-navy">Customers (CRM)</h1>
-        <p className="text-xs text-navy-300">
-          The people who use the service — with their health read against their own
-          ordering rhythm, so quiet regulars surface before they are gone. Riders are
-          tracked in the
-          <span className="mx-1 font-semibold text-navy">Riders</span> tab; team
-          members in
-          <span className="mx-1 font-semibold text-navy">Staff</span>. Recent
-          signups are flagged
-          <span className="mx-1 inline-flex items-center rounded-full bg-gold-400 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-navy">new</span>
-          for their first week.
-        </p>
-      </div>
+      {/* Task 88 — no heading here on purpose: the page above the tab strip
+       * already says "Customers". The old block (a "Customers (CRM)"
+       * heading plus a paragraph of internal explanation) read like
+       * developer notes pasted into the UI — removed. */}
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <div className="relative max-w-sm flex-1">
@@ -240,9 +274,6 @@ export function CustomersView() {
             <span className="ml-1 opacity-70">{count}</span>
           </button>
         ))}
-        <span className="ml-1 hidden text-[10px] text-navy-300/70 sm:inline">
-          health = quiet for longer than their own usual gap · VIP = top 10% lifetime value
-        </span>
       </div>
 
       {/* Phase 77 (mobile): every column renders and the whole table
@@ -302,6 +333,14 @@ export function CustomersView() {
                       <div className="min-w-0">
                         <p className="flex items-center gap-1.5 truncate font-medium text-navy">
                           {u.name}
+                          {membershipByUser.get(u.id) && (
+                            <span
+                              title={`${membershipByUser.get(u.id)!.plan} member — plan payments are counted in Total Spent`}
+                              className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-navy px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-white"
+                            >
+                              <Crown className="h-2.5 w-2.5" /> member
+                            </span>
+                          )}
                           {isVip && (
                             <span
                               title="VIP — top 10% of lifetime value"
@@ -335,8 +374,10 @@ export function CustomersView() {
                     <RoleBadge role={u.role} />
                   </td>
                   <td className="px-4 py-3">
+                    {/* Contact = phone. The email already sits under the
+                     * customer's name one column over — repeating it here was
+                     * the same fact twice per row. */}
                     <p className="text-xs text-navy">{u.phone}</p>
-                    <p className="text-xs text-navy-300">{u.email}</p>
                   </td>
                   <td className="px-4 py-3 text-center">
                     <span className="font-semibold text-navy">{userOrders.length}</span>
@@ -387,6 +428,7 @@ export function CustomersView() {
           orderCount={(orders ?? []).filter((o) => o.userId === selected.id).length}
           health={healthById.get(selected.id)}
           isVip={vipSet.has(selected.id)}
+          membership={membershipByUser.get(selected.id)}
           onClose={() => setSelected(undefined)}
         />
       )}
@@ -412,12 +454,14 @@ function CustomerDetailModal({
   orderCount,
   health,
   isVip,
+  membership,
   onClose,
 }: {
   user: any
   orderCount: number
   health?: CustomerHealth
   isVip?: boolean
+  membership?: { plan: string; status: string; lifetimePaid: number }
   onClose: () => void
 }) {
   // Phase 31: staff browse the CRM but the destructive delete is
@@ -515,7 +559,20 @@ function CustomerDetailModal({
             <Card className="border-navy-100">
               <CardContent className="p-4">
                 <p className="text-xs text-navy-300">Total spent</p>
-                <p className="text-xl font-bold text-navy-300">{formatNaira(health?.ltv ?? orders.reduce((s, o) => s + (o.totalPrice ?? 0), 0))}</p>
+                {/* Task 88: members' laundry orders are zero-naira by design —
+                    their plan payments join here so a loyal member finally
+                    reads as the high-value customer they are. */}
+                <p className="text-xl font-bold text-navy-300">
+                  {formatNaira(
+                    health?.ltv ??
+                      orders.reduce((s, o) => s + (o.totalPrice ?? 0), 0) + (membership?.lifetimePaid ?? 0)
+                  )}
+                </p>
+                {membership && membership.lifetimePaid > 0 && (
+                  <p className="mt-0.5 text-[10px] text-navy-300/80">
+                    incl. {formatNaira(membership.lifetimePaid)} in membership payments
+                  </p>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -599,6 +656,18 @@ function CustomerDetailModal({
               </p>
               <p className="mt-1 text-navy-300">{user.phone}</p>
             </div>
+            {membership && (
+              <div className="rounded-lg bg-linen-200 p-3 text-sm sm:col-span-2">
+                <p className="flex items-center gap-1.5 font-medium text-navy">
+                  <Crown className="h-3.5 w-3.5 text-gold-500" /> Membership
+                </p>
+                <p className="mt-1 text-navy-300">
+                  {membership.plan}
+                  {membership.status === 'ACTIVE' ? ' — active' : membership.status === 'PENDING_ACTIVATION' ? ' — awaiting payment confirmation' : ''}
+                  {membership.lifetimePaid > 0 && ` · ${formatNaira(membership.lifetimePaid)} paid to date`}
+                </p>
+              </div>
+            )}
             {user.address && (
               <div className="rounded-lg bg-linen-200 p-3 text-sm sm:col-span-2">
                 <p className="flex items-center gap-1.5 font-medium text-navy">

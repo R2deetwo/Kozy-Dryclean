@@ -35,7 +35,7 @@ export interface CustomerHealth {
   cadenceDays: number | null
   /** 0–100, higher = more likely gone (null for brand-new accounts). */
   churnRisk: number | null
-  /** Lifetime value across delivered orders. */
+  /** Lifetime value: delivered one-off orders + membership plan payments. */
   ltv: number
   /** Average order value (delivered orders with a price). */
   aov: number | null
@@ -68,6 +68,12 @@ function riskFromRatio(ratio: number): number {
 /**
  * Compute one customer's health from their order history. `now` is injected
  * for testability. Orders need only the fields shown.
+ *
+ * Task 88: `membershipSpend` is everything the customer has paid for their
+ * Kozy Circle plan(s) — a member's laundry orders are zero-naira BY DESIGN
+ * (the plan covers them), so without this a loyal ₦50,000/month member
+ * reads as "spent nothing". It joins ltv (and therefore VIP ranking) but
+ * NOT aov — an average ORDER value must stay about orders.
  */
 export function computeCustomerHealth(
   orders: Array<{
@@ -76,7 +82,8 @@ export function computeCustomerHealth(
     deliveredAt?: string | Date | null
     createdAt?: string | Date | null
   }>,
-  now: Date = new Date()
+  now: Date = new Date(),
+  membershipSpend = 0
 ): CustomerHealth {
   const delivered = orders
     .filter((o) => o.status === 'DELIVERED')
@@ -87,8 +94,9 @@ export function computeCustomerHealth(
     )
 
   const priced = delivered.filter((o) => typeof o.totalPrice === 'number' && o.totalPrice > 0)
-  const ltv = priced.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
-  const aov = priced.length > 0 ? Math.round(ltv / priced.length) : null
+  const orderLtv = priced.reduce((s, o) => s + (o.totalPrice ?? 0), 0)
+  const ltv = orderLtv + Math.max(0, Math.round(membershipSpend))
+  const aov = priced.length > 0 ? Math.round(orderLtv / priced.length) : null
 
   const last = delivered.length > 0 ? new Date(delivered[delivered.length - 1].deliveredAt ?? delivered[delivered.length - 1].createdAt!) : null
   const daysSinceLastOrder = last ? Math.floor((now.getTime() - last.getTime()) / DAY_MS) : null

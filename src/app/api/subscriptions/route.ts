@@ -103,6 +103,31 @@ export async function GET(req: Request) {
   // surfaces on the admin list itself (not only inside the record-renewal
   // dialog), with months + amount + reference ready to confirm.
   const openClaims = await openRenewalClaimsFor(rows.map((r) => r.id), now)
+
+  // Task 88 — lifetime membership revenue per row. A member's laundry orders
+  // are zero-naira BY DESIGN (the plan covers them), so the money they have
+  // actually paid lives here instead: every confirmed cycle writes a
+  // CYCLE_START ledger row whose meta carries that payment's pricePaid.
+  // Memberships that predate the ledger (phase 75) carry no events, so the
+  // row's own pricePaid — the only payment we can vouch for — is the floor.
+  // One grouped query for the whole roster, never per-row.
+  const cycleStarts = rows.length
+    ? await db.subscriptionEvent.findMany({
+        where: { kind: 'CYCLE_START', subscriptionId: { in: rows.map((r) => r.id) } },
+        select: { subscriptionId: true, meta: true },
+      })
+    : []
+  const lifetimeBySub = new Map<string, number>()
+  for (const ev of cycleStarts) {
+    let paid = 0
+    try {
+      paid = Math.round(Number(JSON.parse(ev.meta ?? '{}').pricePaid) || 0)
+    } catch {
+      // Corrupt meta on a ledger row — treat that payment as unverifiable 0.
+    }
+    lifetimeBySub.set(ev.subscriptionId, (lifetimeBySub.get(ev.subscriptionId) ?? 0) + paid)
+  }
+
   const items = rows.map((r) => {
     const plan = r.plan ?? planById.get(r.planId)
     const subOrders = ordersBySub.get(r.id) ?? []
@@ -143,6 +168,10 @@ export async function GET(req: Request) {
       nextPickupSlot: nextScheduled?.pickupTimeSlot ?? null,
       // Task 82: the member's open "I've made payment" claim.
       openClaim: openClaims.get(r.id) ?? null,
+      // Task 88: everything this member has ever paid for the plan itself
+      // (max of the ledger sum and the row's own pricePaid — legacy rows
+      // predate the ledger; the row price is then the honest floor).
+      lifetimePaid: Math.max(lifetimeBySub.get(r.id) ?? 0, r.pricePaid),
     }
   })
 

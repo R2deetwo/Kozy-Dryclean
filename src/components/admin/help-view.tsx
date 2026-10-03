@@ -505,7 +505,7 @@ export function HelpView() {
           <p className="flex items-start gap-1.5">
             <HeartPulse className="mt-0.5 h-4 w-4 shrink-0 text-gold-500" />
             <span>
-              <span className="font-semibold text-navy">Customers (CRM)</span> now reads every customer
+              <span className="font-semibold text-navy">Customers</span> now reads every customer
               against <span className="font-semibold text-navy">their own ordering rhythm</span>: the
               chips at the top (VIP · On rhythm · Going quiet · At risk) answer &quot;who is slipping?&quot; in one
               tap, and each customer&apos;s modal shows their usual gap between orders, average order value
