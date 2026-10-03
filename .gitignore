@@ -98,6 +98,9 @@ work/.t81_live_member.json
 work/.t80_test_email
 work/.t76_emails_sent
 work/.s.PGSQL.*
+# VAPID key-bearing one-shot deploy helpers (keys must never be public)
+scripts/p61_deploy_when_token.sh
+scripts/p61_push_format_probe.js
 
 # vercel CLI local linking
 .vercel/
