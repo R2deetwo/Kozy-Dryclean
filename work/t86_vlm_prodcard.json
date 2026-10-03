@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) **Checkout** (the final step).\n2) **No.** There is a dark navy promotional banner, but it mentions **\"Registered customers get 15% off every order\"**, not \"first Kozy Bag\".\n3) **Yes**, there is a **\"Choose payment method\"** section with options for Bank Transfer and Pay Online.\n4) **No error message is visible**, and the primary action button (**\"I've Made the Transfer\"**) appears to be **enabled** (it is colored gold/yellow, not greyed out). Note that the \"Pay Online — Card\" option is marked as \"UNAVAILABLE\".",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791021633,
+  "id": "2026100318002937fa3c57ec4c4aac",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026100318002937fa3c57ec4c4aac",
+  "usage": {
+    "completion_tokens": 132,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 3003,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 3135
+  }
+}

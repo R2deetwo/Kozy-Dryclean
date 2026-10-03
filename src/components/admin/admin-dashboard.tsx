@@ -92,7 +92,10 @@ const DEEP_LINK_MAP: Record<string, { tab: Tab; sub?: string }> = {
 // no hydration mismatch. Enabled only for admins: the email CTA targets are
 // admin tabs, and STAFF must stay on their operational side.
 // -----------------------------------------------------------------------------
-function useAdminDeepTabParam(onArrive: (tab: Tab) => void, enabled: boolean) {
+function useAdminDeepTabParam(
+  onArrive: (target: { tab: Tab; sub?: string }) => void,
+  enabled: boolean
+) {
   const applied = useRef(false)
   useEffect(() => {
     // Wait for the session to settle the role (it loads async) — but apply
@@ -104,8 +107,12 @@ function useAdminDeepTabParam(onArrive: (tab: Tab) => void, enabled: boolean) {
       const params = new URLSearchParams(window.location.search)
       const key = params.get('tab')
       if (!key) return
-      const target = DEEP_LINK_MAP[key]?.tab
-      if (target) onArrive(target)
+      const target = DEEP_LINK_MAP[key]
+      // Task 87: apply the SUB-tab too (reviews → the Customers page's
+      // Reviews sub-tab, payments → Operations → Payments, …). Before this
+      // the hook only set the top tab, so ?tab=reviews landed on the CRM
+      // directory instead of the reviews wall.
+      if (target) onArrive({ tab: target.tab, sub: target.sub })
     } catch {
       /* no param or malformed URL — stay on the overview */
     }
@@ -219,7 +226,15 @@ export function AdminDashboard() {
   // Task 82 — an email CTA (/admin?tab=memberships) lands the office straight
   // on the tab that needs them. Applied once, after the console gate has
   // settled the role (admin-only tabs are only honoured for admins).
-  useAdminDeepTabParam((t) => setTab(t), isAdmin)
+  useAdminDeepTabParam((t) => {
+    setTab(t.tab)
+    // The sub-tab lands through the deepSub state (each host page picks its
+    // own initial tab up from there — customers/operations/team).
+    if (t.sub) {
+      const key = t.tab === 'operations' ? 'operations' : t.tab === 'team' ? 'team' : 'customers'
+      setDeepSub((prev) => ({ ...prev, [key]: t.sub }))
+    }
+  }, isAdmin)
   // Phase 62: the global branch switcher. 'ALL' | branch id.
   const [branchFilter, setBranchFilter] = useState<string>('ALL')
   const branchId = branchFilter === 'ALL' ? null : branchFilter

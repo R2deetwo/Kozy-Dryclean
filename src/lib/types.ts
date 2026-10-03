@@ -322,6 +322,15 @@ export interface Testimonial {
   orderNumberMasked?: string
   // ISO date — used to show "2 weeks ago" etc.
   createdAt: string
+  // Task 87 — where the testimonial comes from, so the wall can badge it:
+  //   GOOGLE  — synced/selected from the Google Business Profile (public)
+  //   ORDER   — the legacy verified-order review (kept visible; the ask is
+  //             Google-only now, but already-collected reviews stay)
+  //   STARTER — founder-approved marketing copy (fills to the minimum)
+  source?: 'GOOGLE' | 'ORDER' | 'STARTER'
+  // Google's own phrasing for when the review was left ("2 weeks ago"),
+  // shown verbatim on Google-sourced testimonials.
+  relativeTime?: string
 }
 
 // =====================================================
@@ -690,6 +699,17 @@ export interface KozyAppSettings {
   // admin (ADMIN role) can flip it in Settings → Store — the settings PUT
   // is ADMIN-only by construction, so staff can never turn it on.
   storeEnabled: boolean
+    // Task 87 — Google review selection mode on the public wall:
+    // true  = AUTO: every synced Google review with rating >= 4 that is not
+    //         hidden shows (newest first); the office only curates by hiding.
+    // false = MANUAL: only rows the office explicitly approved show.
+    googleReviewAutoSelect: boolean
+    // Task 87 (owner directive) — the conversion-email cooling period. While
+    // today is before this ISO date, the sweep's upsell job plans but never
+    // sends (SUPPRESSED_PAUSED). Self-seeds to 30 days out on first read so
+    // nobody is emailed again too soon after the early sends; the office can
+    // move the date in Settings (a past/empty date = not paused).
+    upsellEmailsPausedUntil: string
   // Card payments (Paystack) — NOT stored in the DB: derived server-side
   // from the presence of PAYSTACK_SECRET_KEY on each /api/settings/app
   // read. When false, checkout greys the card option out and transfer is
@@ -747,6 +767,13 @@ export function defaultAppSettings(): KozyAppSettings {
     // Phase 77 — the Kozy Store ships dark. Nothing customer-facing renders
     // until a super admin turns it on in Settings → Store.
     storeEnabled: false,
+    // Task 87 — Google reviews show automatically (>= 4 stars, not hidden)
+    // unless the office switches to hand-picking in Reviews → Google.
+    googleReviewAutoSelect: true,
+    // Task 87 — the self-seeding default lives in app-settings.ts (it needs
+    // "now"); the code default is "not paused" for local dev batteries,
+    // which seed their own value.
+    upsellEmailsPausedUntil: '',
     // Pessimistic client default — the server response overrides it with
     // the real env-derived value. Greyed out beats a broken card checkout.
     paystackAvailable: false,

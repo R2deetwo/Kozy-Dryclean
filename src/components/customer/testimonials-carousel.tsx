@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, Quote, ChevronLeft, ChevronRight, PenLine, BadgeCheck } from 'lucide-react'
 import { usePublicTestimonials } from '@/lib/hooks'
+import { GOOGLE_REVIEW_URL } from '@/lib/local-seo'
 import { cn } from '@/lib/utils'
 
 /**
@@ -19,7 +20,9 @@ import { cn } from '@/lib/utils'
  * reviews carry a masked verified-order chip (e.g. KZ-••3846).
  */
 export function TestimonialsCarousel() {
-  const { data: testimonials, isLoading } = usePublicTestimonials()
+  const { data, isLoading } = usePublicTestimonials()
+  const testimonials = data?.testimonials
+  const googleStats = data?.googleStats ?? null
 
   const [index, setIndex] = useState(0)
   const [direction, setDirection] = useState(0)
@@ -68,12 +71,28 @@ export function TestimonialsCarousel() {
         {/* Header */}
         <div className="text-center">
           <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/5 px-3 py-1 text-xs font-medium text-gold-200 ring-1 ring-gold-400/30">
-            <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
-            <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
-            <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
-            <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
-            <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
-            <span className="ml-1.5 tracking-wide">Verified Lagos customers</span>
+            {googleStats ? (
+              <>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star
+                    key={s}
+                    className={cn('h-3 w-3', googleStats.rating >= s - 0.25 ? 'fill-gold-400 text-gold-400' : 'fill-transparent text-gold-400/40')}
+                  />
+                ))}
+                <span className="ml-1.5 tracking-wide">
+                  {googleStats.rating.toFixed(1)} on Google · {googleStats.count} review{googleStats.count === 1 ? '' : 's'}
+                </span>
+              </>
+            ) : (
+              <>
+                <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
+                <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
+                <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
+                <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
+                <Star className="h-3 w-3 fill-gold-400 text-gold-400" />
+                <span className="ml-1.5 tracking-wide">Verified Lagos customers</span>
+              </>
+            )}
           </div>
           <h2 className="font-serif text-2xl font-semibold tracking-tight sm:text-3xl">
             Loved by Lagos.
@@ -81,13 +100,17 @@ export function TestimonialsCarousel() {
           <p className="mt-2 max-w-xl mx-auto text-sm text-navy-100/80">
             Real feedback from customers who trusted us with their garments.
           </p>
-          <Link
-            href="/feedback"
+          {/* Task 87 — Google is THE public review place. The old in-app
+              form lives on as the private-feedback door (/feedback). */}
+          <a
+            href={GOOGLE_REVIEW_URL}
+            target="_blank"
+            rel="noopener noreferrer"
             className="mt-3 inline-flex items-center gap-2 rounded-full bg-gold-400 px-4 py-1.5 text-sm font-semibold text-navy shadow-sm transition hover:bg-gold-300"
           >
             <PenLine className="h-4 w-4" />
-            Leave a review
-          </Link>
+            Leave a Google review
+          </a>
         </div>
 
         {/* Carousel */}
@@ -135,11 +158,18 @@ export function TestimonialsCarousel() {
                     {current.displayLocation}
                   </p>
                 )}
-                {current.orderNumberMasked && (
+                {current.source === 'GOOGLE' ? (
                   <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/5 px-2.5 py-0.5 text-[10px] font-medium tracking-wide text-gold-200/90 ring-1 ring-gold-400/20">
                     <BadgeCheck className="h-3 w-3" />
-                    Verified order {current.orderNumberMasked}
+                    Google review{current.relativeTime ? ` · ${current.relativeTime}` : ''}
                   </span>
+                ) : (
+                  current.orderNumberMasked && (
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-white/5 px-2.5 py-0.5 text-[10px] font-medium tracking-wide text-gold-200/90 ring-1 ring-gold-400/20">
+                      <BadgeCheck className="h-3 w-3" />
+                      Verified order {current.orderNumberMasked}
+                    </span>
+                  )
                 )}
               </div>
             </motion.div>

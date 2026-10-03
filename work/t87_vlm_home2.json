@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1. Yes, there is a review from **Adaeze N.** mentioning that her **silk gowns** came back immaculate.\n2. Yes, a chip below her name says **'Google review · 2 weeks ago'**.\n3. Yes, there is a **gold 'Leave a Google review' button** above the testimonial text.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791024333,
+  "id": "2026100318453079860e92f0db4527",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "2026100318453079860e92f0db4527",
+  "usage": {
+    "completion_tokens": 76,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1944,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2020
+  }
+}

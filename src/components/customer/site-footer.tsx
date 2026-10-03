@@ -252,7 +252,7 @@ export function SiteFooter() {
               </li>
               <li>
                 <a href="/feedback" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
-                  Leave a review / feedback
+                  Private feedback / complaints
                 </a>
               </li>
               {/* The Google review door (Task 85) — opens the Google
@@ -266,7 +266,7 @@ export function SiteFooter() {
                   className="inline-flex cursor-pointer items-center gap-1.5 text-navy-100/70 transition hover:text-gold-300"
                 >
                   <Star className="h-3 w-3 text-gold-400" aria-hidden="true" />
-                  Review us on Google
+                  Leave a review on Google
                 </a>
               </li>
               <li>

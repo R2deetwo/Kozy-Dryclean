@@ -115,10 +115,3 @@ export function clearFirstBagMarker(): void {
   }
 }
 
-// -----------------------------------------------------------------------------
-// The copy — one promise, everywhere the pitch appears.
-// -----------------------------------------------------------------------------
-
-/** The first-bag promise in one line (card + dialog + email share it). */
-export const FIRST_BAG_PROMISE =
-  'Whatever is in your basket rides as your first Kozy Bag — free, mixed as it is. No counting, no scrutiny; it becomes the first weekly pickup of your plan.'

@@ -166,6 +166,20 @@ export async function PUT(req: NextRequest) {
   // construction (checked above), which is exactly the owner's directive:
   // the store can only ever be activated by a super admin.
   flag('storeEnabled')
+  // Task 87 — Google-review wall selection mode (auto vs hand-picked).
+  flag('googleReviewAutoSelect')
+  // Task 87 — the conversion-email cooling date (ISO string; empty/past =
+  // not paused). Free-form date validated loosely: a bad date is rejected.
+  {
+    const v = (p as Record<string, unknown>).upsellEmailsPausedUntil
+    if (v !== undefined) {
+      if (typeof v !== 'string' || v.trim() === '' || Number.isNaN(new Date(v.trim()).getTime())) {
+        errors.push('upsellEmailsPausedUntil must be a date (or empty to clear the pause)')
+      } else {
+        ;(out as Record<string, unknown>).upsellEmailsPausedUntil = v.trim()
+      }
+    }
+  }
 
   if (errors.length > 0) {
     return NextResponse.json({ error: errors.join('; ') }, { status: 400 })

@@ -44,6 +44,7 @@ import {
   MIN_TESTIMONIALS,
   MAX_TESTIMONIALS,
 } from '@/lib/starter-testimonials'
+import { selectedGoogleReviews, googleReviewStats } from '@/lib/google-reviews'
 
 // This route reads the DB on every request — never statically cached.
 export const dynamic = 'force-dynamic'
@@ -75,19 +76,30 @@ function contactMatches(
 }
 
 // ----- GET /api/reviews (public testimonials) -----
+// Task 87: the wall's primary source is now the Google Business Profile
+// (selected per the office's mode — see google-reviews.ts). Legacy
+// verified-order reviews stay visible (they are real, order-verified
+// testimonials collected before the ask moved to Google), and the starter
+// marketing copy fills to the minimum as before. The response also carries
+// Google's own aggregate (rating + count) when a sync has happened, so the
+// trust bar can quote real numbers instead of marketing copy.
 export async function GET() {
   try {
-    const reviews = await db.review.findMany({
-      where: { isApproved: true, isHidden: false, rating: { gte: 4.5 } },
-      orderBy: { createdAt: 'desc' },
-      take: MAX_TESTIMONIALS,
-      include: {
-        user: { select: { name: true } },
-        order: { select: { orderNumber: true } },
-      },
-    })
+    const [reviews, google, stats] = await Promise.all([
+      db.review.findMany({
+        where: { isApproved: true, isHidden: false, rating: { gte: 4.5 } },
+        orderBy: { createdAt: 'desc' },
+        take: MAX_TESTIMONIALS,
+        include: {
+          user: { select: { name: true } },
+          order: { select: { orderNumber: true } },
+        },
+      }),
+      selectedGoogleReviews(MAX_TESTIMONIALS),
+      googleReviewStats(),
+    ])
 
-    const real: Testimonial[] = reviews.map((r) => ({
+    const legacy: Testimonial[] = reviews.map((r) => ({
       id: r.id,
       displayName: r.displayName || r.user?.name || 'Verified Customer',
       displayLocation: r.displayLocation || undefined,
@@ -95,16 +107,20 @@ export async function GET() {
       comment: r.comment,
       orderNumberMasked: r.order?.orderNumber ? maskOrderNumber(r.order.orderNumber) : undefined,
       createdAt: r.createdAt.toISOString(),
+      source: 'ORDER',
     }))
 
-    // Fill with starter marketing testimonials only up to the minimum.
+    // Google reviews lead the wall (the owner's single public review place);
+    // verified-order reviews follow; starters fill to the minimum.
+    const real = [...google, ...legacy]
     const fill = Math.max(0, MIN_TESTIMONIALS - real.length)
-    const testimonials = [...real, ...STARTER_TESTIMONIALS.slice(0, fill)].slice(
-      0,
-      MAX_TESTIMONIALS
-    )
+    const starters: Testimonial[] = STARTER_TESTIMONIALS.slice(0, fill).map((t) => ({
+      ...t,
+      source: 'STARTER',
+    }))
+    const testimonials = [...real, ...starters].slice(0, MAX_TESTIMONIALS)
 
-    return NextResponse.json({ testimonials })
+    return NextResponse.json({ testimonials, googleStats: stats })
   } catch (err) {
     console.error('GET /api/reviews failed:', err)
     return NextResponse.json(

@@ -810,6 +810,10 @@ export interface ApiTestimonial {
   // Masked order reference for order-verified reviews (e.g. KZ-••3846)
   orderNumberMasked?: string
   createdAt: string
+  // Task 87 — where the testimonial comes from (GOOGLE | ORDER | STARTER).
+  source?: 'GOOGLE' | 'ORDER' | 'STARTER'
+  // Google's own "2 weeks ago" phrasing, shown on Google-sourced entries.
+  relativeTime?: string
 }
 
 // Public testimonials for the landing page carousel (no auth required).
@@ -820,9 +824,108 @@ export function usePublicTestimonials() {
       const res = await fetch('/api/reviews')
       if (!res.ok) throw new Error('Failed to fetch testimonials')
       const data = await res.json()
-      return data.testimonials as ApiTestimonial[]
+      return {
+        testimonials: data.testimonials as ApiTestimonial[],
+        // Task 87 — Google's own aggregate for the listing (null until a
+        // sync has happened; callers fall back to the existing copy).
+        googleStats:
+          (data.googleStats as { rating: number; count: number; syncedAt: string | null } | null) ?? null,
+      }
     },
     staleTime: 60 * 1000, // 1 minute
+  })
+}
+
+// ---------------------------------------------------------------------------
+// Task 87 — Google reviews (the office's management surface + the wall feed)
+// ---------------------------------------------------------------------------
+
+/** Every synced/entered Google review row + the listing aggregate + the
+ *  selection mode + whether the Places API key is configured. */
+export function useGoogleReviews() {
+  return useQuery({
+    queryKey: ['reviews', 'google', 'admin'],
+    queryFn: async () => {
+      const res = await fetch('/api/reviews/google')
+      if (!res.ok) throw new Error('Failed to load Google reviews')
+      return res.json() as Promise<{
+        reviews: Array<{
+          id: string
+          authorName: string
+          rating: number
+          text: string | null
+          relativeTime: string | null
+          reviewedAt: string | null
+          approved: boolean
+          hidden: boolean
+          source: string
+          syncedAt: string
+        }>
+        stats: { rating: number; count: number; syncedAt: string | null } | null
+        autoSelect: boolean
+        syncConfigured: boolean
+      }>
+    },
+    staleTime: 30 * 1000,
+  })
+}
+
+/** Pull the listing's reviews from Google now (admin button). */
+export function useSyncGoogleReviews() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const res = await fetch('/api/reviews/google-sync', { method: 'POST' })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.message || 'Sync failed')
+      return data as { ok: boolean; status: string; message: string; fetched?: number; created?: number; updated?: number }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reviews', 'google', 'admin'] })
+      qc.invalidateQueries({ queryKey: ['reviews', 'public'] })
+    },
+  })
+}
+
+/** Approve/hide a Google review row (the wall's selection). */
+export function useModerateGoogleReview() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { id: string; approved?: boolean; hidden?: boolean }) => {
+      const res = await fetch('/api/reviews/google', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Could not update')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reviews', 'google', 'admin'] })
+      qc.invalidateQueries({ queryKey: ['reviews', 'public'] })
+    },
+  })
+}
+
+/** Type a Google review in manually (from the public listing). */
+export function useAddGoogleReview() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { authorName: string; rating: number; text: string; relativeTime?: string }) => {
+      const res = await fetch('/api/reviews/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(input),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data?.error || 'Could not add')
+      return data
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['reviews', 'google', 'admin'] })
+      qc.invalidateQueries({ queryKey: ['reviews', 'public'] })
+    },
   })
 }
 

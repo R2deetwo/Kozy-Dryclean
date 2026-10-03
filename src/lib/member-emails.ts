@@ -47,9 +47,16 @@ import {
   notifyMembershipPaused,
   notifyMembershipFirstPaymentNudge,
   notifyMembershipUpsell,
+  notifyGoogleReviewAsk,
 } from '@/lib/notifications'
 import { getStoreProducts } from '@/lib/kozy-store'
 import { upsellPlanForTotal } from '@/lib/upsell'
+import {
+  eligibleForReviewAsk,
+  googleReviewAskLink,
+  recordReviewAskSent,
+  reviewAskOptOutLink,
+} from '@/lib/google-reviews'
 
 function baseUrl(): string {
   return (
@@ -88,10 +95,10 @@ export function memberEmailTestMode(): boolean {
   return v === '1' || v === 'true' || v === 'yes'
 }
 
-export type SweepOutcome = 'SENT' | 'SUPPRESSED' | 'SKIPPED_SENT_ALREADY' | 'DRY_RUN'
+export type SweepOutcome = 'SENT' | 'SUPPRESSED' | 'SUPPRESSED_PAUSED' | 'SKIPPED_SENT_ALREADY' | 'DRY_RUN'
 
 export interface SweepDetail {
-  job: 'summary' | 'paused' | 'first-payment' | 'conversion'
+  job: 'summary' | 'paused' | 'first-payment' | 'conversion' | 'review-ask'
   member: { name: string; email: string }
   planName: string
   outcome: SweepOutcome
@@ -111,6 +118,8 @@ export interface SweepResult {
   firstPaymentCandidates: number
   /** Task 86 — the conversion pitch: customers in a spend band, no membership */
   upsellCandidates: number
+  /** Task 87 — the Google review ask backfill (recent deliveries) */
+  reviewAskCandidates: number
   sent: number
   suppressed: number
   skipped: number
@@ -509,6 +518,7 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
     summaryCandidates: 0,
     pausedCandidates: 0,
     upsellCandidates: 0,
+    reviewAskCandidates: 0,
     cancellationsApplied: 0,
     firstPaymentCandidates: 0,
     sent: 0,
@@ -738,7 +748,24 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
   // month while the spend stays in a band, and it stops the moment they
   // hold a laundry membership. Shoe Club members still get it — the tiers
   // are the laundry product; the club is a separate family.
+  //
+  // Task 87 (owner directive): the COOLING PERIOD. Upsell emails have gone
+  // out before; nobody gets another for a while. While today is before the
+  // paused-until date (an AppSetting, self-seeded to 30 days out, editable
+  // in admin Settings), this job plans but never sends — every candidate is
+  // logged SUPPRESSED_PAUSED so the office always sees who is waiting.
   try {
+    let upsellPausedUntil = 0
+    try {
+      const pausedRow = await db.appSetting.findUnique({ where: { key: 'upsell_emails_paused_until' } })
+      if (pausedRow) {
+        const parsed = new Date(JSON.parse(pausedRow.value))
+        if (!Number.isNaN(parsed.getTime())) upsellPausedUntil = parsed.getTime()
+      }
+    } catch {
+      /* an unreadable date simply means "not paused" */
+    }
+    const upsellPaused = now < upsellPausedUntil
     const UPSELL_WINDOW_DAYS = 60
     const UPSELL_GAP_MS = 30 * 24 * 60 * 60 * 1000
     const since = new Date(now - UPSELL_WINDOW_DAYS * 24 * 60 * 60 * 1000)
@@ -822,6 +849,17 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
         continue
       }
 
+      if (upsellPaused && !opts.dry) {
+        result.suppressed++
+        result.details.push({
+          job: 'conversion',
+          member: { name: user.name, email: user.email },
+          planName: plan.name,
+          outcome: 'SUPPRESSED_PAUSED',
+          reason: `Conversion emails are paused until ${new Date(upsellPausedUntil).toISOString().slice(0, 10)} (the owner's cooling period) — this customer would otherwise qualify`,
+        })
+        continue
+      }
       if (!opts.dry) {
         const settings = await getAppSettings()
         await notifyMembershipUpsell({
@@ -861,6 +899,95 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
     }
   } catch (e) {
     console.error('[member-emails] conversion pitch job failed:', e)
+  }
+
+  // ----- Task 87, Job 5: the Google review ask (backfill + safety net) -----
+  // The delivered-status email now carries the Google ask (gated by the
+  // same state machine). This job catches customers whose delivery happened
+  // BEFORE that email existed — one calm invitation, and the state machine
+  // makes sure it can never become a pattern: one ask per delivery, a
+  // 30-day gap, 6 lifetime, stop for good on click-through or opt-out,
+  // never for an unhappy customer. A 14-day cross-check against the upsell
+  // log keeps the two automations from ever stacking in one fortnight.
+  try {
+    const ASK_WINDOW_DAYS = 30
+    const since = new Date(now - ASK_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+
+    const delivered = await db.order.findMany({
+      where: {
+        status: 'DELIVERED',
+        type: 'ITEM',
+        deliveredAt: { gte: since },
+      },
+      orderBy: { deliveredAt: 'desc' },
+      select: {
+        id: true,
+        orderNumber: true,
+        userId: true,
+        deliveredAt: true,
+        user: { select: { id: true, name: true, email: true, role: true } },
+      },
+      take: 300,
+    })
+
+    // Skip customers who received ANY conversion email in the last 14 days —
+    // one marketing-ish email a fortnight is plenty for anyone.
+    const recentUpsell = new Set(
+      (
+        await db.membershipUpsellLog.findMany({
+          where: { sentAt: { gte: new Date(now - 14 * 24 * 60 * 60 * 1000) } },
+          select: { userId: true },
+        })
+      ).map((r) => r.userId)
+    )
+
+    const seenUsers = new Set<string>()
+    for (const o of delivered) {
+      if (!o.user?.id || !o.user.email || o.user.role !== 'B2C') continue
+      if (seenUsers.has(o.user.id)) continue // newest delivery only
+      seenUsers.add(o.user.id)
+      if (recentUpsell.has(o.user.id)) continue
+
+      if (!(await eligibleForReviewAsk(o.user.id, { orderId: o.id, now }))) continue
+
+      result.reviewAskCandidates++
+      const safe = !testMode || isTestSafeRecipient(o.user.email, allowlist)
+      if (!safe) {
+        result.suppressed++
+        result.details.push({
+          job: 'review-ask',
+          member: { name: o.user.name, email: o.user.email },
+          planName: 'Google review',
+          outcome: 'SUPPRESSED',
+          reason:
+            'Test mode is ON and this recipient is outside the test allowlist — logged only; production sends to every customer',
+        })
+        continue
+      }
+
+      if (!opts.dry) {
+        const settings = await getAppSettings()
+        await notifyGoogleReviewAsk({
+          user: { id: o.user.id, name: o.user.name, email: o.user.email },
+          orderNumber: o.orderNumber,
+          reviewUrl: googleReviewAskLink(o.user.id, o.id),
+          optOutUrl: reviewAskOptOutLink(o.user.id),
+          contactPhone: settings.contactPhone,
+        })
+        await recordReviewAskSent(o.user.id, o.id)
+        result.sent++
+      }
+      result.details.push({
+        job: 'review-ask',
+        member: { name: o.user.name, email: o.user.email },
+        planName: 'Google review',
+        outcome: opts.dry ? 'DRY_RUN' : 'SENT',
+        reason: `Delivered order #${o.orderNumber} within ${ASK_WINDOW_DAYS} days — one-time Google review invitation`,
+        subjectHint: `${o.user.name.split(' ')[0]}, one small favour after your delivery`,
+      })
+    }
+  } catch (e) {
+    console.error('[member-emails] review-ask job failed:', e)
   }
 
   return result

@@ -19,6 +19,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { GOOGLE_REVIEW_URL } from '@/lib/local-seo'
 import { motion } from 'framer-motion'
 import { useSession } from 'next-auth/react'
 import {
@@ -231,11 +232,34 @@ export function FeedbackPage() {
             How did we do?
           </h1>
           <p className="mt-3 text-navy-300">
-            Reviews keep us honest and help other Lagos residents find a dry
-            cleaner they can trust. Complaints and questions go straight to the
-            team — answered within one working day.
+            Complaints and questions go straight to the team — answered within
+            one working day. Praise belongs on Google, where other Lagos
+            residents can find it.
           </p>
         </motion.div>
+
+        {/* Task 87 — Google is THE public review place. This banner routes
+            happy customers there; the form below stays for private
+            feedback (and the verified-order record). */}
+        <a
+          href={GOOGLE_REVIEW_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mt-6 flex items-center gap-3 rounded-2xl border border-gold-200 bg-gold-50/70 p-4 transition hover:border-gold-400 hover:bg-gold-50"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-lg font-bold text-navy ring-1 ring-gold-200" aria-hidden="true">
+            G
+          </span>
+          <span className="min-w-0">
+            <span className="block text-sm font-bold text-navy">
+              Everything was as it should be? Leave a Google review
+            </span>
+            <span className="mt-0.5 block text-xs leading-relaxed text-navy-300">
+              60 seconds on Google Maps — the review other Lagosians actually see. Thank you for
+              helping a young business grow.
+            </span>
+          </span>
+        </a>
 
         {/* Mode selector */}
         <div className="mt-8 grid grid-cols-3 gap-2">

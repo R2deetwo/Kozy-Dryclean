@@ -18,8 +18,8 @@ phase documents kept for context; `worklog.md` is the chronological build record
 | Surface | Route | Highlights |
 | --- | --- | --- |
 | Landing page | `/` | Live server pricing ("From ₦800/kg" for corporate/hotel laundry), offers strip, per-item catalog, testimonials, SEO + OG images |
-| Guest booking | `/book` | Book in ~2 minutes with no account; 409 guard for existing accounts; auto-save draft resume; scroll-to-top on every step |
-| Plans & pricing | `/memberships` | The Kozy Circle tiers (Essentials / Household / Whole Home — bag- and box-sized kits), persona routing, the full per-item price list, Paystack or bank-transfer join |
+| Guest booking | `/book` | Book in ~2 minutes with no account; 409 guard for existing accounts; auto-save draft resume; scroll-to-top on every step; Iron-Only mode (60% of list prices, admin-tunable); checkout conversion pitch — a basket over ₦15,000 is offered its band's tier with the basket riding as the first Kozy Bag free |
+| Plans & pricing | `/memberships` | The Kozy Circle tiers sized by people — Essentials 1 person / Household 3 / Whole Home 5, each kitted for a full week per bag/box, with bed-sheet and duvet perks; persona routing; the full per-item price list; Paystack or bank-transfer join; FAQPage structured data |
 | Specialty services | `/services` | Couture Care (assessed & quoted per piece), Sneaker & Trainer Restoration (from ₦5,000), Alterations with in-house seamstress, **The Kozy Shoe Club** (shoes-only monthly subscription — 2/4/6 pairs on a rotation rhythm, sold in the shoe-care section, never a tier) |
 | Customer portal | `/portal` | Order tracking, invoices, reviews, the membership tab (tier usage meters + Shoe Club card), referral and loyalty state |
 | Admin console | `/admin` | Kanban/list orders, payment verification queue, CRM with health scoring, finance charts, pricing & settings (server-side — live for every visitor), branch management (company vs franchise), rider response-time league, newsletter engine, coupon & promo calendar, feedback inbox |
@@ -62,6 +62,38 @@ delivery, and guarantee eligibility checks. Notifications: branded email via Bre
 (live), SMS via Termii (activates when `TERMII_API_KEY` is set), and Web-Push for
 riders (activates when `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY` are set). All
 integrations degrade gracefully when keys are absent.
+
+### Email automations (the daily 09:00 WAT sweep)
+
+`/api/cron/member-emails` (cron + admin dry-run at `?dry=1`) runs five jobs:
+member monthly summaries with renewal buttons, paused/reactivation emails,
+cancellation applies, the stuck-signup first-payment nudge, and two
+customer-facing automations:
+
+- **Conversion pitch** (Task 86): a customer whose trailing 60-day spend lands in
+  an upsell band (₦15k+/₦30k+/₦50k+) and who holds no laundry tier gets the
+  monthly "your spend would fit a plan" email — the same first-Kozy-Bag offer the
+  checkout card makes. Cadence is one per customer per 30 days, counted from the
+  `MembershipUpsellLog` table, and the whole job honours a **cooling date**
+  (`upsell_emails_paused_until` AppSetting, editable in Settings → Notifications)
+  that self-seeded 30 days out — while paused, candidates are planned and logged
+  as `SUPPRESSED_PAUSED`, never emailed.
+- **Google review invitations** (Task 87): the delivered-order email invites the
+  customer to review Kozy on Google through an HMAC-tracked link. The ask state
+  (`ReviewAskState`) is the anti-harassment memory: one ask per delivery, 30-day
+  gap, 6 lifetime, stops forever on first click-through (assume reviewed) or the
+  one-tap opt-out, and never goes to a customer whose recent private feedback was
+  below 4★.
+
+### Google reviews & the public wall
+
+Google is the single public review place. `Reviews → Google` in the console syncs
+the Business Profile's reviews via the Places API (`GOOGLE_MAPS_API_KEY` in Vercel;
+an honest setup note shows until the key exists) or accepts manual entry, with the
+same selection the old wall had: AUTO mode (every review ≥ 4★ not hidden) or MANUAL
+(hand-picked). The home-page trust bar quotes Google's own rating once a sync has
+happened, and the carousel badges Google-sourced entries. A weekly cron
+(`/api/cron/google-review-sync`, Mondays 10:30 WAT) keeps the wall fresh.
 
 ### Marketing engine
 

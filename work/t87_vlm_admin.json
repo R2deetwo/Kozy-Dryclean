@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1. **Yes**, there is a gold-bordered section titled \"GOOGLE REVIEWS — THE PUBLIC WALL'S SOURCE\".\n2. **Yes**, it shows a \"Sync from Google\" button and a rating summary (3.00 AVG RATING, 0 PUBLIC, 1 PENDING).\n3. **Yes**, there are \"Auto — show every review ≥4★ (hide exceptions)\" and \"Manual — only reviews I approve\" selection mode buttons.\n4. **Yes**, there is a review card from **Adaeze N.** with 5 stars and status chips (\"ENTERED MANUALLY\", \"ON THE WALL\").\n5. **No** obvious layout problems or overlapping text; the layout is clean and well-structured.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791024291,
+  "id": "202610031844486f64e80974314dac",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202610031844486f64e80974314dac",
+  "usage": {
+    "completion_tokens": 151,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1690,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1841
+  }
+}

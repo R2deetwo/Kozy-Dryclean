@@ -35,7 +35,7 @@ import {
   itemsForGroup,
   type CatalogDisplayGroup,
 } from '@/lib/pricing-groups'
-import { useServerPrices, useAppSettings, useMembershipPlans } from '@/lib/hooks'
+import { useServerPrices, useAppSettings, useMembershipPlans, usePublicTestimonials } from '@/lib/hooks'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -64,6 +64,12 @@ interface Props {
 // so the two surfaces can never drift apart.
 
 export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
+  // Task 87 — the trust bar quotes Google's OWN numbers when a sync has
+  // happened (veracity: no invented rating once real data exists). Before
+  // that it keeps the founder's marketing line.
+  const { data: testimonialsData } = usePublicTestimonials()
+  const googleStats = testimonialsData?.googleStats ?? null
+
   // Server-managed commercial terms (offers, delivery fee, guarantee rules,
   // alterations pricing, per-kg terms) — admin edits reach every visitor
   // instantly. The localStorage store is no longer consulted for anything
@@ -224,7 +230,13 @@ export function CustomerLanding({ onBook, onPortal, onBookShoes }: Props) {
             { icon: Building2, label: 'Corporate Partners', value: '24 Hotels & Estates' },
             { icon: Shield, label: 'Items Returned', value: '12,400+ Pieces' },
             { icon: Clock, label: 'Avg Turnaround', value: '46 hours' },
-            { icon: Star, label: 'Customer Rating', value: '4.9 / 5.0' },
+            {
+              icon: Star,
+              label: googleStats ? 'Google rating' : 'Customer Rating',
+              value: googleStats
+                ? `${googleStats.rating.toFixed(1)} / 5.0 · ${googleStats.count} review${googleStats.count === 1 ? '' : 's'}`
+                : '4.9 / 5.0',
+            },
           ].map((s) => {
             const Icon = s.icon
             return (

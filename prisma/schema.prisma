@@ -121,6 +121,11 @@ model User {
   // Every conversion email this customer has been sent (the monthly
   // checkout-spend pitch). The cadence cap reads straight from here.
   membershipUpsellLogs MembershipUpsellLog[] @relation("MembershipUpsellLogs")
+  // ----- Google review ask state (Task 87) -----
+  // The anti-harassment memory for review invitations: how many asks, when
+  // the last one went, whether they already clicked through to Google
+  // (assume reviewed — never ask again), and whether they opted out.
+  reviewAskState ReviewAskState?
   // ----- Rider payouts (phase 72) -----
   // Money the office has actually PAID this rider (weekly settlement of
   // completed-stop earnings). The rider's pending balance is computed
@@ -1265,6 +1270,67 @@ model SubscriptionEvent {
 
   @@index([subscriptionId, createdAt])
   @@index([orderId])
+}
+
+// =====================================================
+// GOOGLE REVIEW (Task 87) — the public testimonial source
+// =====================================================
+// Reviews synced from the Kozy Care Google Business Profile (Places API)
+// or entered by the office from the public Google listing (source MANUAL).
+// These are the PUBLIC testimonials: Google is the single place customers
+// are asked to review, and the wall on the site displays what Google holds,
+// under the office's selection (auto mode: rating >= 4 and not hidden;
+// manual mode: explicitly approved rows).
+model GoogleReview {
+  id           String   @id @default(cuid())
+  // Stable identity within Google's listing: sha256(author + review time +
+  // first chars of text) — makes the sync idempotent.
+  googleKey    String   @unique
+  authorName   String
+  rating       Int
+  text         String?  @db.Text
+  // Google's phrasing, e.g. "2 weeks ago" (kept verbatim for attribution).
+  relativeTime String?
+  reviewedAt   DateTime?
+  // Selection: approved = the office manually picked it (manual mode);
+  // hidden = never shown regardless of mode. Auto mode shows rating >= 4
+  // and not hidden.
+  approved     Boolean  @default(false)
+  hidden       Boolean  @default(false)
+  // SYNC = pulled from the Places API; MANUAL = typed by the office from
+  // the public Google listing (their own data entry).
+  source       String   @default("SYNC")
+  syncedAt     DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([hidden, rating])
+}
+
+// =====================================================
+// REVIEW ASK STATE (Task 87) — the anti-harassment memory
+// =====================================================
+// One row per customer. The review-invitation cadence is counted from here:
+// a customer is asked ONLY while they have not clicked through to Google
+// (our honest proxy for "they left a review"), have not opted out, and the
+// asks stay inside the caps (max 1 per 30 days, max 6 lifetime). The state
+// is written by the delivered-status email and the sweep's backfill job.
+model ReviewAskState {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  asksTotal       Int       @default(0)
+  lastAskedAt     DateTime?
+  // Set the first time they tap the Google review link in an email — from
+  // that moment they are never asked again (assume they reviewed).
+  clickedThroughAt DateTime?
+  // Set via the one-tap "never ask me again" link in any ask email.
+  optedOutAt      DateTime?
+  // The order the last ask rode on (an ask is never repeated for the same
+  // delivery).
+  lastOrderId     String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }
 
 // =====================================================

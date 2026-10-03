@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "Based on the image provided:\n\n1.  **No.** The image shows the **hero section** of the homepage (featuring a headline, \"Book Pickup Now\" button, and an image of white shirts). It does not show any testimonials or reviews.\n2.  **No.** There are no review badges, chips, or timestamps visible in this section.\n3.  **No.** There is no \"Leave a Google review\" button; there is only a yellow \"Book Pickup Now\" button.\n4.  **No layout issues.** The hero section appears well-structured with clear typography, balanced spacing between the text and image, and a clean visual hierarchy.\n\n*Note: You may be looking for a different section of the website (likely further down the page) or a different screenshot.*",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791024309,
+  "id": "20261003184505a4ff10f09be94c56",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "20261003184505a4ff10f09be94c56",
+  "usage": {
+    "completion_tokens": 166,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 1144,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1310
+  }
+}

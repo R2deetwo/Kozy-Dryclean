@@ -596,6 +596,62 @@ export function SettingsView() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Task 87 — the customer-email cooling controls (owner directive).
+              The conversion (upsell) emails are paused while today is before
+              this date; the sweep logs every suppressed candidate so the
+              office always sees who is waiting. Review invitations are a
+              service follow-up, not a campaign — they run with their own
+              built-in caps (one ask per delivery, 30-day gap, stops for good
+              once the customer reviews). */}
+          <Card className="border-navy-100 shadow-navy">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-serif text-navy">
+                <Mail className="h-4 w-4 text-gold-400" /> Customer emails — cadence &amp; cooling
+              </CardTitle>
+              <p className="text-xs text-navy-300">
+                How often the system may email customers who are not members. Conservative by
+                design — a quiet inbox is a kept customer.
+              </p>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!app ? (
+                <p className="py-4 text-center text-sm text-navy-300">Loading…</p>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+                    <Label htmlFor="upsell-paused-until" className="text-xs font-semibold uppercase tracking-wide text-navy-300">
+                      Conversion emails paused until
+                    </Label>
+                    <Input
+                      id="upsell-paused-until"
+                      type="date"
+                      value={(app.upsellEmailsPausedUntil || '').slice(0, 10)}
+                      onChange={(e) => setApp({ upsellEmailsPausedUntil: e.target.value ? new Date(e.target.value).toISOString() : '' })}
+                      className="mt-1.5 max-w-xs"
+                    />
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-navy-300">
+                      While today is before this date, the monthly &ldquo;your spend would fit a
+                      plan&rdquo; emails are <span className="font-medium text-navy">planned but never sent</span> —
+                      the morning sweep logs every suppressed candidate. The pause started
+                      automatically at 30 days. Clear the date to resume.
+                    </p>
+                  </div>
+                  <div className="rounded-lg border border-navy-100 bg-linen-50 p-3 text-xs leading-relaxed text-navy-300">
+                    <p className="font-medium text-navy">Review invitations (Google) — the caps:</p>
+                    <p className="mt-1">
+                      Sent with the delivered-order email, at most <span className="font-medium text-navy">one per
+                      delivery</span>, a <span className="font-medium text-navy">30-day gap</span> between asks,{' '}
+                      <span className="font-medium text-navy">6 lifetime</span> per customer — and they stop for good
+                      the moment a customer taps through to Google (we treat that as reviewed) or taps
+                      &ldquo;never ask again&rdquo;. A customer whose recent private feedback was below 4★ is never
+                      asked to take anything public. Nothing to arm — the caps are the design.
+                    </p>
+                  </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* BRANCHES TAB (phase 62) — the physical locations: zones owned,

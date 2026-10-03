@@ -20,6 +20,12 @@ import { getAppSettings } from '@/lib/app-settings'
 import { isValidEmail, normalizeEmail } from '@/lib/email-validation'
 import { db } from '@/lib/db'
 import type { NotificationEventType, NotificationEmailStatus } from '@/lib/types'
+import {
+  eligibleForReviewAsk,
+  googleReviewAskLink,
+  recordReviewAskSent,
+  reviewAskOptOutLink,
+} from '@/lib/google-reviews'
 
 type NotifiableOrder = {
   id: string
@@ -409,12 +415,42 @@ export async function notifyOrderStatus(
     const heading = isDelivered
       ? 'Your order was delivered — how did we do?'
       : copy.title
+
+    // ----- Task 87: the Google review ask (anti-harassment gated) -----
+    // Google is now the SINGLE place we ask customers to review. The ask
+    // rides the delivered email — the perfectly-timed moment — but ONLY
+    // while the ask-state machine says yes: not opted out, not already
+    // clicked through to Google (assume reviewed — never again), inside
+    // the 30-day gap and lifetime caps, never twice for one delivery, and
+    // never for a customer whose recent private feedback was unhappy.
+    // Everyone else gets a quiet delivery note.
+    let reviewAsk: { url: string; optOutUrl: string } | null = null
+    if (isDelivered && order.user?.id) {
+      try {
+        if (await eligibleForReviewAsk(order.user.id, { orderId: order.id })) {
+          reviewAsk = {
+            url: googleReviewAskLink(order.user.id, order.id),
+            optOutUrl: reviewAskOptOutLink(order.user.id),
+          }
+          await recordReviewAskSent(order.user.id, order.id)
+        }
+      } catch (e) {
+        console.error('[notify] review-ask eligibility failed (email still sends):', e)
+      }
+    }
+
     const intro = isDelivered
-      ? `${firstName ? `${firstName}, your` : 'Your'} garments are back with you — freshly cleaned, pressed and ready for the week. If everything looks and feels exactly right, we would love a quick rating: it takes about 30 seconds and it genuinely helps other Lagos households choose well.${
-          (order as any).guaranteeActive
-            ? ' If anything is NOT as it should be, check your items now — you have 24 hours from delivery to tell us under the Return-as-Received Guarantee, and your pre-pickup photos are on file.'
-            : ''
-        }`
+      ? reviewAsk
+        ? `${firstName ? `${firstName}, your` : 'Your'} garments are back with you — freshly cleaned, pressed and ready for the week. If everything looks and feels exactly right, a Google review is the one thing that genuinely helps other Lagos households choose well — it takes about 60 seconds and it means a great deal to a young Lagos business.${
+            (order as any).guaranteeActive
+              ? ' If anything is NOT as it should be, <strong style="color:#0A192F;">tell us privately instead</strong> — check your items now, you have 24 hours from delivery under the Return-as-Received Guarantee, and your pre-pickup photos are on file.'
+              : ' And if anything is <strong style="color:#0A192F;">not</strong> right, tell us privately instead — reply to this email or call the office, and we will make it right. That matters more to us than any rating.'
+          }`
+        : `${firstName ? `${firstName}, your` : 'Your'} garments are back with you — freshly cleaned, pressed and ready for the week. We hope everything is exactly as it should be.${
+            (order as any).guaranteeActive
+              ? ' If anything is not, check your items now — you have 24 hours from delivery to tell us under the Return-as-Received Guarantee, and your pre-pickup photos are on file.'
+              : ''
+          }`
       : copy.body
 
     // Phase 56 category per stage — the customer inbox can be triaged
@@ -437,8 +473,13 @@ export async function notifyOrderStatus(
       order,
       cta:
         newStatus === 'DELIVERED'
-          ? { label: 'Rate your experience', url: `${baseUrl()}/review/${order.id}` }
+          ? reviewAsk
+            ? { label: 'Review Kozy on Google', url: reviewAsk.url }
+            : { label: 'View my order', url: `${baseUrl()}/portal` }
           : { label: 'Track your order', url: `${baseUrl()}/portal` },
+      footer: reviewAsk
+        ? `You receive this review invitation because your Kozy order was just delivered — at most one per month, and it stops for good once you have reviewed us.<br>Prefer we never ask? <a href="${reviewAsk.optOutUrl}" style="color:#0A192F;font-weight:600;text-decoration:underline;text-decoration-color:#D4AF37;">One tap, never asked again</a>.<br>Kozy Care — Uncompromising care. Exceptional convenience.`
+        : undefined,
     })
     await sendEmail({ to: order.user.email, subject, html })
 
@@ -1940,6 +1981,59 @@ export async function notifyMembershipCancelled(opts: {
 //   • RENEWAL reminder — a transfer member whose month is about to end.
 // =============================================================================
 
+
+// =============================================================================
+// Task 87 — the Google review ask (standalone, for the sweep's backfill)
+// =============================================================================
+// Customers whose delivery happened BEFORE the delivered-email ask existed
+// get ONE catch-up invitation through the daily sweep — same offer, same
+// anti-harassment state machine, same opt-out. After the backfill window
+// passes, the delivered email is the only ask that fires.
+// =============================================================================
+
+/** "Review us on Google" — one calm invitation after a recent delivery. */
+export async function notifyGoogleReviewAsk(opts: {
+  user: { id: string; name: string; email: string }
+  orderNumber: string
+  reviewUrl: string
+  optOutUrl: string
+  contactPhone: string
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const { subject, html } = memberEmailChrome({
+      category: 'membership',
+      heading: `${firstName}, one small favour after your delivery`,
+      bodyHtml: `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        Your recent Kozy order <strong style="color:#0A192F;">#${opts.orderNumber}</strong> is delivered — we hope everything came back
+        exactly as it should. If it did, a Google review is the one thing that genuinely helps other Lagos
+        households find a cleaner they can trust. It takes about 60 seconds.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 12px 0;">
+        And if something was <strong style="color:#0A192F;">not</strong> right — tell us directly instead. Call
+        <strong style="color:#0A192F;">${opts.contactPhone}</strong> or reply to this email and we will make it right; that matters
+        more to us than any rating.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
+        This is the only review email you will get for this order — and once you have reviewed us, we stop
+        asking for good. Rather we never asked at all?
+        <a href="${opts.optOutUrl}" style="color:#0A192F;font-weight:600;text-decoration:underline;text-decoration-color:#D4AF37;">One tap, never asked again</a>.
+      </p>`,
+      ctas: [
+        {
+          label: 'Review Kozy on Google',
+          url: opts.reviewUrl,
+          variant: 'gold',
+        },
+      ],
+      footer: `You receive this because a Kozy order was delivered to you recently.<br>Kozy Care — Uncompromising care. Exceptional convenience.`,
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyGoogleReviewAsk failed:', e)
+  }
+}
 
 // =============================================================================
 // Task 86 — the conversion email (checkout-spend → membership pitch)

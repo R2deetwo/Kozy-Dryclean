@@ -10,7 +10,7 @@ export default function TermsPage() {
     <div className="min-h-screen bg-[#F8F9FA] py-12">
       <div className="mx-auto max-w-3xl px-4 sm:px-6">
         <h1 className="font-serif text-3xl font-bold text-[#0A192F] mb-2">Terms of Service</h1>
-        <p className="text-sm text-[#6F88A8] mb-8">Effective Date: August 2025</p>
+        <p className="text-sm text-[#6F88A8] mb-8">Effective Date: 3 October 2026</p>
         <div className="space-y-6">
           <div><h2 className="font-serif text-xl font-semibold mb-2 text-[#0A192F]">Company Information</h2>
             <p className="text-sm text-[#6F88A8]">Kozy Care Drycleaning &amp; Laundry Services<br/>Address: No 20, Westsyde Drive, Ogombo, Lagos State<br/>Email: kozygarmentcare@gmail.com<br/>Phone: +234 803 175 5230</p></div>
@@ -34,8 +34,15 @@ export default function TermsPage() {
             <p className="text-sm text-[#6F88A8]">Governed by the laws of the Federal Republic of Nigeria. Disputes resolved through mediation in Lagos State, then Lagos State High Court.</p></div>
           <div><h2 className="font-serif text-xl font-semibold mb-2 text-[#0A192F]">10. Reviews &amp; Testimonials</h2>
             <p className="text-sm text-[#6F88A8] leading-relaxed">
-              Customer reviews are tied to completed, delivered orders and may be submitted either
-              through the private review link sent after delivery or through our feedback page by
+              Public reviews are collected on our Google Business Profile — reviews left on Google
+              are governed by Google&apos;s terms of service, and our website displays a selection of
+              them (with the author name Google shows and Google&apos;s own &ldquo;when&rdquo; label)
+              on our testimonials section; we select what to display and may hide entries, but we
+              never alter a review&apos;s words, rating or attribution. After a delivery we may
+              email you an invitation to review us on Google — at most one per delivery, at least
+              30 days apart, and never again once you have reviewed us or tapped the one-tap
+              &ldquo;never ask again&rdquo; link included in every invitation. Private feedback may
+              also be given through our feedback page by
               providing your order number together with the email address or phone number used at
               booking. One review per order. Reviews rated 4.5 stars and above may appear on our
               public testimonials wall, displayed with the display name and location you choose

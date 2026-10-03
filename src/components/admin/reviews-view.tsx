@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Star, Check, X, Eye, EyeOff, MessageSquare, MapPin, User, Inbox, Loader2 } from 'lucide-react'
 import { useAdminReviews, useModerateReview, ADMIN_POLL, type ApiReview } from '@/lib/hooks'
+import { GoogleReviewsSection } from './google-reviews-section'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -54,15 +55,19 @@ export function ReviewsView() {
 
   return (
     <div className="space-y-6">
+      {/* ===== Task 87: Google reviews — the wall's source (managed) ===== */}
+      <GoogleReviewsSection />
+
       {/* ===== Header + stats ===== */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h2 className="font-serif text-2xl font-semibold tracking-tight text-navy">
-            Reviews &amp; Testimonials
+            Verified-order reviews &amp; private feedback
           </h2>
           <p className="mt-1 text-sm text-navy-300">
-            Approve reviews to show them on the public testimonials carousel. Reviews below 4.5★
-            never appear publicly but are visible here for your records.
+            Collected before the ask moved to Google — still order-verified and still shown on the
+            wall alongside Google reviews. Below 4.5★ they stay private (your records); a recent
+            low rating also pauses that customer&rsquo;s review invitations.
           </p>
         </div>
         <div className="flex items-center gap-4 rounded-xl bg-white px-4 py-2 ring-1 ring-navy-100">

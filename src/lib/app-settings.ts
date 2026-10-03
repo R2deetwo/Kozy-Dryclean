@@ -51,6 +51,10 @@ export const APP_SETTING_KEYS = [
   'rider_distance_cap',
   // Phase 77 — the Kozy Store master switch (super-admin only, ships dark)
   'store_enabled',
+  // Task 87 — Google-review wall selection mode + the conversion-email
+  // cooling date (owner directive: no upsell sends for a while).
+  'google_review_auto_select',
+  'upsell_emails_paused_until',
 ] as const
 
 export type AppSettingKey = (typeof APP_SETTING_KEYS)[number]
@@ -115,6 +119,8 @@ function rowsToSettings(rows: { key: string; value: string }[]): KozyAppSettings
     riderFreeKm: num('rider_free_km', d.riderFreeKm),
     riderDistanceCap: num('rider_distance_cap', d.riderDistanceCap),
     storeEnabled: bool('store_enabled', d.storeEnabled),
+    googleReviewAutoSelect: bool('google_review_auto_select', d.googleReviewAutoSelect),
+    upsellEmailsPausedUntil: str('upsell_emails_paused_until', d.upsellEmailsPausedUntil),
     // Not a DB setting — derived from the server env at the API layer. The
     // false here is a placeholder so this DB-mapped object satisfies the
     // type; callers that care use the /api/settings/app response, which
@@ -163,6 +169,14 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
       rider_free_km: JSON.stringify(d.riderFreeKm),
       rider_distance_cap: JSON.stringify(d.riderDistanceCap),
       store_enabled: JSON.stringify(d.storeEnabled),
+      google_review_auto_select: JSON.stringify(d.googleReviewAutoSelect),
+      // Task 87 (owner directive): the cooling period self-seeds to 30 days
+      // out the first time the table is ever built. On the LIVE table this
+      // key is already absent → the upsert below writes today+30d exactly
+      // once, and from then on the office owns the date.
+      upsell_emails_paused_until: JSON.stringify(
+        new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      ),
     }
     const missing = (Object.keys(seed) as AppSettingKey[]).filter((k) => !existing.has(k))
     if (missing.length > 0) {
@@ -192,6 +206,12 @@ export async function getAppSettings(): Promise<KozyAppSettings> {
  *  API route before calling this). */
 export async function saveAppSettings(patch: Partial<KozyAppSettings>): Promise<KozyAppSettings> {
   const map: Partial<Record<AppSettingKey, string>> = {}
+  // Task 87 — Google-review wall mode + the conversion-email cooling date.
+  if (patch.googleReviewAutoSelect !== undefined)
+    map.google_review_auto_select = JSON.stringify(patch.googleReviewAutoSelect)
+  if (patch.upsellEmailsPausedUntil !== undefined)
+    map.upsell_emails_paused_until = JSON.stringify(patch.upsellEmailsPausedUntil.trim())
+
   if (patch.bankName !== undefined) map.bank_name = JSON.stringify(patch.bankName)
   if (patch.accountName !== undefined) map.account_name = JSON.stringify(patch.accountName)
   if (patch.accountNumber !== undefined) map.account_number = JSON.stringify(patch.accountNumber)
