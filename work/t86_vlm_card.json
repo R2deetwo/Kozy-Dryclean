@@ -1,0 +1,28 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "1) **Yes**, the card explicitly states: \"This ₦22,400 basket could be your **first Kozy Bag — free**.\"\n2) **Yes**, it names the plan \"**The Essentials**\" at a price of \"₦30,000/month\".\n3) **Yes**, there is a prominent **gold button** (\"Make this my first Kozy Bag...\") and a text-based \"**No thanks**\" option next to it.\n4) **Yes**, the \"**Choose payment method**\" section (including Bank Transfer and Pay Online options) is clearly visible immediately below the promotional card.\n5) **No significant layout problems.** The page follows a logical vertical flow: Order Summary → Coupon → Upsell Card → Payment Options. The hierarchy is clear, and the dark card effectively breaks up the white space to draw attention to the membership offer without obscuring the payment details below.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1791020944,
+  "id": "202610031748585e33e34740b6474d",
+  "model": "glm-5v-turbo",
+  "object": "chat.completion",
+  "request_id": "202610031748585e33e34740b6474d",
+  "usage": {
+    "completion_tokens": 184,
+    "completion_tokens_details": {
+      "reasoning_tokens": 0
+    },
+    "prompt_tokens": 2932,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 3116
+  }
+}

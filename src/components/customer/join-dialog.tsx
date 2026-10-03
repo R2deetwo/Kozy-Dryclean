@@ -21,11 +21,17 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { signOut } from 'next-auth/react'
-import { ArrowRight, BadgeCheck, Banknote, CreditCard, Loader2, LogIn, LogOut, Upload, UserPlus } from 'lucide-react'
+import { ArrowRight, BadgeCheck, Banknote, CreditCard, Loader2, LogIn, LogOut, ShoppingBag, Upload, UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { toast } from '@/hooks/use-toast'
 import { formatNaira, PEOPLE_PER_TIER } from '@/lib/types'
+import { clearDraft } from '@/lib/booking-draft'
+import {
+  clearFirstBagMarker,
+  loadFirstBagMarker,
+  type FirstBagMarker,
+} from '@/lib/upsell'
 import {
   useAppSettings,
   useSubscribe,
@@ -70,6 +76,14 @@ export function JoinDialog({
   const [receipt, setReceipt] = useState<string | null>(null)
   const [done, setDone] = useState<'paystack-redirect' | 'transfer-pending' | null>(null)
   const [signingOut, setSigningOut] = useState(false)
+  // ----- Task 86: the first Kozy Bag claimed at checkout -----
+  // When the customer accepted the conversion pitch in the booking wizard,
+  // a note with their exact basket (mixed as it is) waited in localStorage.
+  // It rides along with the join; the server records it on the membership
+  // ledger, and the moment the first month is paid the basket books itself
+  // as the first weekly pickup — free. The marker survives the whole
+  // signup → verify-email → login detour (7-day TTL, same as the draft).
+  const [firstBag] = useState<FirstBagMarker | null>(() => loadFirstBagMarker())
 
   const isClub = plan.family === 'SHOES'
   const auth = authStatus ?? (sessionEmail ? 'authenticated' : 'unauthenticated')
@@ -126,7 +140,33 @@ export function JoinDialog({
         planCode: plan.code,
         paymentMethod: method,
         ...(receipt ? { transferReceipt: receipt } : {}),
+        // Task 86 — the claimed first Kozy Bag rides with the join. The
+        // server validates every field and records it on the ledger; it
+        // books as the first weekly pickup (₦0, mixed basket honoured) the
+        // moment the first month is paid.
+        ...(firstBag
+          ? {
+              firstBag: {
+                items: firstBag.items,
+                pickupAddress: firstBag.pickupAddress,
+                pickupDate: firstBag.pickupDate,
+                pickupSlot: firstBag.pickupSlot,
+                deliveryAddress: firstBag.deliveryAddress,
+                ...(firstBag.modeOfWash ? { modeOfWash: firstBag.modeOfWash } : {}),
+                ...(firstBag.serviceSpeed ? { serviceSpeed: firstBag.serviceSpeed } : {}),
+                ...(firstBag.alterationNotes ? { alterationNotes: firstBag.alterationNotes } : {}),
+                estimatedTotal: firstBag.estimatedTotal,
+              },
+            }
+          : {}),
       })
+      // The basket is claimed server-side now — release the local note and
+      // the booking draft so this exact basket can never double-book as a
+      // one-off order later.
+      if (firstBag) {
+        clearFirstBagMarker()
+        clearDraft()
+      }
 
       if (res.next === 'paystack') {
         setDone('paystack-redirect')
@@ -208,6 +248,26 @@ export function JoinDialog({
                 <p className="mt-2 text-[11px] text-navy-300">Billed to {sessionEmail}</p>
               )}
             </div>
+
+            {/* Task 86 — the first Kozy Bag claimed at checkout. Gold panel
+                so it reads as the head start it is: their exact basket rides
+                free as the first weekly pickup the moment this first month is
+                paid. Mixed basket, no scrutiny — the owner's own promise. */}
+            {firstBag && !isClub && (
+              <div className="mt-3 flex items-start gap-3 rounded-xl border border-gold-200 bg-gold-50/70 p-4">
+                <ShoppingBag className="mt-0.5 h-5 w-5 shrink-0 text-gold-600" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-semibold text-navy">
+                    Your {formatNaira(firstBag.estimatedTotal)} basket rides as your first {plan.unitName} — free
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-navy-300">
+                    Exactly what you built at checkout, mixed as it is. It becomes the first
+                    weekly pickup of this plan the moment your first month is paid — no
+                    counting, no scrutiny, nothing extra to book.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {auth === 'loading' ? (
               /* Session still resolving — hold the dialog rather than flashing
@@ -397,7 +457,10 @@ export function JoinDialog({
                   Transfer <strong className="text-navy">{formatNaira(plan.priceMonthly)}</strong> to
                   the studio account — the full details are waiting at the top of your portal,
                   reference included. The moment our team verifies it, your month starts and your
-                  rider schedules the kit hand-over.
+                  rider schedules the kit hand-over
+                  {firstBag
+                    ? ' — delivering your kit and collecting your first Bag (already saved from checkout) in the same visit.'
+                    : '.'}
                 </>
               )}
             </p>

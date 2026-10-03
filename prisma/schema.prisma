@@ -117,6 +117,10 @@ model User {
   // The customer's Kozy Circle memberships (history preserved — one live,
   // cancelled/lapsed ones remain for the record).
   subscriptions       Subscription[]
+  // ----- Membership upsell log (Task 86) -----
+  // Every conversion email this customer has been sent (the monthly
+  // checkout-spend pitch). The cadence cap reads straight from here.
+  membershipUpsellLogs MembershipUpsellLog[] @relation("MembershipUpsellLogs")
   // ----- Rider payouts (phase 72) -----
   // Money the office has actually PAID this rider (weekly settlement of
   // completed-stop earnings). The rider's pending balance is computed
@@ -1261,6 +1265,32 @@ model SubscriptionEvent {
 
   @@index([subscriptionId, createdAt])
   @@index([orderId])
+}
+
+// =====================================================
+// MEMBERSHIP UPSELL LOG (Task 86) — the conversion engine's memory
+// =====================================================
+// One row per conversion email a customer has received (the monthly
+// "your laundry spend would fit a plan" pitch). The sweep's cadence is
+// counted from here: at most one email per customer per 30 days, only
+// while their trailing spend stays inside a pitch band and they hold no
+// laundry membership. Deletion rides the user (CASCADE) — the log is a
+// courtesy memory, not a money record.
+model MembershipUpsellLog {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation("MembershipUpsellLogs", fields: [userId], references: [id], onDelete: Cascade)
+  // The tier the email pitched (ESSENTIALS / HOUSEHOLD / WHOLEHOME).
+  planCode  String
+  // Human-readable band snapshot, e.g. "spend=23400 band=15000-29999".
+  spendBand String
+  // The trailing window the spend was measured over (days) — the email
+  // quotes the number, so the log records how it was computed.
+  spendWindowDays Int @default(60)
+  sentAt    DateTime @default(now())
+
+  @@index([userId, sentAt])
+  @@index([sentAt])
 }
 
 // =====================================================

@@ -1543,6 +1543,21 @@ export function useSubscribe() {
       planCode: string
       paymentMethod: 'PAYSTACK' | 'BANK_TRANSFER'
       transferReceipt?: string
+      // Task 86 — the first Kozy Bag claimed at checkout: the wizard's
+      // exact basket (mixed as it is) rides with the join. The server
+      // validates it and records it on the membership ledger; it books as
+      // the first weekly pickup (₦0) when the first month is paid.
+      firstBag?: {
+        items: Record<string, number>
+        pickupAddress: string
+        pickupDate: string
+        pickupSlot: string
+        deliveryAddress: string
+        modeOfWash?: 'MACHINE' | 'HANDWASH' | 'IRON_ONLY'
+        serviceSpeed?: 'STANDARD' | 'EXPRESS_24' | 'EXPRESS_48' | 'EXPRESS_12'
+        alterationNotes?: string
+        estimatedTotal: number
+      }
     }) => {
       const res = await fetch('/api/subscriptions', {
         method: 'POST',
@@ -1556,7 +1571,11 @@ export function useSubscribe() {
         ;(err as any).subscription = data.subscription
         throw err
       }
-      return data as { subscription: ApiMembership; next: 'paystack' | 'transfer' }
+      return data as {
+        subscription: ApiMembership
+        next: 'paystack' | 'transfer'
+        firstBagClaimed?: boolean
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['my-membership'] }),
   })

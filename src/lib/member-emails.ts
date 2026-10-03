@@ -14,6 +14,12 @@
 //   (PAST_DUE day 1) without a renewal gets the one-tap reactivation email.
 //   Sent once per lapse.
 //
+//   Job 4 — CONVERSION PITCH (Task 86): a customer whose trailing 60-day
+//   spend lands in an upsell band (₦15k+ → the tier it maps to) but who
+//   holds no laundry membership gets the monthly "your spend would fit a
+//   plan" email — the same first-Kozy-Bag offer the checkout card makes.
+//   Monthly per customer while the spend stays in a band; stops on join.
+//
 // ALWAYS ON FOR MEMBERS (phase 77, the owner's directive): there is no
 //   admin toggle — real members receive their emails as a matter of course.
 //   The only guard is for OUR OWN testing: when MEMBER_EMAIL_TEST_MODE is
@@ -40,8 +46,10 @@ import {
   notifyMembershipMonthlySummary,
   notifyMembershipPaused,
   notifyMembershipFirstPaymentNudge,
+  notifyMembershipUpsell,
 } from '@/lib/notifications'
 import { getStoreProducts } from '@/lib/kozy-store'
+import { upsellPlanForTotal } from '@/lib/upsell'
 
 function baseUrl(): string {
   return (
@@ -83,7 +91,7 @@ export function memberEmailTestMode(): boolean {
 export type SweepOutcome = 'SENT' | 'SUPPRESSED' | 'SKIPPED_SENT_ALREADY' | 'DRY_RUN'
 
 export interface SweepDetail {
-  job: 'summary' | 'paused' | 'first-payment'
+  job: 'summary' | 'paused' | 'first-payment' | 'conversion'
   member: { name: string; email: string }
   planName: string
   outcome: SweepOutcome
@@ -101,6 +109,8 @@ export interface SweepResult {
   /** Task 82 */
   cancellationsApplied: number
   firstPaymentCandidates: number
+  /** Task 86 — the conversion pitch: customers in a spend band, no membership */
+  upsellCandidates: number
   sent: number
   suppressed: number
   skipped: number
@@ -498,6 +508,7 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
     allowlist,
     summaryCandidates: 0,
     pausedCandidates: 0,
+    upsellCandidates: 0,
     cancellationsApplied: 0,
     firstPaymentCandidates: 0,
     sent: 0,
@@ -715,6 +726,141 @@ export async function runMemberEmailSweep(opts: { dry?: boolean } = {}): Promise
       reason: opts.dry ? 'Dry run — planned only' : 'First-payment nudge sent',
       subjectHint,
     })
+  }
+
+  // ----- Task 86, Job 4: the conversion pitch (checkout-spend → a plan) -----
+  // Customers (B2C) whose trailing-60-day order spend lands in an upsell
+  // band — ₦15,000+ maps to the tier that spend fits — and who hold NO
+  // laundry membership get the monthly "your spend would fit a plan" email.
+  // The same first-Kozy-Bag offer the checkout card makes, by email, with a
+  // deep link that opens the exact plan's join dialog. Cadence: at most one
+  // per customer per 30 days (counted from MembershipUpsellLog), every
+  // month while the spend stays in a band, and it stops the moment they
+  // hold a laundry membership. Shoe Club members still get it — the tiers
+  // are the laundry product; the club is a separate family.
+  try {
+    const UPSELL_WINDOW_DAYS = 60
+    const UPSELL_GAP_MS = 30 * 24 * 60 * 60 * 1000
+    const since = new Date(now - UPSELL_WINDOW_DAYS * 24 * 60 * 60 * 1000)
+
+    // Live laundry memberships (any state that isn't dead) — members never
+    // get pitched at.
+    const liveSubs = await db.subscription.findMany({
+      where: { status: { in: ['PENDING_ACTIVATION', 'ACTIVE', 'PAST_DUE'] }, plan: { family: 'KIT' } },
+      select: { userId: true },
+    })
+    const memberUserIds = new Set(liveSubs.map((r) => r.userId))
+
+    // Candidates: customer accounts with in-window spend, newest first.
+    const spendRows = await db.order.findMany({
+      where: {
+        type: 'ITEM',
+        status: { not: 'CANCELLED' },
+        createdAt: { gte: since },
+        totalPrice: { gte: 1 },
+      },
+      select: { userId: true, totalPrice: true },
+    })
+    const spendByUser = new Map<string, number>()
+    for (const r of spendRows) {
+      if (!r.userId) continue
+      spendByUser.set(r.userId, (spendByUser.get(r.userId) ?? 0) + (r.totalPrice ?? 0))
+    }
+
+    // Previous sends (one query, not N+1).
+    const logRows = await db.membershipUpsellLog.findMany({
+      where: { sentAt: { gte: new Date(now - 45 * 24 * 60 * 60 * 1000) } },
+      select: { userId: true, sentAt: true },
+      orderBy: { sentAt: 'desc' },
+    })
+    const lastSentByUser = new Map<string, number>()
+    for (const r of logRows) {
+      if (!lastSentByUser.has(r.userId)) lastSentByUser.set(r.userId, new Date(r.sentAt).getTime())
+    }
+
+    // The plan rows (name/price/perks come from the live plans, never
+    // hard-coded) + the people-count copy.
+    const { getPlans } = await import('@/lib/subscriptions')
+    const { PEOPLE_PER_TIER } = await import('@/lib/types')
+    const plans = await getPlans(true)
+    const planByCode = new Map(plans.map((p) => [p.code, p]))
+
+    const candidateIds = [...spendByUser.entries()]
+      .filter(([userId, spend]) => !memberUserIds.has(userId) && upsellPlanForTotal(spend) !== null)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 50) // a calm batch per day; the rest follow tomorrow
+
+    for (const [userId, spend] of candidateIds) {
+      const planCode = upsellPlanForTotal(spend)
+      const plan = planCode ? planByCode.get(planCode) : undefined
+      if (!plan) continue
+
+      // Cadence: inside the 30-day quiet gap — pure silence, no detail row.
+      const lastAt = lastSentByUser.get(userId) ?? null
+      if (lastAt !== null && now - lastAt < UPSELL_GAP_MS) continue
+
+      result.upsellCandidates++
+      const user = await db.user.findUnique({
+        where: { id: userId },
+        select: { name: true, email: true, role: true },
+      })
+      // Only personal-customer accounts are pitched (B2B buys per-kg programs
+      // through the office; riders/partners/team never).
+      if (!user || !user.email || user.role !== 'B2C') continue
+
+      const safe = !testMode || isTestSafeRecipient(user.email, allowlist)
+      if (!safe) {
+        result.suppressed++
+        result.details.push({
+          job: 'conversion',
+          member: { name: user.name, email: user.email },
+          planName: plan.name,
+          outcome: 'SUPPRESSED',
+          reason:
+            'Test mode is ON and this recipient is outside the test allowlist — logged only; production sends to every customer',
+        })
+        continue
+      }
+
+      if (!opts.dry) {
+        const settings = await getAppSettings()
+        await notifyMembershipUpsell({
+          user: { name: user.name, email: user.email },
+          plan: {
+            code: plan.code,
+            name: plan.name,
+            priceMonthly: plan.priceMonthly,
+            unitName: plan.unitName,
+            includedUnits: plan.includedUnits,
+          },
+          peoplePerTier: PEOPLE_PER_TIER[plan.code] ?? 1,
+          spend,
+          spendWindowDays: UPSELL_WINDOW_DAYS,
+          ...(plan.bedsheetsPerMonth ? { bedsheetsPerMonth: plan.bedsheetsPerMonth } : {}),
+          joinUrl: `${baseUrl()}/memberships?join=${encodeURIComponent(plan.code)}`,
+          contactPhone: settings.contactPhone,
+        })
+        await db.membershipUpsellLog.create({
+          data: {
+            userId,
+            planCode: plan.code,
+            spendBand: `spend=${Math.round(spend)} band=${plan.code}`,
+            spendWindowDays: UPSELL_WINDOW_DAYS,
+          },
+        })
+        result.sent++
+      }
+      result.details.push({
+        job: 'conversion',
+        member: { name: user.name, email: user.email },
+        planName: plan.name,
+        outcome: opts.dry ? 'DRY_RUN' : 'SENT',
+        reason: `Trailing ${UPSELL_WINDOW_DAYS}-day spend ${Math.round(spend).toLocaleString('en-NG')} naira — pitched ${plan.name}`,
+        subjectHint: `Your laundry already runs like a member's (${plan.name})`,
+      })
+    }
+  } catch (e) {
+    console.error('[member-emails] conversion pitch job failed:', e)
   }
 
   return result

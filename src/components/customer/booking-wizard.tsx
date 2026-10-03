@@ -93,6 +93,11 @@ import {
   clearDraft,
   rememberAuthRedirect,
 } from '@/lib/booking-draft'
+import {
+  upsellPlanForTotal,
+  saveFirstBagMarker,
+  UPSELL_MIN_TOTAL,
+} from '@/lib/upsell'
 
 // Zustand is now only used for settings (pricing config) — orders/payments go through the API
 import { cn } from '@/lib/utils'
@@ -713,6 +718,105 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
   const grossTotal = cleaningBase + expressSurcharge
   const total =
     Math.max(0, Math.round(serviceSubtotal - discount - couponFlatAmount)) + deliveryFeeEstimate
+
+  // ----- Task 86: the checkout→membership conversion pitch -----
+  // The owner's offer, at every applicable checkout (and for new customers
+  // too): a basket totalling ₦15,000+ is offered the tier its spend maps to
+  // (15–30k → Essentials, 30–50k → Household, 50k+ → Whole Home). THIS
+  // basket — mixed as it is — becomes the member's first Kozy Bag, free;
+  // it rides as the first weekly pickup once the first month is paid. The
+  // customer's checkout is PRESERVED: dismissing the card changes nothing,
+  // and accepting only leaves a note + the already-auto-saved draft, so
+  // coming back restores this exact basket either way.
+  const [upsellDismissed, setUpsellDismissed] = useState(false)
+  // Suppressed for anyone already holding a laundry membership (live or
+  // awaiting payment) — the probe only runs for signed-in customer accounts;
+  // guests always see the card (the join flow itself refuses duplicates
+  // gracefully and redirects existing members to their payment).
+  const { data: myMembership } = useQuery({
+    queryKey: ['my-membership', 'wizard-upsell'],
+    queryFn: async () => {
+      const res = await fetch('/api/subscriptions/me')
+      if (!res.ok) return { membership: null }
+      return res.json()
+    },
+    enabled:
+      type === 'ITEM' &&
+      !isGuest &&
+      !!effectiveUser &&
+      (effectiveUser?.role === 'B2C' || effectiveUser?.role === 'B2B') &&
+      total >= UPSELL_MIN_TOTAL,
+    staleTime: 30 * 1000,
+    retry: false,
+  })
+  const holdsLaundryMembership = Boolean(
+    myMembership?.membership &&
+      (myMembership.membership.status === 'ACTIVE' ||
+        myMembership.membership.status === 'PENDING_ACTIVATION' ||
+        myMembership.membership.status === 'PAST_DUE')
+  )
+  const upsellPlanCode = upsellPlanForTotal(total)
+  const upsellEligible =
+    type === 'ITEM' &&
+    !quoteOnly &&
+    !complimentaryCheckout &&
+    !holdsLaundryMembership &&
+    upsellPlanCode !== null &&
+    !upsellDismissed
+  // The live plan row (name + real price — admin-editable, so never
+  // hard-coded) for the tier the basket maps to. Fetched only when the card
+  // would actually render.
+  const { data: upsellPlans } = useQuery({
+    queryKey: ['membership-plans', 'upsell'],
+    queryFn: async () => {
+      const res = await fetch('/api/subscriptions/plans?active=1')
+      if (!res.ok) throw new Error('Failed to load plans')
+      return (await res.json()).plans as Array<{
+        code: string
+        name: string
+        priceMonthly: number
+        unitName: string
+        includedUnits: number
+      }>
+    },
+    enabled: upsellEligible,
+    staleTime: 60 * 1000,
+    retry: false,
+  })
+  const upsellPlan =
+    upsellEligible && upsellPlanCode
+      ? upsellPlans?.find((p) => p.code === upsellPlanCode) ?? null
+      : null
+  /** Accept the offer: leave a first-bag note (the draft already holds the
+   *  basket), then route to the plan's join dialog — through signup for
+   *  guests (the plan carries over that whole detour), straight to the
+   *  dialog for signed-in customers. */
+  const acceptCheckoutUpsell = () => {
+    if (!upsellPlanCode) return
+    saveFirstBagMarker({
+      planCode: upsellPlanCode,
+      items,
+      pickupAddress,
+      pickupDate,
+      pickupSlot,
+      deliveryAddress,
+      ...(modeOfWash ? { modeOfWash } : {}),
+      ...(effectiveSpeed ? { serviceSpeed: effectiveSpeed } : {}),
+      ...(alterationNotes.trim() ? { alterationNotes: alterationNotes.trim() } : {}),
+      estimatedTotal: total,
+    })
+    const backTo = `/memberships?join=${encodeURIComponent(upsellPlanCode)}`
+    if (isGuest) {
+      window.location.href =
+        '/signup?callbackUrl=' +
+        encodeURIComponent(backTo) +
+        (guestEmailValid ? `&email=${encodeURIComponent(guestEmail.trim())}` : '') +
+        (guestName.trim().length >= 2 ? `&name=${encodeURIComponent(guestName.trim())}` : '') +
+        (guestPhone.trim().length >= 7 ? `&phone=${encodeURIComponent(guestPhone.trim())}` : '')
+    } else {
+      window.location.href = backTo
+    }
+  }
 
   // ----- Phase 36: live coupon validation -----
   // Checks the typed code against the SERVER's exact checkout rules (same
@@ -2860,6 +2964,65 @@ export function BookingWizard({ onComplete, onCancel, allowGuest = false, initia
                       </p>
                     )}
                   </div>
+
+                  {/* ----- Task 86: the membership conversion pitch ----- */}
+                  {/* Shows at every applicable checkout (₦15,000+) for anyone
+                      not already holding a laundry membership — new
+                      customers included. Accepting leaves a first-bag note
+                      and routes to the join dialog; the basket itself is
+                      already safe in the auto-saved draft, so the one-off
+                      checkout is preserved either way. */}
+                  {upsellPlan && upsellPlanCode && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="relative mt-5 overflow-hidden rounded-2xl bg-navy p-5 text-white ring-1 ring-gold-400/40"
+                    >
+                      <div className="absolute right-0 top-0 h-24 w-24 rounded-bl-full bg-gold-400/10" />
+                      <div className="relative">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-gold-400" aria-hidden="true" />
+                          <p className="text-xs font-bold uppercase tracking-[0.14em] text-gold-300">
+                            Before you pay — one better idea
+                          </p>
+                        </div>
+                        <p className="mt-2 font-serif text-lg font-semibold leading-snug">
+                          This {formatNaira(total)} basket could be your first {upsellPlan.unitName} — free.
+                        </p>
+                        <p className="mt-2 text-sm leading-relaxed text-navy-100/80">
+                          Join <strong className="text-white">{upsellPlan.name}</strong> at{' '}
+                          {formatNaira(upsellPlan.priceMonthly)}/month and{' '}
+                          {upsellPlan.includedUnits} × {upsellPlan.unitName} pickups ride every
+                          month — each one kitted for the week. This exact basket, mixed as it
+                          is, rides as your first one at no charge: no counting, no scrutiny,
+                          it simply becomes your first weekly pickup once your first month is
+                          paid.
+                        </p>
+                        <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <Button
+                            type="button"
+                            onClick={acceptCheckoutUpsell}
+                            className="rounded-full bg-gold-gradient px-6 font-bold text-navy hover:opacity-90"
+                          >
+                            Make this my first {upsellPlan.unitName} — join{' '}
+                            {upsellPlan.name}
+                            <ArrowRight className="ml-2 h-4 w-4" />
+                          </Button>
+                          <button
+                            type="button"
+                            onClick={() => setUpsellDismissed(true)}
+                            className="rounded-full px-4 py-2 text-xs text-navy-100/60 underline-offset-2 transition hover:text-gold-300 hover:underline"
+                          >
+                            No thanks — keep my one-off checkout
+                          </button>
+                        </div>
+                        <p className="mt-3 text-[11px] leading-relaxed text-navy-100/50">
+                          Your basket stays exactly as you&apos;ve built it — the join takes
+                          about a minute, and coming back here restores this checkout untouched.
+                        </p>
+                      </div>
+                    </motion.div>
+                  )}
 
                   <p className="text-sm font-semibold">Choose payment method</p>
                   <RadioGroup

@@ -1789,6 +1789,16 @@ export async function notifyAdminNewSubscription(opts: {
   plan: { name: string; code: string; priceMonthly: number }
   paymentMethod: string
   subscriptionId: string
+  /** Task 86 — the first Kozy Bag claimed at checkout: the saved basket
+   *  books itself as the first weekly pickup (₦0) the moment the office
+   *  verifies this join's first payment. The office should KNOW it's
+   *  coming, not be surprised by a zero-naira order. */
+  firstBagClaimed?: {
+    estimatedTotal: number
+    pickupAddress: string
+    pickupDate: string
+    pickupSlot: string
+  }
 }): Promise<void> {
   try {
     const cfg = await adminAlertConfig()
@@ -1807,6 +1817,14 @@ export async function notifyAdminNewSubscription(opts: {
         { label: 'Plan', value: `${opts.plan.name} (${opts.plan.code})` },
         { label: 'Monthly', value: formatNaira(opts.plan.priceMonthly) },
         { label: 'Payment', value: opts.paymentMethod === 'PAYSTACK' ? 'Paystack (card)' : 'Bank transfer — awaiting receipt/verification' },
+        ...(opts.firstBagClaimed
+          ? [
+              {
+                label: 'First Kozy Bag',
+                value: `Claimed at checkout — their ${formatNaira(opts.firstBagClaimed.estimatedTotal)} basket (mixed, as-is) books itself as the first pickup at ${opts.firstBagClaimed.pickupSlot} on ${opts.firstBagClaimed.pickupDate} the moment you verify the first payment.`,
+              },
+            ]
+          : []),
       ],
       // Task 82: the CTA lands DIRECTLY on the Members tab — never a bare
       // dashboard dump that still needs a second click.
@@ -1921,6 +1939,67 @@ export async function notifyMembershipCancelled(opts: {
 //   • USAGE nudge — an at-risk member sitting on an unused allowance.
 //   • RENEWAL reminder — a transfer member whose month is about to end.
 // =============================================================================
+
+
+// =============================================================================
+// Task 86 — the conversion email (checkout-spend → membership pitch)
+// =============================================================================
+// Sent by the daily sweep (Job 4) to customers whose trailing 60-day spend
+// lands in an upsell band but who hold no laundry membership. The same
+// promise the checkout card makes, by email: their next basket can ride as
+// their first Kozy Bag — free, mixed as it is. Monthly per customer while
+// their spend stays in a band; stops the moment they join.
+// =============================================================================
+
+/** The monthly "your spend would fit a plan" pitch — non-members only. */
+export async function notifyMembershipUpsell(opts: {
+  user: { name: string; email: string }
+  plan: { code: string; name: string; priceMonthly: number; unitName: string; includedUnits: number }
+  peoplePerTier: number
+  spend: number
+  spendWindowDays: number
+  bedsheetsPerMonth?: number | null
+  joinUrl: string
+  contactPhone: string
+}): Promise<void> {
+  try {
+    const firstName = opts.user.name.split(' ')[0]
+    const { subject, html } = memberEmailChrome({
+      category: 'membership',
+      heading: `Your laundry already runs like a member's, ${firstName}`,
+      bodyHtml: `
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 20px 0;">
+        Your last ${opts.spendWindowDays} days of Kozy baskets came to
+        <strong style="color:#0A192F;">${formatNaira(opts.spend)}</strong>. At that pace,
+        <strong style="color:#0A192F;">${opts.plan.name}</strong> — ${formatNaira(opts.plan.priceMonthly)} a month —
+        pays for itself in weekly pickups: ${opts.peoplePerTier} person${opts.peoplePerTier === 1 ? '' : 's'} kitted
+        for the week, every week, ${opts.plan.includedUnits} × ${opts.plan.unitName} collections a month, pickup and
+        delivery always free${opts.bedsheetsPerMonth ? `, plus ${opts.bedsheetsPerMonth} bed-sheet wash${opts.bedsheetsPerMonth === 1 ? '' : 'es'} a month` : ''}.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.6; font-size: 15px; margin: 0 0 12px 0;">
+        And to start you off: build your next basket as usual — at checkout you'll be offered to
+        make it your <strong style="color:#0A192F;">first ${opts.plan.unitName}, free</strong>. Whatever is in it, mixed
+        as it is. No counting, no scrutiny — it rides as your first weekly pickup the moment your
+        first month is paid.
+      </p>
+      <p style="color: #6F88A8; line-height: 1.7; font-size: 13px; margin: 12px 0 0 0;">
+        Prefer to talk it through? Call
+        <strong style="color:#0A192F;">${opts.contactPhone}</strong> and the office will set you up in one call.
+      </p>`,
+      ctas: [
+        {
+          label: `See ${opts.plan.name} — ${formatNaira(opts.plan.priceMonthly)}/month`,
+          url: opts.joinUrl,
+          variant: 'gold',
+        },
+      ],
+      footer: `You receive this because your recent Kozy orders totalled ${formatNaira(opts.spend)} in the last ${opts.spendWindowDays} days.<br>Join now or ignore — your one-off service never changes.<br>Kozy Care — Uncompromising care. Exceptional convenience.`,
+    })
+    await sendEmail({ to: opts.user.email, subject, html })
+  } catch (e) {
+    console.error('notifyMembershipUpsell failed:', e)
+  }
+}
 
 /** Task 82 — the stuck-signup recovery email. A member whose FIRST payment
  *  never landed gets ONE calm note pointing at the payment waiting in their

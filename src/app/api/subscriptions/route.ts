@@ -21,6 +21,7 @@ import { NextResponse, after } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { rateLimit } from '@/lib/rate-limit'
+import { GARMENT_CATALOG } from '@/lib/types'
 import {
   getPlans,
   rowToMembership,
@@ -28,6 +29,7 @@ import {
   effectiveUsage,
   cycleHealth,
   openRenewalClaimsFor,
+  recordSubscriptionEvent,
 } from '@/lib/subscriptions'
 import { notifyAdminNewSubscription } from '@/lib/notifications'
 
@@ -181,6 +183,15 @@ export async function POST(req: Request) {
       ? body.transferReceipt.slice(0, 1_500_000)
       : null
 
+  // ----- Task 86: the first Kozy Bag claimed at checkout -----
+  // The customer accepted the conversion pitch in the booking wizard, so
+  // their exact basket (mixed as it is) rides with the join. Validated
+  // field by field below — NEVER trusted as-is — then recorded on the
+  // membership ledger as FIRST_BAG_CLAIMED. The order itself is only
+  // placed when the first month is paid (activateOrRenewSubscription —
+  // nobody rides free on an unpaid plan).
+  const firstBag = sanitizeFirstBag(body?.firstBag)
+
   if (!planCode) {
     return NextResponse.json({ error: 'planCode is required' }, { status: 400 })
   }
@@ -243,6 +254,21 @@ export async function POST(req: Request) {
     include: { plan: true, pendingPlan: true },
   })
 
+  // ----- Task 86: record the claimed first Kozy Bag on the ledger -----
+  // The basket waits here (validated above). The moment the first month is
+  // paid, activateOrRenewSubscription books it as the first weekly pickup
+  // at ₦0 — mixed basket honoured, no scrutiny. One claim per membership.
+  if (firstBag) {
+    await recordSubscriptionEvent({
+      subscriptionId: created.id,
+      kind: 'FIRST_BAG_CLAIMED',
+      delta: 0,
+      count: 0,
+      meta: firstBag as unknown as Record<string, unknown>,
+      note: `First ${plan.unitName} claimed at checkout — rides free on activation (mixed basket accepted, one-off value ${firstBag.estimatedTotal.toLocaleString('en-NG')} naira)`,
+    })
+  }
+
   // ----- Admin alert (never blocks the response) -----
   after(async () => {
     try {
@@ -253,10 +279,22 @@ export async function POST(req: Request) {
           plan: { name: plan.name, code: plan.code, priceMonthly: plan.priceMonthly },
           paymentMethod,
           subscriptionId: sub.id,
+          // Task 86 - tell the office a first Kozy Bag is riding on this
+          // join: verifying the payment books the saved basket automatically.
+          ...(firstBag
+            ? {
+                firstBagClaimed: {
+                  estimatedTotal: firstBag.estimatedTotal,
+                  pickupAddress: firstBag.pickupAddress,
+                  pickupDate: firstBag.pickupDate,
+                  pickupSlot: firstBag.pickupSlot,
+                },
+              }
+            : {}),
         })
       }
     } catch (e) {
-      console.error('[memberships] admin alert failed:', e)
+      console.error('emberships] admin alert failed:', e)
     }
   })
 
@@ -267,7 +305,102 @@ export async function POST(req: Request) {
         paymentMethod === 'PAYSTACK'
           ? 'paystack'
           : 'transfer',
+      ...(firstBag ? { firstBagClaimed: true } : {}),
     },
     { status: 201 }
   )
+}
+
+// -----------------------------------------------------------------------------
+// Task 86 - first-bag payload validation. Everything is re-checked here
+// (NEVER trust the client): garment ids must exist in the catalog,
+// quantities are sane integers, the addresses have real length, the date is
+// a plausible future pickup, and text fields are length-capped. The result
+// is the exact shape stored on the ledger - nothing else rides along.
+// -----------------------------------------------------------------------------
+interface SanitizedFirstBag {
+  items: Record<string, number>
+  pickupAddress: string
+  pickupDate: string
+  pickupSlot: string
+  deliveryAddress: string
+  modeOfWash?: 'MACHINE' | 'HANDWASH' | 'IRON_ONLY'
+  serviceSpeed?: 'STANDARD' | 'EXPRESS_24' | 'EXPRESS_48' | 'EXPRESS_12'
+  alterationNotes?: string
+  estimatedTotal: number
+}
+
+function sanitizeFirstBag(raw: unknown): SanitizedFirstBag | null {
+  if (!raw || typeof raw !== 'object') return null
+  const b = raw as Record<string, unknown>
+
+  // Items: garment id -> quantity. Ids must exist in the shared catalog
+  // (alteration rides too - the seamstress quotes it as always).
+  if (!b.items || typeof b.items !== 'object' || Array.isArray(b.items)) return null
+  const items: Record<string, number> = {}
+  let totalQty = 0
+  for (const [id, qtyRaw] of Object.entries(b.items as Record<string, unknown>)) {
+    const known = id === 'alteration' || GARMENT_CATALOG.some((g) => g.id === id)
+    if (!known) return null
+    const qty = Number(qtyRaw)
+    if (!Number.isInteger(qty) || qty < 1 || qty > 99) return null
+    items[id] = qty
+    totalQty += qty
+  }
+  if (totalQty < 1 || totalQty > 200) return null
+
+  // Addresses / slots - same rules the member-pickup endpoint applies.
+  const pickupAddress = typeof b.pickupAddress === 'string' ? b.pickupAddress.trim() : ''
+  if (pickupAddress.length < 8 || pickupAddress.length > 400) return null
+  const deliveryAddress = typeof b.deliveryAddress === 'string' ? b.deliveryAddress.trim() : ''
+  if (deliveryAddress.length > 400) return null
+  const pickupSlot = typeof b.pickupSlot === 'string' ? b.pickupSlot.trim() : ''
+  if (!pickupSlot || pickupSlot.length > 40) return null
+
+  // Date: a plausible pickup date (today -1 day through +60 days). Stored
+  // as the YYYY-MM-DD string the wizard used.
+  const pickupDate = typeof b.pickupDate === 'string' ? b.pickupDate.trim() : ''
+  const when = new Date(pickupDate)
+  if (!pickupDate || Number.isNaN(when.getTime())) return null
+  const nowMs = Date.now()
+  if (when.getTime() < nowMs - 24 * 60 * 60 * 1000 || when.getTime() > nowMs + 60 * 24 * 60 * 60 * 1000) {
+    return null
+  }
+
+  // Mode of wash + turnaround: enum-guarded, optional.
+  const modeOfWash =
+    b.modeOfWash === 'MACHINE' || b.modeOfWash === 'HANDWASH' || b.modeOfWash === 'IRON_ONLY'
+      ? b.modeOfWash
+      : undefined
+  const serviceSpeed =
+    b.serviceSpeed === 'STANDARD' ||
+    b.serviceSpeed === 'EXPRESS_24' ||
+    b.serviceSpeed === 'EXPRESS_48' ||
+    b.serviceSpeed === 'EXPRESS_12'
+      ? b.serviceSpeed
+      : undefined
+
+  // Free-text note: length-capped, optional.
+  const alterationNotes =
+    typeof b.alterationNotes === 'string' && b.alterationNotes.trim()
+      ? b.alterationNotes.trim().slice(0, 500)
+      : undefined
+
+  // The one-off estimate they were shown - informational only (the first
+  // bag itself is zero-naira by construction; this number explains the gift).
+  const estimatedTotal = Number(b.estimatedTotal)
+
+  return {
+    items,
+    pickupAddress,
+    pickupDate,
+    pickupSlot,
+    deliveryAddress,
+    ...(modeOfWash ? { modeOfWash } : {}),
+    ...(serviceSpeed ? { serviceSpeed } : {}),
+    ...(alterationNotes ? { alterationNotes } : {}),
+    estimatedTotal: Number.isFinite(estimatedTotal)
+      ? Math.max(0, Math.min(Math.round(estimatedTotal), 10_000_000))
+      : 0,
+  }
 }

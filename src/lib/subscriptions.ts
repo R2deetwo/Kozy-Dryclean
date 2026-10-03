@@ -20,9 +20,12 @@ import {
   formatNaira,
   renewalPriceFor,
   renewalSavingFor,
+  GARMENT_CATALOG,
   type MembershipPlan,
   type Membership,
 } from '@/lib/types'
+import { assignBranchForAddress } from '@/lib/branches'
+import { notifyOrderCreated, notifyAdminNewOrder } from '@/lib/notifications'
 
 // ----- Plan defaults (phase 66 → 67: the owner's ladder, retold in plain words) -----
 // Three plans sized by KIT (bag → box → the whole home). Couture, designer
@@ -712,10 +715,242 @@ export async function activateOrRenewSubscription(
       },
     })
   } catch (e) {
-    console.error('[memberships] CYCLE_START ledger write failed:', e)
+    console.error('emberships] CYCLE_START ledger write failed:', e)
+  }
+
+  // ----- Task 86: book the first Kozy Bag claimed at checkout -----
+  // A FRESH activation (not a renewal) whose member claimed their checkout
+  // basket as the first Bag gets it placed NOW: the exact basket they
+  // built, mixed as it is, at zero naira, riding the normal order pipeline
+  // (rider, kanban, notifications). Best-effort - activation itself must
+  // never fail because a courtesy booking hiccuped; the claim stays on the
+  // ledger either way, and the office can book it by hand.
+  if (sub.status !== 'ACTIVE') {
+    try {
+      await placeFirstBagOrder(updated.id)
+    } catch (e) {
+      console.error('emberships] first-bag booking failed (claim preserved on ledger):', e)
+    }
   }
 
   return updated
+}
+
+
+// =============================================================================
+// Task 86 — the first Kozy Bag claimed at checkout (the conversion engine)
+// =============================================================================
+// The owner's offer, honoured mechanically: a customer whose one-off basket
+// reached ₦15,000+ at checkout was pitched the tier their spend maps to,
+// with THIS basket — mixed as it is — riding as their first Kozy Bag, free.
+// The claim (validated basket, addresses, slot) waits on the ledger as
+// FIRST_BAG_CLAIMED; the moment the first month is PAID
+// (activateOrRenewSubscription — office-verified transfer or Paystack),
+// this function turns it into a real order:
+//   - every garment they selected, at zero naira each (the plan covers it)
+//   - the plan's standard turnaround (express was a one-off choice)
+//   - ONE included bag/box unit consumed (the first bag IS a pickup)
+//   - the kit hand-over rides the same stop
+//   - rides the NORMAL pipeline: branch assignment, rider view, kanban,
+//     customer + admin notifications — zero new pipeline code.
+// If the claimed pickup date has passed by activation time, the pickup
+// moves to tomorrow (same slot) — the office sees the note on the manifest.
+// =============================================================================
+
+interface FirstBagBasket {
+  items: Record<string, number>
+  pickupAddress: string
+  pickupDate: string
+  pickupSlot: string
+  deliveryAddress: string
+  modeOfWash?: 'MACHINE' | 'HANDWASH' | 'IRON_ONLY'
+  serviceSpeed?: 'STANDARD' | 'EXPRESS_24' | 'EXPRESS_48' | 'EXPRESS_12'
+  alterationNotes?: string
+  estimatedTotal: number
+}
+
+function parseFirstBagBasket(metaJson: string | null): FirstBagBasket | null {
+  if (!metaJson) return null
+  try {
+    const b = JSON.parse(metaJson)
+    if (!b || typeof b !== 'object') return null
+    if (!b.items || typeof b.items !== 'object' || Array.isArray(b.items)) return null
+    if (typeof b.pickupAddress !== 'string' || b.pickupAddress.length < 8) return null
+    if (typeof b.pickupSlot !== 'string' || !b.pickupSlot) return null
+    return b as FirstBagBasket
+  } catch {
+    return null
+  }
+}
+
+/** Place the claimed first Kozy Bag. Idempotent: a claim that already has
+ *  its FIRST_BAG_BOOKED marker (or its order) is never booked twice. */
+export async function placeFirstBagOrder(subscriptionId: string): Promise<string | null> {
+  const sub = await db.subscription.findUnique({
+    where: { id: subscriptionId },
+    include: { plan: true },
+  })
+  if (!sub || !sub.plan) return null
+
+  // The claim, and whether it has already been honoured.
+  const events = await db.subscriptionEvent.findMany({
+    where: { subscriptionId, kind: { in: ['FIRST_BAG_CLAIMED', 'FIRST_BAG_BOOKED'] } },
+    orderBy: { createdAt: 'asc' },
+  })
+  const claimed = events.find((e) => e.kind === 'FIRST_BAG_CLAIMED')
+  const booked = events.find((e) => e.kind === 'FIRST_BAG_BOOKED')
+  if (!claimed || booked) return null
+  const basket = parseFirstBagBasket(claimed.meta)
+  if (!basket) return null
+
+  // Rebuild the item manifest from the shared catalog: every garment they
+  // selected, at zero naira. Alterations ride as "to be quoted" (the
+  // seamstress quotes before any work — the plan does not include sewing).
+  const items: Array<{ id: string; name: string; quantity: number; unitPrice: number }> = []
+  for (const [id, qty] of Object.entries(basket.items)) {
+    if (id === 'alteration') {
+      items.push({
+        id: 'firstbag_alteration',
+        name: `Alterations — to be quoted by the studio (${qty} piece${qty === 1 ? '' : 's'})`,
+        quantity: qty,
+        unitPrice: 0,
+      })
+      continue
+    }
+    const g = GARMENT_CATALOG.find((c) => c.id === id)
+    if (!g) continue // unknown id — drop silently, never fail the booking
+    items.push({
+      id: `firstbag_${g.id}`,
+      name: `${g.name} — first ${sub.plan.unitName} (included)`,
+      quantity: qty,
+      unitPrice: 0,
+    })
+  }
+  if (items.length === 0) return null
+
+  // The pickup date: honoured as claimed unless it has already passed —
+  // then the next sensible day, same slot, with a manifest note.
+  const claimedDate = new Date(basket.pickupDate)
+  const today = new Date()
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  const pickupDate =
+    !Number.isNaN(claimedDate.getTime()) && claimedDate.getTime() >= todayStart.getTime()
+      ? claimedDate
+      : new Date(todayStart.getTime() + 24 * 60 * 60 * 1000)
+  const dateMoved = pickupDate.getTime() !== claimedDate.getTime()
+
+  const branch = await assignBranchForAddress(basket.pickupAddress)
+
+  const manifestNote: string[] = [
+    `FIRST KOZY BAG — included with the first month of ${sub.plan.name} (claimed at checkout: ${formatNaira(basket.estimatedTotal)} one-off basket, mixed as-is)`,
+    `KIT DELIVERY — hand over the ${sub.plan.unitName} at this stop`,
+  ]
+  if (dateMoved) {
+    manifestNote.push(`Date moved from ${basket.pickupDate} (claimed) — first month confirmed after that date`)
+  }
+  if (basket.serviceSpeed && basket.serviceSpeed !== 'STANDARD') {
+    manifestNote.push('Express was selected at checkout — the first Bag rides at the plan standard turnaround')
+  }
+  if (items.some((i) => i.id === 'firstbag_alteration')) {
+    manifestNote.push(`Alteration note from checkout: ${basket.alterationNotes ?? '(none given — the seamstress will call)'}`)
+  }
+
+  const orderNumber = `KZ-${Date.now().toString().slice(-6)}${Math.floor(Math.random() * 90 + 10)}`
+  const order = await db.order.create({
+    data: {
+      orderNumber,
+      userId: sub.userId,
+      status: 'PAYMENT_VERIFIED', // money settled by the membership itself
+      type: 'ITEM',
+      guaranteeActive: false,
+      serviceSpeed: 'STANDARD',
+      modeOfWash: basket.modeOfWash ?? 'MACHINE',
+      deliveryFee: 0,
+      itemsManifest: JSON.stringify(items),
+      alterationNotes: manifestNote.join(' · '), // shows in the admin manifest panel
+      totalPrice: 0,
+      subscriptionId: sub.id,
+      ...(branch ? { branchId: branch.branchId } : {}),
+      pickupAddress: basket.pickupAddress,
+      pickupDate,
+      pickupTimeSlot: basket.pickupSlot,
+      deliveryAddress: basket.deliveryAddress || null,
+    },
+    include: {
+      user: { select: { id: true, name: true, email: true, phone: true, role: true } },
+      payments: true,
+    },
+  })
+
+  // Status trail.
+  try {
+    await db.statusEvent.create({
+      data: {
+        orderId: order.id,
+        status: order.status,
+        note: `First ${sub.plan.unitName} claimed at checkout — covered by the first month of ${sub.plan.name}${branch ? ` · ${branch.branchName} branch` : ''}`,
+      },
+    })
+  } catch {
+    /* trail is best-effort */
+  }
+
+  // Consume ONE included unit (the first bag IS a pickup of the plan) and
+  // hand over the kit on the same stop.
+  try {
+    await db.subscription.update({
+      where: { id: sub.id },
+      data: {
+        unitsUsed: (sub.unitsUsed ?? 0) + 1,
+        usageCycleKey: sub.usageCycleKey ?? 'seed',
+        ...(sub.kitState === 'PENDING_DELIVERY'
+          ? { kitState: 'WITH_MEMBER', kitDeliveredAt: new Date() }
+          : {}),
+      },
+    })
+  } catch (e) {
+    console.error('emberships] first-bag usage update failed (order still placed):', e)
+  }
+
+  // The ledger: the UNIT consumption + the booking marker (idempotency) +
+  // the kit hand-over.
+  await recordSubscriptionEvent({
+    subscriptionId: sub.id,
+    kind: 'UNIT',
+    delta: 1,
+    count: 1,
+    meta: { includedUnits: 1, extraUnits: 0, firstBag: true },
+    note: 'First Kozy Bag claimed at checkout — booked on activation',
+    orderId: order.id,
+  })
+  await recordSubscriptionEvent({
+    subscriptionId: sub.id,
+    kind: 'FIRST_BAG_BOOKED',
+    delta: 0,
+    count: 0,
+    note: `Order ${order.orderNumber} placed — the checkout basket rides as the first ${sub.plan.unitName}`,
+    orderId: order.id,
+  })
+  if (sub.kitState === 'PENDING_DELIVERY') {
+    await recordSubscriptionEvent({
+      subscriptionId: sub.id,
+      kind: 'KIT_DELIVERED',
+      delta: 0,
+      count: 0,
+      note: 'Kit handed over with the first Kozy Bag',
+      orderId: order.id,
+    })
+  }
+
+  // Notifications (best-effort — the booking itself is already done).
+  try {
+    await notifyOrderCreated(order as any)
+    await notifyAdminNewOrder(order as any)
+  } catch (e) {
+    console.error('emberships] first-bag notifications failed:', e)
+  }
+
+  return order.id
 }
 
 // =============================================================================
