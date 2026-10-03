@@ -10,7 +10,14 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Phone, Mail, MapPin, MailCheck, ArrowRight } from 'lucide-react'
+import { Phone, Mail, MapPin, MailCheck, ArrowRight, MessageCircle, Star } from 'lucide-react'
+import {
+  GOOGLE_BUSINESS,
+  GOOGLE_MAPS_URL,
+  GOOGLE_MAPS_EMBED_URL,
+  GOOGLE_REVIEW_URL,
+  WHATSAPP_CHAT_URL,
+} from '@/lib/local-seo'
 
 // NewsletterSignup — footer email-list builder (phase 36)
 // POSTs to /api/newsletter/subscribe (rate limited, validated server-side).
@@ -143,6 +150,20 @@ export function SiteFooter() {
               Contact Us
             </p>
             <ul className="mt-3 space-y-2 text-sm">
+              {/* WhatsApp first — the Lagos channel (Task 85). Opens a chat
+                  with the studio line (same number as the Google listing)
+                  with a short greeting pre-typed. */}
+              <li className="flex items-center gap-2 transition">
+                <MessageCircle className="h-4 w-4 shrink-0 text-gold-400" />
+                <a
+                  href={WHATSAPP_CHAT_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-navy-100/70 transition hover:text-gold-300"
+                >
+                  WhatsApp us — {GOOGLE_BUSINESS.phoneDisplay}
+                </a>
+              </li>
               <li className="flex items-center gap-2 transition">
                 <Phone className="h-4 w-4 shrink-0 text-gold-400" />
                 <a href="tel:+2348031755230" className="text-navy-100/70 transition hover:text-gold-300">+234 803 175 5230</a>
@@ -155,11 +176,43 @@ export function SiteFooter() {
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
                 <span className="text-navy-100/70">No 20. Westsyde Drive, Ogombo, Lagos State</span>
               </li>
+              {/* The Chevron base doubles as the Google Business Profile
+                  address — the pin now links to the live listing. */}
               <li className="flex items-start gap-2 transition">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-gold-400" />
-                <span className="text-navy-100/70">Paradise 3 Estate, Road 5/3, Chevron, Lagos State</span>
+                <a
+                  href={GOOGLE_MAPS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-navy-100/70 underline-offset-2 transition hover:text-gold-300 hover:underline"
+                >
+                  Paradise 3 Estate, Road 5/3, Chevron, Lagos State
+                </a>
               </li>
             </ul>
+            {/* The live Google Business Profile pin, embedded (keyless
+                Google Maps embed). Lazy-loaded so it costs nothing until a
+                visitor actually scrolls to the footer. Tapping the caption
+                opens the full listing — directions, reviews, hours. */}
+            <a
+              href={GOOGLE_MAPS_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="group mt-4 block"
+              aria-label="See Kozy Care on Google Maps"
+            >
+              <iframe
+                src={GOOGLE_MAPS_EMBED_URL}
+                title="Kozy Care on Google Maps — Paradise 3 Estate, Chevron, Lekki"
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+                allowFullScreen
+                className="pointer-events-none h-36 w-full rounded-xl border border-navy-500/60 opacity-90 transition group-hover:opacity-100"
+              />
+              <p className="mt-1.5 text-[11px] font-medium text-navy-100/50 transition group-hover:text-gold-300">
+                Kozy Care on Google Maps — find us, get directions, leave a review
+              </p>
+            </a>
           </div>
 
           <div>
@@ -200,6 +253,20 @@ export function SiteFooter() {
               <li>
                 <a href="/feedback" className="cursor-pointer text-navy-100/70 transition hover:text-gold-300">
                   Leave a review / feedback
+                </a>
+              </li>
+              {/* The Google review door (Task 85) — opens the Google
+                  Business Profile's review form directly. Every public
+                  review strengthens the listing's local ranking. */}
+              <li>
+                <a
+                  href={GOOGLE_REVIEW_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex cursor-pointer items-center gap-1.5 text-navy-100/70 transition hover:text-gold-300"
+                >
+                  <Star className="h-3 w-3 text-gold-400" aria-hidden="true" />
+                  Review us on Google
                 </a>
               </li>
               <li>

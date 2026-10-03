@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { MembershipsClient } from '@/components/customer/memberships-page'
+import { MEMBERSHIPS_FAQ } from '@/lib/faq-content'
 
 // =============================================================================
 // /memberships — Plans & Pricing: the Kozy Circle (phase 62 → 64)
@@ -26,21 +27,42 @@ export const metadata: Metadata = {
   },
 }
 
-const breadcrumbSchema = {
+// Structured data (Task 85): the breadcrumb stays, and the FAQ the page
+// already renders becomes FAQPage schema — built from the SAME source array
+// the visible FAQ uses (src/lib/faq-content.ts), so the answer Google shows
+// in search can never disagree with the answer on the page. No invented
+// questions; every word is already published on the page.
+const graphSchema = {
   '@context': 'https://schema.org',
-  '@type': 'BreadcrumbList',
-  itemListElement: [
+  '@graph': [
     {
-      '@type': 'ListItem',
-      position: 1,
-      name: 'Home',
-      item: 'https://kozycare.ng',
+      '@type': 'BreadcrumbList',
+      itemListElement: [
+        {
+          '@type': 'ListItem',
+          position: 1,
+          name: 'Home',
+          item: 'https://kozycare.ng',
+        },
+        {
+          '@type': 'ListItem',
+          position: 2,
+          name: 'Plans & pricing',
+          item: 'https://kozycare.ng/memberships',
+        },
+      ],
     },
     {
-      '@type': 'ListItem',
-      position: 2,
-      name: 'Plans & pricing',
-      item: 'https://kozycare.ng/memberships',
+      '@type': 'FAQPage',
+      '@id': 'https://kozycare.ng/memberships#faq',
+      mainEntity: MEMBERSHIPS_FAQ.map((f) => ({
+        '@type': 'Question',
+        name: f.q,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: f.a,
+        },
+      })),
     },
   ],
 }
@@ -50,7 +72,7 @@ export default function MembershipsPage() {
     <>
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(graphSchema) }}
       />
       <MembershipsClient />
     </>

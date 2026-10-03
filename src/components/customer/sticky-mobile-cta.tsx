@@ -10,8 +10,9 @@
 // =============================================================================
 
 import { useEffect, useState } from 'react'
-import { ArrowRight, Phone } from 'lucide-react'
+import { ArrowRight, MessageCircle, Phone } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { WHATSAPP_CHAT_URL } from '@/lib/local-seo'
 
 export function StickyMobileCta({ onBook }: { onBook: () => void }) {
   const [showStickyCta, setShowStickyCta] = useState(false)
@@ -39,6 +40,18 @@ export function StickyMobileCta({ onBook }: { onBook: () => void }) {
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-navy-200 text-navy transition-colors hover:border-gold-400"
           >
             <Phone className="h-4 w-4" />
+          </a>
+          {/* WhatsApp chat — thumb-reach, the Lagos way (Task 85). Opens a
+              chat with the studio line (the same number as the Google
+              Business Profile) with a greeting pre-typed. */}
+          <a
+            href={WHATSAPP_CHAT_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Chat with Kozy Care on WhatsApp"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-navy-200 text-navy transition-colors hover:border-gold-400"
+          >
+            <MessageCircle className="h-4 w-4" />
           </a>
           <button
             onClick={onBook}

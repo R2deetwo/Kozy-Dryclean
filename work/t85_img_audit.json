@@ -1,0 +1,247 @@
+{
+  "/": {
+    "imgs": [
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      },
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      },
+      {
+        "src": "/_next/image?url=%2Fbrand%2Fimages%2Fhero-pressed-shirts.png&w=3840&q=75",
+        "alt": "Pristine freshly pressed white shirts on premium wooden hangers",
+        "cls": "object-cover"
+      },
+      {
+        "src": "/brand/images/how-1-book.png",
+        "alt": "01 · Request a pickup",
+        "cls": "h-full w-full object-cover"
+      },
+      {
+        "src": "/brand/images/how-2-collect.png",
+        "alt": "02 · We collect & treat",
+        "cls": "h-full w-full object-cover"
+      },
+      {
+        "src": "/brand/images/how-3-return.png",
+        "alt": "03 · Pristine return",
+        "cls": "h-full w-full object-cover"
+      },
+      {
+        "src": "/brand/images/laundry-handover.png",
+        "alt": "",
+        "cls": "absolute inset-0 h-full w-full object-cover object"
+      },
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      }
+    ],
+    "bgs": []
+  },
+  "/services": {
+    "imgs": [
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      },
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      },
+      {
+        "src": "/brand/images/atelier-craftsman.png",
+        "alt": "Kozy master presser hand-finishing a premium garment at the steam station",
+        "cls": "h-full w-full object-cover"
+      },
+      {
+        "src": "/brand/images/shoe-care.png",
+        "alt": "Restored luxury shoes",
+        "cls": "h-full w-full object-cover"
+      },
+      {
+        "src": "/brand/images/seamstress.png",
+        "alt": "Young Kozy in-house seamstress sewing at her machine in a bright white-walled studio",
+        "cls": "h-full w-full object-cover"
+      },
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      }
+    ],
+    "bgs": []
+  },
+  "/memberships": {
+    "imgs": [
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      },
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      },
+      {
+        "src": "/_next/image?url=%2Fbrand%2Fimages%2Flaundry-handover.png&w=3840&q=75",
+        "alt": "A Kozy rider handing a freshly cleaned laundry bag back to a customer at her doorstep",
+        "cls": "object-cover"
+      },
+      {
+        "src": "/icons/services/shirt.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/longsleeve.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/singlet.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/trouser.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/jeans.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/suit.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/suit-3pc.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/blazer.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/agbada.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/kaftan.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/leather-jacket.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/jean-jacket.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/sweatshirt.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/bedsheet.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/duvet.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/curtain.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/towel.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/sneakers-white.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/sneakers-coloured.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/leather-shoes.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/suede-shoes.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/sneaker-restoration.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/native-cap.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/tie.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/underwear.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/womens-underwear.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/socks.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/icons/services/hats.svg",
+        "alt": "",
+        "cls": "h-5 w-5 text-navy"
+      },
+      {
+        "src": "/brand/kozy-mark.svg",
+        "alt": "Kozy Care mark",
+        "cls": "shrink-0"
+      }
+    ],
+    "bgs": []
+  }
+}
