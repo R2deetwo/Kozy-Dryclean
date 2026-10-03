@@ -75,6 +75,21 @@ package-lock.json
 scripts/.dburl
 scripts/.directurl
 scripts/.pgenv
+# Owner-provided deployment tokens (never commit)
+.secrets/
+
+# Task 90 hygiene: secrets, prod data and dev environments never enter git
+work/backups/
+work/*.env
+work/env.backup*
+work/.prod_*
+work/.t80_woosh*
+work/*cron_secret*
+work/token_check*.json
+work/*token_probe*.json
+work/*dpl_files*.json
+work/*headers*.txt
+work/pgvenv/
 
 # vercel CLI local linking
 .vercel/
