@@ -90,6 +90,14 @@ work/*token_probe*.json
 work/*dpl_files*.json
 work/*headers*.txt
 work/pgvenv/
+work/*inboxes*.json
+work/*vapid*
+work/vercel-envs*
+work/.t80_verify_links.json
+work/.t81_live_member.json
+work/.t80_test_email
+work/.t76_emails_sent
+work/.s.PGSQL.*
 
 # vercel CLI local linking
 .vercel/
