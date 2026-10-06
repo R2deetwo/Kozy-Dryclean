@@ -214,6 +214,16 @@ export function TestimonialsCarousel() {
               ))}
             </div>
           )}
+
+          {/* PracticePro Standard P8 (honest surfaces) — while real Google
+              and verified-order reviews accumulate, the wall is filled to
+              the minimum with founder-approved marketing samples (source
+              STARTER). Say so quietly, in the footer-disclaimer register. */}
+          {(data?.starterCount ?? 0) > 0 && (
+            <p className="mt-4 text-center text-[10px] leading-relaxed text-navy-100/50">
+              Includes sample reviews shown while our first customer reviews come in.
+            </p>
+          )}
         </div>
       </div>
     </section>

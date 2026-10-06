@@ -830,6 +830,10 @@ export function usePublicTestimonials() {
         // sync has happened; callers fall back to the existing copy).
         googleStats:
           (data.googleStats as { rating: number; count: number; syncedAt: string | null } | null) ?? null,
+        // PracticePro Standard P8 — how many wall entries are founder-approved
+        // marketing samples (source STARTER). 0 once real reviews fill the
+        // minimum; the carousel discloses while it is > 0.
+        starterCount: (data.starterCount as number | undefined) ?? 0,
       }
     },
     staleTime: 60 * 1000, // 1 minute

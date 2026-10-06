@@ -120,7 +120,15 @@ export async function GET() {
     }))
     const testimonials = [...real, ...starters].slice(0, MAX_TESTIMONIALS)
 
-    return NextResponse.json({ testimonials, googleStats: stats })
+    return NextResponse.json({
+      testimonials,
+      googleStats: stats,
+      // PracticePro Standard P8 (honest surfaces): how many of the entries
+      // above are founder-approved marketing samples (source STARTER)
+      // rather than real Google/verified-order reviews. The carousel shows
+      // a quiet disclosure caption while this is > 0.
+      starterCount: starters.length,
+    })
   } catch (err) {
     console.error('GET /api/reviews failed:', err)
     return NextResponse.json(
