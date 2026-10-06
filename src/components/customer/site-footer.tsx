@@ -322,7 +322,22 @@ export function SiteFooter() {
             <a href="/refunds" className="text-navy-100/40 transition hover:text-gold-300">Refunds</a>
             <a href="/cookies" className="text-navy-100/40 transition hover:text-gold-300">Cookies</a>
           </div>
-          <p>Built for Lagos, with care.</p>
+          {/* PracticePro builder credit — PracticePro Standard "Built-by"
+              policy: footer-only, one line, at or below the legal links'
+              visual weight, never on internal (admin/driver/partner)
+              surfaces. practicepro.ng is the PracticePro Systems company
+              site. */}
+          <p className="text-navy-100/40">
+            Built for Lagos, with care · by{' '}
+            <a
+              href="https://practicepro.ng"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="transition hover:text-gold-300"
+            >
+              PracticePro
+            </a>
+          </p>
         </div>
       </div>
     </footer>
